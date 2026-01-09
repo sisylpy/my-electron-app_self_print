@@ -95,6 +95,13 @@ export default {
 //       })
 //   },
 
+saveAccountBillGb(data) {
+    return axios({
+        url: 'nxdepartmentbill/saveAccountBillPrinterGb/'+ data,
+        method: 'get',
+    })
+},
+
   saveAccountBill(data) {
     return axios({
         url: 'nxdepartmentbill/saveAccountBillPrinter/'+ data,

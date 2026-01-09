@@ -301,30 +301,133 @@
                 <div class="modal-body">
                     <!-- 打印组件预览区域 -->
                     <div class="print-preview-section">
-                        <!-- 使用动态组件简化代码 -->
-                        <component
-                                v-if="currentPrintComponent && billDetailData"
-                                :is="currentPrintComponent"
-                                :ref="currentPrintComponentRef"
-                                :nxDepFatherId="selectedBillDepFatherId"
-                                :nxDepId="selectedBillDepFatherId"
-                                :depName="selectedBillDepName"
-                                :depPrintName="selectedBillDepPrintName"
-                                :updateTime="selectedBillId"
-                                :gbDepFatherId="-1"
-                                :gbDepId="-1"
-                                :gbDisId="-1"
-                                :gbBatchId="-1"
-                                :orderData="{
+                        <!-- 根据打印组件类型显示对应的预览 -->
+                        <div v-if="selectedBillDepPrintName === 'ApplyPanel'" class="print-component-preview">
+                            <ApplyPanel
+                                    ref="applyPanelRef"
+                                    :nxDepFatherId="selectedBillDepFatherId"
+                                    :nxDepId="selectedBillDepFatherId"
+                                    :depName="selectedBillDepName"
+                                    :depPrintName="selectedBillDepPrintName"
+                                    :updateTime="selectedBillId"
+                                    :gbDepFatherId="-1"
+                                    :gbDepId="-1"
+                                    :gbDisId="-1"
+                                    :gbBatchId="-1"
+                                    :orderData="{
                   bill: billDetailData,
                   arr: Array.from(billDetailData?.nxDepartmentOrdersEntities || [])
                 }"
-                                @print-started="closeOrderModal"
-                                class="print-component-preview"
-                        />
+                                    @print-started="closeOrderModal"
+                            />
+                        </div>
+
+                        <div v-else-if="selectedBillDepPrintName === 'ApplyFiftyPanel'" class="print-component-preview">
+                            <ApplyFiftyPanel
+                                    ref="applyFiftyPanelRef"
+                                    :nxDepFatherId="selectedBillDepFatherId"
+                                    :nxDepId="selectedBillDepFatherId"
+                                    :depName="selectedBillDepName"
+                                    :depPrintName="selectedBillDepPrintName"
+                                    :updateTime="selectedBillId"
+                                    :gbDepFatherId="-1"
+                                    :gbDepId="-1"
+                                    :gbDisId="-1"
+                                    :gbBatchId="-1"
+                                    :orderData="{
+                  bill: billDetailData,
+                  arr: Array.from(billDetailData?.nxDepartmentOrdersEntities || [])
+                }"
+                                    @print-started="closeOrderModal"
+                            />
+                        </div>
+
+                        <div v-else-if="selectedBillDepPrintName === 'ApplyHalfPanel'" class="print-component-preview">
+                            <ApplyHalfPanel
+                                    ref="applyHalfPanelRef"
+                                    :nxDepFatherId="selectedBillDepFatherId"
+                                    :nxDepId="selectedBillDepFatherId"
+                                    :depName="selectedBillDepName"
+                                    :depPrintName="selectedBillDepPrintName"
+                                    :updateTime="selectedBillId"
+                                    :gbDepFatherId="-1"
+                                    :gbDepId="-1"
+                                    :gbDisId="-1"
+                                    :gbBatchId="-1"
+                                    :orderData="{
+                  bill: billDetailData,
+                  arr: Array.from(billDetailData?.nxDepartmentOrdersEntities || [])
+                }"
+                                    @print-started="closeOrderModal"
+                            />
+                        </div>
+
+                        <div v-else-if="selectedBillDepPrintName === 'ApplyHalfWholePanel'"
+                             class="print-component-preview">
+                            <ApplyHalfWholePanel
+                                    ref="applyHalfWholePanelRef"
+                                    :nxDepFatherId="selectedBillDepFatherId"
+                                    :nxDepId="selectedBillDepFatherId"
+                                    :depName="selectedBillDepName"
+                                    :depPrintName="selectedBillDepPrintName"
+                                    :updateTime="selectedBillId"
+                                    :gbDepFatherId="-1"
+                                    :gbDepId="-1"
+                                    :gbDisId="-1"
+                                    :gbBatchId="-1"
+                                    :orderData="{
+                  bill: billDetailData,
+                  arr: Array.from(billDetailData?.nxDepartmentOrdersEntities || [])
+                }"
+                                    @print-started="closeOrderModal"
+                            />
+                        </div>
+
+                        <div v-else-if="selectedBillDepPrintName === 'ApplyThirtyWholePanel'"
+                             class="print-component-preview">
+                            <ApplyThirtyWholePanel
+                                    ref="applyThirtyWholePanelRef"
+                                    :nxDepFatherId="selectedBillDepFatherId"
+                                    :nxDepId="selectedBillDepFatherId"
+                                    :depName="selectedBillDepName"
+                                    :depPrintName="selectedBillDepPrintName"
+                                    :updateTime="selectedBillId"
+                                    :gbDepFatherId="-1"
+                                    :gbDepId="-1"
+                                    :gbDisId="-1"
+                                    :gbBatchId="-1"
+                                    :orderData="{
+                  bill: billDetailData,
+                  arr: Array.from(billDetailData?.nxDepartmentOrdersEntities || [])
+                }"
+                                    @print-started="closeOrderModal"
+                            />
+                        </div>
+
+                        <div v-else-if="selectedBillDepPrintName === 'ApplyThirtyPanel'"
+                             class="print-component-preview">
+                            <ApplyThirtyPanel
+                                    ref="applyThirtyPanelRef"
+                                    :nxDepFatherId="selectedBillDepFatherId"
+                                    :nxDepId="selectedBillDepFatherId"
+                                    :depName="selectedBillDepName"
+                                    :depPrintName="selectedBillDepPrintName"
+                                    :updateTime="selectedBillId"
+                                    :gbDepFatherId="-1"
+                                    :gbDepId="-1"
+                                    :gbDisId="-1"
+                                    :gbBatchId="-1"
+                                    :orderData="{
+                  bill: billDetailData,
+                  arr: Array.from(billDetailData?.nxDepartmentOrdersEntities || [])
+                }"
+                                    @print-started="closeOrderModal"
+                            />
+                        </div>
+
                         <div v-else class="print-component-preview">
                             <div class="alert alert-info">
-                                {{ billDetailData ? '暂不支持该打印格式的预览' : '加载中...' }}
+                                暂不支持该打印格式的预览
                             </div>
                         </div>
                     </div>
@@ -438,30 +541,6 @@
             console.log('获取到的 disId:====', this.disId, this.disName);
         },
         computed: {
-            // 根据打印组件名称返回对应的组件
-            currentPrintComponent() {
-                const componentMap = {
-                    'ApplyPanel': 'ApplyPanel',
-                    'ApplyFiftyPanel': 'ApplyFiftyPanel',
-                    'ApplyHalfPanel': 'ApplyHalfPanel',
-                    'ApplyHalfWholePanel': 'ApplyHalfWholePanel',
-                    'ApplyThirtyWholePanel': 'ApplyThirtyWholePanel',
-                    'ApplyThirtyPanel': 'ApplyThirtyPanel'
-                };
-                return componentMap[this.selectedBillDepPrintName] || null;
-            },
-            // 当前打印组件的ref名称
-            currentPrintComponentRef() {
-                const refMap = {
-                    'ApplyPanel': 'applyPanelRef',
-                    'ApplyFiftyPanel': 'applyFiftyPanelRef',
-                    'ApplyHalfPanel': 'applyHalfPanelRef',
-                    'ApplyHalfWholePanel': 'applyHalfWholePanelRef',
-                    'ApplyThirtyWholePanel': 'applyThirtyWholePanelRef',
-                    'ApplyThirtyPanel': 'applyThirtyPanelRef'
-                };
-                return refMap[this.selectedBillDepPrintName] || 'printComponentRef';
-            },
             // 判断客户类型（现金或记账）
             customerType() {
                 if (!this.selectedAllCustomer) {

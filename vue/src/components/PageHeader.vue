@@ -3,7 +3,7 @@
 
         <h1>{{navTitle}}
 
-            <button @click="goBack" class="btn btn-primary" style="float: right; margin-left: 10px; margin-right: 40px;">
+        <button @click="goBack" class="btn btn-primary" style="float: right; margin: 10px 40px;">
         退出登录
       </button>
 
