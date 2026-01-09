@@ -1,7 +1,7 @@
 {
-  "name": "my-electron-app",
+  "name": "grain-print-app",
   "version": "1.0.0",
-  "description": "A simple Electron app with electron-builder",
+  "description": "A Self Print For Distributer",
   "main": "src/main.js",
   "scripts": {
     "start": "concurrently \"npm run dev:vue\" \"npm run dev:electron\"",
@@ -12,9 +12,9 @@
   },
   "build": {
     "appId": "club.grainservice.www",
-    "productName": "MyElectronApp",
+    "productName": "GrainPrint",
     "directories": {
-      "output": "dist"
+      "output": "release"
     },
     "files": [
       "dist/**/*",
@@ -22,15 +22,11 @@
       "package.json"
     ],
     "win": {
-      "target": [
-        "nsis",
-        "zip"
-      ],
-      "icon": "build/512.ico"
+      "target": "nsis"
     },
     "mac": {
       "category": "public.app-category.productivity",
-      "icon": "build/512.ico"
+      "icon": "vue/src/assets/icons.ico"
     }
   },
   "author": "Li Pei Yi",
@@ -40,6 +36,7 @@
     "electron": "^19.1.9",
     "electron-builder": "^23.6.0",
     "electron-devtools-installer": "^4.0.0",
+    "rollup": "^2.79.1",
     "vite": "^6.0.3",
     "wait-on": "^8.0.1"
   },

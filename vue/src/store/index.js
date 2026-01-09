@@ -3,8 +3,21 @@ import { createStore } from 'vuex'; // 使用 Vuex 4.x 的创建方法
 import pageHeader from './modules/pageHeader';
 import axiosInstance from '@/api/axios'; // 使用配置好的 Axios 实例
 
+// 从 localStorage 恢复 disUser
+const restoreDisUser = () => {
+  try {
+    const disUserStr = localStorage.getItem('disUser');
+    if (disUserStr) {
+      return JSON.parse(disUserStr);
+    }
+  } catch (error) {
+    console.error('恢复 disUser 失败:', error);
+  }
+  return null;
+};
+
 const state = {
-  disUser: null,
+  disUser: restoreDisUser(), // 从 localStorage 恢复
   user: '',
   pasteArr: '',
   loading: false, // 全局加载状态

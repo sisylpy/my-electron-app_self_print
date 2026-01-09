@@ -55,17 +55,14 @@
 
                 </div>
 
-            <ApplyCheck @printAgain="printAgain" :billItem="billItem" />
             <div style="display: none" id="testDelivery"></div>
-            <PrintSave />
+
         </div>
 <!--@printOk="printOk"-->
 </template>
 
 <script>
     import api from '../../api/order/customer'
-    import ApplyCheck from '@/components/Applys/ApplyCheck'
-    import PrintSave from '@/components/Applys/PrintSave'
 
     export default {
         name: "BillsPanel",
@@ -99,8 +96,7 @@
         },
 
         components: {
-            ApplyCheck,
-            PrintSave,
+
         },
         data() {
             return {

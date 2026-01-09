@@ -35,6 +35,11 @@ Thumbs.db
 vue/.env
 vue/.env.*
 
+# Config files with sensitive information
+vue/src/config/index.js
+cankao/config.js
+语音识别接口文档.md
+
 # Extension
 /src/extension/
 

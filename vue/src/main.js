@@ -19,6 +19,7 @@ const routes = [
   //   path: '/',
   //   name: 'TRyVue',
   //   component: TRyVue,
+  
   // },
   {
     path: '/',
