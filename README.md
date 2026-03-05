@@ -1,2 +1,0 @@
-# jingjing-self-print
-print

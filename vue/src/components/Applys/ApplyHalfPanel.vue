@@ -1,6 +1,16 @@
 <template>
 
-    <div class="applyBodyPage ">
+    <div class="applyBodyPage " style="position: relative;">
+        <!-- 打印蒙版 -->
+        <div v-if="isPrinting" class="printing-overlay">
+            <div class="printing-content">
+                <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">打印中...</span>
+                </div>
+                <div class="text-white fw-bold" style="font-size: 18px;">正在打印，请稍候...</div>
+                <div class="text-white mt-2" style="font-size: 14px;">打印完成后将自动保存</div>
+            </div>
+        </div>
 
         <div class=" card  shadow-lg p-20" style="min-height: 500px;">
             <!-- 页头 -->
@@ -8,15 +18,15 @@
                 <div class="header-content">
                     <!-- 溯源类型布局（3行） -->
                     <template v-if="isTraceabilityType">
-                        <div class="leftPage">
+                        <div class="leftPage" @click="handleHeaderClick">
                             <div class="item">单位: {{ depName }}</div>
                             <div class="item">时间: {{ displayDate }}</div>
                             <div class="item">共{{ totalPages }}页 - 第{{ pagesIndex }}页</div>
                         </div>
-                        <div class="centerPage" >
+                        <div class="centerPage" @click="handleHeaderClick">
                             <div class="title">{{ disInfo.nxDistributerName }}</div>
                         </div>
-                        <div class="rightPage" >
+                        <div class="rightPage" @click="handleHeaderClick">
                             <div class="item" v-if="qrCodeUrl" style="text-align: right; height: 75px; display: flex; align-items: center; justify-content: flex-end;">
                                 <img :src="qrCodeUrl" alt="订单二维码" style="width: 75px; height: 75px; display: block; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; object-fit: contain;" />
                             </div>
@@ -25,14 +35,14 @@
                     
                     <!-- 普通类型布局（2行） -->
                     <template v-else>
-                        <div class="leftPage">
+                        <div class="leftPage" @click="handleHeaderClick">
                             <div class="item">单位: {{ depName }}</div>
                             <div class="item">时间: {{ displayDate }}</div>
                         </div>
-                        <div class="centerPage" >
-                            <div class="title">{{ disInfo.nxDistributerName }} 送货单</div>
+                        <div class="centerPage" @click="handleHeaderClick">
+                            <div class="title">{{ disInfo.nxDistributerName }}</div>
                         </div>
-                        <div class="rightPage" >
+                        <div class="rightPage" @click="handleHeaderClick">
                             <div class="item">共{{ totalPages }}页 - 第{{ pagesIndex }}页</div>
                             <div class="item">单号: {{ tradeNo }}</div>
                         </div>
@@ -40,70 +50,24 @@
                 </div>
             </div>
 
-            <!-- 打印校准面板 -->
-            <div v-if="showCalibrationPanel" style="background: #f5f5f5; border: 1px solid #ddd; margin: 10px; padding: 15px; border-radius: 5px;">
-                <h3 style="margin: 0 0 15px 0; color: #333;">🔧 打印校准设置</h3>
-                
-                <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
-                    <!-- 左侧安全边距 -->
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <label style="font-weight: bold; min-width: 80px;">左侧边距:</label>
-                        <button @click="adjustLeftMargin(-1)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1mm</button>
-                        <button @click="adjustLeftMargin(-0.5)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5mm</button>
-                        <span style="min-width: 40px; text-align: center; font-weight: bold;">{{ currentLeftMargin }}mm</span>
-                        <button @click="adjustLeftMargin(0.5)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5mm</button>
-                        <button @click="adjustLeftMargin(1)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1mm</button>
-                    </div>
-
-                    <!-- 右侧安全边距 -->
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <label style="font-weight: bold; min-width: 80px;">右侧边距:</label>
-                        <button @click="adjustRightMargin(-1)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1mm</button>
-                        <button @click="adjustRightMargin(-0.5)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5mm</button>
-                        <span style="min-width: 40px; text-align: center; font-weight: bold;">{{ currentRightMargin }}mm</span>
-                        <button @click="adjustRightMargin(0.5)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5mm</button>
-                        <button @click="adjustRightMargin(1)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1mm</button>
-                    </div>
-
-                    <!-- 整体缩放 -->
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <label style="font-weight: bold; min-width: 80px;">整体缩放:</label>
-                        <button @click="adjustScale(-0.01)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.01</button>
-                        <button @click="adjustScale(-0.005)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.005</button>
-                        <span style="min-width: 50px; text-align: center; font-weight: bold;">{{ currentScale }}</span>
-                        <button @click="adjustScale(0.005)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.005</button>
-                        <button @click="adjustScale(0.01)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.01</button>
-                    </div>
-                </div>
-
-                <div style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
-                    <button @click="printCalibrationPage()" style="background: #2196F3; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
-                        📄 打印校准页
-                    </button>
-                    <button @click="resetCalibration()" style="background: #FF9800; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
-                        🔄 恢复默认
-                    </button>
-                    <button @click="saveCurrentProfileAsDefault()" style="background: #9C27B0; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
-                        💾 保存配置
-                    </button>
-                    <button @click="showCalibrationPanel = false" style="background: #f44336; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
-                        ❌ 关闭
-                    </button>
-                </div>
-
-                <div style="margin-top: 10px; padding: 10px; background: #e3f2fd; border-radius: 3px; font-size: 12px; color: #1976d2;">
-                    <strong>使用说明：</strong><br>
-                    1. 先打印校准页，检查右侧边框是否完整显示<br>
-                    2. 如果右侧边框被裁掉，增加右侧边距或减小整体缩放<br>
-                    3. 如果左侧内容被裁掉，增加左侧边距<br>
-                    4. 调整满意后点击"保存配置"，系统会记住当前打印机的设置
-                </div>
-            </div>
+            <!-- 打印校准面板组件 -->
+            <PrintCalibrationPanel
+                :visible="showCalibrationPanel"
+                :current-left-margin.sync="currentLeftMargin"
+                :current-right-margin.sync="currentRightMargin"
+                :distributor-name-font-size.sync="distributorNameFontSize"
+                :order-content-font-size.sync="orderContentFontSize"
+                :header-font-size.sync="headerFontSize"
+                :line-height.sync="lineHeight"
+                @print-calibration-page="printCalibrationPage"
+                @close="showCalibrationPanel = false"
+                @saved="handleProfileSaved"
+            />
 
             <!-- 订单内容部分 - 双列布局 -->
-            <div class="content-bill">
-                    <!-- 左列容器 -->
-                    <div class="half-column-container" >
+            <div class="half-content-bill" >
+                    <!-- 外层容器：左右各占50% -->
+                    <div class="half-half-column-container">
                         <!-- 左列表头 -->
                         <div class="table-header">
                             <div class="ten">序号</div>
@@ -115,19 +79,25 @@
                         </div>
 
                         <!-- 左列数据 -->
-                        <div class="table-row" v-for="(item, index) in currentPageData.dualRows"
-                             :key="'left-' + index">
-                            <div class="ten">{{ (pagesIndex - 1) * pageRowsCount + index + 1 }}</div>
+                        <template v-for="(item, index) in currentPageData.dualRows" :key="'left-' + index">
+                            <!-- 部门名称行 -->
+                            <div v-if="item.isDepartmentHeader" class="table-row department-header-row" style="font-weight: bold; background-color: #f0f0f0; border-bottom: 1px solid #000;">
+                                <div style="width: 100%; text-align: left !important; padding-left: 20px !important; justify-content: flex-start !important;">{{ item.depName }}</div>
+                            </div>
+                            <!-- 普通订单行 -->
+                            <div v-else class="table-row">
+                                <div class="ten">{{ getRowNumber(item, index, 'left') }}</div>
                             <div class="thirty">{{ item.nxDistributerGoodsEntity?.nxDgGoodsName }}</div>
-                            <div class="fifteen">{{ item.nxDistributerGoodsEntity?.nxDgGoodsStandardname }}</div>
+                            <div class="fifteen">{{ item.nxDoPrintStandard }}</div>
                             <div class="ten">{{ item.nxDoWeight }}</div>
                             <div class="fifteen">{{ item.nxDoPrice }}</div>
                             <div class="twenty">{{ item.nxDoSubtotal }}</div>
                         </div>
+                        </template>
                     </div>
 
                     <!-- 右列容器 -->
-                    <div class="half-column-container" >
+                    <div class="half-half-column-container">
                         <!-- 右列表头 -->
                         <div class="table-header">
                             <div class="ten">序号</div>
@@ -139,15 +109,21 @@
                         </div>
 
                         <!-- 右列数据 -->
-                        <div class="table-row" v-for="(item, index) in currentPageData.rightColumnData"
-                             :key="'right-' + index">
-                            <div class="ten">{{ item && item.nxDoSubtotal ? (pagesIndex - 1) * pageRowsCount + Math.ceil(pageRowsCount / 2) + index + 1 : '' }}</div>
+                        <template v-for="(item, index) in currentPageData.rightColumnData" :key="'right-' + index">
+                            <!-- 部门名称行 -->
+                            <div v-if="item && item.isDepartmentHeader" class="table-row department-header-row" style="font-weight: bold; background-color: #f0f0f0; border-bottom: 1px solid #000;">
+                                <div style="width: 100%; text-align: left !important; padding-left: 20px;">{{ item.depName }}</div>
+                            </div>
+                            <!-- 普通订单行 -->
+                            <div v-else-if="item && (item.nxDoSubtotal || item.nxDistributerGoodsEntity)" class="table-row">
+                                <div class="ten">{{ item && item.nxDoSubtotal ? getRowNumber(item, index, 'right') : '' }}</div>
                             <div class="thirty">{{ item && item.nxDistributerGoodsEntity ? item.nxDistributerGoodsEntity.nxDgGoodsName : '' }}</div>
-                            <div class="fifteen">{{ item && item.nxDistributerGoodsEntity ? item.nxDistributerGoodsEntity.nxDgGoodsStandardname : '' }}</div>
+                            <div class="fifteen">{{ item && item.nxDoPrintStandard ? item.nxDoPrintStandard : '' }}</div>
                             <div class="ten">{{ item && item.nxDoWeight ? item.nxDoWeight : '' }}</div>
                             <div class="fifteen">{{ item && item.nxDoPrice ? item.nxDoPrice : '' }}</div>
                             <div class="twenty">{{ item && item.nxDoSubtotal ? item.nxDoSubtotal : '' }}</div>
                         </div>
+                        </template>
                     </div>
             </div>
 
@@ -200,6 +176,9 @@
             <div v-if="gbBatchId !== -1">
                 <button class="btn btn-lg btn-primary" @click="printOnly">
                     <i class="fas fa-print"></i> 打印订货单
+                </button>
+                <button class="btn btn-lg btn-secondary" @click="showCalibrationPanel = !showCalibrationPanel" style="margin-left: 10px;">
+                    <i class="fas fa-cog"></i> 打印校准
                 </button>
 
             </div>
@@ -285,7 +264,7 @@
                                 <div class="print-item">时间: {{ displayDate }}</div>
                             </div>
                             <div class="print-center">
-                                <div class="print-title">{{ disInfo?.nxDistributerName || '配送商' }} 送货单</div>
+                                <div class="print-title">{{ disInfo?.nxDistributerName || '配送商' }} </div>
                             </div>
                             <div class="print-right">
                                 <div class="print-item">共{{ totalPages }}页 - 第{{ page.pageIndex }}页</div>
@@ -310,18 +289,21 @@
                         </div>
 
                         <!-- 左列数据 -->
-                        <div
-                                v-for="(item, rowIndex) in page.dualRows"
-                                :key="'left-' + rowIndex"
-                                class="print-table-row"
-                        >
-                            <div class="print-col print-ten">{{ ((page.pageIndex - 1) * pageRowsCount + rowIndex + 1) }}</div>
+                        <template v-for="(item, rowIndex) in page.dualRows" :key="'left-' + rowIndex">
+                            <!-- 部门名称行 -->
+                            <div v-if="item.isDepartmentHeader" class="print-table-row print-department-header-row" style="font-weight: bold; background-color: #f0f0f0; border-bottom: 1px solid #000;">
+                                <div class="print-col print-department-name-col" style="width: 100%; text-align: left !important; padding-left: 20px !important; justify-content: flex-start !important;">{{ item.depName }}</div>
+                            </div>
+                            <!-- 普通订单行 -->
+                            <div v-else class="print-table-row">
+                                <div class="print-col print-ten">{{ getPrintRowNumber(item, rowIndex, page.pageIndex, 'left') }}</div>
                             <div class="print-col print-thirty">{{ item.nxDistributerGoodsEntity?.nxDgGoodsName }}</div>
-                            <div class="print-col print-fifteen">{{ item.nxDistributerGoodsEntity?.nxDgGoodsStandardname }}</div>
+                            <div class="print-col print-fifteen">{{ item.nxDoPrintStandard }}</div>
                             <div class="print-col print-ten">{{ item.nxDoWeight }}</div>
                             <div class="print-col print-fifteen">{{ item.nxDoPrice }}</div>
                             <div class="print-col print-twenty">{{ item.nxDoSubtotal }}</div>
                         </div>
+                        </template>
                     </div>
 
                     <!-- 右列容器 -->
@@ -337,18 +319,21 @@
                         </div>
 
                         <!-- 右列数据 -->
-                        <div
-                                v-for="(item, rowIndex) in page.rightColumnData"
-                                :key="'right-' + rowIndex"
-                                class="print-table-row"
-                        >
-                            <div class="print-col print-ten">{{ ((page.pageIndex - 1) * pageRowsCount + Math.ceil(pageRowsCount / 2) + rowIndex + 1) }}</div>
-                            <div class="print-col print-thirty">{{ item.nxDistributerGoodsEntity?.nxDgGoodsName }}</div>
-                            <div class="print-col print-fifteen">{{ item.nxDistributerGoodsEntity?.nxDgGoodsStandardname }}</div>
-                            <div class="print-col print-ten">{{ item.nxDoWeight }}</div>
-                            <div class="print-col print-fifteen">{{ item.nxDoPrice }}</div>
-                            <div class="print-col print-twenty">{{ item.nxDoSubtotal }}</div>
+                        <template v-for="(item, rowIndex) in page.rightColumnData" :key="'right-' + rowIndex">
+                            <!-- 部门名称行 -->
+                            <div v-if="item && item.isDepartmentHeader" class="print-table-row print-department-header-row" style="font-weight: bold; background-color: #f0f0f0; border-bottom: 1px solid #000;">
+                                <div class="print-col print-department-name-col" style="width: 100%; text-align: left !important; padding-left: 20px !important; justify-content: flex-start !important;">{{ item.depName }}</div>
                         </div>
+                            <!-- 普通订单行 -->
+                            <div v-else class="print-table-row">
+                                <div class="print-col print-ten">{{ item && item.nxDoSubtotal ? getPrintRowNumber(item, rowIndex, page.pageIndex, 'right') : '' }}</div>
+                                <div class="print-col print-thirty">{{ item && item.nxDistributerGoodsEntity ? item.nxDistributerGoodsEntity.nxDgGoodsName : '' }}</div>
+                                <div class="print-col print-fifteen">{{ item && item.nxDoPrintStandard ? item.nxDoPrintStandard : '' }}</div>
+                                <div class="print-col print-ten">{{ item && item.nxDoWeight ? item.nxDoWeight : '' }}</div>
+                                <div class="print-col print-fifteen">{{ item && item.nxDoPrice ? item.nxDoPrice : '' }}</div>
+                                <div class="print-col print-twenty">{{ item && item.nxDoSubtotal ? item.nxDoSubtotal : '' }}</div>
+                            </div>
+                        </template>
                     </div>
 
                 </div>
@@ -389,13 +374,53 @@
     import {mapState} from 'vuex';
     import * as XLSX from 'xlsx';
     import QRCode from 'qrcode'
+    import PrintCalibrationPanel from '@/components/PrintCalibrationPanel.vue'
+    import { initPrinterProfile, getCurrentPrinterName, loadPrinterProfile, DEFAULT_PROFILE } from '@/utils/printerProfile'
 
     export default {
         name: "ApplyHalfPanel",
+        components: {
+            PrintCalibrationPanel
+        },
         props: ['nxDepFatherId', 'nxDepId', 'depName', 'depPrintName',
-            'updateTime', 'gbDepFatherId', 'gbDepId', 'gbDisId', 'gbBatchId', 'orderData'],
+            'updateTime', 'gbDepFatherId', 'gbDepId', 'gbDisId', 'gbBatchId', 'orderData', 'isHistoryOrder'],
+        watch: {
+            // 监听字体大小变化，确保CSS变量同步更新
+            distributorNameFontSize(newValue) {
+                const cssValue = String(newValue) + 'px';
+                document.documentElement.style.setProperty('--distributor-name-font-size', cssValue);
+                // 使用 setTimeout 确保在 DOM 更新后应用样式
+                setTimeout(() => {
+                    const titleElements = document.querySelectorAll('.title, .print-title');
+                    titleElements.forEach(el => {
+                        el.style.setProperty('font-size', cssValue, 'important');
+                    });
+                    // 强制更新视图
+                    this.$forceUpdate();
+                }, 10);
+            },
+            orderContentFontSize(newValue) {
+                const cssValue = String(newValue) + 'px';
+                document.documentElement.style.setProperty('--order-content-font-size', cssValue);
+                // 使用 setTimeout 确保在 DOM 更新后应用样式
+                setTimeout(() => {
+                    const contentElements = document.querySelectorAll('.table-row, .table-header, .print-table-row, .print-table-header, .print-item, .print-address');
+                    contentElements.forEach(el => {
+                        el.style.setProperty('font-size', cssValue, 'important');
+                    });
+                    // 强制更新视图
+                    this.$forceUpdate();
+                }, 10);
+            },
+            currentLeftMargin(newValue) {
+                document.documentElement.style.setProperty('--safe-left-mm', String(newValue));
+            },
+            currentRightMargin(newValue) {
+                document.documentElement.style.setProperty('--safe-right-mm', String(newValue));
+            }
+        },
         computed: {
-            // 统一过滤后的数据源（只保留有小计的行）
+            // 统一过滤后的数据源（只保留有小计的行，如果有子部门则插入部门名称行）
             _filteredRows() {
                 // 确定数据源
                 let dataSource;
@@ -415,13 +440,56 @@
                     return [];
                 }
                 
+                // 过滤掉无效订单
                 const filtered = dataSource.filter(
                     it => it && Object.keys(it).length > 0 && it.nxDoSubtotal !== undefined
                 );
                 
-                console.log('过滤后的数据条数:', filtered.length);
-                console.log('总页数:', Math.ceil(filtered.length / this.pageRowsCount));
+                // 历史订单（有 orderData）时只用 orderData，不使用 departmentsData（来自今日订单）
+                if (this.orderData) {
+                    return filtered;
+                }
+                // 如果有子部门数据，按部门分组并插入部门名称行
+                if (this.departmentsData && this.departmentsData.length > 0) {
+                    console.log(`✅ [_filteredRows] 检测到子部门数据，开始按部门分组`);
+                    console.log(`📋 [_filteredRows] 子部门数量: ${this.departmentsData.length}`);
+                    
+                    const result = [];
+                    let rowIndex = 0;
+                    
+                    this.departmentsData.forEach((dep, depIndex) => {
+                        // 只处理有订单的部门
+                        if (dep.depOrders && dep.depOrders.length > 0) {
+                            // 插入部门名称行（标记为部门标题行）
+                            result.push({
+                                isDepartmentHeader: true,
+                                depId: dep.depId,
+                                depName: dep.depName,
+                                depSubtotal: dep.depSubtotal,
+                                rowIndex: rowIndex++
+                            });
+                            
+                            // 添加该部门的订单
+                            dep.depOrders.forEach(order => {
+                                if (order && order.nxDoSubtotal !== undefined) {
+                                    result.push({
+                                        ...order,
+                                        isDepartmentHeader: false,
+                                        rowIndex: rowIndex++
+                                    });
+                                }
+                            });
+                            
+                            console.log(`📁 [_filteredRows] 部门 "${dep.depName}" 添加了 ${dep.depOrders.length} 条订单`);
+                        }
+                    });
+                    
+                    console.log(`✅ [_filteredRows] 按部门分组后总行数: ${result.length} (包含 ${this.departmentsData.filter(d => d.depOrders && d.depOrders.length > 0).length} 个部门标题行)`);
+                    return result;
+                }
                 
+                // 没有子部门，返回原始过滤后的数据
+                console.log(`✅ [_filteredRows] 没有子部门，返回原始数据，过滤后数据长度: ${filtered.length}`);
                 return filtered;
             },
 
@@ -465,15 +533,32 @@
                     rightColumnData.push({});
                 }
 
-                const pageSubtotal = pageData.reduce((acc, it) => acc + parseFloat(it.nxDoSubtotal || 0), 0);
+                // 计算小计时排除部门名称行
+                const pageSubtotal = pageData.reduce((acc, it) => {
+                    if (it.isDepartmentHeader) return acc;
+                    return acc + parseFloat(it.nxDoSubtotal || 0);
+                }, 0);
                 const pageSubtotalFormatted = parseFloat(pageSubtotal.toFixed(1));
 
                 console.log('currentPageData - 最终左列条数:', leftColumnData.length);
                 console.log('currentPageData - 最终右列条数:', rightColumnData.length);
 
+                // 检查右列是否有实际数据（不是空对象）
+                const hasRightColumnData = rightColumnData.some(item => 
+                    item && (item.nxDoSubtotal || item.isDepartmentHeader || item.nxDistributerGoodsEntity)
+                );
+                
+                // 如果右列没有实际数据，过滤掉空对象
+                const filteredRightColumnData = hasRightColumnData 
+                    ? rightColumnData 
+                    : rightColumnData.filter(item => 
+                        item && (item.nxDoSubtotal || item.isDepartmentHeader || item.nxDistributerGoodsEntity)
+                    );
+
                 return {
                     dualRows: leftColumnData, // 左列13行
-                    rightColumnData: rightColumnData, // 右列13行
+                    rightColumnData: filteredRightColumnData, // 右列数据（如果没有实际数据则为空数组）
+                    hasRightColumnData: hasRightColumnData, // 右列是否有实际数据
                     pageSubtotal: pageSubtotalFormatted,
                     pageSubtotalHanzi: this.numberToChinese(pageSubtotalFormatted, false),
                 };
@@ -487,7 +572,7 @@
             isTraceabilityType() {
                 return this.disUser && 
                        this.disUser.nxDistributerEntity && 
-                       this.disUser.nxDistributerEntity.nxDistributerBusinessTypeId == 4;
+                       this.disUser.nxDistributerEntity.nxDistributerType == 2;
             },
             disId() {
                 return this.disUser && this.disUser.nxDistributerEntity ? this.disUser.nxDistributerEntity.nxDistributerId : -1;
@@ -666,8 +751,17 @@
                 pageRowsCount: 26, // 每页行数，双列布局每页26行（左列13行+右列13行）- 适应140mm固定纸张
                 showCalibrationPanel: false, // 控制打印校准面板显示
                 currentLeftMargin: 12, // 当前左侧边距
-                currentRightMargin: 12, // 当前右侧边距（与左侧相同，确保居中）
-                currentScale: 0.98, // 当前缩放比例
+                currentRightMargin: 12, // 当前右侧边距
+                distributorNameFontSize: 18, // 配送商名称字体大小（px）
+                orderContentFontSize: 14, // 订单内容字体大小（px）
+                headerFontSize: 14, // 表头字体大小（px），默认 14px
+                lineHeight: 24, // 行间距（px），默认 24px
+                departmentsData: [], // 子部门数据（用于按部门分组打印）
+                isPrinting: false, // 控制打印蒙版显示
+                
+                // 隐藏功能：连续点击页头3次显示校准面板
+                headerClickCount: 0, // 页头点击计数
+                headerClickTimer: null // 点击计时器（用于重置计数）
 
             }
         },
@@ -680,11 +774,26 @@
             console.log("gbBatchId===", this.gbBatchId);
 
             // 1) 打印机配置初始化
+            console.log('🔍 [printOnly] 开始打印，初始化前字体大小:', {
+                distributorNameFontSize: this.distributorNameFontSize,
+                orderContentFontSize: this.orderContentFontSize,
+                currentLeftMargin: this.currentLeftMargin,
+                currentRightMargin: this.currentRightMargin
+            });
             await this.initPrinterProfile();
+            console.log('🔍 [printOnly] 初始化后字体大小:', {
+                distributorNameFontSize: this.distributorNameFontSize,
+                orderContentFontSize: this.orderContentFontSize,
+                currentLeftMargin: this.currentLeftMargin,
+                currentRightMargin: this.currentRightMargin,
+                cssDistributorNameFontSize: getComputedStyle(document.documentElement).getPropertyValue('--distributor-name-font-size'),
+                cssOrderContentFontSize: getComputedStyle(document.documentElement).getPropertyValue('--order-content-font-size')
+            });
 
             // 2) 加载数据
             if (this.orderData) {
-                // 历史订单：直接使用传入的 orderData
+                // 历史订单：直接使用传入的 orderData，清空 departmentsData 避免误用今日订单子部门数据
+                this.departmentsData = [];
                 console.log("使用历史订单数据：", this.orderData);
                 this.tradeNo = this.orderData.bill?.nxDbTradeNo || '';
                 this.subtotal = parseFloat(this.orderData.bill?.nxDbTotal) || 0;
@@ -728,6 +837,88 @@
         },
 
         methods: {
+            // 处理页头点击（隐藏功能：连续点击3次显示校准面板）
+            handleHeaderClick() {
+                // 清除之前的计时器
+                if (this.headerClickTimer) {
+                    clearTimeout(this.headerClickTimer);
+                }
+                
+                // 增加点击计数
+                this.headerClickCount++;
+                
+                // 设置计时器：2秒内如果没有再次点击，重置计数
+                this.headerClickTimer = setTimeout(() => {
+                    this.headerClickCount = 0;
+                }, 2000);
+                
+                // 如果连续点击3次，显示校准面板
+                if (this.headerClickCount >= 3) {
+                    this.showCalibrationPanel = true;
+                    this.headerClickCount = 0; // 重置计数
+                    console.log('✅ [handleHeaderClick] 连续点击3次，已显示校准面板');
+                }
+            },
+            
+            // 显示校准面板（供外部调用）
+            openCalibrationPanel() {
+                this.showCalibrationPanel = true;
+                console.log('✅ [openCalibrationPanel] 校准面板已显示');
+            },
+            // 获取行号（跳过部门名称行）- 用于显示层
+            getRowNumber(item, index, column) {
+                // 如果是部门名称行，返回空
+                if (item && item.isDepartmentHeader) {
+                    return '';
+                }
+                
+                const rows = this._filteredRows;
+                const start = (this.pagesIndex - 1) * this.pageRowsCount;
+                const halfCount = Math.ceil(this.pageRowsCount / 2); // 13行
+                
+                // 根据列类型确定起始行号
+                const baseRowNumber = column === 'right' ? halfCount : 0;
+                
+                // 计算当前页中，该行之前有多少非部门名称行
+                let orderRowCount = 0;
+                const startIndex = column === 'right' ? halfCount : 0;
+                const endIndex = column === 'right' ? this.pageRowsCount : halfCount;
+                
+                for (let i = start + startIndex; i < start + index + startIndex; i++) {
+                    if (i < rows.length && !rows[i].isDepartmentHeader) {
+                        orderRowCount++;
+                    }
+                }
+                
+                return (this.pagesIndex - 1) * this.pageRowsCount + baseRowNumber + orderRowCount + 1;
+            },
+            
+            // 获取打印行号（跳过部门名称行）
+            getPrintRowNumber(item, index, pageIndex, column) {
+                if (item && item.isDepartmentHeader) {
+                    return '';
+                }
+                
+                const rows = this._filteredRows;
+                const start = (pageIndex - 1) * this.pageRowsCount;
+                const halfCount = Math.ceil(this.pageRowsCount / 2); // 13行
+                
+                // 根据列类型确定起始行号
+                const baseRowNumber = column === 'right' ? halfCount : 0;
+                
+                // 计算当前页中，该行之前有多少非部门名称行
+                let orderRowCount = 0;
+                const startIndex = column === 'right' ? halfCount : 0;
+                
+                for (let i = start + startIndex; i < start + index + startIndex; i++) {
+                    if (i < rows.length && !rows[i].isDepartmentHeader) {
+                        orderRowCount++;
+                    }
+                }
+                
+                return (pageIndex - 1) * this.pageRowsCount + baseRowNumber + orderRowCount + 1;
+            },
+            
             // 生成二维码
             async generateQRCode() {
                 if (!this.tradeNo) {
@@ -759,6 +950,10 @@
             
             // 统一入口：参数变化 → 重置 + 拉数据
             async reloadByContext() {
+                if (this.orderData) {
+                    console.log("reloadByContext: 历史订单模式，跳过 fetchOrderData/fetchBatchData");
+                    return;
+                }
                 this.pagesIndex = 1;
                 this.applyArrPrint = [];
                 this.subtotal = 0;
@@ -781,105 +976,167 @@
             // 应用打印机配置文件
             applyPrinterProfile(profile) {
                 const root = document.documentElement.style;
-                this.currentLeftMargin = profile.safeLeftMm || 10;
-                this.currentRightMargin = profile.safeRightMm || 10;
-                this.currentScale = profile.scale || 1;
+                // 先更新数据属性（使用 ?? 而不是 ||，避免 0 值被替换）
+                this.currentLeftMargin = profile.safeLeftMm ?? 12; // 默认改为12
+                this.currentRightMargin = profile.safeRightMm ?? 12; // 默认改为12
+                this.distributorNameFontSize = profile.distributorNameFontSize ?? 18; // 配送商名称字体大小
+                this.orderContentFontSize = profile.orderContentFontSize ?? 14; // 订单内容字体大小
+                this.headerFontSize = profile.headerFontSize ?? 14; // 应用表头字体大小
+                this.lineHeight = profile.lineHeight ?? 24; // 应用行间距
+                
+                // 再设置CSS变量
                 root.setProperty('--safe-left-mm', String(this.currentLeftMargin));
                 root.setProperty('--safe-right-mm', String(this.currentRightMargin));
-                root.setProperty('--content-scale', String(this.currentScale));
-                console.log('应用打印机配置:', profile);
+                root.setProperty('--distributor-name-font-size', String(this.distributorNameFontSize) + 'px');
+                root.setProperty('--order-content-font-size', String(this.orderContentFontSize) + 'px');
+                root.setProperty('--header-font-size', String(this.headerFontSize) + 'px');
+                
+                console.log('✅ [applyPrinterProfile] 应用打印机配置:', {
+                    profile,
+                    currentLeftMargin: this.currentLeftMargin,
+                    currentRightMargin: this.currentRightMargin,
+                    distributorNameFontSize: this.distributorNameFontSize,
+                    orderContentFontSize: this.orderContentFontSize,
+                    'profile.distributorNameFontSize': profile.distributorNameFontSize,
+                    'profile.orderContentFontSize': profile.orderContentFontSize
+                });
             },
 
             // 保存打印机配置文件
-            savePrinterProfile(deviceName, profile) {
-                const key = 'printerProfile:' + deviceName;
-                localStorage.setItem(key, JSON.stringify(profile));
-                console.log('保存打印机配置:', deviceName, profile);
-            },
 
-            // 加载打印机配置文件
-            loadPrinterProfile(deviceName) {
-                const key = 'printerProfile:' + deviceName;
-                const json = localStorage.getItem(key);
-                const defaultProfile = { safeLeftMm: 12, safeRightMm: 12, scale: 0.98 };
-                const profile = json ? JSON.parse(json) : defaultProfile;
-                console.log('加载打印机配置:', deviceName, profile);
-                return profile;
-            },
-
-            // 获取当前打印机名称（需要与Electron主进程配合）
-            async getCurrentPrinterName() {
-                try {
-                    // 这里需要与Electron主进程配合，获取当前选择的打印机
-                    // 暂时返回默认值，实际使用时需要调用Electron API
-                    if (window.electronAPI && window.electronAPI.getSelectedPrinterName) {
-                        return await window.electronAPI.getSelectedPrinterName();
-                    }
-                    return 'default-printer';
-                } catch (error) {
-                    console.warn('获取打印机名称失败:', error);
-                    return 'default-printer';
-                }
-            },
-
-            // 初始化打印机配置
+            // 初始化打印机配置（使用共享工具）
             async initPrinterProfile() {
-                try {
-                    const deviceName = await this.getCurrentPrinterName();
-                    const profile = this.loadPrinterProfile(deviceName);
-                    this.applyPrinterProfile(profile);
-                } catch (error) {
-                    console.warn('初始化打印机配置失败:', error);
-                    // 使用默认配置
-                    this.applyPrinterProfile({ safeLeftMm: 12, safeRightMm: 12, scale: 0.98 });
-                }
+                await initPrinterProfile(this);
             },
 
-            // 微调左侧安全边距
+            // 微调左侧安全边距（联动调整右侧边距）
             adjustLeftMargin(delta) {
-                const newValue = Math.max(5, Math.min(20, this.currentLeftMargin + delta));
-                this.currentLeftMargin = newValue;
-                document.documentElement.style.setProperty('--safe-left-mm', String(newValue));
-                console.log('调整左侧安全边距:', newValue);
+                // 计算目标值
+                const targetLeft = this.currentLeftMargin + delta;
+                const targetRight = this.currentRightMargin - delta;
+                
+                // 限制在边界内
+                const newLeftValue = Math.max(5, Math.min(20, targetLeft));
+                const newRightValue = Math.max(5, Math.min(20, targetRight));
+                
+                // 如果一侧达到边界，另一侧按实际变化量调整
+                const actualLeftDelta = newLeftValue - this.currentLeftMargin;
+                const actualRightDelta = -actualLeftDelta; // 反向变化
+                const finalRightValue = Math.max(5, Math.min(20, this.currentRightMargin + actualRightDelta));
+                
+                this.currentLeftMargin = newLeftValue;
+                this.currentRightMargin = finalRightValue;
+                
+                document.documentElement.style.setProperty('--safe-left-mm', String(this.currentLeftMargin));
+                document.documentElement.style.setProperty('--safe-right-mm', String(this.currentRightMargin));
+                
+                console.log('调整左侧安全边距（联动）:', {
+                    left: this.currentLeftMargin,
+                    right: this.currentRightMargin,
+                    delta: delta
+                });
             },
 
-            // 微调右侧安全边距
+            // 微调右侧安全边距（联动调整左侧边距）
             adjustRightMargin(delta) {
-                const newValue = Math.max(5, Math.min(20, this.currentRightMargin + delta));
-                this.currentRightMargin = newValue;
-                document.documentElement.style.setProperty('--safe-right-mm', String(newValue));
-                console.log('调整右侧安全边距:', newValue);
+                // 计算目标值
+                const targetRight = this.currentRightMargin + delta;
+                const targetLeft = this.currentLeftMargin - delta;
+                
+                // 限制在边界内
+                const newRightValue = Math.max(5, Math.min(20, targetRight));
+                const newLeftValue = Math.max(5, Math.min(20, targetLeft));
+                
+                // 如果一侧达到边界，另一侧按实际变化量调整
+                const actualRightDelta = newRightValue - this.currentRightMargin;
+                const actualLeftDelta = -actualRightDelta; // 反向变化
+                const finalLeftValue = Math.max(5, Math.min(20, this.currentLeftMargin + actualLeftDelta));
+                
+                this.currentRightMargin = newRightValue;
+                this.currentLeftMargin = finalLeftValue;
+                
+                document.documentElement.style.setProperty('--safe-right-mm', String(this.currentRightMargin));
+                document.documentElement.style.setProperty('--safe-left-mm', String(this.currentLeftMargin));
+                
+                console.log('调整右侧安全边距（联动）:', {
+                    right: this.currentRightMargin,
+                    left: this.currentLeftMargin,
+                    delta: delta
+                });
             },
 
-            // 微调整体缩放
-            adjustScale(delta) {
-                const newValue = Math.max(0.95, Math.min(1.05, this.currentScale + delta));
-                this.currentScale = newValue;
-                document.documentElement.style.setProperty('--content-scale', String(newValue));
-                console.log('调整整体缩放:', newValue);
+            // 微调配送商名称字体大小
+            adjustDistributorNameFontSize(delta) {
+                const newValue = Math.max(12, Math.min(24, this.distributorNameFontSize + delta));
+                this.distributorNameFontSize = newValue;
+                
+                // 设置CSS变量（在:root上）
+                const cssValue = String(newValue) + 'px';
+                const root = document.documentElement;
+                root.style.setProperty('--distributor-name-font-size', cssValue);
+                
+                // 使用$nextTick确保DOM更新后再应用样式
+                this.$nextTick(() => {
+                    // 直接更新所有使用该变量的元素（确保立即生效）
+                    const titleElements = document.querySelectorAll('.title, .print-title');
+                    titleElements.forEach(el => {
+                        el.style.setProperty('font-size', cssValue, 'important');
+                    });
+                    
+                    // 验证CSS变量和元素样式是否设置成功
+                    const actualValue = getComputedStyle(root).getPropertyValue('--distributor-name-font-size');
+                    const firstElement = titleElements[0];
+                    const elementFontSize = firstElement ? getComputedStyle(firstElement).fontSize : 'N/A';
+                    
+                    console.log('调整配送商名称字体大小:', {
+                        newValue: newValue + 'px',
+                        cssValue: cssValue,
+                        actualCssVar: actualValue,
+                        dataProperty: this.distributorNameFontSize,
+                        updatedElements: titleElements.length,
+                        firstElementFontSize: elementFontSize
+                    });
+                });
             },
 
-            // 保存当前配置为默认值
-            async saveCurrentProfileAsDefault() {
-                try {
-                    const deviceName = await this.getCurrentPrinterName();
-                    const currentProfile = {
-                        safeLeftMm: this.currentLeftMargin,
-                        safeRightMm: this.currentRightMargin,
-                        scale: this.currentScale
-                    };
-                    this.savePrinterProfile(deviceName, currentProfile);
-                    alert(`已保存 ${deviceName} 的打印配置！`);
-                } catch (error) {
-                    console.error('保存配置失败:', error);
-                    alert('保存配置失败，请重试');
-                }
+            // 微调订单内容字体大小
+            adjustOrderContentFontSize(delta) {
+                const newValue = Math.max(10, Math.min(18, this.orderContentFontSize + delta));
+                this.orderContentFontSize = newValue;
+                
+                // 设置CSS变量（在:root上）
+                const cssValue = String(newValue) + 'px';
+                const root = document.documentElement;
+                root.style.setProperty('--order-content-font-size', cssValue);
+                
+                // 使用$nextTick确保DOM更新后再应用样式
+                this.$nextTick(() => {
+                    // 直接更新所有使用该变量的元素（确保立即生效）
+                    const contentElements = document.querySelectorAll('.table-row, .table-header, .print-table-row, .print-table-header, .print-item, .print-address');
+                    contentElements.forEach(el => {
+                        el.style.setProperty('font-size', cssValue, 'important');
+                    });
+                    
+                    // 验证CSS变量和元素样式是否设置成功
+                    const actualValue = getComputedStyle(root).getPropertyValue('--order-content-font-size');
+                    const firstElement = contentElements[0];
+                    const elementFontSize = firstElement ? getComputedStyle(firstElement).fontSize : 'N/A';
+                    
+                    console.log('调整订单内容字体大小:', {
+                        newValue: newValue + 'px',
+                        cssValue: cssValue,
+                        actualCssVar: actualValue,
+                        dataProperty: this.orderContentFontSize,
+                        updatedElements: contentElements.length,
+                        firstElementFontSize: elementFontSize
+                    });
+                });
             },
 
-            // 恢复默认配置
-            resetCalibration() {
-                this.applyPrinterProfile({ safeLeftMm: 12, safeRightMm: 12, scale: 0.98 });
-                console.log('已恢复默认打印配置');
+            // 处理配置保存事件（由 PrintCalibrationPanel 组件触发）
+            handleProfileSaved(profile) {
+                console.log('✅ [handleProfileSaved] 配置已保存:', profile);
+                // 可以在这里添加额外的逻辑，比如提示用户等
             },
 
             // 打印校准页面
@@ -1033,7 +1290,7 @@
             },
 
             async fetchOrderData() {
-                console.log("开始获取订单数据");
+                console.log("========== [fetchOrderData] 开始获取订单数据 ==========");
                 try {
                     // 调试：打印所有相关属性值
                     console.log("参数值检查:", {
@@ -1044,9 +1301,6 @@
                         resFatherId: this.resFatherId,
                         disId: this.disId
                     });
-
-                    // 构建请求参数 - 传递所有必需参数（后端接口需要这些参数）
-                    const params = new URLSearchParams();
                     
                     // 辅助函数：将值转换为整数，如果无效则返回 -1（后端需要所有参数）
                     const toIntOrMinusOne = (value) => {
@@ -1057,7 +1311,37 @@
                         return isNaN(num) ? -1 : num;
                     };
 
-                    // 添加所有必需参数（后端接口需要这些参数，即使值为 -1 也要传递）
+                    // 构建请求参数对象（用于 phoneGetToFillDepOrders）
+                    const requestData = {
+                        depFatherId: toIntOrMinusOne(this.nxDepFatherId),
+                        gbDepFatherId: toIntOrMinusOne(this.gbDepFatherId),
+                        resFatherId: toIntOrMinusOne(this.resFatherId),
+                        disId: toIntOrMinusOne(this.disId)
+                    };
+
+                    console.log("📤 [fetchOrderData] 准备调用 phoneGetToFillDepOrders 接口，参数:", requestData);
+                    
+                    // 先尝试调用 phoneGetToFillDepOrders 接口（支持子部门）
+                    let res = await api.phoneGetToFillDepOrders(requestData);
+                    
+                    console.log("📥 [fetchOrderData] phoneGetToFillDepOrders 接口返回:", res.data);
+                    
+                    // 判断是否有子部门：检查 arr 的第一个元素是否有 depOrders 字段
+                    let hasSubDepartments = false;
+                    if (res.data && res.data.code === 0 && res.data.data && res.data.data.arr && res.data.data.arr.length > 0) {
+                        const firstItem = res.data.data.arr[0];
+                        // 如果有 depOrders 字段，说明是子部门结构
+                        hasSubDepartments = firstItem.hasOwnProperty('depOrders') || firstItem.hasOwnProperty('depName');
+                        console.log("🔍 [fetchOrderData] 检测到子部门结构:", hasSubDepartments);
+                        console.log("🔍 [fetchOrderData] arr 第一个元素的结构:", Object.keys(firstItem));
+                    }
+                    
+                    if (!hasSubDepartments) {
+                        // 没有子部门，使用原来的接口
+                        console.log("ℹ️ [fetchOrderData] 没有子部门，回退到原来的 disGetToFillDepOrders 接口");
+                        
+                        // 构建 URLSearchParams（用于 disGetToFillDepOrders）
+                        const params = new URLSearchParams();
                     params.append('depFatherId', toIntOrMinusOne(this.nxDepFatherId));
                     params.append('depId', toIntOrMinusOne(this.nxDepId));
                     params.append('gbDepFatherId', toIntOrMinusOne(this.gbDepFatherId));
@@ -1065,18 +1349,76 @@
                     params.append('resFatherId', toIntOrMinusOne(this.resFatherId));
                     params.append('disId', toIntOrMinusOne(this.disId));
 
-                    // 发送请求
-                    console.log("请求参数-====", params.toString());
-                    
-                    // 检查是否有有效参数
-                    if (params.toString() === '') {
-                        console.error("错误：没有有效的请求参数！");
-                        throw new Error("缺少必要的请求参数");
+                        console.log("📤 [fetchOrderData] 调用 disGetToFillDepOrders 接口，参数:", params.toString());
+                        res = await api.disGetToFillDepOrders(params);
+                        console.log("📥 [fetchOrderData] disGetToFillDepOrders 接口返回:", res.data);
+                    } else {
+                        console.log("✅ [fetchOrderData] 检测到有子部门，使用 phoneGetToFillDepOrders 接口的数据");
                     }
-                    
-                    const res = await api.disGetToFillDepOrders(params);
 
                     if (res.data && res.data.data) {
+                        // 处理有子部门的情况（phoneGetToFillDepOrders 返回的数据）
+                        if (hasSubDepartments && res.data.code === 0) {
+                            console.log("✅ [fetchOrderData] 处理子部门数据结构（phoneGetToFillDepOrders）");
+                            
+                            // phoneGetToFillDepOrders 返回的 arr 是子部门数组
+                            const depArr = res.data.data.arr || [];
+                            console.log("📋 [fetchOrderData] 子部门数量:", depArr.length);
+                            
+                            // 合并所有子部门的订单到一个数组
+                            let allOrders = [];
+                            depArr.forEach((dep, index) => {
+                                console.log(`\n📁 [fetchOrderData] ========== 子部门 ${index + 1} ==========`);
+                                console.log(`📁 [fetchOrderData] 子部门名称:`, dep.depName);
+                                console.log(`📁 [fetchOrderData] 子部门ID:`, dep.depId);
+                                console.log(`📁 [fetchOrderData] 子部门小计:`, dep.depSubtotal);
+                                console.log(`📁 [fetchOrderData] 子部门订单数量:`, dep.depOrders ? dep.depOrders.length : 0);
+                                
+                                if (dep.depOrders && Array.isArray(dep.depOrders) && dep.depOrders.length > 0) {
+                                    // 将子部门的订单添加到总数组
+                                    allOrders = allOrders.concat(dep.depOrders);
+                                    console.log(`✅ [fetchOrderData] 已添加 ${dep.depOrders.length} 条订单到总数组`);
+                                }
+                            });
+                            
+                            console.log(`📊 [fetchOrderData] 合并后总订单数: ${allOrders.length}`);
+                            
+                            // 设置订单数据
+                            this.tradeNo = res.data.data.tradeNo;
+                            this.generateQRCode();
+                            this.subtotal = parseFloat(res.data.data.total) || 0;
+                            this.subtotalHanzi = res.data.data.totalHanzi || '';
+                            this.applyArrPrint = allOrders;
+                            
+                            // 保存子部门信息，用于后续打印时按部门分组
+                            this.departmentsData = depArr.map(dep => ({
+                                depId: dep.depId,
+                                depName: dep.depName,
+                                depSubtotal: dep.depSubtotal,
+                                depOrders: dep.depOrders || []
+                            }));
+                            
+                            console.log("📊 [fetchOrderData] 子部门汇总信息:");
+                            const depSummary = this.departmentsData.map((dep, index) => ({
+                                index: index + 1,
+                                name: dep.depName,
+                                id: dep.depId,
+                                orderCount: dep.depOrders.length,
+                                subtotal: dep.depSubtotal
+                            }));
+                            console.table(depSummary);
+                            
+                            console.log("========== [ApplyHalfPanel] 子部门数据处理完成 ==========\n");
+                            
+                            // ✅ 等 Vue 渲染完
+                            this.$nextTick(() => {
+                                console.log("DOM 已渲染，打印区域长度:", this.$refs.printArea?.outerHTML.length);
+                            });
+                            
+                            return; // 提前返回，不执行后面的代码
+                        }
+                        
+                        // 处理没有子部门的情况（原来的逻辑）
                         this.tradeNo = res.data.data.tradeNo;
                         // 生成二维码
                         this.generateQRCode();
@@ -1147,9 +1489,88 @@
             },
 
 
+            // 从配置文件获取缩放系数（每次都读取最新值）
+            async getZoomFactorFromProfile() {
+                try {
+                    const printerName = await getCurrentPrinterName();
+                    if (!printerName) {
+                        console.warn('⚠️ [getZoomFactorFromProfile] 未配置打印机，使用组件默认缩放系数');
+                        return this.zoomFactor || 1.0;
+                    }
+                    
+                    console.log('🔍 [getZoomFactorFromProfile] 使用打印机名称:', printerName);
+                    const profile = await loadPrinterProfile(printerName);
+                    const zoomFactor = profile.zoomFactor ?? 1.0;
+                    
+                    console.log('🔍 [getZoomFactorFromProfile] 获取到的缩放系数:', {
+                        printerName,
+                        zoomFactor,
+                        componentZoomFactor: this.zoomFactor
+                    });
+                    
+                    return zoomFactor;
+                } catch (error) {
+                    console.warn('⚠️ [getZoomFactorFromProfile] 读取失败:', error);
+                    return this.zoomFactor || 1.0;
+                }
+            },
+
+            // 从配置文件获取最大可打印宽度（内容区域上限，180-205mm）
+            async getMaxPrintableWidthFromProfile() {
+                try {
+                    const printerName = await getCurrentPrinterName();
+                    if (!printerName) {
+                        return DEFAULT_PROFILE.maxPrintableWidth ?? 200;
+                    }
+                    const profile = await loadPrinterProfile(printerName);
+                    const val = profile.maxPrintableWidth ?? DEFAULT_PROFILE.maxPrintableWidth ?? 200;
+                    return Math.max(180, Math.min(205, val));
+                } catch (error) {
+                    console.warn('⚠️ [getMaxPrintableWidthFromProfile] 读取失败:', error);
+                    return DEFAULT_PROFILE.maxPrintableWidth ?? 200;
+                }
+            },
+
             // 构建单页HTML（用于逐页打印 - 双列布局）
-            buildSinglePageHtml(pageData, pageIndex, totalPages) {
+            async buildSinglePageHtml(pageData, pageIndex, totalPages) {
                 console.log(`📄 [buildSinglePageHtml] 开始构建第${pageIndex}页, 总页数: ${totalPages}`);
+                
+                // 从配置文件获取缩放系数
+                const zoomFactor = await this.getZoomFactorFromProfile();
+                
+                // 字体大小直接乘以缩放系数（保留1位小数）
+                const scaledDistributorFontSize = Math.round((this.distributorNameFontSize * zoomFactor) * 10) / 10;
+                const scaledOrderFontSize = Math.round((this.orderContentFontSize * zoomFactor) * 10) / 10;
+                // 确保 headerFontSize 使用与 orderContentFontSize 相同的值（14px），保持与其他模板一致
+                // 如果 headerFontSize 不是 14，则使用 orderContentFontSize 的值
+                const headerFontSizeValue = (this.headerFontSize === 14) ? 14 : this.orderContentFontSize;
+                const scaledHeaderFontSize = Math.round((headerFontSizeValue * zoomFactor) * 10) / 10;
+                
+                // 如果 headerFontSize 不是 14，给出提示
+                if (this.headerFontSize !== 14) {
+                    console.warn('⚠️ [buildSinglePageHtml] headerFontSize 值不是14，已自动使用 orderContentFontSize 的值:', {
+                        headerFontSize: this.headerFontSize,
+                        orderContentFontSize: this.orderContentFontSize,
+                        实际使用的值: headerFontSizeValue,
+                        缩放后: scaledHeaderFontSize + 'px',
+                        说明: '为了与其他模板保持一致，页头字体大小使用 orderContentFontSize 的值（14px）'
+                    });
+                }
+                
+                console.log(`📄 [buildSinglePageHtml] 字体缩放信息:`, {
+                    缩放系数: zoomFactor,
+                    原始字体大小: {
+                        配送商: this.distributorNameFontSize + 'px',
+                        订单内容: this.orderContentFontSize + 'px',
+                        表头: this.headerFontSize + 'px'
+                    },
+                    缩放后字体大小: {
+                        配送商: scaledDistributorFontSize + 'px',
+                        订单内容: scaledOrderFontSize + 'px',
+                        表头: scaledHeaderFontSize + 'px'
+                    }
+                });
+                
                 console.log(`📄 [buildSinglePageHtml] 当前页数据:`, {
                     dualRowsCount: pageData.dualRows?.length || 0,
                     rightColumnCount: pageData.rightColumnData?.length || 0,
@@ -1161,18 +1582,28 @@
                 let leftTableRowsHtml = '';
                 if (pageData.dualRows && pageData.dualRows.length > 0) {
                     pageData.dualRows.forEach((item, rowIndex) => {
-                        const rowNum = ((pageIndex - 1) * this.pageRowsCount + rowIndex + 1);
+                        // 如果是部门名称行
+                        if (item.isDepartmentHeader) {
+                            leftTableRowsHtml += `
+                                <div class="print-table-row print-department-header-row" style="font-weight: bold; background-color: #f0f0f0; border-bottom: 1px solid #000; font-size: ${scaledOrderFontSize}px !important;">
+                                    <div class="print-col print-department-name-col" style="width: 100%; text-align: left !important; padding-left: 20px !important; justify-content: flex-start !important; font-size: ${scaledOrderFontSize}px !important;">${item.depName || ''}</div>
+                                </div>
+                            `;
+                        } else {
+                            // 普通订单行
+                            const rowNum = this.getPrintRowNumber(item, rowIndex, pageIndex, 'left');
                         const subtotalValue = item.nxDoSubtotal || '';
                         leftTableRowsHtml += `
-                            <div class="print-table-row">
-                                <div class="print-col print-ten">${rowNum}</div>
-                                <div class="print-col print-thirty">${item.nxDistributerGoodsEntity?.nxDgGoodsName || ''}</div>
-                                <div class="print-col print-fifteen">${item.nxDistributerGoodsEntity?.nxDgGoodsStandardname || ''}</div>
-                                <div class="print-col print-ten">${item.nxDoWeight || ''}</div>
-                                <div class="print-col print-fifteen">${item.nxDoPrice || ''}</div>
-                                <div class="print-col print-twenty" style="border-right: 1px solid #000; text-align: right; padding-right: 2mm;">${subtotalValue}</div>
+                            <div class="print-table-row" style="font-size: ${scaledOrderFontSize}px !important;">
+                                <div class="print-col print-ten" style="font-size: ${scaledOrderFontSize}px !important;">${rowNum}</div>
+                                <div class="print-col print-thirty" style="font-size: ${scaledOrderFontSize}px !important;">${item.nxDistributerGoodsEntity?.nxDgGoodsName || ''}</div>
+                                <div class="print-col print-fifteen" style="font-size: ${scaledOrderFontSize}px !important;">${item.nxDoPrintStandard || ''}</div>
+                                <div class="print-col print-ten" style="font-size: ${scaledOrderFontSize}px !important;">${item.nxDoWeight || ''}</div>
+                                <div class="print-col print-fifteen" style="font-size: ${scaledOrderFontSize}px !important;">${item.nxDoPrice || ''}</div>
+                                <div class="print-col print-twenty" style="border-right: 1px solid #000; text-align: right; padding-right: 2mm; font-size: ${scaledOrderFontSize}px !important;">${subtotalValue}</div>
                             </div>
                         `;
+                        }
                     });
                 }
 
@@ -1180,18 +1611,28 @@
                 let rightTableRowsHtml = '';
                 if (pageData.rightColumnData && pageData.rightColumnData.length > 0) {
                     pageData.rightColumnData.forEach((item, rowIndex) => {
-                        const rowNum = ((pageIndex - 1) * this.pageRowsCount + Math.ceil(this.pageRowsCount / 2) + rowIndex + 1);
+                        // 如果是部门名称行
+                        if (item && item.isDepartmentHeader) {
+                            rightTableRowsHtml += `
+                                <div class="print-table-row print-department-header-row" style="font-weight: bold; background-color: #f0f0f0; border-bottom: 1px solid #000; font-size: ${scaledOrderFontSize}px !important;">
+                                    <div class="print-col print-department-name-col" style="width: 100%; text-align: left !important; padding-left: 20px !important; justify-content: flex-start !important; font-size: ${scaledOrderFontSize}px !important;">${item.depName || ''}</div>
+                                </div>
+                            `;
+                        } else {
+                            // 普通订单行
+                            const rowNum = this.getPrintRowNumber(item, rowIndex, pageIndex, 'right');
                         const subtotalValue = item && item.nxDoSubtotal ? item.nxDoSubtotal : '';
                         rightTableRowsHtml += `
-                            <div class="print-table-row">
-                                <div class="print-col print-ten">${item && item.nxDoSubtotal ? rowNum : ''}</div>
-                                <div class="print-col print-thirty">${item && item.nxDistributerGoodsEntity ? item.nxDistributerGoodsEntity.nxDgGoodsName : ''}</div>
-                                <div class="print-col print-fifteen">${item && item.nxDistributerGoodsEntity ? item.nxDistributerGoodsEntity.nxDgGoodsStandardname : ''}</div>
-                                <div class="print-col print-ten">${item && item.nxDoWeight ? item.nxDoWeight : ''}</div>
-                                <div class="print-col print-fifteen">${item && item.nxDoPrice ? item.nxDoPrice : ''}</div>
-                                <div class="print-col print-twenty" style="border-right: none; text-align: right; padding-right: 2mm;">${subtotalValue}</div>
+                            <div class="print-table-row" style="font-size: ${scaledOrderFontSize}px !important;">
+                                <div class="print-col print-ten" style="font-size: ${scaledOrderFontSize}px !important;">${item && item.nxDoSubtotal ? rowNum : ''}</div>
+                                <div class="print-col print-thirty" style="font-size: ${scaledOrderFontSize}px !important;">${item && item.nxDistributerGoodsEntity ? item.nxDistributerGoodsEntity.nxDgGoodsName : ''}</div>
+                                <div class="print-col print-fifteen" style="font-size: ${scaledOrderFontSize}px !important;">${item && item.nxDoPrintStandard ? item.nxDoPrintStandard : ''}</div>
+                                <div class="print-col print-ten" style="font-size: ${scaledOrderFontSize}px !important;">${item && item.nxDoWeight ? item.nxDoWeight : ''}</div>
+                                <div class="print-col print-fifteen" style="font-size: ${scaledOrderFontSize}px !important;">${item && item.nxDoPrice ? item.nxDoPrice : ''}</div>
+                                <div class="print-col print-twenty" style="border-right: none; text-align: right; padding-right: 2mm; font-size: ${scaledOrderFontSize}px !important;">${subtotalValue}</div>
                             </div>
                         `;
+                        }
                     });
                 }
 
@@ -1199,7 +1640,7 @@
                 let subtotalHtml = '';
                 if (totalPages > 1) {
                     subtotalHtml = `
-                        <div class="print-subtotal">
+                        <div class="print-subtotal" style="font-size: ${scaledOrderFontSize}px !important;">
                             第${pageIndex}页小计：${pageData.pageSubtotalHanzi} ${pageData.pageSubtotalFormatted || pageData.pageSubtotal}元
                         </div>
                     `;
@@ -1209,14 +1650,14 @@
                 let addressTotalHtml = '';
                 if (pageData.isLastPage) {
                     addressTotalHtml = `
-                        <div class="print-address-total">
-                            <span class="address">地址: ${this.disInfo?.nxDistributerAddress || '暂无地址'}</span>
-                            <span class="total">${this.subtotalHanzi} 合计: ${this.subtotalFormatted || this.subtotal}元</span>
+                        <div class="print-address-total" style="font-size: ${scaledOrderFontSize}px !important;">
+                            <span class="address" style="font-size: ${scaledOrderFontSize}px !important;">地址: ${this.disInfo?.nxDistributerAddress || '暂无地址'}</span>
+                            <span class="total" style="font-size: ${scaledOrderFontSize}px !important;">${this.subtotalHanzi} 合计: ${this.subtotalFormatted || this.subtotal}元</span>
                         </div>
                     `;
                 } else {
                     addressTotalHtml = `
-                        <div class="print-address">
+                        <div class="print-address" style="font-size: ${scaledOrderFontSize}px !important;">
                             地址: ${this.disInfo?.nxDistributerAddress || '暂无地址'}
                         </div>
                     `;
@@ -1232,12 +1673,12 @@
                                     ${this.isTraceabilityType ? `
                                         <!-- 溯源类型布局（3行） -->
                                         <div class="print-left">
-                                            <div class="print-item">单位: ${this.depName}</div>
-                                            <div class="print-item">时间: ${this.displayDate}</div>
-                                            <div class="print-item">共${totalPages}页 - 第${pageIndex}页</div>
+                                            <div class="print-item" style="font-size: ${scaledHeaderFontSize}px !important;">单位: ${this.depName}</div>
+                                            <div class="print-item" style="font-size: ${scaledHeaderFontSize}px !important;">时间: ${this.displayDate}</div>
+                                            <div class="print-item" style="font-size: ${scaledHeaderFontSize}px !important;">共${totalPages}页 - 第${pageIndex}页</div>
                                         </div>
                                         <div class="print-center">
-                                            <div class="print-title">${this.disInfo?.nxDistributerName || '配送商'}</div>
+                                            <div class="print-title" style="font-size: ${scaledDistributorFontSize}px !important;">${this.disInfo?.nxDistributerName || '配送商'}</div>
                                         </div>
                                         <div class="print-right">
                                             ${this.qrCodeUrl ? `<div class="print-item" style="text-align: right; height: 75px; display: flex; align-items: center; justify-content: flex-end;"><img src="${this.qrCodeUrl}" alt="订单二维码" style="width: 75px; height: 75px; display: block; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; object-fit: contain;" /></div>` : ''}
@@ -1245,15 +1686,15 @@
                                     ` : `
                                         <!-- 普通类型布局（2行） -->
                                         <div class="print-left">
-                                            <div class="print-item">单位: ${this.depName}</div>
-                                            <div class="print-item">时间: ${this.displayDate}</div>
+                                            <div class="print-item" style="font-size: ${scaledHeaderFontSize}px !important;">单位: ${this.depName}</div>
+                                            <div class="print-item" style="font-size: ${scaledHeaderFontSize}px !important;">时间: ${this.displayDate}</div>
                                         </div>
                                         <div class="print-center">
-                                            <div class="print-title">${this.disInfo?.nxDistributerName || '配送商'} 送货单</div>
+                                            <div class="print-title" style="font-size: ${scaledDistributorFontSize}px !important;">${this.disInfo?.nxDistributerName || '配送商'}</div>
                                         </div>
                                         <div class="print-right">
-                                            <div class="print-item">共${totalPages}页 - 第${pageIndex}页</div>
-                                            <div class="print-item">单号: ${this.tradeNo}</div>
+                                            <div class="print-item" style="font-size: ${scaledHeaderFontSize}px !important; line-height: ${this.lineHeight}px !important;">共${totalPages}页 - 第${pageIndex}页</div>
+                                            <div class="print-item" style="font-size: ${scaledHeaderFontSize}px !important; line-height: ${this.lineHeight}px !important;">单号: ${this.tradeNo}</div>
                                         </div>
                                     `}
                                 </div>
@@ -1279,13 +1720,13 @@
                                 <!-- 右列容器 -->
                                 <div class="print-fifty-column-container">
                                     <!-- 右列表头 -->
-                                    <div class="print-table-header">
-                                        <div class="print-col print-ten">序号</div>
-                                        <div class="print-col print-thirty">商品</div>
-                                        <div class="print-col print-fifteen">规格</div>
-                                        <div class="print-col print-ten">数量</div>
-                                        <div class="print-col print-fifteen">单价</div>
-                                        <div class="print-col print-twenty" style="border-right: none; text-align: right; padding-right: 2mm;">小计</div>
+                                    <div class="print-table-header" style="font-size: ${scaledOrderFontSize}px !important;">
+                                        <div class="print-col print-ten" style="font-size: ${scaledOrderFontSize}px !important;">序号</div>
+                                        <div class="print-col print-thirty" style="font-size: ${scaledOrderFontSize}px !important;">商品</div>
+                                        <div class="print-col print-fifteen" style="font-size: ${scaledOrderFontSize}px !important;">规格</div>
+                                        <div class="print-col print-ten" style="font-size: ${scaledOrderFontSize}px !important;">数量</div>
+                                        <div class="print-col print-fifteen" style="font-size: ${scaledOrderFontSize}px !important;">单价</div>
+                                        <div class="print-col print-twenty" style="border-right: none; text-align: right; padding-right: 2mm; font-size: ${scaledOrderFontSize}px !important;">小计</div>
                                     </div>
                                     <!-- 右列数据 -->
                                     ${rightTableRowsHtml}
@@ -1303,30 +1744,109 @@
             },
 
             // 注入打印样式（单页模式 - 双列布局）
-            injectPrintStyles(singlePageHtml) {
+            async injectPrintStyles(singlePageHtml) {
                 console.log("🎨 [injectPrintStyles] 开始注入打印样式");
                 
+                // 从配置文件获取缩放系数和最大可打印宽度
+                const zoomFactor = await this.getZoomFactorFromProfile();
+                const actualPrintableWidth = await this.getMaxPrintableWidthFromProfile();
+                
+                // 物理纸张尺寸（固定）
+                const physicalPageWidth = 240; // 物理纸张宽度（mm）
+                const physicalPageHeight = 140; // 物理纸张高度（mm）- ApplyHalfPanel 使用140mm
+                
+                // ========== 最大化打印宽度策略 ==========
+                const safeBaseWidth = 210; // 使用210mm作为基准
+                
+                // ========== 应用缩放系数 ==========
+                let adjustedLeftMargin = this.currentLeftMargin * zoomFactor;
+                let adjustedRightMargin = this.currentRightMargin * zoomFactor;
+                
+                // 计算可用宽度（原始）- 使用210mm作为基准
+                const originalAvailableWidth = safeBaseWidth - this.currentLeftMargin - this.currentRightMargin;
+                
+                // 缩放后的可用宽度
+                let realAvailableWidth = originalAvailableWidth * zoomFactor;
+                
+                // 容器宽度 = 左边距 + 可用宽度 + 右边距（全部按系数缩放）
+                let cssContainerWidth = adjustedLeftMargin + realAvailableWidth + adjustedRightMargin;
+                
+                // 如果容器宽度超过物理纸张宽度，按比例缩小
+                if (cssContainerWidth > physicalPageWidth) {
+                    const scaleDown = physicalPageWidth / cssContainerWidth;
+                    cssContainerWidth = physicalPageWidth;
+                    adjustedLeftMargin = adjustedLeftMargin * scaleDown;
+                    adjustedRightMargin = adjustedRightMargin * scaleDown;
+                    realAvailableWidth = realAvailableWidth * scaleDown;
+                }
+                
+                // 计算容器的实际内容区域宽度
+                let containerContentWidth = cssContainerWidth - adjustedLeftMargin - adjustedRightMargin;
+                
+                // ========== 实际可打印宽度限制 ==========
+                if (containerContentWidth > actualPrintableWidth) {
+                    const scaleDownForPrintable = actualPrintableWidth / containerContentWidth;
+                    containerContentWidth = actualPrintableWidth;
+                    cssContainerWidth = cssContainerWidth * scaleDownForPrintable;
+                    adjustedLeftMargin = adjustedLeftMargin * scaleDownForPrintable;
+                    adjustedRightMargin = adjustedRightMargin * scaleDownForPrintable;
+                    realAvailableWidth = realAvailableWidth * scaleDownForPrintable;
+                }
+                
+                // 表格宽度应该等于内容区域宽度
+                const tableWidth = containerContentWidth;
+                
+                // 字体大小：直接乘以缩放系数
+                const scaledDistributorFontSize = Math.round((this.distributorNameFontSize * zoomFactor) * 10) / 10;
+                const scaledOrderFontSize = Math.round((this.orderContentFontSize * zoomFactor) * 10) / 10;
+                // 确保 headerFontSize 使用与 orderContentFontSize 相同的值（14px），保持与其他模板一致
+                // 如果 headerFontSize 不是 14，则使用 orderContentFontSize 的值
+                const headerFontSizeValue = (this.headerFontSize === 14) ? 14 : this.orderContentFontSize;
+                const scaledHeaderFontSize = Math.round((headerFontSizeValue * zoomFactor) * 10) / 10;
+                
+                // 页面高度：应用缩放系数（减去上下边距）
+                const pageHeightValue = (physicalPageHeight - 10 - 5) * zoomFactor; // 10mm上边距 + 5mm下边距
+                
                 const styleTag = `
-                        <style scoped>
+                        <style>
+                        :root {
+                            --page-width-mm: ${physicalPageWidth};
+                            --page-height-mm: ${physicalPageHeight};
+                            --bleed-mm: 1;
+                            --safe-left-mm: ${adjustedLeftMargin.toFixed(2)};
+                            --safe-right-mm: ${adjustedRightMargin.toFixed(2)};
+                            --available-width-mm: ${realAvailableWidth.toFixed(2)};
+                            --container-width-mm: ${cssContainerWidth.toFixed(2)};
+                            --distributor-name-font-size: ${scaledDistributorFontSize}px;
+                            --order-content-font-size: ${scaledOrderFontSize}px;
+                            --header-font-size: ${scaledHeaderFontSize}px;
+                            --line-height: ${this.lineHeight}px;
+                        }
                         * { margin: 0; padding: 0; box-sizing: border-box; }
                         
                             .print-header { padding: 2px 0; margin-bottom: 0; width: 100%; }
                             .print-header-content { display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; }
                             .print-left, .print-right { flex: 1 !important; }
                             .print-center { flex: 2 !important; text-align: center !important; }
-                            .print-title { font-size: 18px; font-weight: bold; }
-                            .print-item { font-size: 12px; line-height: 24px; }
+                            .print-title { font-size: var(--distributor-name-font-size, 18px) !important; font-weight: bold; }
+                            .print-header .print-item { font-size: var(--header-font-size, 14px) !important; line-height: var(--line-height, 24px) !important; }
+                            .print-item { font-size: var(--order-content-font-size, 14px) !important; line-height: var(--line-height, 24px) !important; }
                             
-                        .print-table-header { display: flex !important; font-size: 12px !important; line-height: 24px !important; text-align: center !important; border-bottom: 1px solid #000 !important; font-weight: bold !important; }
+                        .print-table-header { display: flex !important; font-size: var(--order-content-font-size, 14px) !important; line-height: var(--line-height, 24px) !important; text-align: center !important; border-bottom: 1px solid #000 !important; font-weight: bold !important; }
                         .print-content-bill { 
                             border: 2px solid #000 !important; 
                             position: relative !important; 
                             z-index: 1 !important; 
                             display: flex !important; 
-                            justify-content: space-between !important; 
+                            justify-content: center !important;
+                            width: ${tableWidth.toFixed(2)}mm !important;
+                            max-width: ${tableWidth.toFixed(2)}mm !important;
+                            min-width: ${tableWidth.toFixed(2)}mm !important;
+                            box-sizing: border-box !important;
+                            overflow: hidden !important;
                         }
-                            .print-fifty-column-container { width: 50% !important; box-sizing: border-box !important; display: inline-block !important; vertical-align: top !important; }
-                            .print-table-row { display: flex !important; line-height: 24px !important; font-size: 12px !important; text-align: center !important; border-bottom: 1px solid #000 !important; flex-wrap: nowrap !important; }
+                            .print-fifty-column-container { flex: 0 0 calc(50% - 0px) !important; width: calc(50% - 0px) !important; box-sizing: border-box !important; flex-shrink: 0 !important; margin: 0 !important; padding: 0 !important; }
+                            .print-table-row { display: flex !important; line-height: var(--line-height, 24px) !important; font-size: var(--order-content-font-size, 14px) !important; text-align: center !important; border-bottom: 1px solid #000 !important; flex-wrap: nowrap !important; }
                             
                             /* 基础列样式 */
                             .print-col { 
@@ -1337,7 +1857,8 @@
                                 display: flex !important; 
                                 align-items: center !important; 
                                 justify-content: center !important; 
-                                font-size: 12px !important;
+                                font-size: var(--order-content-font-size, 14px) !important;
+                                line-height: var(--line-height, 24px) !important;
                                 white-space: nowrap !important;
                                 overflow: hidden !important;
                                 text-overflow: ellipsis !important;
@@ -1373,7 +1894,7 @@
                                 
                             .print-subtotal { 
                                 text-align: right; 
-                                font-size: 14px; 
+                                font-size: var(--order-content-font-size, 14px); 
                                 font-weight: bold; 
                                 margin-bottom: 4px; 
                                 padding: 4px 8px; 
@@ -1384,44 +1905,62 @@
                                 overflow: visible !important;
                                 white-space: nowrap !important;
                             }
-                        .print-address-total { display: flex; justify-content: space-between; align-items: center; padding: 2px 8px; font-size: 14px; margin-top: 2px; }
-                        .print-address-total .address { text-align: left; }
-                        .print-address-total .total { text-align: right; font-weight: bold; }
-                            .print-address { margin-top: 2px; padding: 2px 0; font-size: 14px; }
-                            
-                        /* 全局打印参数 */
-                            :root {
-                            --page-width-mm: 240;
-                            --page-height-mm: 140;
-                            --bleed-mm: 1;
-                            --safe-left-mm: ${this.currentLeftMargin};
-                            --safe-right-mm: ${this.currentRightMargin};
-                            --content-scale: ${this.currentScale};
+                        /* 部门名称行样式 */
+                        .print-department-header-row {
+                            font-weight: bold !important;
+                            background-color: #f0f0f0 !important;
+                            border-bottom: 2px solid #000 !important;
+                        }
+                        .print-department-header-row .print-department-name-col {
+                            justify-content: flex-start !important;
+                            align-items: center !important;
+                            text-align: left !important;
+                            padding-left: 20px !important;
                         }
                         
+                        .print-address-total { display: flex; justify-content: space-between; align-items: center; padding: 2px 8px; font-size: var(--order-content-font-size, 14px); margin-top: 2px; }
+                        .print-address-total .address { text-align: left; }
+                        .print-address-total .total { text-align: right; font-weight: bold; }
+                            .print-address { margin-top: 2px; padding: 2px 0; font-size: var(--order-content-font-size, 14px) !important; }
+                            
                         /* 关键：单页打印样式 - 统一规则，避免冲突 */
                             @media print {
-                                /* 1) 唯一的 @page 规则 - 驱动边距设为0，留白由 .print-page 的 padding 控制 */
                                 @page {
                                     size: 240mm 140mm;
                                     margin: 0 !important;
                                 }
 
+                                :root {
+                                    --line-height: ${this.lineHeight}px;
+                                }
+
                                 * { visibility: visible !important; }
                                 
-                                body { margin: 0 !important; padding: 0 !important; }
+                                html, body { 
+                                    margin: 0 !important; 
+                                    padding: 0 !important; 
+                                    width: 100% !important;
+                                    height: 100% !important;
+                                    overflow: hidden !important;
+                                }
                                 
-                                /* 2) 每页一个封闭画布（140mm-1mm），留白用 padding 控制 */
                                 .print-page {
                                     box-sizing: border-box !important;
-                                    width: calc((var(--page-width-mm) - var(--safe-left-mm) - var(--safe-right-mm)) * 1mm) !important;
-                                    height: calc(var(--page-height-mm) * 1mm - var(--bleed-mm) * 1mm) !important;
-                                    padding: 10mm calc(var(--safe-right-mm) * 1mm) 5mm calc(var(--safe-left-mm) * 1mm) !important;
-                                    overflow: visible !important;
+                                    width: ${cssContainerWidth.toFixed(2)}mm !important;
+                                    max-width: ${cssContainerWidth.toFixed(2)}mm !important;
+                                    height: ${pageHeightValue.toFixed(2)}mm !important;
+                                    min-height: ${pageHeightValue.toFixed(2)}mm !important;
+                                    max-height: ${pageHeightValue.toFixed(2)}mm !important;
+                                    padding: 10mm ${adjustedRightMargin.toFixed(2)}mm 5mm ${adjustedLeftMargin.toFixed(2)}mm !important;
+                                    overflow: hidden !important;
                                     display: flex !important;
                                     flex-direction: column !important;
                                     position: relative !important;
                                     margin: 0 !important;
+                                    break-after: auto !important;
+                                    page-break-after: auto !important;
+                                    page-break-inside: avoid !important;
+                                    break-inside: avoid !important;
                                 }
                                 
                                 /* 3) 允许"本页后换页"，但绝对不要加 margin-bottom */
@@ -1430,12 +1969,10 @@
                                     page-break-after: always !important;
                                 }
                                 
-                                /* 内容包装器：应用缩放，从顶部中心缩放，确保居中 */
+                                /* 内容包装器 */
                                 .print-page-content {
                                     width: 100% !important;
                                     height: 100% !important;
-                                    transform: scale(var(--content-scale)) !important;
-                                    transform-origin: top center !important;
                                     display: flex !important;
                                     flex-direction: column !important;
                                     box-sizing: border-box !important;
@@ -1447,8 +1984,9 @@
                                 .print-content-bill {
                                     border: 2px solid #000 !important;
                                     border-right: 2px solid #000 !important;
-                                    width: 100% !important;
-                                    max-width: 100% !important;
+                                    width: ${tableWidth.toFixed(2)}mm !important;
+                                    max-width: ${tableWidth.toFixed(2)}mm !important;
+                                    min-width: ${tableWidth.toFixed(2)}mm !important;
                                     box-sizing: border-box !important;
                                     position: relative !important;
                                     flex-shrink: 0 !important;
@@ -1457,10 +1995,12 @@
                                 
                                 /* 双列容器样式 */
                                 .print-fifty-column-container {
-                                    width: 50% !important;
+                                    flex: 0 0 calc(50% - 0px) !important;
+                                    width: calc(50% - 0px) !important;
                                     box-sizing: border-box !important;
-                                    display: inline-block !important;
-                                    vertical-align: top !important;
+                                    flex-shrink: 0 !important;
+                                    margin: 0 !important;
+                                    padding: 0 !important;
                                 }
                                 
                                 /* 确保小计列样式正确应用 */
@@ -1485,25 +2025,64 @@
                     `;
 
                 const finalHtml = styleTag + singlePageHtml;
-                console.log("🎨 [injectPrintStyles] 样式注入完成, 总长度: " + finalHtml.length);
+                console.log("🎨 [injectPrintStyles] 样式注入完成", {
+                    htmlLength: finalHtml.length,
+                    safeLeftMm: this.currentLeftMargin,
+                    safeRightMm: this.currentRightMargin,
+                    distributorNameFontSize: this.distributorNameFontSize,
+                    orderContentFontSize: this.orderContentFontSize,
+                    cssVarLeft: `--safe-left-mm: ${this.currentLeftMargin}`,
+                    cssVarRight: `--safe-right-mm: ${this.currentRightMargin}`,
+                    cssVarDistributorFont: `--distributor-name-font-size: ${this.distributorNameFontSize}px`,
+                    cssVarOrderFont: `--order-content-font-size: ${this.orderContentFontSize}px`
+                });
+                console.log("🔍 [injectPrintStyles] 检查实际使用的边距值:", {
+                    currentLeftMargin: this.currentLeftMargin,
+                    currentRightMargin: this.currentRightMargin,
+                    distributorNameFontSize: this.distributorNameFontSize,
+                    orderContentFontSize: this.orderContentFontSize
+                });
                 return finalHtml;
             },
 
             // 打印页面的逻辑 - 改为逐页打印
             async printOnly() {
                 console.log("=== printOnly 开始（逐页打印模式）===");
-                console.log("📊 [printOnly] 准备打印, 总页数: " + this.printPagesData.length);
                 
-                if (!this.printPagesData || this.printPagesData.length === 0) {
-                    console.error("❌ [printOnly] printPagesData为空，无法打印");
-                    return;
+                // 打印前重新加载并应用配置，确保使用最新的缓存配置
+                try {
+                    await this.initPrinterProfile();
+                    console.log("✅ [printOnly] 打印前已重新加载配置");
+                } catch (error) {
+                    console.warn("⚠️ [printOnly] 打印前重新加载配置失败:", error);
                 }
+                
+                console.log("📊 [printOnly] 准备打印, 总页数: " + this.printPagesData.length);
+                console.log("🔍 [printOnly] 当前边距和字体设置:", {
+                    currentLeftMargin: this.currentLeftMargin,
+                    currentRightMargin: this.currentRightMargin,
+                    distributorNameFontSize: this.distributorNameFontSize,
+                    orderContentFontSize: this.orderContentFontSize,
+                    cssVarLeft: getComputedStyle(document.documentElement).getPropertyValue('--safe-left-mm'),
+                    cssVarRight: getComputedStyle(document.documentElement).getPropertyValue('--safe-right-mm'),
+                    cssVarDistributorFont: getComputedStyle(document.documentElement).getPropertyValue('--distributor-name-font-size'),
+                    cssVarOrderFont: getComputedStyle(document.documentElement).getPropertyValue('--order-content-font-size')
+                });
+                
+                // 显示打印蒙版
+                this.isPrinting = true;
+                
+                try {
+                    if (!this.printPagesData || this.printPagesData.length === 0) {
+                        console.error("❌ [printOnly] printPagesData为空，无法打印");
+                        return;
+                    }
 
-                        // 检查是否在Electron环境中
-                        if (typeof window.electronAPI === 'undefined') {
-                    console.warn("⚠️ [printOnly] 警告：不在Electron环境中，无法调用打印功能");
-                            return;
-                        }
+                    // 检查是否在Electron环境中
+                    if (typeof window.electronAPI === 'undefined') {
+                        console.warn("⚠️ [printOnly] 警告：不在Electron环境中，无法调用打印功能");
+                        return;
+                    }
 
                 // 确定使用哪个打印接口
                 let usePrintRequest = null;
@@ -1549,10 +2128,10 @@
 
                     try {
                         // 1. 构建单页HTML
-                        const singlePageHtml = this.buildSinglePageHtml(pageData, pageIndex, totalPages);
+                        const singlePageHtml = await this.buildSinglePageHtml(pageData, pageIndex, totalPages);
                         
                         // 2. 注入打印样式
-                        const finalHtmlForThisPage = this.injectPrintStyles(singlePageHtml);
+                        const finalHtmlForThisPage = await this.injectPrintStyles(singlePageHtml);
                         
                         // 3. 清理Vue特殊属性
                         let cleanHtml = finalHtmlForThisPage.replace(/data-v-[a-zA-Z0-9]+=""/g, '');
@@ -1585,7 +2164,8 @@
                                     this.tradeNo,  // 使用原始tradeNo，不用带页码
                                 this.disUser.nxDistributerUserId,
                                     paperCount,  // 传入总页数
-                                    shouldSave   // 只在最后一页为true
+                                    shouldSave,  // 只在最后一页为true
+                                    !!this.isHistoryOrder  // 历史订单打印时跳过保存接口和刷新客户列表
                             );
                         } else if (this.gbDepFatherId !== -1) {
                                 printResult = await window.electronAPI.sendPrintRequestGbWithCallback(
@@ -1629,6 +2209,10 @@
 
                 console.log("\n✅ [printOnly] ========== 所有页面打印完成 ==========");
                 console.log(`✅ [printOnly] 总计打印 ${this.printPagesData.length} 页`);
+                } finally {
+                    // 无论成功还是失败，都隐藏打印蒙版
+                    this.isPrinting = false;
+                }
             },
 
             // 导出Excel方法
@@ -1829,12 +2413,12 @@
     }
 
     .print-title {
-        font-size: 18px;
+        font-size: var(--distributor-name-font-size, 18px);
         font-weight: bold;
     }
 
     .print-item {
-        font-size: 14px;
+        font-size: var(--order-content-font-size, 14px);
         line-height: 25px;
     }
 
@@ -1924,7 +2508,7 @@
     .print-address {
         /*margin-top: 6px;*/
         /*padding: 4px 0;*/
-        font-size: 14px;
+        font-size: var(--order-content-font-size, 14px);
     }
 
     .print-address-total {
@@ -1981,7 +2565,7 @@
     }
 
     .print-title {
-        font-size: 18px;
+        font-size: var(--distributor-name-font-size, 18px);
         font-weight: bold;
     }
 
@@ -2062,29 +2646,43 @@
     }
 
     .title {
-        font-size: 18px;
+        font-size: var(--distributor-name-font-size, 18px) !important;
         font-weight: bold;
     }
 
     .item {
-        font-size: 14px;
+        font-size: var(--order-content-font-size, 14px);
         line-height: 25px;
     }
 
-    .content-bill {
-        display: flex;
-        justify-content: space-between; /* 双列布局，左右分布 */
+    .half-content-bill {
+        display: flex !important;
+        flex-direction: row !important;
+        justify-content: space-between !important; /* 双列布局，左右分布 */
+        align-items: flex-start !important;
         margin-top: 0; /* 减少表格顶部边距 */
         border: 1px solid #000; /* 加粗外边框，使用黑色 */
         box-sizing: border-box;
         /* 防止布局溢出 */
+        max-height: 70vh; /* 设置最大高度为视口高度的70% */
+        overflow-y: auto; /* 内容超出时显示垂直滚动条 */
+        overflow-x: hidden; /* 隐藏水平滚动条 */
     }
 
-    .half-column-container{
-        width: 50%; /* 双列各占50%宽度 */
-        box-sizing: border-box;
-        display: inline-block;
-        vertical-align: top;
+    .half-half-column-container{
+        flex: 0 0 50% !important; /* 双列各占50%宽度，不允许收缩和扩展 */
+        width: 50% !important; /* 双列各占50%宽度，使用!important覆盖其他规则 */
+        max-width: 50% !important; /* 确保最大宽度不超过50% */
+        box-sizing: border-box !important;
+        flex-shrink: 0 !important; /* 不允许收缩 */
+        display: flex !important; /* 使用flex布局 */
+        flex-direction: column !important; /* 垂直排列，确保表头在顶部 */
+        align-items: stretch !important; /* 确保子元素拉伸 */
+    }
+    
+    .half-half-column-container > .table-header {
+        flex-shrink: 0 !important; /* 表头不允许收缩 */
+        flex-grow: 0 !important; /* 表头不允许扩展 */
     }
 
 
@@ -2094,17 +2692,23 @@
     }
 
     .table-header {
-        display: flex;
-        flex-wrap: nowrap; /* 确保不换行 */
-        justify-content: flex-start; /* 改为左对齐，让列按顺序排列 */
-        font-size: 12px;
-        line-height: 25px;
-        text-align: center;
-        border-bottom: 1px solid #000;
-        border-top: 1px solid #000;
-        margin-top: 0; /* 减少表头顶部边距 */
-        margin-bottom: 0; /* 减少表头底部边距 */
-        width: 100%; /* 确保表头占满整个宽度 */
+        display: flex !important;
+        flex-wrap: nowrap !important; /* 确保不换行 */
+        justify-content: flex-start !important; /* 改为左对齐，让列按顺序排列 */
+        font-size: var(--order-content-font-size, 14px) !important;
+        line-height: 25px !important;
+        text-align: center !important;
+        border-bottom: 1px solid #000 !important;
+        border-top: 1px solid #000 !important;
+        margin-top: 0 !important; /* 减少表头顶部边距 */
+        margin-bottom: 0 !important; /* 减少表头底部边距 */
+        width: 100% !important; /* 确保表头占满整个宽度 */
+        order: -1 !important; /* 确保表头始终在最前面 */
+        flex-shrink: 0 !important; /* 防止表头被压缩 */
+        position: sticky !important; /* 粘性定位，滚动时保持在顶部 */
+        top: 0 !important; /* 距离顶部0 */
+        background-color: #f5f5f5 !important; /* 背景色，防止内容透过 */
+        z-index: 10 !important; /* 确保表头在其他内容之上 */
     }
 
     /* .table-header .col {
@@ -2118,7 +2722,7 @@
         flex-wrap: nowrap; /* 确保不换行 */
         justify-content: flex-start; /* 改为左对齐，让列按顺序排列 */
         line-height: 25px;
-        font-size: 12px;
+        font-size: var(--order-content-font-size, 14px);
         text-align: center;
         border-bottom: 1px solid #000;
         width: 100%; /* 确保表行占满整个宽度 */
@@ -2188,5 +2792,28 @@
         box-sizing: border-box;
     }
 
+    /* 打印蒙版样式 */
+    .printing-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .printing-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: rgba(255, 255, 255, 0.1);
+        padding: 40px;
+        border-radius: 10px;
+    }
 
 </style>

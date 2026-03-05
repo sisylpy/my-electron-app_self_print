@@ -8,7 +8,9 @@
     "dev:vue": "cd vue && vite",
     "dev:electron": "wait-on http://localhost:3000 && electron .",
     "build:vue": "cd vue && vite build",
-    "dist": "electron-builder"
+    "dist": "npm run build:vue && electron-builder",
+    "dist:mac": "npm run build:vue && electron-builder --mac",
+    "dist:win": "npm run build:vue && electron-builder --win"
   },
   "build": {
     "appId": "club.grainservice.www",
@@ -19,14 +21,25 @@
     "files": [
       "dist/**/*",
       "src/**/*",
-      "package.json"
+      "package.json",
+      "node_modules/**/*"
     ],
+    "asar": false,
     "win": {
       "target": "nsis"
     },
     "mac": {
       "category": "public.app-category.productivity",
-      "icon": "vue/src/assets/icons.ico"
+      "icon": "vue/src/assets/icons.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
     }
   },
   "author": "Li Pei Yi",
@@ -43,10 +56,19 @@
   "dependencies": {
     "@nut-tree/nut-js": "^3.1.2",
     "admin-lte": "^4.0.0-beta2",
+    "asynckit": "^0.4.0",
     "axios": "^1.7.9",
     "bootstrap": "^5.3.3",
     "bootstrap-vue-3": "^0.5.1",
+    "combined-stream": "^1.0.8",
+    "delayed-stream": "^1.0.0",
+    "es-set-tostringtag": "^2.1.0",
+    "form-data": "^4.0.0",
+    "hasown": "^2.0.2",
     "jquery": "^3.7.1",
+    "mime-db": "^1.52.0",
+    "mime-types": "^2.1.12",
+    "node-record-lpcm16": "^1.0.1",
     "qrcode": "^1.5.4",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0",

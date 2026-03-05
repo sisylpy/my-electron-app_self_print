@@ -172,22 +172,7 @@ async function createWindow() {
 
   }
 
-  // 右键菜单：在文本输入框/textarea 等可编辑区域显示粘贴、复制、剪切、全选（Electron 默认不显示系统右键菜单）
-  const contextMenuTemplate = [
-    { role: 'undo', label: '撤销' },
-    { role: 'redo', label: '重做' },
-    { type: 'separator' },
-    { role: 'cut', label: '剪切' },
-    { role: 'copy', label: '复制' },
-    { role: 'paste', label: '粘贴' },
-    { role: 'selectAll', label: '全选' }
-  ];
-  const contextMenu = Menu.buildFromTemplate(contextMenuTemplate);
-  mainWindow.webContents.on('context-menu', (_event, params) => {
-    if (params.isEditable) {
-      contextMenu.popup();
-    }
-  });
+
 
   // 监听来自渲染进程的打印请求（旧接口，保持兼容）
   ipcMain.on('print-request', (event, printData, depFatherId, depId, tradeNo, userId, paperCount) => {
@@ -203,16 +188,37 @@ async function createWindow() {
   });
 
   // 新的IPC handlers：支持回执的打印接口（返回Promise）
-  ipcMain.handle('print-request-with-callback', async (event, printData, depFatherId, depId, tradeNo, userId, paperCount, shouldSave, isHistoryOrder) => {
-    console.log('📥 [IPC Handler] 收到打印请求:', { depFatherId, depId, tradeNo, userId, paperCount, shouldSave, isHistoryOrder });
+  ipcMain.handle('print-request-with-callback', async (event, printData, depFatherId, depId, tradeNo, userId, paperCount, shouldSave) => {
+    console.log('🔍 [打印系数] ========== IPC Handler 收到打印请求 ==========');
+    console.log('📥 [IPC Handler] ========== 收到打印请求 ==========');
+    console.log('📥 [IPC Handler] 参数:', { depFatherId, depId, tradeNo, userId, paperCount, shouldSave });
     console.log('📥 [IPC Handler] HTML内容长度:', printData ? printData.length : 0);
+    console.log('📥 [IPC Handler] HTML内容预览（前200字符）:', printData ? printData.substring(0, 200) : '(空)');
+    
+    // 获取打印系数（用于日志）
+    try {
+      const defaultPrinter = getDefaultPrinterName();
+      const zoomFactor = await getPrinterZoomFactor(defaultPrinter || '');
+      console.log('🔍 [打印系数] IPC Handler - 获取到的缩放系数:', {
+        defaultPrinter: defaultPrinter || '系统默认',
+        zoomFactor: zoomFactor,
+        zoomFactorType: typeof zoomFactor,
+        willApplyScaling: zoomFactor !== 1.0
+      });
+    } catch (err) {
+      console.warn('⚠️ [打印系数] IPC Handler - 获取缩放系数失败:', err);
+    }
     
     try {
-      const result = await printContentToWindowWithCallback(printData, depFatherId, depId, tradeNo, userId, paperCount, shouldSave, isHistoryOrder);
-      console.log('📤 [IPC Handler] 打印请求完成:', result);
+      const result = await printContentToWindowWithCallback(printData, depFatherId, depId, tradeNo, userId, paperCount, shouldSave);
       return result;
     } catch (error) {
-      console.error('❌ [IPC Handler] 打印请求异常:', error);
+      console.error('❌ [IPC Handler] ❌ 打印请求异常:', error);
+      console.error('❌ [IPC Handler] 错误详情:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       throw error;
     }
   });
@@ -233,51 +239,6 @@ async function createWindow() {
     } catch (error) {
       throw error;
     }
-  });
-
-  // 打印校准页：弹出系统打印对话框，让用户设置分辨率等并保存为默认
-  ipcMain.handle('print-calibration-page', async (event, htmlContent) => {
-    return new Promise((resolve, reject) => {
-      const printWindow = new BrowserWindow({
-        show: false,
-        webPreferences: {
-          nodeIntegration: false,
-          contextIsolation: true
-        }
-      });
-
-      printWindow.webContents.setZoomFactor(1.0);
-      printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
-
-      printWindow.webContents.on('did-finish-load', () => {
-        printWindow.webContents.setZoomFactor(1.0);
-        const defaultPrinter = getDefaultPrinterName();
-        console.log('[校准页面] 弹出打印对话框，使用打印机:', defaultPrinter || '系统默认');
-
-        setTimeout(() => {
-          printWindow.webContents.print({
-            silent: false, // 弹出打印对话框，用户可设置分辨率并保存为默认
-            printBackground: true,
-            deviceName: defaultPrinter || '',
-            marginsType: 1, // 无边距
-          }, (success, error) => {
-            printWindow.destroy();
-            if (success) {
-              console.log('[校准页面] ✅ 打印成功，用户设置已保存为默认');
-              resolve({ success: true });
-            } else {
-              console.log('[校准页面] 用户取消或打印失败');
-              resolve({ success: false, error: error || '用户取消' });
-            }
-          });
-        }, 500);
-      });
-
-      printWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-        printWindow.destroy();
-        reject({ success: false, error: `加载失败: ${errorDescription}`, errorCode });
-      });
-    });
   });
 
   console.log('Window created');
@@ -616,6 +577,57 @@ ipcMain.handle('load-all-printer-profiles', async (event) => {
   }
 });
 
+// ========== 打印校准页面相关 IPC ==========
+
+// 打印校准页面
+ipcMain.handle('print-calibration-page', async (event, htmlContent) => {
+  return new Promise((resolve, reject) => {
+    const printWindow = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true
+      }
+    });
+
+    // 设置缩放因子为 1.0（校准页面不需要缩放）
+    printWindow.webContents.setZoomFactor(1.0);
+
+    printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
+
+    printWindow.webContents.on('did-finish-load', () => {
+      printWindow.webContents.setZoomFactor(1.0);
+      
+      // 获取默认打印机名称
+      const defaultPrinter = getDefaultPrinterName();
+      console.log('[校准页面] 使用打印机:', defaultPrinter || '系统默认打印机');
+      
+      setTimeout(() => {
+        printWindow.webContents.print({
+          silent: false, // 校准页面显示打印对话框，让用户选择打印机
+          printBackground: true,
+          deviceName: defaultPrinter || '',
+          marginsType: 1, // 无边距
+        }, (success, error) => {
+          printWindow.destroy();
+          if (success) {
+            console.log('[校准页面] ✅ 打印成功');
+            resolve({ success: true });
+          } else {
+            console.error('[校准页面] ❌ 打印失败:', error);
+            reject({ success: false, error });
+          }
+        });
+      }, 500);
+    });
+
+    printWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+      printWindow.destroy();
+      reject({ success: false, error: `加载失败: ${errorDescription}`, errorCode });
+    });
+  });
+});
+
 // ========== Windows 系统打印机配置获取（通过 PowerShell）==========
 
 // 获取系统默认打印机的配置信息（DPI、纸张尺寸）
@@ -628,113 +640,73 @@ ipcMain.handle('get-printer-system-config', async (event) => {
     
     // Windows 平台：使用 PowerShell
     if (platform === 'win32') {
-      // PowerShell 命令：获取默认打印机的配置信息（包括可打印区域）
-      const psCommand = `
-        $printer = Get-CimInstance -ClassName Win32_Printer | Where-Object { $_.Default -eq $true }
-        if ($printer) {
-          $config = Get-CimInstance -ClassName Win32_PrinterConfiguration | Where-Object { $_.Name -eq $printer.Name }
-          if ($config) {
-            # 获取纸张尺寸（单位：0.1mm）
-            $paperWidthMm = [Math]::Round($config.PaperWidth / 10, 1)
-            $paperHeightMm = [Math]::Round($config.PaperLength / 10, 1)
-            
-            # 尝试获取可打印区域（如果驱动支持）
-            # 注意：Win32_PrinterConfiguration 可能不直接提供可打印区域信息
-            # 可打印区域通常由打印机驱动决定
-            
-            $obj = [PSCustomObject]@{
-              name = $printer.Name
-              hDpi = $config.HorizontalResolution
-              vDpi = $config.VerticalResolution
-              widthMm = $paperWidthMm
-              heightMm = $paperHeightMm
-              # 诊断信息：计算可能的可打印区域
-              # 注意：这是估算值，实际可打印区域由驱动决定
-              estimatedPrintableWidth = $paperWidthMm
-              note = "可打印区域由打印机驱动决定，可能需要通过实际测试确定"
-            }
-            $obj | ConvertTo-Json -Compress
-          } else {
-            '{"error": "Printer configuration not found"}'
+    
+    // PowerShell 命令：获取默认打印机的配置信息
+    const psCommand = `
+      $printer = Get-CimInstance -ClassName Win32_Printer | Where-Object { $_.Default -eq $true }
+      if ($printer) {
+        $config = Get-CimInstance -ClassName Win32_PrinterConfiguration | Where-Object { $_.Name -eq $printer.Name }
+        if ($config) {
+          $obj = [PSCustomObject]@{
+            name = $printer.Name
+            hDpi = $config.HorizontalResolution
+            vDpi = $config.VerticalResolution
+            widthMm = [Math]::Round($config.PaperWidth / 10, 1)
+            heightMm = [Math]::Round($config.PaperLength / 10, 1)
           }
+          $obj | ConvertTo-Json -Compress
         } else {
-          '{"error": "No default printer found"}'
+          '{"error": "Printer configuration not found"}'
         }
-      `;
-      
-      console.log('[打印机系统配置] 开始执行 PowerShell 命令获取系统配置');
-      
-      // 使用临时文件方式执行 PowerShell 命令，避免引号转义问题
-      const tempDir = os.tmpdir();
-      const tempScriptPath = path.join(tempDir, `printer-config-${Date.now()}.ps1`);
-      
-      try {
-        // 将 PowerShell 命令写入临时文件
-        fs.writeFileSync(tempScriptPath, psCommand.trim(), 'utf8');
-        
-        // 执行临时脚本文件
-        const { stdout, stderr } = await execAsync(
-          `powershell -NoProfile -ExecutionPolicy Bypass -File "${tempScriptPath}"`,
-          { encoding: 'utf8', timeout: 10000 }
-        );
-        
-        // 清理临时文件
-        try {
-          fs.unlinkSync(tempScriptPath);
-        } catch (unlinkError) {
-          console.warn('[打印机系统配置] 清理临时文件失败:', unlinkError);
-        }
-        
-        if (stderr && stderr.trim()) {
-          console.warn('[打印机系统配置] PowerShell 警告:', stderr);
-        }
-        
-        if (!stdout || stdout.trim() === '') {
-          console.warn('[打印机系统配置] PowerShell 返回空结果');
-          return { 
-            success: false, 
-            error: 'Empty result from PowerShell',
-            config: null 
-          };
-        }
-        
-        // 解析 JSON 结果
-        const config = JSON.parse(stdout.trim());
-        
-        if (config.error) {
-          console.error('[打印机系统配置] PowerShell 返回错误:', config.error);
-          return { 
-            success: false, 
-            error: config.error,
-            config: null 
-          };
-        }
-        
-        console.log('[打印机系统配置] ✅ 成功获取系统配置:', config);
-        
-        return { 
-          success: true, 
-          config: {
-            name: config.name,
-            hDpi: config.hDpi || 300,
-            vDpi: config.vDpi || 300,
-            widthMm: config.widthMm || 241,
-            heightMm: config.heightMm || 279
-          }
-        };
-      } catch (execError) {
-        // 确保临时文件被清理
-        try {
-          if (fs.existsSync(tempScriptPath)) {
-            fs.unlinkSync(tempScriptPath);
-          }
-        } catch (unlinkError) {
-          console.warn('[打印机系统配置] 清理临时文件失败:', unlinkError);
-        }
-        
-        // 重新抛出错误，让外层 catch 处理
-        throw execError;
+      } else {
+        '{"error": "No default printer found"}'
       }
+    `;
+    
+    console.log('[打印机系统配置] 开始执行 PowerShell 命令获取系统配置');
+    
+    const { stdout, stderr } = await execAsync(
+      `powershell -Command "${psCommand.replace(/\n/g, ' ').replace(/"/g, '\\"')}"`,
+      { encoding: 'utf8', timeout: 10000 }
+    );
+    
+    if (stderr && stderr.trim()) {
+      console.warn('[打印机系统配置] PowerShell 警告:', stderr);
+    }
+    
+    if (!stdout || stdout.trim() === '') {
+      console.warn('[打印机系统配置] PowerShell 返回空结果');
+      return { 
+        success: false, 
+        error: 'Empty result from PowerShell',
+        config: null 
+      };
+    }
+    
+    // 解析 JSON 结果
+    const config = JSON.parse(stdout.trim());
+    
+    if (config.error) {
+      console.error('[打印机系统配置] PowerShell 返回错误:', config.error);
+      return { 
+        success: false, 
+        error: config.error,
+        config: null 
+      };
+    }
+    
+    console.log('[打印机系统配置] ✅ 成功获取系统配置:', config);
+    
+      return { 
+        success: true, 
+        config: {
+          name: config.name,
+          hDpi: config.hDpi || 300,
+          vDpi: config.vDpi || 300,
+          widthMm: config.widthMm || 241,
+          heightMm: config.heightMm || 279
+        }
+      };
     }
     
     // macOS 平台：使用 lpstat 和 lpoptions 命令
@@ -890,19 +862,16 @@ ipcMain.handle('get-printer-system-config', async (event) => {
           if (!lpoptionsOutput || lpoptionsOutput.trim() === '') {
             console.warn('[打印机系统配置] macOS: lpoptions 返回空结果，使用默认值');
           } else {
-            // 解析分辨率：lpoptions -l 输出 * 标记当前默认，如 "Resolution/Resolution: 60dpi *120x60dpi 180x180dpi"
-            // 优先解析 * 标记的预设值（用户存预设后 lpoptions 会更新）
-            let resolutionMatch = lpoptionsOutput.match(/Resolution\/[^\n]*?\*(\d+)x(\d+)dpi/i);
-            if (!resolutionMatch) {
-              resolutionMatch = lpoptionsOutput.match(/Resolution\/[^]*?(\d+)x(\d+)dpi/i) ||
-                lpoptionsOutput.match(/Resolution\/.*:\s*(\d+)x(\d+)/i);
-            }
+            // 解析分辨率设置（如果可用）
+            const resolutionMatch = lpoptionsOutput.match(/Resolution\/.*:\s*(\d+)x(\d+)/i);
             if (resolutionMatch) {
               hDpi = parseInt(resolutionMatch[1]) || 300;
               vDpi = parseInt(resolutionMatch[2]) || 300;
               console.log('[打印机系统配置] macOS: ✅ 解析到分辨率:', hDpi, 'x', vDpi);
             } else {
               console.log('[打印机系统配置] macOS: ⚠️ 未找到分辨率信息，使用默认值 300x300');
+              console.log('[打印机系统配置] macOS: 尝试查找其他分辨率格式...');
+              // 尝试其他可能的格式
               const altResolutionMatch = lpoptionsOutput.match(/resolution[:\s]+(\d+)[xX](\d+)/i);
               if (altResolutionMatch) {
                 hDpi = parseInt(altResolutionMatch[1]) || 300;
@@ -911,9 +880,11 @@ ipcMain.handle('get-printer-system-config', async (event) => {
               }
             }
             
-            // 解析纸张尺寸：支持 "数字x数字" 或 命名尺寸 "PageSize/...: *Letter Legal A4 ..."
+            // 解析纸张尺寸设置（如果可用）
             const pageSizeMatch = lpoptionsOutput.match(/PageSize\/.*:\s*(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)/i);
             if (pageSizeMatch) {
+              // macOS 通常使用点（points）或英寸，需要转换
+              // 1 inch = 25.4mm, 1 point = 0.352778mm
               const widthInches = parseFloat(pageSizeMatch[1]) || 0;
               const heightInches = parseFloat(pageSizeMatch[2]) || 0;
               if (widthInches > 0 && heightInches > 0) {
@@ -922,27 +893,7 @@ ipcMain.handle('get-printer-system-config', async (event) => {
                 console.log('[打印机系统配置] macOS: ✅ 解析到纸张尺寸:', widthMm, 'x', heightMm, 'mm');
               }
             } else {
-              // 命名尺寸映射（Letter/A4/Legal 等），取当前默认（* 标记）或第一个
-              const pageSizeLine = lpoptionsOutput.match(/PageSize\/[^\n]+/i);
-              if (pageSizeLine) {
-                const line = pageSizeLine[0];
-                const defaultName = line.match(/\*(\w+)/);
-                const name = (defaultName && defaultName[1]) || line.match(/(?:Letter|Legal|A4|FanFoldUS)/i)?.[0] || '';
-                const namedSizes = {
-                  Letter: [215.9, 279.4], Legal: [215.9, 355.6], A4: [210, 297],
-                  FanFoldUS: [241, 279]
-                };
-                const key = Object.keys(namedSizes).find(k => k.toLowerCase() === name.toLowerCase());
-                if (key) {
-                  widthMm = namedSizes[key][0];
-                  heightMm = namedSizes[key][1];
-                  console.log('[打印机系统配置] macOS: ✅ 从命名尺寸解析到纸张:', name, widthMm, 'x', heightMm, 'mm');
-                } else {
-                  console.log('[打印机系统配置] macOS: ⚠️ 未找到纸张尺寸信息，使用默认值 241x279mm');
-                }
-              } else {
-                console.log('[打印机系统配置] macOS: ⚠️ 未找到纸张尺寸信息，使用默认值 241x279mm');
-              }
+              console.log('[打印机系统配置] macOS: ⚠️ 未找到纸张尺寸信息，使用默认值 241x279mm');
             }
           }
         } catch (lpoptionsError) {
@@ -997,26 +948,6 @@ ipcMain.handle('get-printer-system-config', async (event) => {
       error: error.message,
       config: null 
     };
-  }
-});
-
-// macOS：将分辨率设为打印机系统默认（用 lpoptions 写入，一键同步可读取）
-ipcMain.handle('set-printer-resolution', async (event, hDpi, vDpi) => {
-  if (process.platform !== 'darwin') {
-    return { success: false, error: '仅 macOS 支持' };
-  }
-  try {
-    const printerName = getDefaultPrinterName();
-    if (!printerName) {
-      return { success: false, error: '未配置默认打印机' };
-    }
-    const resolutionValue = `${hDpi}x${vDpi}dpi`;
-    await execAsync(`lpoptions -p "${printerName}" -o Resolution=${resolutionValue}`, { encoding: 'utf8', timeout: 5000 });
-    console.log('[打印机] 已设置分辨率:', resolutionValue, '打印机:', printerName);
-    return { success: true };
-  } catch (error) {
-    console.error('[打印机] 设置分辨率失败:', error);
-    return { success: false, error: error.message };
   }
 });
 
@@ -1539,12 +1470,12 @@ function generateTencentCloudSignature(secretId, secretKey, service, action, tim
 ipcMain.handle('start-voice-recognition', async (event) => {
   try {
     console.log('[语音识别] 开始语音识别（主进程 PCM 录音）...');
-    
+
     const cfg = getTencentCloudConfig();
     if (!cfg.secretId || !cfg.secretKey) {
       return { success: false, error: '请配置腾讯云密钥：复制 config/tencent-cloud.example.json 为 tencent-cloud.json 或放入用户数据目录，并填入 secretId、secretKey' };
     }
-    
+
     // 如果已有会话，先清理
     if (currentVoiceRecognitionSession) {
       console.log('[语音识别] 清理之前的会话');
@@ -1781,6 +1712,62 @@ function getDefaultPrinterName() {
   }
 }
 
+// 获取打印机的缩放系数（从配置文件读取）
+async function getPrinterZoomFactor(printerName) {
+  try {
+    const userDataPath = app.getPath('userData');
+    const profilesPath = path.join(userDataPath, 'printer-profiles.json');
+    
+    if (!fs.existsSync(profilesPath)) {
+      return 1.0; // 配置文件不存在，返回默认值
+    }
+    
+    const profilesData = fs.readFileSync(profilesPath, 'utf-8');
+    const profiles = JSON.parse(profilesData);
+    
+    // 优先查找 default-printer（因为保存时使用的是 default-printer）
+    if (profiles['default-printer'] && profiles['default-printer'].zoomFactor !== undefined) {
+      return profiles['default-printer'].zoomFactor;
+    }
+    
+    if (!printerName) {
+      // 如果没有指定打印机名称，尝试查找第一个配置
+      const profileKeys = Object.keys(profiles);
+      if (profileKeys.length > 0) {
+        const firstProfile = profiles[profileKeys[0]];
+        if (firstProfile && firstProfile.zoomFactor !== undefined) {
+          return firstProfile.zoomFactor;
+        }
+      }
+      return 1.0;
+    }
+    
+    // 精确匹配
+    const profile = profiles[printerName];
+    if (profile && profile.zoomFactor !== undefined) {
+      return profile.zoomFactor;
+    }
+    
+    // 尝试模糊匹配（不区分大小写）
+    const lowerPrinterName = printerName.toLowerCase();
+    for (const [key, value] of Object.entries(profiles)) {
+      if (key.toLowerCase() === lowerPrinterName && value.zoomFactor !== undefined) {
+        return value.zoomFactor;
+      }
+    }
+    
+    // 如果找不到匹配的打印机配置，尝试使用 default-printer 作为后备
+    if (profiles['default-printer'] && profiles['default-printer'].zoomFactor !== undefined) {
+      return profiles['default-printer'].zoomFactor;
+    }
+    
+    return 1.0; // 没有配置，返回默认值
+  } catch (error) {
+    console.error('🔍 [打印系数] getPrinterZoomFactor - 读取失败:', error.message);
+    return 1.0; // 出错时返回默认值
+  }
+}
+
 // 语音合成：将文本转换为语音
 ipcMain.handle('text-to-speech', async (event, text, sessionId) => {
   try {
@@ -1918,12 +1905,6 @@ ipcMain.handle('text-to-speech', async (event, text, sessionId) => {
   }
 });
 
-// 打印 DPI：EPSON_LQ_730K 等针式打印机系统报告为 120x60，匹配此值可减少缩放模糊
-// 不传 dpi，让驱动使用系统默认。Mac 用户可通过「设为系统默认」按钮设置 lpoptions
-function getPrintDpiOptions() {
-  return {};
-}
-
 function printContentToWindowGbPb(printContent, gbBatchId, paperCount) {
   const printWindow = new BrowserWindow({
     show: false, // 不显示打印窗口
@@ -1949,12 +1930,13 @@ function printContentToWindowGbPb(printContent, gbBatchId, paperCount) {
     printWindow.webContents.print({
       marginsType: 0, // 0 = default, 1 = none, 2 = minimum
       silent: true,  // 静默打印，不弹出对话框
-      printBackground: true, // 开启背景打印，防止边框/样式丢失
+      printBackground: false,
       deviceName: defaultPrinter || '',// 使用配置的默认打印机，空字符串使用系统默认打印机
       margins: {
         marginType: 'none' // 或使用具体的数值，如 { top: 0, bottom: 0, left: 0, right: 0 }
       },
-      ...getPrintDpiOptions(),
+      dpi: { horizontal: 300, vertical: 300 }, // 设置打印DPI为300，提高清晰度
+
     }, (success, error) => {
       if (success) {
         console.log('打印成功userId', gbBatchId);
@@ -1983,24 +1965,29 @@ function printContentToWindowGbPbWithCallback(printContent, gbBatchId, paperCoun
 
     printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(printContent));
 
-    printWindow.webContents.on('did-finish-load', () => {
-      // 确保在打印前设置正确的缩放
-      printWindow.webContents.setZoomFactor(1.0);
-      
-      // 获取默认打印机名称
+    printWindow.webContents.on('did-finish-load', async () => {
+      // 获取默认打印机名称和缩放系数
       const defaultPrinter = getDefaultPrinterName();
+      const zoomFactor = await getPrinterZoomFactor(defaultPrinter);
+      
       console.log('[打印] GB批次打印（IPC回执），使用打印机:', defaultPrinter || '系统默认打印机');
+      console.log('[打印缩放] 缩放系数:', zoomFactor);
+      
+      // 应用缩放系数（关键：修正整体缩小问题）
+      printWindow.webContents.setZoomFactor(zoomFactor);
       
       printWindow.webContents.print({
         marginsType: 0,
         silent: true,
-        printBackground: true, // 开启背景打印，防止边框/样式丢失
+        printBackground: false,
         deviceName: defaultPrinter || '', // 使用配置的默认打印机
         margins: {
           marginType: 'none'
         },
-        ...getPrintDpiOptions(),
+        dpi: { horizontal: 360, vertical: 180 }, // 设置打印DPI为360x180，提高清晰度
       }, (success, error) => {
+        // 恢复缩放因子
+        printWindow.webContents.setZoomFactor(1.0);
         printWindow.destroy();
         
         if (success) {
@@ -2054,12 +2041,13 @@ function printContentToWindowGb(printContent, gbDepFatherId, gbDepId, tradeNo, u
     printWindow.webContents.print({
       marginsType: 0, // 0 = default, 1 = none, 2 = minimum
       silent: true,  // 静默打印，不弹出对话框
-      printBackground: true, // 开启背景打印，防止边框/样式丢失
+      printBackground: false,
       deviceName: defaultPrinter || '',// 使用配置的默认打印机，空字符串使用系统默认打印机
       margins: {
         marginType: 'none' // 或使用具体的数值，如 { top: 0, bottom: 0, left: 0, right: 0 }
       },
-      ...getPrintDpiOptions(),
+      dpi: { horizontal: 300, vertical: 300 }, // 设置打印DPI为300，提高清晰度
+
     }, (success, error) => {
       if (success) {
         console.log('打印成功userId', userId);
@@ -2088,23 +2076,26 @@ function printContentToWindowGbWithCallback(printContent, gbDepFatherId, gbDepId
 
     printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(printContent));
 
-    printWindow.webContents.on('did-finish-load', () => {
-      // 确保在打印前设置正确的缩放
-      printWindow.webContents.setZoomFactor(1.0);
-      
-      // 获取默认打印机名称
+    printWindow.webContents.on('did-finish-load', async () => {
+      // 获取默认打印机名称和缩放系数
       const defaultPrinter = getDefaultPrinterName();
+      const zoomFactor = await getPrinterZoomFactor(defaultPrinter);
+      
       console.log('[打印] GB订单打印（IPC回执），使用打印机:', defaultPrinter || '系统默认打印机');
+      console.log('[打印缩放] 缩放系数:', zoomFactor);
+      
+      // 应用缩放系数（关键：修正整体缩小问题）
+      printWindow.webContents.setZoomFactor(zoomFactor);
       
       printWindow.webContents.print({
         marginsType: 0,
         silent: true,
-        printBackground: true, // 开启背景打印，防止边框/样式丢失
+        printBackground: false,
         deviceName: defaultPrinter || '', // 使用配置的默认打印机
         margins: {
           marginType: 'none'
         },
-        ...getPrintDpiOptions(),
+        dpi: { horizontal: 360, vertical: 180 }, // 设置打印DPI为360x180，提高清晰度
       }, (success, error) => {
         printWindow.destroy();
         
@@ -2160,12 +2151,13 @@ function printContentToWindow(printContent, depFatherId, depId, tradeNo, userId,
     printWindow.webContents.print({
       marginsType: 0, // 0 = default, 1 = none, 2 = minimum
       silent: true,  // 静默打印，不弹出对话框
-      printBackground: true, // 开启背景打印，防止边框/样式丢失
+      printBackground: false,
       deviceName: defaultPrinter || '',// 使用配置的默认打印机，空字符串使用系统默认打印机
       margins: {
         marginType: 'none' // 或使用具体的数值，如 { top: 0, bottom: 0, left: 0, right: 0 }
       },
-      ...getPrintDpiOptions(),
+      dpi: { horizontal: 300, vertical: 300 }, // 设置打印DPI为300，提高清晰度
+
     }, (success, error) => {
       if (success) {
         console.log('打印成功userId', userId);
@@ -2188,10 +2180,11 @@ function printContentToWindow(printContent, depFatherId, depId, tradeNo, userId,
   });
 }
 
-// 新的打印函数：返回Promise，支持IPC回执。isHistoryOrder=true 时跳过保存接口和刷新客户列表
-function printContentToWindowWithCallback(printContent, depFatherId, depId, tradeNo, userId, paperCount, shouldSave = true, isHistoryOrder = false) {
+// 新的打印函数：返回Promise，支持IPC回执
+function printContentToWindowWithCallback(printContent, depFatherId, depId, tradeNo, userId, paperCount, shouldSave = true) {
+  console.log('🔍 [打印系数] ========== printContentToWindowWithCallback 函数开始 ==========');
   console.log('🚀 [printContentToWindowWithCallback] ========== 开始创建打印窗口 ==========');
-  console.log('🚀 [printContentToWindowWithCallback] 参数:', { depFatherId, depId, tradeNo, userId, paperCount, shouldSave, isHistoryOrder });
+  console.log('🚀 [printContentToWindowWithCallback] 参数:', { depFatherId, depId, tradeNo, userId, paperCount, shouldSave });
   console.log('🚀 [printContentToWindowWithCallback] HTML长度:', printContent ? printContent.length : 0);
   
   return new Promise((resolve, reject) => {
@@ -2233,13 +2226,16 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
       }
     }, 10000); // 10秒超时
     
-    printWindow.webContents.on('did-finish-load', () => {
+    printWindow.webContents.on('did-finish-load', async () => {
       console.log('📄 [printContentToWindowWithCallback] 打印窗口加载完成，准备打印');
       console.log('📄 [printContentToWindowWithCallback] HTML内容长度:', printContent.length);
       console.log('📄 [printContentToWindowWithCallback] 打印参数:', { depFatherId, depId, tradeNo, userId, paperCount, shouldSave });
       
-      // 确保在打印前设置正确的缩放
+      // 注意：这里先设置为 1.0，实际的缩放系数会在 setTimeout 回调中应用
+      // 因为需要先获取打印机配置来确定最终的缩放系数
       printWindow.webContents.setZoomFactor(1.0);
+      
+      console.log('📄 [printContentToWindowWithCallback] 普通打印：将在 setTimeout 回调中应用缩放系数');
       
       // 添加延迟，确保内容完全渲染（根据 GPT 建议，延迟 500ms 确保 HTML/CSS/图片完全加载）
       setTimeout(async () => {
@@ -2314,9 +2310,16 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
                   console.log('📊 [打印] 打印机状态:', statusText, '(状态码:', matchedPrinter.status, ')');
                   
                   if (matchedPrinter.status === 2) {
-                    console.warn('⚠️ [打印] 打印机处于暂停状态，打印可能失败');
+                    console.warn('⚠️ [打印] ⚠️⚠️⚠️ 打印机处于暂停状态，打印可能失败 ⚠️⚠️⚠️');
+                    console.warn('⚠️ [打印] 请检查打印机是否暂停，如果是，请取消暂停后重试');
                   } else if (matchedPrinter.status === 3) {
-                    console.error('❌ [打印] 打印机处于错误状态，打印可能失败');
+                    console.error('❌ [打印] ❌❌❌ 打印机处于错误状态，打印可能失败 ❌❌❌');
+                    console.error('❌ [打印] 请检查：');
+                    console.error('❌ [打印]   1. 打印机是否已连接');
+                    console.error('❌ [打印]   2. 打印机是否缺纸');
+                    console.error('❌ [打印]   3. 打印机是否有卡纸或其他错误');
+                    console.error('❌ [打印]   4. 打印机驱动是否正常');
+                    console.error('❌ [打印] 即使 Electron 返回成功，打印机也可能因为错误状态而无法打印');
                   }
                 }
               } else {
@@ -2341,11 +2344,62 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
           console.log('ℹ️ [打印] 未配置默认打印机，使用系统默认');
         }
         
+        // 重要：使用最终确定的打印机名称重新获取缩放系数
+        // 因为 finalPrinterName 可能是系统识别的实际名称，与配置时保存的名称可能不同
+        const printerNameForZoom = finalPrinterName || defaultPrinter || '';
+        const finalZoomFactor = await getPrinterZoomFactor(printerNameForZoom);
+        
+        // 获取初始缩放系数（用于日志对比）
+        const initialZoomFactor = await getPrinterZoomFactor(defaultPrinter || '');
+        
+        console.log('🔍 [打印系数] ========== main.js 获取缩放系数 ==========');
+        console.log('🔍 [printContentToWindowWithCallback] 最终打印机配置:', {
+          defaultPrinter: defaultPrinter || '未配置',
+          finalPrinterName: finalPrinterName || '系统默认',
+          printerNameForZoom: printerNameForZoom || '系统默认',
+          initialZoomFactor: initialZoomFactor,
+          finalZoomFactor: finalZoomFactor,
+          'initialZoomFactor类型': typeof initialZoomFactor,
+          'finalZoomFactor类型': typeof finalZoomFactor,
+          zoomFactorChanged: finalZoomFactor !== initialZoomFactor,
+          '将使用的zoomFactor': finalZoomFactor
+        });
+        console.log('🔍 [打印系数] ========== main.js 缩放系数获取完成 ==========');
+        
+        // 重要：对于针式打印机，CSS @page size 可能被驱动忽略
+        // 因此需要同时使用 Electron 的 setZoomFactor 来确保缩放生效
+        // 注意：CSS 层面已经缩放字体大小，这里只缩放整体页面，避免双重缩放字体
+        // 策略：CSS 保持原始尺寸，Electron setZoomFactor 统一缩放
+        console.log('🔍 [打印系数] ========== main.js 应用缩放系数 ==========');
+        console.log('🔍 [打印系数] main.js - 缩放系数检查:', {
+          'finalZoomFactor': finalZoomFactor,
+          '类型': typeof finalZoomFactor,
+          '是否为1.0': finalZoomFactor === 1.0,
+          '将应用setZoomFactor': finalZoomFactor !== 1.0
+        });
+        
+        if (finalZoomFactor !== 1.0) {
+          printWindow.webContents.setZoomFactor(finalZoomFactor);
+          console.log('✅ [打印系数] main.js - 应用 Electron setZoomFactor:', finalZoomFactor);
+          console.log('📐 [打印系数] main.js - 说明：针式打印机需要 Electron 层面缩放，CSS @page size 可能被驱动忽略');
+          console.log('📐 [打印系数] main.js - 缩放效果：页面将放大', ((finalZoomFactor - 1) * 100).toFixed(2), '%');
+        } else {
+          printWindow.webContents.setZoomFactor(1.0);
+        }
+        console.log('🔍 [打印系数] ========== main.js 缩放系数应用完成 ==========');
+        
         console.log('🖨️ [printContentToWindowWithCallback] 开始调用打印API');
+        
+        // 检测平台
+        const platform = os.platform();
+        const isMacOS = platform === 'darwin';
+        const isWindows = platform === 'win32';
+        
+        console.log('🖨️ [printContentToWindowWithCallback] 当前平台:', platform);
         
         // 根据 GPT 建议优化打印参数：
         // 1. 使用 marginsType: 0 (默认边距)，比 'none' 更稳健
-        // 2. 移除自定义 DPI，让驱动自己决定（针式打印机对 DPI 很敏感）
+        // 2. macOS 需要特殊处理：设置 DPI 和禁用字体平滑
         // 3. 开启 printBackground 防止样式丢失
         const printOptions = {
           silent: true,
@@ -2353,15 +2407,34 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
           deviceName: finalPrinterName, // 使用验证后的打印机名称
           marginsType: 0, // 0 = 默认边距，比 'none' 更稳健，兼容性更好
           // 不设置 margins 对象，使用系统默认
-          // macOS 使用 300x300 DPI，Windows 不设置让驱动决定
-          ...getPrintDpiOptions(),
         };
+        
+        // macOS 特殊处理：针式打印机需要明确的 DPI 设置
+        // macOS 使用 CUPS，打印流程是：应用 -> PDF -> CUPS -> 驱动
+        // PDF 中间层可能导致字体渲染模糊，需要明确设置 DPI
+        if (isMacOS) {
+          // Epson 针式打印机通常使用 180x180 DPI（标准）或 360x180 DPI（高质量）
+          // 对于 macOS，使用高质量模式以提高清晰度
+          printOptions.dpi = { horizontal: 360, vertical: 180 };
+          console.log('🍎 [printContentToWindowWithCallback] macOS 平台：设置 DPI 360x180（高质量模式）');
+          console.log('🍎 [printContentToWindowWithCallback] 说明：macOS 使用 CUPS，需要明确 DPI 以避免 PDF 中间层导致的模糊');
+          console.log('🍎 [printContentToWindowWithCallback] 使用高质量模式（360x180）以提高打印清晰度');
+        } else if (isWindows) {
+          // Windows：让驱动自己决定 DPI（针式打印机驱动通常能正确识别）
+          // 不设置 dpi，让打印机驱动自己决定（针式打印机通常有固定 DPI，如 180x180）
+          console.log('🪟 [printContentToWindowWithCallback] Windows 平台：不设置 DPI，让驱动自己决定');
+        }
         
         console.log('🖨️ [printContentToWindowWithCallback] 打印参数:', printOptions);
         console.log('🖨️ [printContentToWindowWithCallback] 优化说明:');
         console.log('  - 使用 marginsType: 0 (默认边距)');
-        console.log('  - macOS 使用 300x300 DPI，Windows 不设置让驱动决定');
-        console.log('  - 开启 printBackground: true');
+        if (isMacOS) {
+          console.log('  - macOS: 设置 DPI 360x180（高质量模式）');
+          console.log('  - macOS: 开启 printBackground: true');
+        } else {
+          console.log('  - 移除自定义 DPI，使用驱动默认值');
+          console.log('  - 开启 printBackground: true');
+        }
         console.log('  - 如果打印失败，请检查打印机是否在线、缺纸或暂停');
         
         // 监听打印错误事件
@@ -2371,13 +2444,32 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
           console.error('❌ [打印] errorDescription:', errorDescription);
         });
         
-        printWindow.webContents.print(printOptions, (success, error) => {
+        // 在打印前再次确认 setZoomFactor（确保缩放生效）
+        const currentZoomFactor = printWindow.webContents.getZoomFactor();
+        
+        // 强制应用缩放系数（确保生效）
+        if (Math.abs(currentZoomFactor - finalZoomFactor) > 0.0001) {
+          printWindow.webContents.setZoomFactor(finalZoomFactor);
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        
+        // 使用 Promise 包装 print()，确保在打印时缩放仍然生效
+        const printPromise = new Promise((printResolve, printReject) => {
+          // 在调用 print() 前再次确认缩放（macOS 可能需要）
+          if (finalZoomFactor !== 1.0) {
+            printWindow.webContents.setZoomFactor(finalZoomFactor);
+          }
+          
+          printWindow.webContents.print(printOptions, (success, error) => {
           console.log('🖨️ [printContentToWindowWithCallback] ========== 打印回调被调用 ==========');
           console.log('🖨️ [printContentToWindowWithCallback] success:', success);
           console.log('🖨️ [printContentToWindowWithCallback] error:', error);
           console.log('🖨️ [printContentToWindowWithCallback] error类型:', typeof error);
           console.log('🖨️ [printContentToWindowWithCallback] 打印参数:', { userId, tradeNo, shouldSave });
           console.log('🖨️ [printContentToWindowWithCallback] 使用的打印机:', finalPrinterName || '系统默认');
+          
+          // 恢复缩放因子为 1.0（虽然窗口会被销毁，但为了代码完整性）
+          printWindow.webContents.setZoomFactor(1.0);
           
           cleanup(); // 清除超时
           
@@ -2397,10 +2489,8 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
             console.log('✅ [IPC回执] shouldSave:', shouldSave);
             console.log('✅ [IPC回执] 打印机:', defaultPrinter || '系统默认打印机');
             
-            // 历史订单打印：跳过保存接口和刷新客户列表
-            if (isHistoryOrder) {
-              console.log('⏭️ [IPC回执] 历史订单打印，跳过保存接口');
-            } else if (shouldSave) {
+            // 只在 shouldSave=true 时保存打印记录（异步，不阻塞回执）
+            if (shouldSave) {
               console.log('💾 [IPC回执] 需要保存打印记录，paperCount:', paperCount);
               if (mainWindow) {
                 console.log('💾 [IPC回执] 发送设备配置检查请求到渲染进程');
@@ -2415,7 +2505,7 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
               console.log('⏭️ [IPC回执] 跳过保存，非最后一页');
             }
             
-            resolve({ success: true, tradeNo });
+            printResolve({ success: true, tradeNo });
           } else {
             console.error('❌ [IPC回执] ========== 打印失败 ==========');
             console.error('❌ [IPC回执] error:', error);
@@ -2437,9 +2527,10 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
               console.warn('💡 [IPC回执] 建议: 尝试使用系统默认打印机或检查打印机状态');
             }
             
-            reject({ success: false, error: error || '打印失败', tradeNo, printer: finalPrinterName || defaultPrinter });
+            printReject({ success: false, error: error || '打印失败', tradeNo, printer: finalPrinterName || defaultPrinter });
           }
         });
+        }); // 关闭 printPromise
       }, 100); // 添加100ms延迟，确保内容完全渲染
     });
 

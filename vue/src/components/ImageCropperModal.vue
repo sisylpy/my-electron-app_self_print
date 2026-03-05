@@ -33,7 +33,7 @@
                             <button type="button" class="icm-btn" @click="resetCrop">重置裁剪框</button>
                         </div>
 
-                        <div class="icm-toolbar-right">
+                        <div v-if="showCropBox" class="icm-toolbar-right">
                             <label class="icm-check">
                                 <input type="checkbox" v-model="lockCropToImage" />
                                 裁剪框限制在图片内
@@ -50,15 +50,15 @@
                         <img
                                 ref="img"
                                 class="icm-image"
-                                :src="src"
+                                :src="displaySrc || src"
                                 alt="preview"
                                 draggable="false"
                                 @load="onImageLoad"
                                 :style="imageTransformStyle"
                         />
 
-                        <!-- Crop overlay -->
-                        <div v-if="ready" class="icm-overlay">
+                        <!-- Crop overlay：仅在选择「裁剪框」时显示 -->
+                        <div v-if="ready && showCropBox" class="icm-overlay">
                             <!-- crop box -->
                             <div
                                     class="icm-crop"
@@ -86,12 +86,35 @@
 
                 <!-- Footer -->
                 <div class="icm-footer">
+
                     <button type="button" class="icm-btn ghost" @click="onCancel">取消</button>
-                    <button type="button" class="icm-btn" :disabled="!ready" @click="onDirectRecognize">
-                        直接识别
+                    <button type="button" class="icm-btn" :disabled="!ready" :class="{ 'crop-box-btn': showCropBox }" @click="rotateImage(-90)">
+                        旋转 90 度
                     </button>
-                    <button type="button" class="icm-btn primary" :disabled="!ready" @click="onConfirm">
-                        确认裁剪
+                    <!-- <button type="button" class="icm-btn" :disabled="!ready" :class="{ 'crop-box-btn': showCropBox }" @click="rotateImage(-15)">
+                        左旋转↺
+                    </button>
+                    <button type="button" class="icm-btn" :disabled="!ready" :class="{ 'crop-box-btn': showCropBox }" @click="rotateImage(15)">
+                        右旋转↻
+                    </button> -->
+                    <button type="button" class="icm-btn" :disabled="!ready" :class="{ 'crop-box-btn': showCropBox }" @click="toggleCropBox">
+                        {{ showCropBox ? '取消裁剪框' : '裁剪框' }}
+                    </button>
+
+                    <!-- 识别模式：单列 / 多列 单选 -->
+                    <div class="icm-ocr-mode" style=" margin-right: 10px; margin-left: 60px;">
+                        <span class="icm-ocr-mode-label">选择模式：</span>
+                        <label class="icm-mode-item" :class="{ active: ocrMode === 'fast' }">
+                            <input type="radio" value="fast" v-model="ocrMode" />
+                            <span>单列快速识别</span>
+                        </label>
+                        <label class="icm-mode-item" :class="{ active: ocrMode === 'complex' }">
+                            <input type="radio" value="complex" v-model="ocrMode" />
+                            <span>多列复杂识别</span>
+                        </label>
+                    </div>
+                    <button type="button" class="icm-btn primary icm-recognize-btn" :disabled="!ready || !ocrMode" @click="startRecognizeByMode">
+                        开始识别
                     </button>
                 </div>
             </div>
@@ -100,6 +123,7 @@
 </template>
 
 <script>
+
     export default {
         name: "ImageCropperModal",
 
@@ -108,15 +132,21 @@
             modelValue: { type: Boolean, default: undefined },
             value: { type: Boolean, default: undefined },
 
-            src: { type: String, required: true },
+            src: { type: String, default: '' },
             title: { type: String, default: "图片预览与裁剪" },
             fileSize: { type: Number, default: 0 },
 
             // 初始裁剪框占图片可视区域比例
-            initialCropRatio: { type: Number, default: 0.8 }
+            initialCropRatio: { type: Number, default: 0.8 },
+
+            // AI识别所需的参数
+            depId: { type: [Number, String], default: null },
+            depFatherId: { type: [Number, String], default: null },
+            disId: { type: [Number, String], default: null },
+            userId: { type: [Number, String], default: null }
         },
 
-        emits: ["update:modelValue", "input", "cancel", "confirm", "direct-recognize"],
+        emits: ["update:modelValue", "input", "cancel", "confirm", "direct-recognize", "direct-recognize-ai"],
 
         data() {
             return {
@@ -124,6 +154,10 @@
 
                 naturalWidth: 0,
                 naturalHeight: 0,
+
+                displaySrc: '',
+                originalSrc: '',
+                rotationDegrees: 0,
 
                 // view transform
                 zoom: 1,
@@ -136,11 +170,23 @@
                 // behavior
                 lockCropToImage: true,
 
+                // 旋转后不重置裁剪框，仅 clamp（保留用户选区）
+                _rotateJustHappened: false,
+
                 // interaction
                 dragMode: null, // 'pan' | 'crop-move' | 'crop-resize'
                 resizeHandle: null,
                 pointerId: null,
-                start: null
+                start: null,
+
+                // 防止「单列/多列」重复点击导致接口请求 2 次
+                directRecognizePending: false,
+
+                // 是否显示裁剪框（默认不显示，与小程序一致：点击「裁剪框」才显示）
+                showCropBox: false,
+
+                // 识别模式：null 未选择，'fast' 单列，'complex' 多列（不默认，需用户选择后再可开始识别）
+                ocrMode: null
             };
         },
 
@@ -174,6 +220,10 @@
         watch: {
             isOpen(val) {
                 if (val) {
+                    this.displaySrc = this.src || '';
+                    this.directRecognizePending = false;
+                    this.showCropBox = false;
+                    this.ocrMode = null;
                     this.$nextTick(() => {
                         this.bindWheelZoom();
                     });
@@ -184,6 +234,9 @@
 
             src() {
                 // src 变化时重置状态
+                this.displaySrc = this.src || '';
+                this.originalSrc = this.src || '';
+                this.rotationDegrees = 0;
                 this.ready = false;
                 this.naturalWidth = 0;
                 this.naturalHeight = 0;
@@ -227,7 +280,12 @@
                 this.$nextTick(() => {
                     this.ready = true;
                     this.resetView();
-                    this.resetCrop();
+                    if (this._rotateJustHappened) {
+                        this._rotateJustHappened = false;
+                        this.clampCropToImage();
+                    } else {
+                        this.resetCrop();
+                    }
                 });
             },
 
@@ -538,7 +596,7 @@
                 await new Promise((resolve, reject) => {
                     img.onload = resolve;
                     img.onerror = reject;
-                    img.src = this.src;
+                    img.src = this.displaySrc || this.src;
                 });
 
                 ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
@@ -549,10 +607,132 @@
                 };
             },
 
+            // 旋转图片（degrees: 90 顺时针，-90 逆时针，180 翻转；15/-15 为微调，始终基于 originalSrc 避免尺寸累积）
+            async rotateImage(degrees) {
+                if (!this.ready) return;
+                const isMicro = Math.abs(degrees) < 90;
+                const baseSrc = isMicro ? (this.originalSrc || this.src) : (this.displaySrc || this.src);
+                if (!baseSrc) return;
+
+                if (isMicro) this.rotationDegrees = (this.rotationDegrees + degrees) % 360;
+                const totalDeg = isMicro ? this.rotationDegrees : degrees;
+
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                    img.src = baseSrc;
+                });
+
+                const w = img.naturalWidth;
+                const h = img.naturalHeight;
+
+                const rad = (totalDeg * Math.PI) / 180;
+                const canvas = document.createElement("canvas");
+                const ctx = canvas.getContext("2d");
+                let cw, ch;
+
+                if (Math.abs(totalDeg) === 90) {
+                    cw = h;
+                    ch = w;
+                    canvas.width = cw;
+                    canvas.height = ch;
+                    const norm = (totalDeg % 360 + 360) % 360;
+                    if (norm === 90) {
+                        ctx.translate(cw, 0);
+                    } else {
+                        ctx.translate(0, ch);
+                    }
+                    ctx.rotate(rad);
+                    ctx.drawImage(img, 0, 0);
+                } else if (Math.abs(totalDeg) === 180) {
+                    cw = w;
+                    ch = h;
+                    canvas.width = cw;
+                    canvas.height = ch;
+                    ctx.translate(cw, ch);
+                    ctx.rotate(rad);
+                    ctx.drawImage(img, 0, 0);
+                } else {
+                    // 微调角度：计算旋转后外接框（与 90° 不同，需按旋转矩形外接框公式）
+                    const cos = Math.abs(Math.cos(rad));
+                    const sin = Math.abs(Math.sin(rad));
+                    cw = Math.ceil(w * cos + h * sin);
+                    ch = Math.ceil(w * sin + h * cos);
+                    canvas.width = cw;
+                    canvas.height = ch;
+                    // 白底填充，避免透明边角导致渲染异常或多次旋转后尺寸异常
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, cw, ch);
+                    ctx.translate(cw / 2, ch / 2);
+                    ctx.rotate(rad);
+                    ctx.translate(-w / 2, -h / 2);
+                    ctx.drawImage(img, 0, 0);
+                }
+
+                const dataUrl = canvas.toDataURL("image/png");
+                this.displaySrc = dataUrl;
+                if (!isMicro) {
+                    this.originalSrc = dataUrl;
+                    this.rotationDegrees = 0;
+                }
+                this._rotateJustHappened = true;
+                this.ready = false;
+                // onImageLoad 会在新图加载完成时触发，不重置裁剪框以保留用户选区
+            },
+
+            toggleCropBox() {
+                this.showCropBox = !this.showCropBox;
+            },
+
+            // 根据当前选择的模式执行识别（与小程序 startRecognizeByMode 一致）
+            startRecognizeByMode() {
+                if (!this.ocrMode) return;
+                if (this.ocrMode === 'complex') {
+                    this.onDirectRecognizeAi();
+                } else {
+                    this.onDirectRecognize();
+                }
+            },
+
             onDirectRecognize() {
-                // 直接识别，不裁剪
-                this.$emit("direct-recognize", this.src);
-                this.close();
+                if (this.directRecognizePending) return;
+                this.directRecognizePending = true;
+                if (this.showCropBox) {
+                    this.makeCroppedDataUrl()
+                        .then(({ dataUrl }) => {
+                            this.$emit("direct-recognize", dataUrl);
+                            this.close();
+                        })
+                        .catch((e) => {
+                            this.directRecognizePending = false;
+                            console.error(e);
+                            alert("裁剪失败，请重试");
+                        });
+                } else {
+                    this.$emit("direct-recognize", this.displaySrc || this.src);
+                    this.close();
+                }
+            },
+            onDirectRecognizeAi() {
+                if (this.directRecognizePending) return;
+                this.directRecognizePending = true;
+                if (this.showCropBox) {
+                    this.makeCroppedDataUrl()
+                        .then(({ dataUrl }) => {
+                            this.$emit("direct-recognize-ai", dataUrl);
+                            this.close();
+                        })
+                        .catch((e) => {
+                            this.directRecognizePending = false;
+                            console.error(e);
+                            alert("裁剪失败，请重试");
+                        });
+                } else {
+                    this.$emit("direct-recognize-ai", this.displaySrc || this.src);
+                    this.close();
+                }
             },
 
             async onConfirm() {
@@ -687,6 +867,12 @@
         background: #fff;
     }
 
+    .icm-btn.crop-box-btn {
+        background: #e8f4fc;
+        border-color: #0d6efd;
+        color: #0d6efd;
+    }
+
     .icm-btn:disabled {
         opacity: .6;
         cursor: not-allowed;
@@ -779,7 +965,46 @@
         border-top: 1px solid #eee;
         background: #fff;
         display: flex;
+        align-items: center;
         justify-content: flex-end;
         gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .icm-ocr-mode {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .icm-ocr-mode-label {
+        font-size: 13px;
+        color: #555;
+    }
+    .icm-mode-item {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 13px;
+        cursor: pointer;
+        background: #fff;
+    }
+    .icm-mode-item input {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    .icm-mode-item:hover {
+        background: #f7f7f7;
+    }
+    .icm-mode-item.active {
+        border-color: #2c7;
+        background: #e8f8f0;
+        color: #1a5c34;
+    }
+    .icm-recognize-btn {
+        margin-left: 4px;
     }
 </style>

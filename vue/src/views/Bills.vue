@@ -11,6 +11,15 @@
                             @click="switchToOrderCustomers">
                         配送单
                     </button>
+                    <button
+                            v-if="taskCount > 0"
+                            type="button"
+                            :class="currentView === 'task' ? 'btn btn-primary' : 'btn btn-outline-primary'"
+                            @click="switchToTaskList">
+                        下单中
+                        <span class="badge bg-secondary ms-2" >{{ taskCount }}</span>
+
+                    </button>
                     <button type="button"
                             :class="currentView === 'all' ? 'btn btn-primary' : 'btn btn-outline-primary'"
                             @click="switchToAllCustomers">
@@ -85,9 +94,33 @@
                     </div>
                 </div>
 
+                <!-- 今日任务客户（父级部门列表，选中后右侧按部门用 depFatherGetTaskList 拉任务） -->
+                <div v-if="currentView === 'task'" class="box customer-list-box">
+                    <div class="box-body no-padding customer-list-body">
+                        <div v-if="taskListLoading" class="text-center p-3 text-muted">加载中...</div>
+                        <ul v-else-if="taskList.length > 0" class="nav nav-pills nav-stacked customer-list">
+                            <li v-for="dep in taskList" :key="dep.nxDepartmentId"
+                                :class="{ 'active': selectedTask && selectedTask.nxDepartmentId === dep.nxDepartmentId, 'tab-item': true }"
+                                @click="selectTask(dep)">
+                                <a>{{ taskDepartmentLabel(dep) }}</a>
+                                <span class="badge bg-secondary ms-2" v-if="dep.taskCount">{{ dep.taskCount }}</span>
+                            </li>
+                        </ul>
+                        <div v-else class="empty-customer-list text-center p-4">
+                            <div class="text-muted">
+                                <div class="mb-2" style="font-size: 48px;">📋</div>
+                                <div class="fw-bold mb-1">暂无今日任务客户</div>
+                                <div class="small">点击上方按钮加载有未完成任务的客户列表</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 全部客户列表 -->
                 <div v-if="currentView === 'all'" class="box customer-list-box">
-                    <div class="box-body no-padding customer-list-body">
+                    <div class="box-body no-padding customer-list-body" 
+                         ref="customerListBody"
+                         @scroll="handleCustomerListScroll">
                         <!-- 现金客户 -->
                         <div class="customer-type-section"
                              :class="{ 'collapsed': collapsedCustomerTypes.cash || filteredCashCustomers.length === 0 }">
@@ -97,14 +130,16 @@
                                     style="cursor: pointer; user-select: none;">
                                 <span class="me-2">{{ collapsedCustomerTypes.cash ? '▶' : '▼' }}</span>
                                 现金客户
-                                <span class="badge bg-secondary ms-2">{{ filteredCashCustomers.length }}</span>
                             </h6>
                             <ul v-show="!collapsedCustomerTypes.cash && filteredCashCustomers.length > 0"
                                 class="nav nav-pills nav-stacked">
                                 <li v-for="customer in filteredCashCustomers" :key="customer.nxDepartmentId"
-                                    :class="{ 'active': selectedAllCustomer === customer.nxDepartmentId }"
+                                    :class="{ 'active': String(selectedAllCustomer) === String(customer.nxDepartmentId) }"
                                     @click="selectAllCustomer(customer.nxDepartmentId, customer)">
-                                    <a>{{ customer.nxDepartmentAttrName }}</a>
+                                    <a class="d-flex align-items-center flex-nowrap" style="white-space: nowrap;">
+                                        <span>{{ customer.nxDepartmentAttrName }}</span>
+                                        <span class="badge bg-secondary ms-2" v-if="customer.taskCount > 0">{{ customer.taskCount }}</span>
+                                    </a>
                                 </li>
                             </ul>
                         </div>
@@ -118,16 +153,23 @@
                                     style="cursor: pointer; user-select: none;">
                                 <span class="me-2">{{ collapsedCustomerTypes.credit ? '▶' : '▼' }}</span>
                                 记账客户
-                                <span class="badge bg-secondary ms-2">{{ filteredCreditCustomers.length }}</span>
                             </h6>
                             <ul v-show="!collapsedCustomerTypes.credit && filteredCreditCustomers.length > 0"
                                 class="nav nav-pills nav-stacked">
                                 <li v-for="customer in filteredCreditCustomers" :key="customer.nxDepartmentId"
-                                    :class="{ 'active': selectedAllCustomer === customer.nxDepartmentId }"
+                                    :class="{ 'active': String(selectedAllCustomer) === String(customer.nxDepartmentId) }"
                                     @click="selectAllCustomer(customer.nxDepartmentId, customer)">
-                                    <a>{{ customer.nxDepartmentAttrName }}</a>
+                                    <a class="d-flex align-items-center flex-nowrap" style="white-space: nowrap;">
+                                        <span>{{ customer.nxDepartmentAttrName }}</span>
+                                        <span class="badge bg-secondary ms-2" v-if="customer.taskCount">{{ customer.taskCount }}</span>
+                                    </a>
                                 </li>
                             </ul>
+                        </div>
+                        
+                        <!-- 到底了提示 -->
+                        <div v-if="isCustomerListBottom" class="customer-list-bottom-tip">
+                            到底了！
                         </div>
                     </div>
                 </div>
@@ -143,7 +185,7 @@
                                :gbDepId="gbDepId"
                                :gbDepName="gbDepName" :gbDisId="gbDisId" :gbBatchId="gbBatchId"
 
-                               @order-saved="switchToOrderCustomers"
+                               @order-saved="handleOrderSavedFromPrintView"
                                @print-only="handlePrintOnly"
                     ></component>
                 </keep-alive>
@@ -155,6 +197,24 @@
                         <h5 class="fw-bold mb-2">暂无配送单数据</h5>
                         <p class="mb-0">请在左侧选择客户查看订单详情</p>
                     </div>
+                </div>
+
+                <!-- 今日任务视图 - 右侧显示 TaskOrder（按父级部门拉取任务，由 ImageUpload depFatherGetTaskList 获取） -->
+                <div v-if="currentView === 'task'" class="task-order-wrapper">
+                    <div v-if="!selectedTask" class="text-center p-5">
+                        <div class="text-muted">
+                            <div class="mb-3" style="font-size: 64px;">📋</div>
+                            <h5 class="fw-bold mb-2">请选择客户</h5>
+                            <p class="mb-0">在左侧选择有未完成任务的客户，右侧将按该客户的父级部门拉取任务并显示订单</p>
+                        </div>
+                    </div>
+                    <TaskOrder
+                        v-else
+                        ref="taskOrderRef"
+                        :selected-all-customer="selectedTask.nxDepartmentId"
+                        :selected-sub-department="selectedTask.nxDepartmentId"
+                        @task-list-changed="handleTaskAdded"
+                    />
                 </div>
 
                 <!-- 全部客户视图 - 显示三个标签页 -->
@@ -170,58 +230,18 @@
                     <!-- 已选择客户时显示标签页 -->
                     <div v-if="selectedAllCustomer" class="card shadow-lg p-4">
                         <!-- 客户信息行：客户名称、类型、子部门、订单保存路径 -->
-                        <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
-                            <div class="d-flex align-items-center gap-3 flex-grow-1">
-                                <h5 class="mb-0">
-                                    <span class="text-muted">{{ customerType === 'cash' ? '现金' : '记账' }}</span>
-                                    客户：{{ selectedCustomerName }}
-                                </h5>
+<!--                        <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">-->
+<!--                            <div class="d-flex align-items-center gap-3 flex-grow-1">-->
+<!--                                <h5 class="mb-0">-->
+<!--                                    <span class="text-muted">{{ customerType === 'cash' ? '现金' : '记账' }}</span>-->
+<!--                                    客户：{{ selectedCustomerName }}-->
+<!--                                </h5>-->
 
-                                <!-- 子部门选择（如果有子部门） -->
-                                <div v-if="hasSubDepartments" class="d-flex align-items-center gap-2">
-                                    <span class="text-muted">部门：</span>
-                                    <select
-                                            v-model="selectedSubDepartment"
-                                            @change="handleSubDepartmentChange"
-                                            class="form-select form-select-sm"
-                                            style="width: auto; min-width: 150px;">
-                                        <option
-                                                v-for="subDept in selectedCustomerEntity.nxDepartmentEntities"
-                                                :key="subDept.nxDepartmentId"
-                                                :value="subDept.nxDepartmentId">
-                                            {{ subDept.nxDepartmentAttrName || subDept.nxDepartmentName }}
-                                        </option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <!-- 订单保存路径（显示在右侧） -->
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="text-muted small">📁 订单保存路径：</span>
-                                <span v-if="customerFolderPath" class="text-muted small"
-                                      style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-                                      :title="customerFolderPath">
-                                    {{ customerFolderPath }}
-                                </span>
-                                <span v-else class="text-warning small">未设置</span>
-                                <button
-                                        class="btn btn-sm btn-primary"
-                                        @click="selectCustomerFolder"
-                                        :disabled="selectingFolder">
-                                    <span v-if="selectingFolder" class="spinner-border spinner-border-sm me-1"></span>
-                                    {{ selectingFolder ? '选择中...' : '选择' }}
-                                </button>
-                                <button
-                                        v-if="customerFolderPath"
-                                        class="btn btn-sm btn-outline-secondary"
-                                        @click="clearCustomerFolder">
-                                    清除
-                                </button>
-                            </div>
-                        </div>
+<!--                            </div>-->
+<!--                        </div>-->
 
                         <!-- 主标签页：今日订单 / 下单 / 历史订单 -->
-                        <ul class="nav nav-tabs mb-3" role="tablist">
+                        <ul class="nav nav-tabs mb-3 d-flex align-items-center" role="tablist">
                             <li class="nav-item" role="presentation">
                                 <button
                                         class="nav-link"
@@ -230,17 +250,42 @@
                                         role="tab"
                                         @click="switchAllCustomerTab(0)">
                                     💾 今日订单
+                                    <span class="badge bg-primary ms-2" v-if="todayOrderTotal > 0">{{ todayOrderTotal }}</span>
                                 </button>
                             </li>
-                            <li class="nav-item" role="presentation">
-                                <button
-                                        class="nav-link"
-                                        :class="{ 'active': allCustomerTabIndex === 1 }"
-                                        type="button"
-                                        role="tab"
-                                        @click="switchAllCustomerTab(1)">
-                                    ➕ 下单
-                                </button>
+                            <li class="nav-item d-flex align-items-center" role="presentation">
+                                <div class="d-flex align-items-center" 
+                                     :class="{ 'nav-link-active-wrapper': allCustomerTabIndex === 1 }"
+                                     style="display: flex; align-items: center; border: 1px solid transparent; border-top-left-radius: 0.375rem; border-top-right-radius: 0.375rem; margin-bottom: -1px;">
+                                    <button
+                                            class="nav-link"
+                                            :class="{ 'active': allCustomerTabIndex === 1 }"
+                                            type="button"
+                                            role="tab"
+                                            @click="switchAllCustomerTab(1)"
+                                            style="border: none; border-radius: 0;">
+                                        ➕ 下单
+                                    </button>
+                                    <!-- 子部门选择（只在"下单"标签页显示） -->
+                                    <div v-if="allCustomerTabIndex === 1 && hasSubDepartments" 
+                                         class="d-flex align-items-center gap-2 px-2"
+                                         style="border-left: 1px solid #dee2e6; height: 100%;">
+                                        <!-- <span class="text-muted small">部门：</span> -->
+                                        <select
+                                                v-model="selectedSubDepartment"
+                                                @change="handleSubDepartmentChange"
+                                                class="form-select form-select-sm"
+                                                style="width: auto; min-width: 150px; border: none; box-shadow: none;"
+                                                @click.stop>
+                                            <option
+                                                    v-for="subDept in selectedCustomerEntity.nxDepartmentEntities"
+                                                    :key="subDept.nxDepartmentId"
+                                                    :value="subDept.nxDepartmentId">
+                                                {{ subDept.nxDepartmentAttrName || subDept.nxDepartmentName }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                </div>
                             </li>
                             <li class="nav-item" role="presentation">
                                 <button
@@ -279,6 +324,8 @@
                                         :selectedCustomerEntity="selectedCustomerEntity"
                                         :selectedCustomerName="selectedCustomerName"
                                         @order-saved="handleOrderSaved"
+                                        @task-added="handleTaskAdded"
+                                        @switch-to-today-orders="() => switchAllCustomerTab(0)"
                                 />
                             </div>
 
@@ -304,6 +351,7 @@
                         <!-- 使用动态组件简化代码 -->
                         <component
                                 v-if="currentPrintComponent && billDetailData"
+                                :key="'history-print-' + selectedBillId"
                                 :is="currentPrintComponent"
                                 :ref="currentPrintComponentRef"
                                 :nxDepFatherId="selectedBillDepFatherId"
@@ -315,6 +363,7 @@
                                 :gbDepId="-1"
                                 :gbDisId="-1"
                                 :gbBatchId="-1"
+                                :isHistoryOrder="true"
                                 :orderData="{
                   bill: billDetailData,
                   arr: Array.from(billDetailData?.nxDepartmentOrdersEntities || [])
@@ -346,6 +395,7 @@
     import ApplyThirtyWholePanel from '../components/Applys/ApplyThirtyWholePanel.vue';
     import TodayOrders from '@/components/TodayOrders.vue';
     import PlaceOrder from '@/components/PlaceOrder.vue';
+    import TaskOrder from '@/components/TaskOrder.vue';
     import HistoryOrders from '@/components/HistoryOrders.vue';
 
     export default {
@@ -355,14 +405,13 @@
             ApplyPanel,
             ApplyFiftyPanel,
             ApplyHalfPanel,
-
             ApplyHalfWholePanel,
             ApplyThirtyPanel,
             ApplyThirtyWholePanel,
             TodayOrders,
             PlaceOrder,
-            HistoryOrders,
-
+            TaskOrder,
+            HistoryOrders
         },
 
 
@@ -406,12 +455,13 @@
                     credit: false  // 记账客户是否折叠
                 },
                 customerSearchKeyword: '', // 客户搜索关键词
+                isCustomerListBottom: false, // 客户列表是否滚动到底部
 
                 // 新增：客户历史订单相关
                 allCustomerTabIndex: 0, // 全部客户视图的标签页索引：0=今日订单, 1=下单, 2=历史订单
                 todayOrderList: [], // 今日已保存的订单列表（无子部门）
                 todayOrderDepArr: [], // 今日已保存的订单列表（有子部门）
-                todayOrderTotal: 0, // 今日订单总计
+                todayOrderTotal: 0, // 今日订单个数
 
                 // 客户文件夹路径相关
                 customerFolderPath: null, // 客户文件夹路径
@@ -426,7 +476,13 @@
                 selectedBillDepPrintName: '', // 选中账单的打印组件名称
                 selectedBillDepName: '', // 选中账单的部门名称
                 selectedBillDepFatherId: null, // 选中账单的部门父ID
-                billDetailData: null // 账单详情数据
+                billDetailData: null, // 账单详情数据
+
+                // 今日任务列表（disGetTaskList）
+                taskList: [],
+                taskListLoading: false,
+                selectedTask: null,
+                taskCount: 0,
             }
         },
 
@@ -571,7 +627,6 @@
                 });
             }
 
-
         },
 
         methods: {
@@ -596,8 +651,17 @@
                 }
             },
 
+            // 处理客户列表滚动事件
+            handleCustomerListScroll(event) {
+                const element = event.target;
+                // 判断是否滚动到底部（允许5px的误差）
+                const isBottom = element.scrollHeight - element.scrollTop <= element.clientHeight + 5;
+                this.isCustomerListBottom = isBottom;
+            },
+
             // 切换到未打印订单客户视图并刷新数据
             switchToOrderCustomers() {
+                console.log("switchToOrderCustomersswitchToOrderCustomers")
                 this.currentView = 'order';
                 this.selectedAllCustomer = null;
                 this.selectedCustomerName = '';
@@ -651,8 +715,97 @@
                 this.initAllCustomers();
             },
 
+            // 切换到今日任务视图并拉取任务列表
+            async switchToTaskList() {
+                this.currentView = 'task';
+                this.selectedTask = null;
+                const disId = this.disId || (this.disUser && this.disUser.nxDiuDistributerId);
+                if (!disId) {
+                    alert('请先登录或选择配送商');
+                    return;
+                }
+                this.taskListLoading = true;
+                this.taskList = [];
+                try {
+                    const res = await api.getDisTaskFatherDepartmentList(disId);
+                    const data = res && res.data;
+                    // 打印完整响应，便于核对后端返回结构（code、data/list 等）
+                    console.log('[Bills] switchToTaskList API 原始响应', {
+                        hasData: !!data,
+                        code: data?.code,
+                        keys: data ? Object.keys(data) : [],
+                        dataLength: Array.isArray(data?.data) ? data.data.length : '-',
+                        listLength: Array.isArray(data?.list) ? data.list.length : '-',
+                        firstItem: (data?.data || data?.list)?.[0]
+                    });
+                    const list = (data && (data.code === 0 || data.code === 200))
+                        ? (data.data || data.list || data.result || [])
+                        : [];
+                    this.taskList = Array.isArray(list) ? list : [];
+                    if (this.taskList.length > 0) {
+                        this.selectedTask = this.taskList[0];
+                        this.taskCount = this.taskList.length;
+                        console.log('[Bills] switchToTaskList 默认选中第一个客户', {
+                            taskListLength: this.taskList.length,
+                            nxDepartmentId: this.selectedTask?.nxDepartmentId,
+                            departmentName: this.selectedTask?.nxDepartmentName ?? this.selectedTask?.nxDepartmentAttrName
+                        });
+                    } else {
+                        this.taskCount = 0;
+                        console.log('[Bills] switchToTaskList 任务客户列表为空，未设置 selectedTask');
+                    }
+                } catch (e) {
+                    console.error('[Bills] getDisTaskFatherDepartmentList failed:', e);
+                    alert('获取今日任务客户列表失败：' + (e.message || '请稍后重试'));
+                } finally {
+                    this.taskListLoading = false;
+                }
+            },
+
+            selectTask(dep) {
+                this.selectedTask = dep;
+                // 切换任务客户时立即清除 TaskOrder 的任务状态和轮询
+                if (this.$refs.taskOrderRef && typeof this.$refs.taskOrderRef.clearTaskStatusOnCustomerChange === 'function') {
+                    this.$refs.taskOrderRef.clearTaskStatusOnCustomerChange();
+                }
+            },
+
+            // TaskOrder 删除任务后刷新左侧今日任务客户列表（task-added 时无论当前 tab 都刷新，切换时数据已就绪）
+            async refreshTaskCustomerList() {
+                const disId = this.disId || (this.disUser && this.disUser.nxDiuDistributerId);
+                if (!disId) return;
+                this.taskListLoading = true;
+                try {
+                    const res = await api.getDisTaskFatherDepartmentList(disId);
+                    const data = res && res.data;
+                    if (data && (data.code === 0 || data.code === 200)) {
+                        const list = data.data || data.list || [];
+                        this.taskList = Array.isArray(list) ? list : [];
+                        const currentId = this.selectedTask && this.selectedTask.nxDepartmentId;
+                        const stillInList = this.taskList.find(d => d.nxDepartmentId === currentId);
+                        if (!stillInList) {
+                            this.selectedTask = this.taskList.length > 0 ? this.taskList[0] : null;
+                        }
+                    }
+                } catch (e) {
+                    console.error('[Bills] refreshTaskCustomerList failed:', e);
+                } finally {
+                    this.taskListLoading = false;
+                }
+            },
+
+            // 今日任务左侧列表：父级部门（客户）展示文案
+            taskDepartmentLabel(dep) {
+                return dep.nxDepartmentAttrName;
+            },
+
             // 切换全部客户视图的标签页
             switchAllCustomerTab(index) {
+                // 停止所有正在进行的朗读
+                if (this.$refs.placeOrderRef && typeof this.$refs.placeOrderRef.stopAllReading === 'function') {
+                    this.$refs.placeOrderRef.stopAllReading();
+                }
+                
                 this.allCustomerTabIndex = index;
 
                 // 历史订单的加载已经由 HistoryOrders 组件内部通过 watch selectedAllCustomer 自动处理
@@ -714,23 +867,61 @@
                     if (res && res.data && res.data.code === 0) {
                         const orderData = res.data.data;
 
-                        // 判断是否有子部门（根据 depHasSubs 或 selectedCustomerEntity 判断）
-                        const hasSubs = this.selectedCustomerEntity?.nxDepartmentEntities &&
-                            this.selectedCustomerEntity.nxDepartmentEntities.length > 0;
+                        console.log('📦 [fetchTodayOrders] API返回的数据结构:', {
+                            hasArr: !!orderData.arr,
+                            arrLength: orderData.arr?.length || 0,
+                            arrFirstItem: orderData.arr?.[0],
+                            arrFirstItemKeys: orderData.arr?.[0] ? Object.keys(orderData.arr[0]) : []
+                        });
 
-                        if (hasSubs && this.selectedSubDepartment) {
-                            // 有子部门的情况，数据在 depArr 中
-                            this.todayOrderDepArr = orderData.arr || [];
-                            this.todayOrderList = [];
-                        } else {
-                            // 无子部门的情况，数据在 applyArr 中
-                            this.todayOrderList = orderData.arr || [];
-                            this.todayOrderDepArr = [];
+                        // 判断是否有子部门：检查 arr 的第一个元素是否有 depOrders 字段
+                        // phoneGetToFillDepOrders 接口：如果有子部门，arr 是部门数组（每个部门有 depOrders）
+                        // 如果没有子部门，arr 是订单数组
+                        let hasSubs = false;
+                        if (orderData.arr && orderData.arr.length > 0) {
+                            const firstItem = orderData.arr[0];
+                            // 如果有 depOrders 或 depName 字段，说明是子部门结构
+                            hasSubs = firstItem.hasOwnProperty('depOrders') || firstItem.hasOwnProperty('depName');
+                            console.log('🔍 [fetchTodayOrders] 检测子部门结构:', {
+                                hasSubs,
+                                firstItemKeys: Object.keys(firstItem),
+                                hasDepOrders: firstItem.hasOwnProperty('depOrders'),
+                                hasDepName: firstItem.hasOwnProperty('depName')
+                            });
                         }
 
-                        this.todayOrderTotal = orderData.total || 0;
+                        // 今日订单标签页：总是显示全部部门的订单
+                        // 如果有子部门，按部门显示（使用 todayOrderDepArr）
+                        // 如果没有子部门，使用 todayOrderList
+                        if (hasSubs) {
+                            // 有子部门的情况：显示所有部门的订单
+                            // 确保每个部门都有 depOrders 属性，避免 Vue 渲染错误
+                            this.todayOrderDepArr = (orderData.arr || []).map(dep => ({
+                                ...dep,
+                                depOrders: dep.depOrders || []
+                            }));
+                            this.todayOrderList = [];
+                            console.log('✅ [fetchTodayOrders] 多部门模式，显示所有部门的订单');
+                            console.log('📊 [fetchTodayOrders] 部门数量:', this.todayOrderDepArr.length);
+                            this.todayOrderDepArr.forEach((dep, index) => {
+                                console.log(`  📁 部门 ${index + 1}: "${dep.depName}", 订单数: ${dep.depOrders?.length || 0}`);
+                            });
+                        } else {
+                            // 无子部门的情况：使用订单列表
+                            this.todayOrderList = orderData.arr || [];
+                            this.todayOrderDepArr = [];
+                            console.log('✅ [fetchTodayOrders] 单部门模式，显示订单列表');
+                            console.log('📊 [fetchTodayOrders] 订单数量:', this.todayOrderList.length);
+                        }
 
-                        console.log('成功获取今日订单数据:', {
+                        // 今日订单个数（订单数，非金额）
+                        if (hasSubs) {
+                            this.todayOrderTotal = (this.todayOrderDepArr || []).reduce((sum, dep) => sum + (dep.depOrders?.length || 0), 0);
+                        } else {
+                            this.todayOrderTotal = (this.todayOrderList || []).length;
+                        }
+
+                        console.log('✅ [fetchTodayOrders] 成功获取今日订单数据:', {
                             hasSubs,
                             listLength: this.todayOrderList.length,
                             depArrLength: this.todayOrderDepArr.length,
@@ -752,10 +943,26 @@
 
 
 
+            // 处理任务添加成功事件（从 PlaceOrder 发出：图片识别、粘贴/Excel粘贴保存）
+            handleTaskAdded() {
+                this.refreshTaskCustomerList(); // getDisTaskFatherDepartmentList 今日任务
+                this.initAllCustomers({ skipAutoSelect: true }); // 仅刷新客户列表，不切换选中客户，避免任务数据被清空
+            },
+
             // 处理订单保存成功事件（从 PlaceOrder 组件发出）
-            handleOrderSaved() {
+            handleOrderSaved(payload) {
+                // 图片模式保存后已刷新任务列表，跳过多余的客户列表接口（webNxDisGetTodayOrderCustomer）
+                if (payload && payload.skipCustomerRefresh === true) {
+                    return;
+                }
                 console.log('订单保存成功，刷新客户列表');
-                // 刷新客户列表
+                this.fetchCustomerList();
+            },
+
+            // 配送单视图内保存成功：只刷新任务列表和客户列表，不切换视图、不清空选中客户
+            handleOrderSavedFromPrintView() {
+                console.log('订单保存成功（配送单视图），刷新任务列表与客户列表');
+                this.refreshTaskCustomerList();
                 this.fetchCustomerList();
             },
 
@@ -771,7 +978,8 @@
             },
 
             // 初始化全部客户列表
-            async initAllCustomers() {
+            // options.skipAutoSelect: 为 true 时仅刷新列表，不调用 autoSelectFirstCustomer（避免 task-added 时切换客户导致任务数据被清空）
+            async initAllCustomers(options = {}) {
                 try {
                     // 检查disUser是否存在，如果不存在则尝试从 localStorage 恢复
                     if (!this.disUser || !this.disUser.nxDiuDistributerId) {
@@ -808,12 +1016,25 @@
                     const res = await api.disGetAllCustomer(this.disUser.nxDiuDistributerId);
 
                     if (res && res.data && res.data.code === 0) {
+                        this.taskCount = res.data.taskCount;
                         this.myCustomerArrOne = res.data.data.settleTypeOne || [];
                         this.myCustomerArrTwo = res.data.data.settleTypeTwo || [];
                         console.log('获取全部客户成功:', res.data.data);
+                        
+                        // 打印客户ID列表用于调试
+                        console.log('📋 [Bills] 现金客户ID列表:', this.myCustomerArrOne.map(c => ({
+                            id: c.nxDepartmentId,
+                            name: c.nxDepartmentAttrName
+                        })));
+                        console.log('📋 [Bills] 记账客户ID列表:', this.myCustomerArrTwo.map(c => ({
+                            id: c.nxDepartmentId,
+                            name: c.nxDepartmentAttrName
+                        })));
 
-                        // 自动选择第一个可用的客户
-                        this.autoSelectFirstCustomer();
+                        // 非 skipAutoSelect 时才自动选择第一个客户（task-added 刷新时不应切换客户）
+                        if (!options.skipAutoSelect) {
+                            this.autoSelectFirstCustomer();
+                        }
                     } else {
                         console.error('获取全部客户失败:', res);
                     }
@@ -828,6 +1049,15 @@
                 console.log('客户ID:', customerId);
                 console.log('客户名称:', customer.nxDepartmentAttrName);
                 console.log('客户完整信息:', customer);
+
+                // 停止所有正在进行的朗读
+                if (this.$refs.placeOrderRef && typeof this.$refs.placeOrderRef.stopAllReading === 'function') {
+                    this.$refs.placeOrderRef.stopAllReading();
+                }
+                // 切换部门时立即清除任务状态和轮询，避免「后台处理中」蒙版残留
+                if (this.$refs.placeOrderRef && typeof this.$refs.placeOrderRef.clearTaskStatusOnCustomerChange === 'function') {
+                    this.$refs.placeOrderRef.clearTaskStatusOnCustomerChange();
+                }
 
                 // 检查是否有子部门
                 const hasSubDepartments = customer &&
@@ -853,17 +1083,33 @@
                 }
                 console.log('============================');
 
-                this.selectedAllCustomer = customerId;
-                this.selectedCustomerName = customer.nxDepartmentAttrName;
-                this.selectedCustomerDepPrintName = customer.nxDepartmentPrintName || 'ApplyPanel'; // 设置打印组件名称
-                this.selectedCustomerEntity = customer; // 保存完整的客户信息，包括子部门
+                try {
+                    // 使用 nextTick 确保组件更新完成后再设置，避免组件为 null 时的错误
+                    await this.$nextTick();
+                    
+                    // 设置客户信息（使用 try-catch 包裹，避免响应式更新时的错误）
+                    this.selectedAllCustomer = customerId;
+                    console.log('✅ [selectAllCustomer] 已设置 selectedAllCustomer:', this.selectedAllCustomer, '类型:', typeof this.selectedAllCustomer);
+                    this.selectedCustomerName = customer.nxDepartmentAttrName;
+                    this.selectedCustomerDepPrintName = customer.nxDepartmentPrintName || 'ApplyPanel'; // 设置打印组件名称
+                    this.selectedCustomerEntity = customer; // 保存完整的客户信息，包括子部门
 
-                // 如果有子部门，默认选择第一个
-                if (hasSubDepartments && customer.nxDepartmentEntities.length > 0) {
-                    this.selectedSubDepartment = customer.nxDepartmentEntities[0].nxDepartmentId;
-                    console.log('默认选择第一个子部门:', this.selectedSubDepartment);
-                } else {
-                    this.selectedSubDepartment = null;
+                    // 如果有子部门，默认选择第一个
+                    if (hasSubDepartments && customer.nxDepartmentEntities.length > 0) {
+                        this.selectedSubDepartment = customer.nxDepartmentEntities[0].nxDepartmentId;
+                        console.log('默认选择第一个子部门:', this.selectedSubDepartment);
+                    } else {
+                        this.selectedSubDepartment = null;
+                    }
+
+                    // 再次使用 nextTick 确保所有响应式更新完成
+                    await this.$nextTick();
+                    
+                    // 额外等待一小段时间，确保所有组件更新完成
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                } catch (error) {
+                    console.error('❌ [selectAllCustomer] 设置客户信息时出错:', error);
+                    // 即使出错，也继续执行后续操作
                 }
 
                 // 加载客户文件夹路径
@@ -1016,6 +1262,7 @@
 
             fetchCustomerList() {
                 // 检查disUser是否存在，如果不存在则尝试从 localStorage 恢复
+                console.log("fetchCustomerListfetchCustomerList")
                 if (!this.disUser || !this.disUser.nxDiuDistributerId) {
                     console.warn('fetchCustomerList: disUser或nxDiuDistributerId不存在，尝试从 localStorage 恢复:', this.disUser);
                     
@@ -1042,88 +1289,78 @@
                     }
                 }
 
-                const disId = this.disUser.nxDiuDistributerId;
-                api.webNxDisGetTodayOrderCustomer(disId).then(res => {
+                // 请求配送单客户列表
+                const _disId = this.disUser.nxDiuDistributerId;
+                api.webNxDisGetTodayOrderCustomer(_disId).then((res) => {
                     if (res && res.data) {
-                        console.log("收到的数据:", res.data.data);
+                        console.log("收到的数据:", res.data);
                         this.isactive = 0;
                         this.issubactive = -1;
-                        this.depList = res.data.data.nxArr;
-                        // 注意：gbDepList 已不再使用
-                        this.gbBatchArr = res.data.data.gbBatchArr;
+                        this.depList = res.data.data.nxArr || [];
+                        this.gbBatchArr = res.data.data.gbBatchArr || [];
+                        this.taskCount = res.data.taskCount;
 
-
-                        if (res.data.data.nxArr.length > 0) {
-                            // 自动选择第一个客户，确保所有参数都正确设置
+                        if ((res.data.data.nxArr || []).length > 0) {
                             const firstCustomer = res.data.data.nxArr[0];
-                            this.onclick(0, firstCustomer.nxDepartmentId, firstCustomer.nxDepartmentId, 
-                                        firstCustomer.nxDepartmentAttrName || firstCustomer.nxDepartmentName, 
-                                        '', 
-                                        firstCustomer.nxDepartmentPrintName || 'ApplyPanel', 
+                            this.onclick(0, firstCustomer.nxDepartmentId, firstCustomer.nxDepartmentId,
+                                        firstCustomer.nxDepartmentAttrName || firstCustomer.nxDepartmentName,
+                                        '',
+                                        firstCustomer.nxDepartmentPrintName || 'ApplyPanel',
                                         0);
-
                         } else {
-                            // 处理空数据的情况
                             this.nxDepFatherId = -1;
                             this.nxDepId = -1;
                             this.depName = "";
                             this.depPrintName = "";
 
-                            if (res.data.data.gbArr.length > 0) {
-                                this.gbDepFatherId = res.data.data.gbArr[0].gbDepartmentId;
-                                this.gbDepId = res.data.data.gbArr[0].gbDepartmentId;
-                                this.gbDisId = res.data.data.gbArr[0].gbDepartmentDisId;
-                                this.depName = res.data.data.gbArr[0].gbDepartmentName;
-                                this.depPrintName = res.data.data.gbArr[0].gbDepartmentPrintName;
-                                this.updateTime = new Date().getMilliseconds()   // 启动轮询
+                            const gbArr = res.data.data.gbArr || [];
+                            const gbBatchArr = res.data.data.gbBatchArr || [];
+                            if (gbArr.length > 0) {
+                                this.gbDepFatherId = gbArr[0].gbDepartmentId;
+                                this.gbDepId = gbArr[0].gbDepartmentId;
+                                this.gbDisId = gbArr[0].gbDepartmentDisId;
+                                this.depName = gbArr[0].gbDepartmentName;
+                                this.depPrintName = gbArr[0].gbDepartmentPrintName;
+                                this.updateTime = new Date().getMilliseconds();
                                 this.nxDepFatherId = -1;
                                 this.nxDepId = -1;
                                 this.isactivepb = -1;
+                            } else if (gbBatchArr.length > 0) {
+                                this.nxDepFatherId = -1;
+                                this.nxDepId = -1;
+                                this.gbDepFatherId = -1;
+                                this.gbDepId = -1;
+                                this.gbDisId = -1;
+                                this.isactive = -1;
+                                this.isactivepb = 0;
+                                this.gbBatchId = gbBatchArr[0].gbDistributerPurchaseBatchId;
+                                this.depName = gbBatchArr[0].gbDistributerEntity.gbDistributerName;
+                                this.depPrintName = gbBatchArr[0].gbDistributerEntity.gbDistributerPrintName;
+                                this.updateTime = new Date().getMilliseconds();
                             } else {
-
-                                if (res.data.data.gbBatchArr.length > 0) {
-                                    this.nxDepFatherId = -1;
-                                    this.nxDepId = -1;
-                                    this.gbDepFatherId = -1;
-                                    this.gbDepId = -1;
-                                    this.gbDisId = -1;
-                                    this.isactive = -1;
-                                    this.isactivepb = 0,
-                                        this.gbBatchId = res.data.data.gbBatchArr[0].gbDistributerPurchaseBatchId;
-                                    this.depName = res.data.data.gbBatchArr[0].gbDistributerEntity.gbDistributerName;
-                                    this.depPrintName = res.data.data.gbBatchArr[0].gbDistributerEntity.gbDistributerPrintName;
-                                    this.updateTime = new Date().getMilliseconds()   // 启动轮询
-
-                                } else {
-                                    // 防止退出，设置默认值
-                                    this.nxDepFatherId = -1;
-                                    this.nxDepId = -1;
-                                    this.gbDepFatherId = -1;
-                                    this.gbDepId = -1;
-                                    this.gbDisId = -1;
-                                    this.isactive = -1;
-                                    this.isactivepb = -1;
-                                    this.gbBatchId = -1;
-                                    this.depName = "";
-                                    this.depPrintName = "";
-                                    console.log("所有客户数据都为空，但不退出应用");
-                                }
-
-
+                                this.nxDepFatherId = -1;
+                                this.nxDepId = -1;
+                                this.gbDepFatherId = -1;
+                                this.gbDepId = -1;
+                                this.gbDisId = -1;
+                                this.isactive = -1;
+                                this.isactivepb = -1;
+                                this.gbBatchId = -1;
+                                this.depName = "";
+                                this.depPrintName = "";
+                                console.log("所有客户数据都为空，但不退出应用");
                             }
-
                         }
-
-
                     } else {
                         console.error("API 返回的数据格式不正确:", res);
                     }
-                    console.log("this.nxdefatheid=", this.nxDepFatherId)
-                }).catch(error => {
-                    console.error("API 请求失败:", error);
+                }).catch((err) => {
+                    console.error("fetchCustomerList 请求失败:", err);
+                    this.depList = this.depList || [];
+                    this.gbBatchArr = this.gbBatchArr || [];
+                    this.isactive = 0;
+                    this.issubactive = -1;
                 });
-                ;
-
             },
 
 
@@ -1386,34 +1623,29 @@
         background-color: #e9ecef;
     }
 
-    /* 客户列表滚动容器 - 只有展开的现金或记账客户列表滚动 */
+    /* 客户列表 - 移除独立滚动，使用外层统一滚动容器 */
     .customer-type-section .nav-pills {
         flex: 0 0 auto; /* 按照实际内容高度显示 */
         min-height: 0;
-        max-height: 400px; /* 设置最大高度，超出时滚动 */
-        overflow-y: auto;
-        overflow-x: hidden;
-        /* 美化滚动条 */
-        scrollbar-width: thin;
-        scrollbar-color: #cbd5e0 #f7fafc;
+        overflow: visible; /* 移除独立滚动，使用外层滚动 */
     }
 
-    /* Webkit 浏览器滚动条样式 */
-    .customer-type-section .nav-pills::-webkit-scrollbar {
+    /* 客户列表滚动条样式 - 应用到外层容器 */
+    .customer-list-body::-webkit-scrollbar {
         width: 8px;
     }
 
-    .customer-type-section .nav-pills::-webkit-scrollbar-track {
+    .customer-list-body::-webkit-scrollbar-track {
         background: #f7fafc;
         border-radius: 4px;
     }
 
-    .customer-type-section .nav-pills::-webkit-scrollbar-thumb {
+    .customer-list-body::-webkit-scrollbar-thumb {
         background: #cbd5e0;
         border-radius: 4px;
     }
 
-    .customer-type-section .nav-pills::-webkit-scrollbar-thumb:hover {
+    .customer-list-body::-webkit-scrollbar-thumb:hover {
         background: #a0aec0;
     }
 
@@ -1532,7 +1764,7 @@
     .nav-tabs .nav-link.active {
         color: #495057;
         background-color: #fff;
-        border: 1px solid #dee2e6 !important;
+        border: 1px solid #86b7fe !important;
         border-bottom-color: #fff !important;
         font-weight: 600;
         /* 确保边框稳定 */
@@ -1549,11 +1781,13 @@
         width: auto !important;
         height: auto !important;
         min-width: auto !important;
-        max-width: none !important;
-        flex: none !important;
-        flex-shrink: 0 !important;
-        flex-grow: 0 !important;
-        flex-basis: auto !important;
+    }
+
+    /* 下单按钮的包装器样式（选中时淡蓝色边框） */
+    .nav-link-active-wrapper {
+        border: 1px solid #86b7fe !important;
+        border-bottom-color: #fff !important;
+        background-color: #fff;
     }
 
     /* 侧边栏和内容区域的整体布局 */
@@ -1623,7 +1857,22 @@
         flex-direction: column;
         flex: 1;
         min-height: 0;
-        overflow: hidden;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding-bottom: 30px; /* 底部留白 */
+        /* 滚动条样式 */
+        scrollbar-width: thin;
+        scrollbar-color: #cbd5e0 #f7fafc;
+    }
+
+    /* 到底了提示样式 */
+    .customer-list-bottom-tip {
+        text-align: center;
+        padding: 15px;
+        color: #6c757d;
+        font-size: 14px;
+        margin-top: 10px;
+        flex-shrink: 0;
     }
 
     /* 客户列表 - 自动滚动 */

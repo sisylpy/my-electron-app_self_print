@@ -1,13 +1,14 @@
 
 <template>
- 
   <!-- 显示匹配的组件 -->
-  <div >
-   <LoadingOverlay />
- 
-     <router-view></router-view>
-   </div>
- </template>
+  <div id="app-container">
+    <LoadingOverlay />
+    <router-view v-if="$route" />
+    <div v-else style="padding: 20px; color: red;">
+      ⚠️ 路由未加载，当前路由: {{ $route }}
+    </div>
+  </div>
+</template>
  
 <script>
 import LoadingOverlay from './components/LoadingOverlay.vue';

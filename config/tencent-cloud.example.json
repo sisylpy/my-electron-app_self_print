@@ -1,0 +1,7 @@
+{
+  "secretId": "YOUR_TENCENT_CLOUD_SECRET_ID",
+  "secretKey": "YOUR_TENCENT_CLOUD_SECRET_KEY",
+  "appId": "YOUR_APP_ID",
+  "engineModelType": "16k_zh",
+  "region": "ap-guangzhou"
+}

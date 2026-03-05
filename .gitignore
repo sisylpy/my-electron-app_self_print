@@ -38,6 +38,7 @@ vue/.env.*
 # Config files with sensitive information
 vue/src/config/index.js
 cankao/config.js
+config/tencent-cloud.json
 语音识别接口文档.md
 
 # Extension
@@ -47,3 +48,8 @@ cankao/config.js
 *.pub
 1
 1.pub
+
+# Exclude from git
+/sox/
+/sox-14.4.1/
+/docs/

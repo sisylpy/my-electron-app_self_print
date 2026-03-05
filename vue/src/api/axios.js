@@ -6,7 +6,7 @@ import config from '../config'; // 引入配置文件
 // 获取环境变量中的 API 地址
 // 开发环境使用本地地址，生产环境使用远程地址
 const apiUrl = process.env.NODE_ENV === 'development' 
-  ? 'http://192.168.0.103:8080/nongxinle_master_war_exploded/api/'
+  ? 'http://192.168.0.102:8080/nongxinle_master_war_exploded/api/'
   : (config.baseURL || 'https://grainservice.club:8443/nongxinle/api/');
 
 // 创建 Axios 实例
@@ -24,14 +24,14 @@ const axiosInstance = axios.create({
 // 请求拦截器
 axiosInstance.interceptors.request.use(
   (config) => {
-    console.log('📤 发送请求:', config);
-    console.log('📤 请求 URL:', config.url);
-    console.log('📤 请求方法:', config.method);
-    console.log('📤 请求数据:', config.data);
-    console.log('📤 请求数据类型:', typeof config.data, config.data instanceof URLSearchParams ? 'URLSearchParams' : typeof config.data);
-    console.log('📤 请求头:', config.headers);
-    console.log('📤 Content-Type:', config.headers?.['Content-Type'] || config.headers?.['content-type']);
-    
+    // console.log('📤 发送请求:', config);
+    // console.log('📤 请求 URL:', config.url);
+    // console.log('📤 请求方法:', config.method);
+    // console.log('📤 请求数据:', config.data);
+    // console.log('📤 请求数据类型:', typeof config.data, config.data instanceof URLSearchParams ? 'URLSearchParams' : typeof config.data);
+    // console.log('📤 请求头:', config.headers);
+    // console.log('📤 Content-Type:', config.headers?.['Content-Type'] || config.headers?.['content-type']);
+    //
     // 如果数据是 URLSearchParams 类型或字符串类型（form-urlencoded），确保 Content-Type 正确设置
     if (config.data instanceof URLSearchParams) {
       if (!config.headers) {

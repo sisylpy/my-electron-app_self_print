@@ -14,6 +14,10 @@ import 'bootstrap/dist/js/bootstrap.bundle.min.js'
 
 import 'admin-lte/dist/css/adminlte.min.css'
 import 'admin-lte/dist/js/adminlte.min.js'
+
+// 引入 vxe-table
+import VXETable from 'vxe-table'
+import 'vxe-table/lib/style.css'
 const routes = [
   // {
   //   path: '/',
@@ -39,4 +43,20 @@ const app = createApp(App);
 app.use(router);
 app.use(store)  // 使用 Vue Router
 app.use(BootstrapVue3);
-app.mount('#app');
+app.use(VXETable); // 使用 vxe-table
+
+// 添加错误处理
+app.config.errorHandler = (err, instance, info) => {
+  console.error('Vue 错误:', err);
+  console.error('错误信息:', info);
+  console.error('组件实例:', instance);
+};
+
+// 挂载应用
+const mountElement = document.getElementById('app');
+if (mountElement) {
+  app.mount('#app');
+  console.log('✅ Vue 应用已挂载到 #app');
+} else {
+  console.error('❌ 找不到 #app 元素！');
+}

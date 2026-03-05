@@ -15,7 +15,7 @@ export default defineConfig({
     strictPort: true, // 如果端口被占用则报错
     proxy: {
       '/api': {
-        target: 'http://192.168.0.103:8080/nongxinle_master_war_exploded/api/',
+        target: 'http://192.168.0.102:8080/nongxinle_master_war_exploded/api/',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
       }

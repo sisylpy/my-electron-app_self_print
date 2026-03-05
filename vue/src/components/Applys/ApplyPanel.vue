@@ -1,6 +1,16 @@
 <template>
 
-    <div class="applyBodyPage ">
+    <div class="applyBodyPage " style="position: relative;">
+        <!-- 打印蒙版 -->
+        <div v-if="isPrinting" class="printing-overlay">
+            <div class="printing-content">
+                <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">打印中...</span>
+                </div>
+                <div class="text-white fw-bold" style="font-size: 18px;">正在打印，请稍候...</div>
+                <div class="text-white mt-2" style="font-size: 14px;">打印完成后将自动保存</div>
+            </div>
+        </div>
 
         <div class=" card  shadow-lg p-20" style="min-height: 500px;">
             <!-- 页头 -->
@@ -8,15 +18,15 @@
                 <div class="header-content">
                     <!-- 溯源类型布局（3行） -->
                     <template v-if="isTraceabilityType">
-                        <div class="leftPage">
+                        <div class="leftPage" @click="handleHeaderClick">
                             <div class="item">单位: {{ depName }}</div>
                             <div class="item">时间: {{ displayDate }}</div>
                             <div class="item">共{{ totalPages }}页 - 第{{ pagesIndex }}页</div>
                         </div>
-                        <div class="centerPage" >
+                        <div class="centerPage" @click="handleHeaderClick">
                             <div class="title">{{ disInfo.nxDistributerName }}</div>
                         </div>
-                        <div class="rightPage" >
+                        <div class="rightPage" @click="handleHeaderClick">
                             <div class="item" v-if="qrCodeUrl" style="text-align: right; height: 75px; display: flex; align-items: center; justify-content: flex-end;">
                                 <img :src="qrCodeUrl" alt="订单二维码" style="width: 75px; height: 75px; display: block; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; object-fit: contain;" />
                             </div>
@@ -25,15 +35,15 @@
                     
                     <!-- 普通类型布局（2行） -->
                     <template v-else>
-                        <div class="leftPage">
+                        <div class="leftPage" @click="handleHeaderClick">
                             <div class="item">单位: {{ depName }}</div>
                             <div class="item">时间: {{ displayDate }}</div>
                         </div>
-                        <div class="centerPage" >
-                            <div class="title">{{ disInfo.nxDistributerName }} 送货单</div>
+                        <div class="centerPage" @click="handleHeaderClick">
+                            <div class="title">{{ disInfo.nxDistributerName }} </div>
                         </div>
 
-                        <div class="rightPage" >
+                        <div class="rightPage" @click="handleHeaderClick">
                             <div class="item">共{{ totalPages }}页 - 第{{ pagesIndex }}页</div>
                             <div class="item">单号: {{ tradeNo }}</div>
                         </div>
@@ -41,90 +51,54 @@
                 </div>
             </div>
 
-            <!-- 打印校准面板 -->
-            <div v-if="showCalibrationPanel" style="background: #f5f5f5; border: 1px solid #ddd; margin: 10px; padding: 15px; border-radius: 5px;">
-                <h3 style="margin: 0 0 15px 0; color: #333;">🔧 打印校准设置</h3>
-                
-                <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
-                    <!-- 左侧安全边距 -->
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <label style="font-weight: bold; min-width: 80px;">左侧边距:</label>
-                        <button @click="adjustLeftMargin(-1)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1mm</button>
-                        <button @click="adjustLeftMargin(-0.5)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5mm</button>
-                        <span style="min-width: 40px; text-align: center; font-weight: bold;">{{ currentLeftMargin }}mm</span>
-                        <button @click="adjustLeftMargin(0.5)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5mm</button>
-                        <button @click="adjustLeftMargin(1)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1mm</button>
-                    </div>
-
-                    <!-- 右侧安全边距 -->
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <label style="font-weight: bold; min-width: 80px;">右侧边距:</label>
-                        <button @click="adjustRightMargin(-1)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1mm</button>
-                        <button @click="adjustRightMargin(-0.5)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5mm</button>
-                        <span style="min-width: 40px; text-align: center; font-weight: bold;">{{ currentRightMargin }}mm</span>
-                        <button @click="adjustRightMargin(0.5)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5mm</button>
-                        <button @click="adjustRightMargin(1)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1mm</button>
-                    </div>
-
-                    <!-- 整体缩放 -->
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <label style="font-weight: bold; min-width: 80px;">整体缩放:</label>
-                        <button @click="adjustScale(-0.01)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.01</button>
-                        <button @click="adjustScale(-0.005)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.005</button>
-                        <span style="min-width: 50px; text-align: center; font-weight: bold;">{{ currentScale }}</span>
-                        <button @click="adjustScale(0.005)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.005</button>
-                        <button @click="adjustScale(0.01)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.01</button>
-                    </div>
-                </div>
-
-                <div style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
-                    <button @click="printCalibrationPage()" style="background: #2196F3; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
-                        📄 打印校准页
-                    </button>
-                    <button @click="resetCalibration()" style="background: #FF9800; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
-                        🔄 恢复默认
-                    </button>
-                    <button @click="saveCurrentProfileAsDefault()" style="background: #9C27B0; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
-                        💾 保存配置
-                    </button>
-                    <button @click="showCalibrationPanel = false" style="background: #f44336; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
-                        ❌ 关闭
-                    </button>
-                </div>
-
-                <div style="margin-top: 10px; padding: 10px; background: #e3f2fd; border-radius: 3px; font-size: 12px; color: #1976d2;">
-                    <strong>使用说明：</strong><br>
-                    1. 先打印校准页，检查右侧边框是否完整显示<br>
-                    2. 如果右侧边框被裁掉，增加右侧边距或减小整体缩放<br>
-                    3. 如果左侧内容被裁掉，增加左侧边距<br>
-                    4. 调整满意后点击"保存配置"，系统会记住当前打印机的设置
-                </div>
-            </div>
+            <!-- 打印校准面板组件 -->
+            <PrintCalibrationPanel
+                :visible="showCalibrationPanel"
+                :current-left-margin.sync="currentLeftMargin"
+                :current-right-margin.sync="currentRightMargin"
+                :distributor-name-font-size.sync="distributorNameFontSize"
+                :order-content-font-size.sync="orderContentFontSize"
+                @print-calibration-page="printCalibrationPage"
+                @close="showCalibrationPanel = false"
+                @saved="handleProfileSaved"
+            />
 
             <!-- 订单内容部分 - 单列布局 -->
             <div class="content-bill">
                 <!-- 单列容器 -->
-                <div class="half-column-container">
+                <div class="whole-column-container">
                     <!-- 表头 -->
                     <div class="table-header">
                         <div class="ten">序号</div>
                         <div class="thirty">商品</div>
                         <div class="fifteen">规格</div>
+                        <div class="ten">单位</div>
                         <div class="ten">数量</div>
-                        <div class="fifteen">单价</div>
-                        <div class="twenty">小计</div>
+                        <div class="ten">单价</div>
+                        <div class="fifteen">小计</div>
                     </div>
 
                     <!-- 数据行 -->
-                    <div class="table-row" v-for="(item, index) in currentPageData.dualRows"
-                         :key="'row-' + index">
-                        <div class="ten">{{ (pagesIndex - 1) * pageRowsCount + index + 1 }}</div>
-                        <div class="thirty">{{ item.nxDistributerGoodsEntity?.nxDgGoodsName }}</div>
-                        <div class="fifteen">{{ item.nxDistributerGoodsEntity?.nxDgGoodsStandardname }}</div>
-                        <div class="ten">{{ item.nxDoWeight }}</div>
-                        <div class="fifteen">{{ item.nxDoPrice }}</div>
-                        <div class="twenty">{{ item.nxDoSubtotal }}</div>
-                    </div>
+                    <template v-for="(item, index) in currentPageData.dualRows" :key="'row-' + index">
+                        <!-- 部门名称行 -->
+                        <div v-if="item.isDepartmentHeader" class="table-row department-header-row" style="font-weight: bold; background-color: #f0f0f0; border-bottom: 1px solid #000;">
+                            <div style="width: 100%; text-align: left !important; padding-left: 20px !important; justify-content: flex-start !important;">{{ item.depName }}</div>
+                        </div>
+                        <!-- 普通订单行 -->
+                        <div v-else class="table-row">
+                            <div class="ten">{{ getRowNumber(item, index) }}</div>
+                            <div class="thirty">{{ item.nxDistributerGoodsEntity?.nxDgGoodsName }}</div>
+                            <div class="fifteen">
+                                <template v-if="item.nxDistributerGoodsEntity?.nxDgItemsPerCarton != null">
+                                    {{ item.nxDistributerGoodsEntity?.nxDgGoodsStandardWeight }} * {{ item.nxDistributerGoodsEntity?.nxDgItemsPerCarton }}{{ item.nxDistributerGoodsEntity?.nxDgGoodsStandardname }}
+                                </template>
+                            </div>
+                            <div class="ten">{{ item.nxDoPrintStandard}}</div>
+                            <div class="ten">{{ item.nxDoWeight }}</div>
+                            <div class="ten">{{ item.nxDoPrice }}</div>
+                            <div class="fifteen">{{ item.nxDoSubtotal }}</div>
+                        </div>
+                    </template>
                 </div>
             </div>
 
@@ -281,25 +255,34 @@
                     <div class="print-table-header">
                             <div class="print-col print-ten">序号</div>
                             <div class="print-col print-thirty">商品</div>
-                            <div class="print-col print-fifteen">规格</div>
+                        <div class="print-col print-fifteen">规格</div>
+                            <div class="print-col print-ten">单位</div>
                             <div class="print-col print-ten">数量</div>
-                            <div class="print-col print-fifteen">单价</div>
-                            <div class="print-col print-twenty">小计</div>
+                            <div class="print-col print-ten">单价</div>
+                            <div class="print-col print-fifteen">小计</div>
                     </div>
 
                         <!-- 数据行 -->
-                    <div
-                                v-for="(item, rowIndex) in page.dualRows"
-                                :key="'row-' + rowIndex"
-                        class="print-table-row"
-                        >
-                            <div class="print-col print-ten">{{ ((page.pageIndex - 1) * pageRowsCount + rowIndex + 1) }}</div>
-                            <div class="print-col print-thirty">{{ item.nxDistributerGoodsEntity?.nxDgGoodsName }}</div>
-                            <div class="print-col print-fifteen">{{ item.nxDistributerGoodsEntity?.nxDgGoodsStandardname }}</div>
-                            <div class="print-col print-ten">{{ item.nxDoWeight }}</div>
-                            <div class="print-col print-fifteen">{{ item.nxDoPrice }}</div>
-                            <div class="print-col print-twenty">{{ item.nxDoSubtotal }}</div>
-                        </div>
+                        <template v-for="(item, rowIndex) in page.dualRows" :key="'row-' + rowIndex">
+                            <!-- 部门名称行 -->
+                            <div v-if="item.isDepartmentHeader" class="print-table-row print-department-header-row" style="font-weight: bold; background-color: #f0f0f0; border-bottom: 1px solid #000;">
+                                <div class="print-col print-department-name-col" style="width: 100%; text-align: left !important; padding-left: 20px !important; justify-content: flex-start !important;">{{ item.depName }}</div>
+                            </div>
+                            <!-- 普通订单行 -->
+                            <div v-else class="print-table-row">
+                                <div class="print-col print-ten">{{ getPrintRowNumber(item, rowIndex, page.pageIndex) }}</div>
+                                <div class="print-col print-thirty">{{ item.nxDistributerGoodsEntity?.nxDgGoodsName }}</div>
+                                <div class="print-col print-fifteen">
+                                    <template v-if="item.nxDistributerGoodsEntity?.nxDgItemsPerCarton != null">
+                                        {{ item.nxDistributerGoodsEntity?.nxDgGoodsStandardWeight }} * {{ item.nxDistributerGoodsEntity?.nxDgItemsPerCarton }}{{ item.nxDistributerGoodsEntity?.nxDgGoodsStandardname }}
+                                    </template>
+                                </div>
+                                <div class="print-col print-ten">{{ item.nxDoPrintStandard }}</div>
+                                <div class="print-col print-ten">{{ item.nxDoWeight }}</div>
+                                <div class="print-col print-ten">{{ item.nxDoPrice }}</div>
+                                <div class="print-col print-fifteen">{{ item.nxDoSubtotal }}</div>
+                            </div>
+                        </template>
                     </div>
                 </div>
 
@@ -339,13 +322,66 @@ import api from '@/api/all'
 import QRCode from 'qrcode'
     import {mapState} from 'vuex';
     import * as XLSX from 'xlsx';
+    import PrintCalibrationPanel from '@/components/PrintCalibrationPanel.vue'
+    import { initPrinterProfile, getCurrentPrinterName, loadPrinterProfile, DEFAULT_PROFILE } from '@/utils/printerProfile'
 
     export default {
     name: "ApplyPanel",
-    props: ['nxDepFatherId', 'nxDepId', 'depName', 'depPrintName', 
-            'updateTime', 'gbDepFatherId', 'gbDepId', 'gbDisId', 'gbBatchId', 'orderData'],
+    components: {
+        PrintCalibrationPanel
+    },
+    props: ['nxDepFatherId', 'nxDepId', 'depName', 'depPrintName',
+            'updateTime', 'gbDepFatherId', 'gbDepId', 'gbDisId', 'gbBatchId', 'orderData', 'isHistoryOrder'],
+        watch: {
+            // 监听校准面板显示状态
+            showCalibrationPanel(newValue) {
+                console.log('🔍 [watch showCalibrationPanel] 状态变化:', {
+                    newValue,
+                    type: typeof newValue,
+                    isTrue: newValue === true
+                });
+                this.$nextTick(() => {
+                    const panelElement = document.querySelector('[style*="打印校准设置"]') || 
+                                       document.querySelector('h3:contains("打印校准设置")') ||
+                                       document.querySelector('.print-calibration-panel');
+                    console.log('🔍 [watch showCalibrationPanel] nextTick 后检查面板元素:', {
+                        panelElement: panelElement ? '找到' : '未找到',
+                        showCalibrationPanel: this.showCalibrationPanel
+                    });
+                });
+            },
+            // 监听字体大小变化，确保CSS变量同步更新
+            distributorNameFontSize(newValue) {
+                const cssValue = String(newValue) + 'px';
+                document.documentElement.style.setProperty('--distributor-name-font-size', cssValue);
+                setTimeout(() => {
+                    const titleElements = document.querySelectorAll('.title, .print-title');
+                    titleElements.forEach(el => {
+                        el.style.setProperty('font-size', cssValue, 'important');
+                    });
+                    this.$forceUpdate();
+                }, 10);
+            },
+            orderContentFontSize(newValue) {
+                const cssValue = String(newValue) + 'px';
+                document.documentElement.style.setProperty('--order-content-font-size', cssValue);
+                setTimeout(() => {
+                    const contentElements = document.querySelectorAll('.table-row, .table-header, .print-table-row, .print-table-header, .print-item, .print-address');
+                    contentElements.forEach(el => {
+                        el.style.setProperty('font-size', cssValue, 'important');
+                    });
+                    this.$forceUpdate();
+                }, 10);
+            },
+            currentLeftMargin(newValue) {
+                document.documentElement.style.setProperty('--safe-left-mm', String(newValue));
+            },
+            currentRightMargin(newValue) {
+                document.documentElement.style.setProperty('--safe-right-mm', String(newValue));
+            }
+        },
         computed: {
-            // 统一过滤后的数据源（只保留有小计的行）
+            // 统一过滤后的数据源（只保留有小计的行，如果有子部门则插入部门名称行）
             _filteredRows() {
                 // 确定数据源
                 let dataSource;
@@ -359,9 +395,57 @@ import QRCode from 'qrcode'
 
                 if (!Array.isArray(dataSource)) return [];
                 
-                return dataSource.filter(
+                // 过滤掉无效订单
+                const filtered = dataSource.filter(
                     it => it && Object.keys(it).length > 0 && it.nxDoSubtotal !== undefined
                 );
+                
+                // 历史订单（有 orderData）时只用 orderData，不使用 departmentsData（来自今日订单）
+                if (this.orderData) {
+                    return filtered;
+                }
+                // 如果有子部门数据，按部门分组并插入部门名称行
+                if (this.departmentsData && this.departmentsData.length > 0) {
+                    console.log(`✅ [_filteredRows] 检测到子部门数据，开始按部门分组`);
+                    console.log(`📋 [_filteredRows] 子部门数量: ${this.departmentsData.length}`);
+                    
+                    const result = [];
+                    let rowIndex = 0;
+                    
+                    this.departmentsData.forEach((dep, depIndex) => {
+                        // 只处理有订单的部门
+                        if (dep.depOrders && dep.depOrders.length > 0) {
+                            // 插入部门名称行（标记为部门标题行）
+                            result.push({
+                                isDepartmentHeader: true,
+                                depId: dep.depId,
+                                depName: dep.depName,
+                                depSubtotal: dep.depSubtotal,
+                                rowIndex: rowIndex++
+                            });
+                            
+                            // 添加该部门的订单
+                            dep.depOrders.forEach(order => {
+                                if (order && order.nxDoSubtotal !== undefined) {
+                                    result.push({
+                                        ...order,
+                                        isDepartmentHeader: false,
+                                        rowIndex: rowIndex++
+                                    });
+                                }
+                            });
+                            
+                            console.log(`📁 [_filteredRows] 部门 "${dep.depName}" 添加了 ${dep.depOrders.length} 条订单`);
+                        }
+                    });
+                    
+                    console.log(`✅ [_filteredRows] 按部门分组后总行数: ${result.length} (包含 ${this.departmentsData.filter(d => d.depOrders && d.depOrders.length > 0).length} 个部门标题行)`);
+                    return result;
+                }
+                
+                // 没有子部门，返回原始过滤后的数据
+                console.log(`✅ [_filteredRows] 没有子部门，返回原始数据，过滤后数据长度: ${filtered.length}`);
+                return filtered;
             },
 
             // 单一事实来源：总页数
@@ -387,7 +471,11 @@ import QRCode from 'qrcode'
                 const end   = Math.min(start + this.pageRowsCount, rows.length);
                 const pageData = rows.slice(start, end);
 
-                const pageSubtotal = pageData.reduce((acc, it) => acc + parseFloat(it.nxDoSubtotal || 0), 0);
+                // 计算小计时排除部门名称行
+                const pageSubtotal = pageData.reduce((acc, it) => {
+                    if (it.isDepartmentHeader) return acc;
+                    return acc + parseFloat(it.nxDoSubtotal || 0);
+                }, 0);
             const pageSubtotalFormatted = parseFloat(pageSubtotal.toFixed(1));
 
             return {
@@ -405,7 +493,7 @@ import QRCode from 'qrcode'
             isTraceabilityType() {
                 return this.disUser && 
                        this.disUser.nxDistributerEntity && 
-                       this.disUser.nxDistributerEntity.nxDistributerBusinessTypeId == 4;
+                       this.disUser.nxDistributerEntity.nxDistributerType == 2;
             },
             disId() {
             return this.disUser && this.disUser.nxDistributerEntity ? this.disUser.nxDistributerEntity.nxDistributerId : -1;
@@ -470,7 +558,11 @@ import QRCode from 'qrcode'
                         isLastPage: pageIndex === totalPages
                     });
 
-                    const pageSubtotal = pageData.reduce((acc, it) => acc + parseFloat(it.nxDoSubtotal || 0), 0);
+                    // 计算小计时排除部门名称行
+                    const pageSubtotal = pageData.reduce((acc, it) => {
+                        if (it.isDepartmentHeader) return acc;
+                        return acc + parseFloat(it.nxDoSubtotal || 0);
+                    }, 0);
                 const pageSubtotalFormatted = parseFloat(pageSubtotal.toFixed(1));
 
                 pages.push({
@@ -592,8 +684,16 @@ import QRCode from 'qrcode'
                 pageRowsCount: 30, // 每页行数，单列布局每页30行
                 showCalibrationPanel: false, // 控制打印校准面板显示
                 currentLeftMargin: 12, // 当前左侧边距
-                currentRightMargin: 15, // 当前右侧边距
-                currentScale: 0.98, // 当前缩放比例
+                currentRightMargin: 12, // 当前右侧边距
+                distributorNameFontSize: 18, // 配送商名称字体大小（px）
+                orderContentFontSize: 14, // 订单内容字体大小（px）
+                departmentsData: [], // 子部门数据（用于按部门分组打印）
+                
+                // 隐藏功能：连续点击页头3次显示校准面板
+                headerClickCount: 0, // 页头点击计数
+                headerClickTimer: null, // 点击计时器（用于重置计数）
+                
+                isPrinting: false // 控制打印蒙版显示
 
             }
         },
@@ -610,7 +710,8 @@ import QRCode from 'qrcode'
 
             // 2) 加载数据
             if (this.orderData) {
-                // 历史订单：直接使用传入的 orderData
+                // 历史订单：直接使用传入的 orderData，清空 departmentsData 避免误用今日订单子部门数据
+                this.departmentsData = [];
                 console.log("使用历史订单数据：", this.orderData);
                 this.tradeNo = this.orderData.bill?.nxDbTradeNo || '';
                 this.subtotal = parseFloat(this.orderData.bill?.nxDbTotal) || 0;
@@ -654,6 +755,56 @@ import QRCode from 'qrcode'
         },
 
         methods: {
+            // 获取行号（跳过部门名称行）- 用于显示层
+            getRowNumber(item, index) {
+                // 如果是部门名称行，返回空
+                if (item.isDepartmentHeader) {
+                    return '';
+                }
+                
+                const rows = this._filteredRows;
+                const start = (this.pagesIndex - 1) * this.pageRowsCount;
+                
+                // 计算前面所有页面的非部门名称行总数
+                let previousPagesOrderRowCount = 0;
+                for (let i = 0; i < start; i++) {
+                    if (i < rows.length && !rows[i].isDepartmentHeader) {
+                        previousPagesOrderRowCount++;
+                    }
+                }
+                
+                // 计算当前页中，该行之前有多少非部门名称行
+                let currentPageOrderRowCount = 0;
+                for (let i = start; i < start + index; i++) {
+                    if (i < rows.length && !rows[i].isDepartmentHeader) {
+                        currentPageOrderRowCount++;
+                    }
+                }
+                
+                // 返回全局序号：前面页面的订单行数 + 当前页内的序号
+                return previousPagesOrderRowCount + currentPageOrderRowCount + 1;
+            },
+            
+            // 获取打印行号（跳过部门名称行）
+            getPrintRowNumber(item, index, pageIndex) {
+                if (item.isDepartmentHeader) {
+                    return '';
+                }
+                
+                const rows = this._filteredRows;
+                const start = (pageIndex - 1) * this.pageRowsCount;
+                
+                // 计算当前页中，该行之前有多少非部门名称行
+                let orderRowCount = 0;
+                for (let i = start; i < start + index; i++) {
+                    if (i < rows.length && !rows[i].isDepartmentHeader) {
+                        orderRowCount++;
+                    }
+                }
+                
+                return orderRowCount + 1;
+            },
+            
             // 生成二维码
             async generateQRCode() {
                 if (!this.tradeNo) {
@@ -680,10 +831,74 @@ import QRCode from 'qrcode'
                     this.qrCodeUrl = '';
                 }
             },
+
+            // 从配置文件获取缩放系数（每次都读取最新值）
+            async getZoomFactorFromProfile() {
+                try {
+                    const printerName = await getCurrentPrinterName();
+                    if (!printerName) {
+                        console.warn('⚠️ [getZoomFactorFromProfile] 未配置打印机，使用组件默认缩放系数');
+                        return this.zoomFactor || 1.0;
+                    }
+                    
+                    console.log('🔍 [getZoomFactorFromProfile] 使用打印机名称:', printerName);
+                    const profile = await loadPrinterProfile(printerName);
+                    const zoomFactor = profile.zoomFactor ?? 1.0;
+                    
+                    console.log('🔍 [getZoomFactorFromProfile] 获取到的缩放系数:', {
+                        printerName,
+                        zoomFactor,
+                        componentZoomFactor: this.zoomFactor
+                    });
+                    
+                    return zoomFactor;
+                } catch (error) {
+                    console.warn('⚠️ [getZoomFactorFromProfile] 读取失败:', error);
+                    return this.zoomFactor || 1.0;
+                }
+            },
+
+            // 从配置文件获取最大可打印宽度（内容区域上限，180-205mm）
+            async getMaxPrintableWidthFromProfile() {
+                try {
+                    const printerName = await getCurrentPrinterName();
+                    if (!printerName) {
+                        return DEFAULT_PROFILE.maxPrintableWidth ?? 200;
+                    }
+                    const profile = await loadPrinterProfile(printerName);
+                    const val = profile.maxPrintableWidth ?? DEFAULT_PROFILE.maxPrintableWidth ?? 200;
+                    return Math.max(180, Math.min(205, val));
+                } catch (error) {
+                    console.warn('⚠️ [getMaxPrintableWidthFromProfile] 读取失败:', error);
+                    return DEFAULT_PROFILE.maxPrintableWidth ?? 200;
+                }
+            },
+
             // 构建单页 HTML（逐页打印）
-            buildSinglePageHtml(pageData, pageIndex, totalPages) {
+            async buildSinglePageHtml(pageData, pageIndex, totalPages) {
                 console.log(`📄 [buildSinglePageHtml] 开始构建第${pageIndex}页, 总页数: ${totalPages}`);
                 console.log(`📄 [buildSinglePageHtml] isTraceabilityType: ${this.isTraceabilityType}`);
+                
+                // 从配置文件获取缩放系数
+                const zoomFactor = await this.getZoomFactorFromProfile();
+                
+                // 字体大小直接乘以缩放系数（保留1位小数）
+                const scaledDistributorFontSize = Math.round((this.distributorNameFontSize * zoomFactor) * 10) / 10;
+                const scaledOrderFontSize = Math.round((this.orderContentFontSize * zoomFactor) * 10) / 10;
+                const scaledHeaderFontSize = Math.round((this.headerFontSize * zoomFactor) * 10) / 10;
+                
+                console.log(`📄 [buildSinglePageHtml] 字体缩放信息:`, {
+                    缩放系数: zoomFactor,
+                    原始字体大小: {
+                        配送商: this.distributorNameFontSize + 'px',
+                        订单内容: this.orderContentFontSize + 'px'
+                    },
+                    缩放后字体大小: {
+                        配送商: scaledDistributorFontSize + 'px',
+                        订单内容: scaledOrderFontSize + 'px'
+                    }
+                });
+                
                 const isLastPage = !!pageData.isLastPage;
                 
                 // 根据 isTraceabilityType 构建不同的 headerHtml
@@ -692,12 +907,12 @@ import QRCode from 'qrcode'
                         <div class="print-header-content">
                             <!-- 溯源类型布局（3行） -->
                             <div class="print-left">
-                                <div class="print-item">单位: ${this.depName || ''}</div>
-                                <div class="print-item">时间: ${this.displayDate}</div>
-                                <div class="print-item">共${totalPages}页 - 第${pageIndex}页 </div>
+                                <div class="print-item" style="font-size: ${scaledHeaderFontSize}px !important;">单位: ${this.depName || ''}</div>
+                                <div class="print-item" style="font-size: ${scaledHeaderFontSize}px !important;">时间: ${this.displayDate}</div>
+                                <div class="print-item" style="font-size: ${scaledHeaderFontSize}px !important;">共${totalPages}页 - 第${pageIndex}页 </div>
                             </div>
                             <div class="print-center">
-                                <div class="print-title">${this.disInfo?.nxDistributerName || '配送商'}</div>
+                                <div class="print-title" style="font-size: ${scaledDistributorFontSize}px !important;">${this.disInfo?.nxDistributerName || '配送商'}</div>
                             </div>
                             <div class="print-right">
                                 ${this.qrCodeUrl ? `<div class="print-item" style="text-align: right; height: 75px; display: flex; align-items: center; justify-content: flex-end;"><img src="${this.qrCodeUrl}" alt="订单二维码" style="width: 75px; height: 75px; display: block; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; object-fit: contain;" /></div>` : ''}
@@ -708,15 +923,15 @@ import QRCode from 'qrcode'
                         <div class="print-header-content">
                             <!-- 普通类型布局（2行） -->
                             <div class="print-left">
-                                <div class="print-item">单位: ${this.depName || ''}</div>
-                                <div class="print-item">时间: ${this.displayDate}</div>
+                                <div class="print-item" style="font-size: ${scaledHeaderFontSize}px !important;">单位: ${this.depName || ''}</div>
+                                <div class="print-item" style="font-size: ${scaledHeaderFontSize}px !important;">时间: ${this.displayDate}</div>
                             </div>
                             <div class="print-center">
-                                <div class="print-title">${this.disInfo?.nxDistributerName || '配送商'} 送货单</div>
+                                <div class="print-title" style="font-size: ${scaledDistributorFontSize}px !important;">${this.disInfo?.nxDistributerName || '配送商'} </div>
                             </div>
                             <div class="print-right">
-                                <div class="print-item">共${totalPages}页 - 第${pageIndex}页</div>
-                                <div class="print-item">单号: ${this.tradeNo || ''}</div>
+                                <div class="print-item" style="font-size: ${scaledHeaderFontSize}px !important;">共${totalPages}页 - 第${pageIndex}页</div>
+                                <div class="print-item" style="font-size: ${scaledHeaderFontSize}px !important;">单号: ${this.tradeNo || ''}</div>
                             </div>
                         </div>
                     </div>`;
@@ -726,26 +941,40 @@ import QRCode from 'qrcode'
                         <div class="print-col print-ten">序号</div>
                         <div class="print-col print-thirty">商品</div>
                         <div class="print-col print-fifteen">规格</div>
+                        <div class="print-col print-ten">单位</div>
                         <div class="print-col print-ten">数量</div>
-                        <div class="print-col print-fifteen">单价</div>
-                        <div class="print-col print-twenty">小计</div>
+                        <div class="print-col print-ten">单价</div>
+                        <div class="print-col print-fifteen">小计</div>
                     </div>`;
 
                 const rowsHtml = (pageData.dualRows || []).map((item, rowIndex) => {
-                    const seq = ((pageIndex - 1) * this.pageRowsCount) + rowIndex + 1;
+                    // 如果是部门名称行
+                    if (item.isDepartmentHeader) {
+                        return `
+                            <div class="print-table-row print-department-header-row" style="font-weight: bold; background-color: #f0f0f0; border-bottom: 1px solid #000; font-size: ${scaledOrderFontSize}px !important;">
+                                <div class="print-col print-department-name-col" style="width: 100%; text-align: left !important; padding-left: 20px !important; justify-content: flex-start !important; font-size: ${scaledOrderFontSize}px !important;">${item.depName || ''}</div>
+                            </div>`;
+                    }
+                    
+                    // 普通订单行
+                    const seq = this.getPrintRowNumber(item, rowIndex, pageIndex);
                     const name = item.nxDistributerGoodsEntity?.nxDgGoodsName || '';
-                    const std  = item.nxDistributerGoodsEntity?.nxDgGoodsStandardname || '';
+                    const std  = item.nxDoPrintStandard || '';
+                    const pack = item.nxDistributerGoodsEntity?.nxDgItemsPerCarton != null 
+                        ? `${item.nxDistributerGoodsEntity?.nxDgGoodsStandardWeight || ''} * ${item.nxDistributerGoodsEntity?.nxDgItemsPerCarton}${item.nxDistributerGoodsEntity?.nxDgGoodsStandardname || ''}`
+                        : '';
                     const qty  = item.nxDoWeight ?? '';
                     const price= item.nxDoPrice ?? '';
                     const sub  = item.nxDoSubtotal ?? '';
                     return `
-                        <div class="print-table-row">
-                            <div class="print-col print-ten">${seq}</div>
-                            <div class="print-col print-thirty">${name}</div>
-                            <div class="print-col print-fifteen">${std}</div>
-                            <div class="print-col print-ten">${qty}</div>
-                            <div class="print-col print-fifteen">${price}</div>
-                            <div class="print-col print-twenty">${sub}</div>
+                        <div class="print-table-row" style="font-size: ${scaledOrderFontSize}px !important;">
+                            <div class="print-col print-ten" style="font-size: ${scaledOrderFontSize}px !important;">${seq}</div>
+                            <div class="print-col print-thirty" style="font-size: ${scaledOrderFontSize}px !important;">${name}</div>
+                            <div class="print-col print-fifteen" style="font-size: ${scaledOrderFontSize}px !important;">${pack}</div>
+                            <div class="print-col print-ten" style="font-size: ${scaledOrderFontSize}px !important;">${std}</div>
+                            <div class="print-col print-ten" style="font-size: ${scaledOrderFontSize}px !important;">${qty}</div>
+                            <div class="print-col print-ten" style="font-size: ${scaledOrderFontSize}px !important;">${price}</div>
+                            <div class="print-col print-fifteen" style="font-size: ${scaledOrderFontSize}px !important;">${sub}</div>
                         </div>`;
                 }).join('');
 
@@ -758,11 +987,11 @@ import QRCode from 'qrcode'
                     </div>`;
 
                 const subtotalHtml = (totalPages > 1) ? `
-                    <div class="print-subtotal">第${pageIndex}页小计：${pageData.pageSubtotalHanzi} ${pageData.pageSubtotalFormatted || pageData.pageSubtotal}元</div>` : '';
+                    <div class="print-subtotal" style="font-size: ${scaledOrderFontSize}px !important;">第${pageIndex}页小计：${pageData.pageSubtotalHanzi} ${pageData.pageSubtotalFormatted || pageData.pageSubtotal}元</div>` : '';
 
                 const addressOrTotalHtml = isLastPage
-                    ? `<div class="print-address-total"><span class="address">地址: ${this.disInfo?.nxDistributerAddress || '暂无地址'}</span><span class="total">${this.subtotalHanzi} 合计: ${this.subtotalFormatted || this.subtotal}元</span></div>`
-                    : `<div class="print-address">地址: ${this.disInfo?.nxDistributerAddress || '暂无地址'}</div>`;
+                    ? `<div class="print-address-total" style="font-size: ${scaledOrderFontSize}px !important;"><span class="address" style="font-size: ${scaledOrderFontSize}px !important;">地址: ${this.disInfo?.nxDistributerAddress || '暂无地址'}</span><span class="total" style="font-size: ${scaledOrderFontSize}px !important;">${this.subtotalHanzi} 合计: ${this.subtotalFormatted || this.subtotal}元</span></div>`
+                    : `<div class="print-address" style="font-size: ${scaledOrderFontSize}px !important;">地址: ${this.disInfo?.nxDistributerAddress || '暂无地址'}</div>`;
 
                 const singlePageHtml = `
                     <div id="printAreaPanel" class="print-area">
@@ -780,32 +1009,162 @@ import QRCode from 'qrcode'
                 return singlePageHtml;
             },
 
-            // 注入打印样式（逐页打印，带 1mm 缓冲）
-            injectPrintStyles(singlePageHtml) {
+            // 注入打印样式（单页模式 - 单列布局）
+            async injectPrintStyles(singlePageHtml) {
                 console.log("🎨 [injectPrintStyles] 开始注入打印样式");
+                
+                // 从配置文件获取缩放系数和最大可打印宽度
+                const zoomFactor = await this.getZoomFactorFromProfile();
+                const actualPrintableWidth = await this.getMaxPrintableWidthFromProfile();
+                
+                // 物理纸张尺寸（固定）
+                const physicalPageWidth = 240; // 物理纸张宽度（mm）
+                const physicalPageHeight = 279; // 物理纸张高度（mm）
+                
+                // ========== 最大化打印宽度策略 ==========
+                // 目标：尽量满纸宽度打印，最大化利用纸张，但不超过实际可打印宽度（默认200mm）
+                // 策略：使用210mm作为基准宽度，但最终不超过用户配置的最大可打印宽度
+                const safeBaseWidth = 210; // 使用210mm作为基准，但最终会被限制在 maxPrintableWidth 以内
+                
+                // ========== 应用缩放系数 ==========
+                // 直接调整尺寸方案：所有尺寸乘以 zoomFactor
+                let adjustedLeftMargin = this.currentLeftMargin * zoomFactor;
+                let adjustedRightMargin = this.currentRightMargin * zoomFactor;
+                
+                // 计算可用宽度（原始）- 使用210mm作为基准
+                const originalAvailableWidth = safeBaseWidth - this.currentLeftMargin - this.currentRightMargin;
+                
+                // 缩放后的可用宽度（不应用任何补偿系数）
+                let realAvailableWidth = originalAvailableWidth * zoomFactor;
+                
+                // 容器宽度 = 左边距 + 可用宽度 + 右边距（全部按系数缩放）
+                let cssContainerWidth = adjustedLeftMargin + realAvailableWidth + adjustedRightMargin;
+                
+                // 如果容器宽度超过物理纸张宽度，按比例缩小到240mm（避免超出纸张）
+                if (cssContainerWidth > physicalPageWidth) {
+                    const scaleDown = physicalPageWidth / cssContainerWidth;
+                    const originalContainerWidth = cssContainerWidth;
+                    cssContainerWidth = physicalPageWidth;
+                    // 按比例缩小边距和可用宽度，保持整体比例
+                    adjustedLeftMargin = adjustedLeftMargin * scaleDown;
+                    adjustedRightMargin = adjustedRightMargin * scaleDown;
+                    realAvailableWidth = realAvailableWidth * scaleDown;
+                    
+                    console.log('📏 [打印宽度调试] 容器宽度超过物理纸张，按比例缩小到最大宽度:', {
+                        原始容器宽度: originalContainerWidth.toFixed(2) + 'mm',
+                        物理纸张宽度: physicalPageWidth + 'mm',
+                        缩小比例: scaleDown.toFixed(4),
+                        最终容器宽度: cssContainerWidth.toFixed(2) + 'mm',
+                        调整后左边距: adjustedLeftMargin.toFixed(2) + 'mm',
+                        调整后右边距: adjustedRightMargin.toFixed(2) + 'mm',
+                        调整后可用宽度: realAvailableWidth.toFixed(2) + 'mm'
+                    });
+                }
+                
+                // 计算容器的实际内容区域宽度（容器宽度 - 左右padding）
+                let containerContentWidth = cssContainerWidth - adjustedLeftMargin - adjustedRightMargin;
+                
+                // ========== 实际可打印宽度限制 ==========
+                // 使用用户配置的最大可打印宽度（PrintCalibrationPanel 可调 180-205mm）
+                if (containerContentWidth > actualPrintableWidth) {
+                    const scaleDownForPrintable = actualPrintableWidth / containerContentWidth;
+                    const originalContentWidth = containerContentWidth;
+                    containerContentWidth = actualPrintableWidth;
+                    
+                    // 按比例缩小容器宽度和边距，保持整体比例
+                    cssContainerWidth = cssContainerWidth * scaleDownForPrintable;
+                    adjustedLeftMargin = adjustedLeftMargin * scaleDownForPrintable;
+                    adjustedRightMargin = adjustedRightMargin * scaleDownForPrintable;
+                    realAvailableWidth = realAvailableWidth * scaleDownForPrintable;
+                    
+                    console.warn('⚠️ [打印宽度调试] 内容区域宽度超过实际可打印宽度，按比例缩小:', {
+                        原始内容区域宽度: originalContentWidth.toFixed(2) + 'mm',
+                        实际可打印宽度: actualPrintableWidth + 'mm',
+                        缩小比例: scaleDownForPrintable.toFixed(4),
+                        最终内容区域宽度: containerContentWidth.toFixed(2) + 'mm',
+                        最终容器宽度: cssContainerWidth.toFixed(2) + 'mm',
+                        调整后左边距: adjustedLeftMargin.toFixed(2) + 'mm',
+                        调整后右边距: adjustedRightMargin.toFixed(2) + 'mm',
+                        调整后可用宽度: realAvailableWidth.toFixed(2) + 'mm',
+                        说明: `根据用户配置，最大可打印宽度为${actualPrintableWidth}mm，超过此宽度会被裁剪。可在打印校准面板中调整（180-205mm）`
+                    });
+                }
+                
+                // 表格宽度应该等于内容区域宽度（边框包含在宽度内，box-sizing: border-box）
+                const tableWidth = containerContentWidth;
+                
+                // 字体大小：直接乘以缩放系数（保留1位小数）
+                const scaledDistributorFontSize = Math.round((this.distributorNameFontSize * zoomFactor) * 10) / 10;
+                const scaledOrderFontSize = Math.round((this.orderContentFontSize * zoomFactor) * 10) / 10;
+                const scaledHeaderFontSize = Math.round((this.headerFontSize * zoomFactor) * 10) / 10;
+                
+                // 页面高度：应用缩放系数（减去上下边距）
+                const pageHeightValue = (physicalPageHeight - 10 - 5) * zoomFactor; // 10mm上边距 + 5mm下边距
+                
+                console.log('📏 [打印宽度调试] 缩放系数应用:', {
+                    缩放系数: zoomFactor,
+                    原始边距: {
+                        左边距: this.currentLeftMargin + 'mm',
+                        右边距: this.currentRightMargin + 'mm'
+                    },
+                    缩放后边距: {
+                        左边距: adjustedLeftMargin.toFixed(2) + 'mm',
+                        右边距: adjustedRightMargin.toFixed(2) + 'mm'
+                    },
+                    最终容器宽度: cssContainerWidth.toFixed(2) + 'mm',
+                    物理纸张宽度: physicalPageWidth + 'mm',
+                    原始字体大小: {
+                        配送商: this.distributorNameFontSize + 'px',
+                        订单内容: this.orderContentFontSize + 'px'
+                    },
+                    缩放后字体大小: {
+                        配送商: scaledDistributorFontSize + 'px',
+                        订单内容: scaledOrderFontSize + 'px'
+                    }
+                });
+                
                 const styleTag = `
                     <style>
-                        /* 全局打印参数 */
+                        /* 全局打印参数 - 必须在最前面定义 */
                         :root {
-                            --page-width-mm: 240;
-                            --page-height-mm: 279;
+                            --page-width-mm: ${physicalPageWidth};
+                            --page-height-mm: ${physicalPageHeight};
                             --bleed-mm: 1;
-                            --safe-left-mm: ${this.currentLeftMargin};
-                            --safe-right-mm: ${this.currentRightMargin};
-                            --content-scale: ${this.currentScale};
+                            --safe-left-mm: ${adjustedLeftMargin.toFixed(2)};
+                            --safe-right-mm: ${adjustedRightMargin.toFixed(2)};
+                            --available-width-mm: ${realAvailableWidth.toFixed(2)};
+                            --container-width-mm: ${cssContainerWidth.toFixed(2)};
+                            --distributor-name-font-size: ${scaledDistributorFontSize}px;
+                            --order-content-font-size: ${scaledOrderFontSize}px;
+                            --header-font-size: ${scaledHeaderFontSize}px;
+                            --line-height: ${this.lineHeight}px;
                         }
 
                         @media print {
                             @page { size: 240mm 279mm; margin: 0 !important; }
 
+                            :root {
+                                --line-height: ${this.lineHeight}px;
+                            }
+
                             * { visibility: visible !important; }
-                            body { margin: 0 !important; padding: 0 !important; }
+                            
+                            html, body { 
+                                margin: 0 !important; 
+                                padding: 0 !important; 
+                                width: 100% !important;
+                                height: 100% !important;
+                                overflow: hidden !important;
+                            }
 
                             .print-page {
                                 box-sizing: border-box !important;
-                                width: calc((var(--page-width-mm) - var(--safe-left-mm) - var(--safe-right-mm)) * 1mm) !important;
-                                height: calc(var(--page-height-mm) * 1mm - var(--bleed-mm) * 1mm) !important;
-                                padding: 10mm calc(var(--safe-right-mm) * 1mm) 5mm calc(var(--safe-left-mm) * 1mm) !important;
+                                width: ${cssContainerWidth.toFixed(2)}mm !important;
+                                max-width: ${cssContainerWidth.toFixed(2)}mm !important;
+                                height: ${pageHeightValue.toFixed(2)}mm !important;
+                                min-height: ${pageHeightValue.toFixed(2)}mm !important;
+                                max-height: ${pageHeightValue.toFixed(2)}mm !important;
+                                padding: 10mm ${adjustedRightMargin.toFixed(2)}mm 5mm ${adjustedLeftMargin.toFixed(2)}mm !important;
                                 overflow: hidden !important;
                                 display: flex !important;
                                 flex-direction: column !important;
@@ -813,6 +1172,8 @@ import QRCode from 'qrcode'
                                 margin: 0 !important;
                                 break-after: auto !important;
                                 page-break-after: auto !important;
+                                page-break-inside: avoid !important;
+                                break-inside: avoid !important;
                             }
 
                             .print-page.page-break { break-after: auto !important; page-break-after: auto !important; }
@@ -820,8 +1181,6 @@ import QRCode from 'qrcode'
                             .print-page-content {
                                 width: 100% !important;
                                 height: 100% !important;
-                                transform: scale(var(--content-scale)) !important;
-                                transform-origin: top center !important;
                                 display: flex !important;
                                 flex-direction: column !important;
                                 box-sizing: border-box !important;
@@ -863,23 +1222,24 @@ import QRCode from 'qrcode'
 
                             /* 标题样式 */
                             .print-title {
-                                font-size: 18px !important;
+                                font-size: var(--distributor-name-font-size, 18px) !important;
                                 font-weight: 700 !important;
                                 letter-spacing: 0.5px !important;
                             }
 
                             /* 左右信息字体（与 ApplyFiftyPanel 对齐） */
                             .print-item { 
-                                font-size: 12px !important; 
-                                line-height: 24px !important; 
+                                font-size: var(--header-font-size, 14px) !important; 
+                                line-height: var(--line-height, 24px) !important; 
                                 font-weight: 600 !important;
                             }
 
                             .print-content-bill {
                                 border: 2px solid #000 !important;
                                 border-right: 2px solid #000 !important;
-                                width: 100% !important;
-                                max-width: 100% !important;
+                                width: ${tableWidth.toFixed(2)}mm !important;
+                                max-width: ${tableWidth.toFixed(2)}mm !important;
+                                min-width: ${tableWidth.toFixed(2)}mm !important;
                                 box-sizing: border-box !important;
                                 position: relative !important;
                                 flex-shrink: 0 !important;
@@ -889,35 +1249,65 @@ import QRCode from 'qrcode'
                             }
 
                             .print-fifty-column-container { width: 100% !important; box-sizing: border-box !important; }
-                            .print-table-header { display: flex !important; font-size: 12px !important; line-height: 24px !important; text-align: center !important; border-bottom: 1px solid #000 !important; font-weight: bold !important; }
-                            .print-table-row { display: flex !important; line-height: 24px !important; font-size: 12px !important; text-align: center !important; border-bottom: 1px solid #000 !important; flex-wrap: nowrap !important; }
-                            .print-col { padding: 0 !important; box-sizing: border-box !important; display: flex !important; align-items: center !important; justify-content: center !important; font-size: 12px !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; flex-shrink: 0 !important; flex-grow: 0 !important; }
+                            .print-table-header { display: flex !important; font-size: var(--order-content-font-size, 14px) !important; line-height: var(--line-height, 24px) !important; text-align: center !important; border-bottom: 1px solid #000 !important; font-weight: bold !important; }
+                            .print-table-row { display: flex !important; line-height: var(--line-height, 24px) !important; font-size: var(--order-content-font-size, 14px) !important; text-align: center !important; border-bottom: 1px solid #000 !important; flex-wrap: nowrap !important; }
+                            .print-col { padding: 0 !important; box-sizing: border-box !important; display: flex !important; align-items: center !important; justify-content: center !important; font-size: var(--order-content-font-size, 14px) !important; line-height: var(--line-height, 24px) !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; flex-shrink: 0 !important; flex-grow: 0 !important; }
                             .print-col { flex: 0 0 auto; min-width: 0; border-right: 1px solid #000; }
                             .print-col.print-ten     { flex-basis: 10%;  max-width: 10%; }
                             .print-col.print-thirty  { flex-basis: 30%;  max-width: 30%; }
                             .print-col.print-fifteen { flex-basis: 15%;  max-width: 15%; }
-                            .print-col.print-twenty  { flex-basis: 20%;  max-width: 20%; text-align: right !important; padding-right: 2mm !important; }
+                            .print-col.print-twenty  { flex-basis: 15%;  max-width: 15%; text-align: right !important; padding-right: 2mm !important; }
                             .print-table-header .print-col:last-child, .print-table-row .print-col:last-child { border-right: none !important; }
 
-                            .print-subtotal { text-align: right; font-size: 14px; font-weight: bold; margin-bottom: 4px; padding: 4px 8px; border-left: 1px solid #000; border-right: 1px solid #000; border-bottom: 1px solid #000; box-sizing: border-box; overflow: hidden; }
-                            .print-address-total { display: flex; justify-content: space-between; align-items: center; padding: 2px 8px; font-size: 14px; margin-top: 2px; }
+                            /* 部门名称行样式 */
+                            .print-department-header-row {
+                                font-weight: bold !important;
+                                background-color: #f0f0f0 !important;
+                                border-bottom: 2px solid #000 !important;
+                            }
+                            .print-department-header-row .print-department-name-col {
+                                justify-content: flex-start !important;
+                                align-items: center !important;
+                                text-align: left !important;
+                                padding-left: 20px !important;
+                            }
+
+                            .print-subtotal { text-align: right; font-size: var(--order-content-font-size, 14px) !important; font-weight: bold; margin-bottom: 4px; padding: 4px 8px; border-left: 1px solid #000; border-right: 1px solid #000; border-bottom: 1px solid #000; box-sizing: border-box; overflow: visible !important; white-space: nowrap !important; }
+                            .print-address-total { display: flex; justify-content: space-between; align-items: center; padding: 2px 8px; font-size: var(--order-content-font-size, 14px) !important; margin-top: 2px; }
                             .print-address-total .address { text-align: left; }
                             .print-address-total .total { text-align: right; font-weight: bold; }
-                            .print-address { margin-top: 2px; padding: 2px 0; font-size: 14px; }
+                            .print-address { margin-top: 2px; padding: 2px 0; font-size: var(--order-content-font-size, 14px) !important; }
                         }
                     </style>
                 `;
 
                 const finalHtml = styleTag + singlePageHtml;
-                console.log("🎨 [injectPrintStyles] 样式注入完成", {
+                
+                // 验证注入的样式标签中是否包含正确的字体大小
+                const hasDistributorFontInStyle = styleTag.includes(`--distributor-name-font-size: ${this.distributorNameFontSize}px`);
+                const hasOrderFontInStyle = styleTag.includes(`--order-content-font-size: ${this.orderContentFontSize}px`);
+                console.log("🔍 [injectPrintStyles] 验证注入的样式标签:", {
+                    hasDistributorFontInStyle,
+                    hasOrderFontInStyle,
+                    distributorFontValue: `${this.distributorNameFontSize}px`,
+                    orderFontValue: `${this.orderContentFontSize}px`,
+                    styleTagContainsDistributor: styleTag.includes('--distributor-name-font-size'),
+                    styleTagContainsOrder: styleTag.includes('--order-content-font-size')
+                });
+                
+                console.log("🎨 [injectPrintStyles] 样式注入完成，最终使用的字体大小:", {
+                    distributorNameFontSize: this.distributorNameFontSize,
+                    orderContentFontSize: this.orderContentFontSize,
+                    injectedDistributorFont: `--distributor-name-font-size: ${this.distributorNameFontSize}px`,
+                    injectedOrderFont: `--order-content-font-size: ${this.orderContentFontSize}px`,
                     htmlLength: finalHtml.length,
                     pageWidthMm: 240,
                     pageHeightMm: 279,
                     bleedMm: 1,
                     safeLeftMm: this.currentLeftMargin,
-                    safeRightMm: this.currentRightMargin,
-                    contentScale: this.currentScale
+                    safeRightMm: this.currentRightMargin
                 });
+                
                 return finalHtml;
             },
 
@@ -925,6 +1315,11 @@ import QRCode from 'qrcode'
             
             // 统一入口：参数变化 → 重置 + 拉数据
             async reloadByContext() {
+                // 历史订单场景：数据由 orderData 传入，不重新拉取
+                if (this.orderData) {
+                    console.log("reloadByContext: 历史订单模式，跳过 fetchOrderData/fetchBatchData");
+                    return;
+                }
                 this.pagesIndex = 1;
                 this.applyArrPrint = [];
                 this.subtotal = 0;
@@ -944,61 +1339,89 @@ import QRCode from 'qrcode'
 
             // ==================== 打印机校准相关方法 ====================
             
-            // 应用打印机配置文件
+            // 应用打印机配置文件（使用共享工具）
             applyPrinterProfile(profile) {
                 const root = document.documentElement.style;
-                this.currentLeftMargin = profile.safeLeftMm || 10;
-                this.currentRightMargin = profile.safeRightMm || 10;
-                this.currentScale = profile.scale || 1;
+                // 先更新数据属性
+                this.currentLeftMargin = profile.safeLeftMm || 12;
+                this.currentRightMargin = profile.safeRightMm || 12;
+                this.distributorNameFontSize = profile.distributorNameFontSize || 18;
+                this.orderContentFontSize = profile.orderContentFontSize || 14;
+                
+                // 再设置CSS变量
                 root.setProperty('--safe-left-mm', String(this.currentLeftMargin));
                 root.setProperty('--safe-right-mm', String(this.currentRightMargin));
-                root.setProperty('--content-scale', String(this.currentScale));
-                console.log('应用打印机配置:', profile);
+                root.setProperty('--distributor-name-font-size', String(this.distributorNameFontSize) + 'px');
+                root.setProperty('--order-content-font-size', String(this.orderContentFontSize) + 'px');
+                
+                console.log('✅ [applyPrinterProfile] 应用打印机配置:', {
+                    profile,
+                    currentLeftMargin: this.currentLeftMargin,
+                    currentRightMargin: this.currentRightMargin,
+                    distributorNameFontSize: this.distributorNameFontSize,
+                    orderContentFontSize: this.orderContentFontSize
+                });
             },
 
-            // 保存打印机配置文件
-            savePrinterProfile(deviceName, profile) {
-                const key = 'printerProfile:' + deviceName;
-                localStorage.setItem(key, JSON.stringify(profile));
-                console.log('保存打印机配置:', deviceName, profile);
-            },
-
-            // 加载打印机配置文件
-            loadPrinterProfile(deviceName) {
-                const key = 'printerProfile:' + deviceName;
-                const json = localStorage.getItem(key);
-                const defaultProfile = { safeLeftMm: 12, safeRightMm: 12, scale: 0.98 };
-                const profile = json ? JSON.parse(json) : defaultProfile;
-                console.log('加载打印机配置:', deviceName, profile);
-                return profile;
-            },
-
-            // 获取当前打印机名称（需要与Electron主进程配合）
-            async getCurrentPrinterName() {
-                try {
-                    // 这里需要与Electron主进程配合，获取当前选择的打印机
-                    // 暂时返回默认值，实际使用时需要调用Electron API
-                    if (window.electronAPI && window.electronAPI.getSelectedPrinterName) {
-                        return await window.electronAPI.getSelectedPrinterName();
-                    }
-                    return 'default-printer';
-                } catch (error) {
-                    console.warn('获取打印机名称失败:', error);
-                    return 'default-printer';
-                }
-            },
-
-            // 初始化打印机配置
+            // 初始化打印机配置（使用共享工具）
             async initPrinterProfile() {
-                try {
-                    const deviceName = await this.getCurrentPrinterName();
-                    const profile = this.loadPrinterProfile(deviceName);
-                    this.applyPrinterProfile(profile);
-                } catch (error) {
-                    console.warn('初始化打印机配置失败:', error);
-                    // 使用默认配置
-                    this.applyPrinterProfile({ safeLeftMm: 12, safeRightMm: 15, scale: 0.98 });
+                await initPrinterProfile(this);
+            },
+            
+            // 处理页头点击（隐藏功能：连续点击3次显示校准面板）
+            handleHeaderClick() {
+                console.log('🔍 [handleHeaderClick] 页头被点击，当前计数:', this.headerClickCount);
+                
+                // 清除之前的计时器
+                if (this.headerClickTimer) {
+                    clearTimeout(this.headerClickTimer);
                 }
+                
+                // 增加点击计数
+                this.headerClickCount++;
+                console.log('🔍 [handleHeaderClick] 点击计数更新为:', this.headerClickCount);
+                
+                // 设置计时器：2秒内如果没有再次点击，重置计数
+                this.headerClickTimer = setTimeout(() => {
+                    console.log('🔍 [handleHeaderClick] 2秒内未再次点击，重置计数');
+                    this.headerClickCount = 0;
+                }, 2000);
+                
+                // 如果连续点击3次，显示校准面板
+                if (this.headerClickCount >= 3) {
+                    console.log('🔍 [handleHeaderClick] 准备显示面板，当前值:', {
+                        before: this.showCalibrationPanel,
+                        headerClickCount: this.headerClickCount
+                    });
+                    
+                    this.showCalibrationPanel = true;
+                    this.headerClickCount = 0; // 重置计数
+                    if (this.headerClickTimer) {
+                        clearTimeout(this.headerClickTimer);
+                        this.headerClickTimer = null;
+                    }
+                    
+                    console.log('✅ [handleHeaderClick] 连续点击3次，已设置 showCalibrationPanel = true', {
+                        showCalibrationPanel: this.showCalibrationPanel,
+                        type: typeof this.showCalibrationPanel,
+                        isTrue: this.showCalibrationPanel === true
+                    });
+                    
+                    // 强制更新以确保组件显示
+                    this.$forceUpdate();
+                    this.$nextTick(() => {
+                        console.log('🔍 [handleHeaderClick] nextTick 后检查:', {
+                            showCalibrationPanel: this.showCalibrationPanel,
+                            panelElements: document.querySelectorAll('[style*="打印校准设置"], h3').length,
+                            allDivs: document.querySelectorAll('div').length
+                        });
+                    });
+                }
+            },
+            
+            // 处理配置保存事件（由 PrintCalibrationPanel 组件触发）
+            handleProfileSaved(profile) {
+                console.log('✅ [handleProfileSaved] 配置已保存:', profile);
             },
 
             // 微调左侧安全边距
@@ -1023,29 +1446,6 @@ import QRCode from 'qrcode'
                 this.currentScale = newValue;
                 document.documentElement.style.setProperty('--content-scale', String(newValue));
                 console.log('调整整体缩放:', newValue);
-            },
-
-            // 保存当前配置为默认值
-            async saveCurrentProfileAsDefault() {
-                try {
-                    const deviceName = await this.getCurrentPrinterName();
-                    const currentProfile = {
-                        safeLeftMm: this.currentLeftMargin,
-                        safeRightMm: this.currentRightMargin,
-                        scale: this.currentScale
-                    };
-                    this.savePrinterProfile(deviceName, currentProfile);
-                    alert(`已保存 ${deviceName} 的打印配置！`);
-                } catch (error) {
-                    console.error('保存配置失败:', error);
-                    alert('保存配置失败，请重试');
-                }
-            },
-
-            // 恢复默认配置
-            resetCalibration() {
-                this.applyPrinterProfile({ safeLeftMm: 12, safeRightMm: 12, scale: 0.98 });
-                console.log('已恢复默认打印配置');
             },
 
             // 打印校准页面
@@ -1199,7 +1599,7 @@ import QRCode from 'qrcode'
         },
 
         async fetchOrderData() {
-            console.log("开始获取订单数据");
+            console.log("========== [fetchOrderData] 开始获取订单数据 ==========");
             try {
                 // 调试：打印所有相关属性值
                 console.log("参数值检查:", {
@@ -1211,9 +1611,6 @@ import QRCode from 'qrcode'
                     disId: this.disId
                 });
 
-                // 构建请求参数 - 传递所有必需参数（后端接口需要这些参数）
-                const params = new URLSearchParams();
-                
                 // 辅助函数：将值转换为整数，如果无效则返回 -1（后端需要所有参数）
                 const toIntOrMinusOne = (value) => {
                     if (value === null || value === undefined || value === '') {
@@ -1223,26 +1620,114 @@ import QRCode from 'qrcode'
                     return isNaN(num) ? -1 : num;
                 };
 
-                // 添加所有必需参数（后端接口需要这些参数，即使值为 -1 也要传递）
-                params.append('depFatherId', toIntOrMinusOne(this.nxDepFatherId));
-                params.append('depId', toIntOrMinusOne(this.nxDepId));
-                params.append('gbDepFatherId', toIntOrMinusOne(this.gbDepFatherId));
-                params.append('gbDepId', toIntOrMinusOne(this.gbDepId));
-                params.append('resFatherId', toIntOrMinusOne(this.resFatherId));
-                params.append('disId', toIntOrMinusOne(this.disId));
+                // 构建请求参数对象（用于 phoneGetToFillDepOrders）
+                const requestData = {
+                    depFatherId: toIntOrMinusOne(this.nxDepFatherId),
+                    gbDepFatherId: toIntOrMinusOne(this.gbDepFatherId),
+                    resFatherId: toIntOrMinusOne(this.resFatherId),
+                    disId: toIntOrMinusOne(this.disId)
+                };
 
-                // 发送请求
-                console.log("请求参数-====", params.toString());
+                console.log("📤 [fetchOrderData] 准备调用 phoneGetToFillDepOrders 接口，参数:", requestData);
                 
-                // 检查是否有有效参数
-                if (params.toString() === '') {
-                    console.error("错误：没有有效的请求参数！");
-                    throw new Error("缺少必要的请求参数");
+                // 先尝试调用 phoneGetToFillDepOrders 接口（支持子部门）
+                let res = await api.phoneGetToFillDepOrders(requestData);
+                
+                console.log("📥 [fetchOrderData] phoneGetToFillDepOrders 接口返回:", res.data);
+                
+                // 判断是否有子部门：检查 arr 的第一个元素是否有 depOrders 字段
+                let hasSubDepartments = false;
+                if (res.data && res.data.code === 0 && res.data.data && res.data.data.arr && res.data.data.arr.length > 0) {
+                    const firstItem = res.data.data.arr[0];
+                    // 如果有 depOrders 字段，说明是子部门结构
+                    hasSubDepartments = firstItem.hasOwnProperty('depOrders') || firstItem.hasOwnProperty('depName');
+                    console.log("🔍 [fetchOrderData] 检测到子部门结构:", hasSubDepartments);
+                    console.log("🔍 [fetchOrderData] arr 第一个元素的结构:", Object.keys(firstItem));
                 }
                 
-                const res = await api.disGetToFillDepOrders(params);
+                if (!hasSubDepartments) {
+                    // 没有子部门，使用原来的接口
+                    console.log("ℹ️ [fetchOrderData] 没有子部门，回退到原来的 disGetToFillDepOrders 接口");
+                    
+                    // 构建 URLSearchParams（用于 disGetToFillDepOrders）
+                    const params = new URLSearchParams();
+                    params.append('depFatherId', toIntOrMinusOne(this.nxDepFatherId));
+                    params.append('depId', toIntOrMinusOne(this.nxDepId));
+                    params.append('gbDepFatherId', toIntOrMinusOne(this.gbDepFatherId));
+                    params.append('gbDepId', toIntOrMinusOne(this.gbDepId));
+                    params.append('resFatherId', toIntOrMinusOne(this.resFatherId));
+                    params.append('disId', toIntOrMinusOne(this.disId));
+                    
+                    console.log("📤 [fetchOrderData] 调用 disGetToFillDepOrders 接口，参数:", params.toString());
+                    res = await api.disGetToFillDepOrders(params);
+                    console.log("📥 [fetchOrderData] disGetToFillDepOrders 接口返回:", res.data);
+                } else {
+                    console.log("✅ [fetchOrderData] 检测到有子部门，使用 phoneGetToFillDepOrders 接口的数据");
+                }
 
                 if (res.data && res.data.data) {
+                    // 处理有子部门的情况（phoneGetToFillDepOrders 返回的数据）
+                    if (hasSubDepartments && res.data.code === 0) {
+                        console.log("✅ [fetchOrderData] 处理子部门数据结构（phoneGetToFillDepOrders）");
+                        
+                        // phoneGetToFillDepOrders 返回的 arr 是子部门数组
+                        const depArr = res.data.data.arr || [];
+                        console.log("📋 [fetchOrderData] 子部门数量:", depArr.length);
+                        
+                        // 合并所有子部门的订单到一个数组
+                        let allOrders = [];
+                        depArr.forEach((dep, index) => {
+                            console.log(`\n📁 [fetchOrderData] ========== 子部门 ${index + 1} ==========`);
+                            console.log(`📁 [fetchOrderData] 子部门名称:`, dep.depName);
+                            console.log(`📁 [fetchOrderData] 子部门ID:`, dep.depId);
+                            console.log(`📁 [fetchOrderData] 子部门小计:`, dep.depSubtotal);
+                            console.log(`📁 [fetchOrderData] 子部门订单数量:`, dep.depOrders ? dep.depOrders.length : 0);
+                            
+                            if (dep.depOrders && Array.isArray(dep.depOrders) && dep.depOrders.length > 0) {
+                                // 将子部门的订单添加到总数组
+                                allOrders = allOrders.concat(dep.depOrders);
+                                console.log(`✅ [fetchOrderData] 已添加 ${dep.depOrders.length} 条订单到总数组`);
+                            }
+                        });
+                        
+                        console.log(`📊 [fetchOrderData] 合并后总订单数: ${allOrders.length}`);
+                        
+                        // 设置订单数据
+                        this.tradeNo = res.data.data.tradeNo;
+                        this.generateQRCode();
+                        this.subtotal = parseFloat(res.data.data.total) || 0;
+                        this.subtotalHanzi = res.data.data.totalHanzi || '';
+                        this.applyArrPrint = allOrders;
+                        
+                        // 保存子部门信息，用于后续打印时按部门分组
+                        this.departmentsData = depArr.map(dep => ({
+                            depId: dep.depId,
+                            depName: dep.depName,
+                            depSubtotal: dep.depSubtotal,
+                            depOrders: dep.depOrders || []
+                        }));
+                        
+                        console.log("📊 [fetchOrderData] 子部门汇总信息:");
+                        const depSummary = this.departmentsData.map((dep, index) => ({
+                            index: index + 1,
+                            name: dep.depName,
+                            id: dep.depId,
+                            orderCount: dep.depOrders.length,
+                            subtotal: dep.depSubtotal
+                        }));
+                        console.table(depSummary);
+                        
+                        console.log("========== [ApplyPanel] 子部门数据处理完成 ==========\n");
+                        
+                        // ✅ 等 Vue 渲染完
+                        this.$nextTick(() => {
+                            console.log("DOM 已渲染，打印区域长度:", this.$refs.printArea?.outerHTML.length);
+                        });
+                        
+                        return; // 提前返回，不执行后面的代码
+                    }
+                    
+                    // 处理没有子部门的情况（原来的逻辑）
                     this.tradeNo = res.data.data.tradeNo;
                     this.subtotal = res.data.data.total;
                     this.subtotalHanzi = res.data.data.totalHanzi;
@@ -1316,6 +1801,36 @@ import QRCode from 'qrcode'
                 // 打印页面的逻辑（逐页打印）
         async printOnly() {
             console.log("=== printOnly 开始（逐页打印模式）===");
+            
+            // 显示打印蒙版
+            this.isPrinting = true;
+            
+            try {
+                // 打印前重新加载打印机配置，确保使用最新的设置
+                console.log("📊 [printOnly] 打印前组件字体大小:", {
+                    distributorNameFontSize: this.distributorNameFontSize,
+                    orderContentFontSize: this.orderContentFontSize
+                });
+                
+                await this.initPrinterProfile();
+            
+            console.log("📊 [printOnly] 加载配置后组件字体大小:", {
+                distributorNameFontSize: this.distributorNameFontSize,
+                orderContentFontSize: this.orderContentFontSize
+            });
+            
+            // 验证CSS变量
+            const rootDistributorFont = getComputedStyle(document.documentElement).getPropertyValue('--distributor-name-font-size');
+            const rootOrderFont = getComputedStyle(document.documentElement).getPropertyValue('--order-content-font-size');
+            console.log("📊 [printOnly] CSS变量值:", {
+                '--distributor-name-font-size': rootDistributorFont,
+                '--order-content-font-size': rootOrderFont,
+                componentDistributorFont: this.distributorNameFontSize + 'px',
+                componentOrderFont: this.orderContentFontSize + 'px',
+                distributorMatch: rootDistributorFont.trim() === (this.distributorNameFontSize + 'px'),
+                orderMatch: rootOrderFont.trim() === (this.orderContentFontSize + 'px')
+            });
+            
             console.log("📊 [printOnly] 准备打印, 总页数:", this.printPagesData.length);
 
             if (!this.printPagesData || this.printPagesData.length === 0) {
@@ -1349,10 +1864,10 @@ import QRCode from 'qrcode'
 
                 try {
                     // 1. 构建单页HTML
-                    const singlePageHtml = this.buildSinglePageHtml(pageData, pageIndex, totalPages);
+                    const singlePageHtml = await this.buildSinglePageHtml(pageData, pageIndex, totalPages);
 
                     // 2. 注入打印样式
-                    const finalHtmlForThisPage = this.injectPrintStyles(singlePageHtml);
+                    const finalHtmlForThisPage = await this.injectPrintStyles(singlePageHtml);
 
                     // 3. 清理Vue特殊属性
                     let cleanHtml = finalHtmlForThisPage.replace(/data-v-[a-zA-Z0-9]+=""/g, '');
@@ -1379,7 +1894,8 @@ import QRCode from 'qrcode'
                             this.tradeNo,  // 使用原始tradeNo，不用带页码
                             this.disUser.nxDistributerUserId,
                             paperCount,  // 传入总页数
-                            shouldSave   // 只在最后一页为true
+                            shouldSave,  // 只在最后一页为true
+                            !!this.isHistoryOrder  // 历史订单打印时跳过保存接口和刷新客户列表
                         );
                     } else if (this.gbDepFatherId !== -1) {
                         printResult = await window.electronAPI.sendPrintRequestGbWithCallback(
@@ -1421,6 +1937,12 @@ import QRCode from 'qrcode'
 
             console.log("\n✅ [printOnly] ========== 所有页面打印完成 ==========");
             console.log(`✅ [printOnly] 总计打印 ${this.printPagesData.length} 页`);
+            } catch (error) {
+                console.error("❌ [printOnly] 打印过程中出错:", error);
+            } finally {
+                // 无论成功还是失败，都隐藏打印蒙版
+                this.isPrinting = false;
+            }
         },
 
         // 导出Excel方法
@@ -1438,14 +1960,18 @@ import QRCode from 'qrcode'
             const excelData = [];
             
             // 添加表头
-            excelData.push(['序号', '商品', '规格', '数量', '单价', '小计']);
+            excelData.push(['序号', '商品', '规格', '单位', '数量', '单价', '小计']);
             
             // 添加数据行
             rows.forEach((item, index) => {
+                const pack = item.nxDistributerGoodsEntity?.nxDgItemsPerCarton != null 
+                    ? `${item.nxDistributerGoodsEntity?.nxDgGoodsStandardWeight || ''} * ${item.nxDistributerGoodsEntity?.nxDgItemsPerCarton}${item.nxDistributerGoodsEntity?.nxDgGoodsStandardname || ''}`
+                    : '';
                 excelData.push([
                     index + 1,
                     item.nxDistributerGoodsEntity?.nxDgGoodsName || '',
-                    item.nxDistributerGoodsEntity?.nxDgGoodsStandardname || '',
+                    pack,
+                    item.nxDoPrintStandard || '',
                     item.nxDoWeight || '',
                     item.nxDoPrice || '',
                     item.nxDoSubtotal || ''
@@ -1453,7 +1979,7 @@ import QRCode from 'qrcode'
             });
             
             // 添加汇总行
-            excelData.push(['', '', '', '', '合计', this.subtotalFormatted || this.subtotal]);
+            excelData.push(['', '', '', '', '', '合计', this.subtotalFormatted || this.subtotal]);
             
             // 创建工作表
             const ws = XLSX.utils.aoa_to_sheet(excelData);
@@ -1619,12 +2145,12 @@ import QRCode from 'qrcode'
 }
 
 .print-title {
-    font-size: 18px;
+    font-size: var(--distributor-name-font-size, 18px);
     font-weight: bold;
 }
 
 .print-item {
-    font-size: 14px;
+    font-size: var(--order-content-font-size, 14px);
     line-height: 25px;
 }
 
@@ -1651,7 +2177,7 @@ import QRCode from 'qrcode'
 
 .print-table-header {
     display: flex;
-    font-size: 12px;
+    font-size: var(--order-content-font-size, 14px);
     line-height: 25px;
     text-align: center;
     border-bottom: 1px solid #000;
@@ -1666,7 +2192,7 @@ import QRCode from 'qrcode'
 .print-table-row {
         display: flex !important; /* 确保使用flexbox布局 */
     line-height: 25px;
-    font-size: 12px;
+    font-size: var(--order-content-font-size, 14px);
     text-align: center;
         border-bottom: 1px solid #000;
         width: 100%; /* 确保表行占满整个宽度 */
@@ -1689,7 +2215,7 @@ import QRCode from 'qrcode'
     .print-col.print-ten     { flex-basis: 10%;  max-width: 10%;  border-right: 1px solid #000; box-sizing: border-box; }
     .print-col.print-thirty  { flex-basis: 30%;  max-width: 30%;  border-right: 1px solid #000; box-sizing: border-box; }
     .print-col.print-fifteen { flex-basis: 15%;  max-width: 15%;  border-right: 1px solid #000; box-sizing: border-box; }
-    .print-col.print-twenty  { flex-basis: 20%;  max-width: 20%;  border-right: none; box-sizing: border-box; }
+    .print-col.print-twenty  { flex-basis: 15%;  max-width: 15%;  border-right: none; box-sizing: border-box; }
 
     /* 统一去掉每行最后一格的右边框（右边线由容器伪元素画） */
     .print-table-header .print-col:last-child,
@@ -1707,7 +2233,7 @@ import QRCode from 'qrcode'
 .print-address {
     /*margin-top: 6px;*/
     /*padding: 4px 0;*/
-    font-size: 14px;
+    font-size: var(--order-content-font-size, 14px);
 }
 
 .print-address-total {
@@ -1715,7 +2241,7 @@ import QRCode from 'qrcode'
     justify-content: space-between;
     align-items: center;
     padding: 2px 8px;
-    font-size: 14px;
+    font-size: var(--order-content-font-size, 14px);
     margin-top: 2px;
 }
 
@@ -1827,6 +2353,7 @@ import QRCode from 'qrcode'
 .leftPage,
 .rightPage {
         width: 25%; /* 从30%增加到35%，确保左右两边有足够空间 */
+        cursor: pointer; /* 添加指针样式，提示可点击 */
 }
 
 
@@ -1837,35 +2364,40 @@ import QRCode from 'qrcode'
 .centerPage {
         width: 40%; /* 增加小计列宽度，确保内容不溢出 */
         text-align: center; /* 小计信息右对齐 */
-
+        cursor: pointer; /* 添加指针样式，提示可点击 */
     }
     .rightPage{
         text-align: right;
 }
 
 .title {
-    font-size: 18px;
+    font-size: var(--distributor-name-font-size, 18px);
     font-weight: bold;
 }
 
 .item {
-    font-size: 14px;
+    font-size: var(--order-content-font-size, 14px);
     line-height: 25px;
 }
 
-.content-bill {
+    .content-bill {
     display: flex;
         justify-content: center; /* 改为居中对齐，单列布局 */
         margin-top: 0; /* 减少表格顶部边距 */
         border: 1px solid #000; /* 加粗外边框，使用黑色 */
     box-sizing: border-box;
     /* 防止布局溢出 */
+    max-height: 70vh; /* 设置最大高度为视口高度的70% */
+    overflow-y: auto; /* 内容超出时显示垂直滚动条 */
+    overflow-x: hidden; /* 隐藏水平滚动条 */
 }
 
-    .half-column-container{
+    .whole-column-container{
         width: 100%; /* 单列占满整个宽度 */
     box-sizing: border-box;
-}
+    display: flex;
+    flex-direction: column;
+    }
 
 
 
@@ -1877,7 +2409,7 @@ import QRCode from 'qrcode'
     display: flex;
         flex-wrap: nowrap; /* 确保不换行 */
         justify-content: flex-start; /* 改为左对齐，让列按顺序排列 */
-    font-size: 12px;
+    font-size: var(--order-content-font-size, 14px);
     line-height: 25px;
     text-align: center;
     border-bottom: 1px solid #000;
@@ -1885,6 +2417,11 @@ import QRCode from 'qrcode'
         margin-top: 0; /* 减少表头顶部边距 */
         margin-bottom: 0; /* 减少表头底部边距 */
         width: 100%; /* 确保表头占满整个宽度 */
+    position: sticky; /* 粘性定位，滚动时保持在顶部 */
+    top: 0; /* 距离顶部0 */
+    background-color: #f5f5f5; /* 背景色，防止内容透过 */
+    z-index: 10; /* 确保表头在其他内容之上 */
+    flex-shrink: 0; /* 表头不允许收缩 */
     }
 
     /* .table-header .col {
@@ -1898,7 +2435,7 @@ import QRCode from 'qrcode'
         flex-wrap: nowrap; /* 确保不换行 */
         justify-content: flex-start; /* 改为左对齐，让列按顺序排列 */
     line-height: 25px;
-    font-size: 12px;
+    font-size: var(--order-content-font-size, 14px);
     text-align: center;
     border-bottom: 1px solid #000;
         width: 100%; /* 确保表行占满整个宽度 */
@@ -1908,12 +2445,12 @@ import QRCode from 'qrcode'
     display: flex;
         justify-content: flex-start; /* 改为左对齐，避免中间空白 */
     /* margin-bottom: 20px; */
-    font-size: 14px;
+    font-size: var(--order-content-font-size, 14px);
 }
 
 .footerPage {
         text-align: left;
-    font-size: 14px;
+    font-size: var(--order-content-font-size, 14px);
 }
 
 .address {
@@ -1935,6 +2472,7 @@ import QRCode from 'qrcode'
 /* 显示表格的列宽度和右边线样式 */
 .ten {
         width: 10%;
+        border-right: 1px solid #000;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1956,17 +2494,48 @@ import QRCode from 'qrcode'
         text-overflow: ellipsis;
 }
 
-.twenty {
-        width: 20%; /* 小计列宽度，从20%减少到19% */
+    .fifteen {
+        width: 15%;
+        border-right: 1px solid #000;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .twenty {
+        width: 15%; /* 小计列宽度，从20%改为15% */
         border-right: 1px solid #000; /* 小计列右边框，加粗 */
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-}
+    }
 
 * {
     box-sizing: border-box;
 }
 
+/* 打印蒙版样式 */
+.printing-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.printing-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 40px;
+    border-radius: 10px;
+}
 
 </style>

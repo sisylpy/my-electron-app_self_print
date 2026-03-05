@@ -16,14 +16,14 @@
       <div class="footer">
         <!-- 左侧标题 -->
         <div class="left-title" @click="openPrinterSettings" style="cursor: pointer;" title="点击设置系统打印机">
-          <h1>京采接单工具</h1>
+          <h1>京采接单订单工具</h1>
           <div v-if="marketName" class="market-name-below">{{ marketName }}</div>
         </div>
   
         <!-- 右侧按钮 -->
         <div class="right-btn d-flex gap-3">
-<!--          <button @click="printWidthTest" class="settings-btn" style="background-color: #17a2b8;">宽度测试</button>-->
-<!--          <button @click="openDeviceSettings" class="settings-btn">设备管理</button>-->
+          <button @click="openWidthTest" class="settings-btn" style="background-color: #17a2b8;">宽度测试</button>
+          <button @click="openDeviceSettings" class="settings-btn">设备管理</button>
           <button @click="goHome" class="print-btn">打印配送单</button>
         </div>
       </div>
@@ -86,6 +86,76 @@
       </div>
     </div>
 
+    <!-- 打印宽度测试弹窗 -->
+    <div v-if="showWidthTestModal" class="modal-overlay" @click="closeWidthTestModal">
+      <div class="modal-content" @click.stop style="max-width: 600px;">
+          <div class="width-test-panel">
+              <h3>📏 打印宽度测试</h3>
+
+              <div class="test-params">
+                  <div class="param-group">
+                      <label>安全基准宽度 (mm):</label>
+                      <input v-model.number="testSafeBaseWidth" type="number" step="1" min="180" max="241" />
+                  </div>
+
+                  <div class="param-group">
+                      <label>实际可打印宽度限制 (mm):</label>
+                      <input v-model.number="testActualPrintableWidth" type="number" step="1" min="180" max="241" />
+                  </div>
+
+                  <div class="param-group">
+                      <label>缩放系数:</label>
+                      <input v-model.number="testZoomFactor" type="number" step="0.01" min="0.5" max="2.0" />
+                  </div>
+
+                  <div class="param-group">
+                      <label>左边距 (mm):</label>
+                      <input v-model.number="testLeftMargin" type="number" step="1" min="0" max="50" />
+                  </div>
+
+                  <div class="param-group">
+                      <label>右边距 (mm):</label>
+                      <input v-model.number="testRightMargin" type="number" step="1" min="0" max="50" />
+                  </div>
+              </div>
+
+              <div class="calculated-info">
+                  <h4>计算结果：</h4>
+                  <div class="info-item">
+                      <span>原始可用宽度:</span>
+                      <strong>{{ calculatedOriginalAvailableWidth.toFixed(2) }} mm</strong>
+                  </div>
+                  <div class="info-item">
+                      <span>缩放后可用宽度:</span>
+                      <strong>{{ calculatedScaledAvailableWidth.toFixed(2) }} mm</strong>
+                  </div>
+                  <div class="info-item">
+                      <span>容器总宽度:</span>
+                      <strong>{{ calculatedContainerWidth.toFixed(2) }} mm</strong>
+                  </div>
+                  <div class="info-item">
+                      <span>内容区域宽度:</span>
+                      <strong :class="{'warning': calculatedContentWidth > testActualPrintableWidth}">
+                          {{ calculatedContentWidth.toFixed(2) }} mm
+                          <span v-if="calculatedContentWidth > testActualPrintableWidth" class="warning-text">⚠️ 超过限制</span>
+                      </strong>
+                  </div>
+                  <div class="info-item">
+                      <span>最终打印宽度:</span>
+                      <strong :class="{'warning': calculatedFinalWidth > testActualPrintableWidth}">
+                          {{ calculatedFinalWidth.toFixed(2) }} mm
+                          <span v-if="calculatedFinalWidth > testActualPrintableWidth" class="warning-text">⚠️ 会被裁剪</span>
+                      </strong>
+                  </div>
+              </div>
+
+              <div class="button-group">
+                  <button @click="printWidthTest" class="confirm-btn">打印测试</button>
+                  <button @click="closeWidthTestModal" class="cancel-btn">关闭</button>
+              </div>
+          </div>
+      </div>
+    </div>
 
     <!-- 设备管理员登录弹窗 -->
     <div v-if="showDeviceAdminModal" class="modal-overlay" @click="closeDeviceAdminModal">
@@ -542,17 +612,13 @@ import deviceAdminApi from '../api/deviceAdmin.js';
       const loadingPrinters = ref(false);
       const savingPrinter = ref(false);
       
-      // 打印宽度测试 - 直接修改这里的参数来学习打印效果
-      // ========== 参数设置区域 ==========
-      const TEST_WIDTH = 200;        // 矩形宽度 (mm) - 修改这个来测试不同宽度
-      const TEST_HEIGHT = 50;         // 矩形高度 (mm)
-      const TEST_LEFT_MARGIN = 0;     // 左边距 (mm) - 注意：打印机驱动可能有默认边距，实际可打印区域会小于页面宽度
-      const TEST_RIGHT_MARGIN = 0;    // 右边距 (mm)
-      const TEST_TOP_MARGIN = 0;      // 上边距 (mm) - 注意：打印机驱动可能有默认上边距
-      const TEST_PAGE_WIDTH = 241;   // 页面宽度 (mm) - 物理纸张宽度
-      // 说明：如果打印出来宽度是185mm而不是200mm，说明左右各被裁剪了约7.5mm（打印机驱动的默认边距）
-      // 如果上边框和右边框被裁剪，说明打印机有默认的上边距和右边距
-      // ========== 参数设置区域结束 ==========
+      // 打印宽度测试相关
+      const showWidthTestModal = ref(false);
+      const testSafeBaseWidth = ref(210);
+      const testActualPrintableWidth = ref(200);
+      const testZoomFactor = ref(1.0);
+      const testLeftMargin = ref(12);
+      const testRightMargin = ref(12);
       
       // 打开打印机设置弹窗
       const openPrinterSettings = async () => {
@@ -713,25 +779,78 @@ import deviceAdminApi from '../api/deviceAdmin.js';
         return classMap[status] || 'status-unknown';
       };
       
-      // 打印宽度测试 - 最简单的矩形测试
+      // 打开宽度测试弹窗
+      const openWidthTest = () => {
+        console.log('📏 打开打印宽度测试');
+        showWidthTestModal.value = true;
+      };
+      
+      // 关闭宽度测试弹窗
+      const closeWidthTestModal = () => {
+        showWidthTestModal.value = false;
+      };
+      
+      // 计算宽度（与 ApplyThirtyWholePanel.vue 逻辑一致）
+      const calculatedOriginalAvailableWidth = computed(() => {
+        return testSafeBaseWidth.value - testLeftMargin.value - testRightMargin.value;
+      });
+      
+      const calculatedScaledAvailableWidth = computed(() => {
+        return calculatedOriginalAvailableWidth.value * testZoomFactor.value;
+      });
+      
+      const calculatedScaledLeftMargin = computed(() => {
+        return testLeftMargin.value * testZoomFactor.value;
+      });
+      
+      const calculatedScaledRightMargin = computed(() => {
+        return testRightMargin.value * testZoomFactor.value;
+      });
+      
+      const calculatedContainerWidth = computed(() => {
+        let containerWidth = calculatedScaledLeftMargin.value + calculatedScaledAvailableWidth.value + calculatedScaledRightMargin.value;
+        const physicalPageWidth = 241;
+        if (containerWidth > physicalPageWidth) {
+          const scaleDown = physicalPageWidth / containerWidth;
+          containerWidth = physicalPageWidth;
+        }
+        return containerWidth;
+      });
+      
+      const calculatedContentWidth = computed(() => {
+        let containerWidth = calculatedScaledLeftMargin.value + calculatedScaledAvailableWidth.value + calculatedScaledRightMargin.value;
+        const physicalPageWidth = 241;
+        let scaledLeft = calculatedScaledLeftMargin.value;
+        let scaledRight = calculatedScaledRightMargin.value;
+        
+        if (containerWidth > physicalPageWidth) {
+          const scaleDown = physicalPageWidth / containerWidth;
+          containerWidth = physicalPageWidth;
+          scaledLeft = scaledLeft * scaleDown;
+          scaledRight = scaledRight * scaleDown;
+        }
+        
+        return containerWidth - scaledLeft - scaledRight;
+      });
+      
+      const calculatedFinalWidth = computed(() => {
+        let contentWidth = calculatedContentWidth.value;
+        if (contentWidth > testActualPrintableWidth.value) {
+          return testActualPrintableWidth.value;
+        }
+        return contentWidth;
+      });
+      
+      // 打印宽度测试
       const printWidthTest = async () => {
         console.log('🖨️ 开始打印宽度测试');
-        console.log('📏 测试参数:', {
-          width: TEST_WIDTH,
-          height: TEST_HEIGHT,
-          leftMargin: TEST_LEFT_MARGIN,
-          rightMargin: TEST_RIGHT_MARGIN,
-          topMargin: TEST_TOP_MARGIN,
-          pageWidth: TEST_PAGE_WIDTH
-        });
-        console.log('📌 说明:');
-        console.log('  - 页面宽度:', TEST_PAGE_WIDTH, 'mm (物理纸张宽度)');
-        console.log('  - 矩形宽度:', TEST_WIDTH, 'mm (期望打印宽度)');
-        console.log('  - 如果实际打印宽度小于', TEST_WIDTH, 'mm，说明打印机驱动有默认边距');
-        console.log('  - 如果上边框/右边框被裁剪，说明打印机有默认的上边距/右边距');
-        console.log('  - 红色虚线标记页面边界，帮助识别实际可打印区域');
         
-        // 构建最简单的测试HTML - 就是一个矩形，带视觉标记
+        const contentWidth = calculatedFinalWidth.value;
+        const containerWidth = calculatedContainerWidth.value;
+        const scaledLeft = calculatedScaledLeftMargin.value;
+        const scaledRight = calculatedScaledRightMargin.value;
+        
+        // 构建简单的测试HTML
         const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -739,7 +858,7 @@ import deviceAdminApi from '../api/deviceAdmin.js';
   <meta charset="UTF-8">
   <style>
     @page {
-      size: ${TEST_PAGE_WIDTH}mm 93mm;
+      size: 241mm 93mm;
       margin: 0;
     }
     * {
@@ -748,109 +867,82 @@ import deviceAdminApi from '../api/deviceAdmin.js';
       box-sizing: border-box;
     }
     body {
-      width: ${TEST_PAGE_WIDTH}mm;
-      height: 93mm;
-      margin: 0;
-      padding: ${TEST_TOP_MARGIN}mm ${TEST_RIGHT_MARGIN}mm 0 ${TEST_LEFT_MARGIN}mm;
-      position: relative;
-      background: #fff;
+      width: ${containerWidth}mm;
+      margin: 0 auto;
+      font-family: Arial, sans-serif;
+      padding-left: ${scaledLeft}mm;
+      padding-right: ${scaledRight}mm;
     }
-    /* 页面边界标记 - 帮助识别实际可打印区域 */
-    .page-marker {
-      position: absolute;
-      border: 1px dashed #ccc;
-    }
-    .page-left {
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 0;
-      border-left: 2px solid #ff0000;
-    }
-    .page-right {
-      right: 0;
-      top: 0;
-      bottom: 0;
-      width: 0;
-      border-right: 2px solid #ff0000;
-    }
-    .page-top {
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 0;
-      border-top: 2px solid #ff0000;
-    }
-    /* 测试矩形 */
-    .test-rect {
-      width: ${TEST_WIDTH}mm;
-      height: ${TEST_HEIGHT}mm;
+    .test-container {
+      width: ${contentWidth}mm;
       border: 2px solid #000;
+      padding: 10mm;
       background: #f0f0f0;
-      margin: 10mm auto 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      font-weight: bold;
-      position: relative;
     }
-    /* 宽度标记 */
-    .width-markers {
-      position: absolute;
-      top: -5mm;
-      left: 0;
-      right: 0;
+    .width-indicator {
+      width: 100%;
+      height: 5mm;
+      background: repeating-linear-gradient(
+        90deg,
+        #000 0mm,
+        #000 5mm,
+        transparent 5mm,
+        transparent 10mm
+      );
+      margin: 5mm 0;
+    }
+    .info {
+      font-size: 12px;
+      line-height: 1.6;
+      margin-bottom: 5mm;
+    }
+    .width-display {
+      font-size: 24px;
+      font-weight: bold;
+      text-align: center;
+      margin: 10mm 0;
+      padding: 5mm;
+      background: #fff;
+      border: 1px solid #000;
+    }
+    .ruler {
       display: flex;
       justify-content: space-between;
       font-size: 10px;
-      color: #666;
-    }
-    .width-markers::before {
-      content: '0';
-      position: absolute;
-      left: 0;
-    }
-    .width-markers::after {
-      content: '${TEST_WIDTH}mm';
-      position: absolute;
-      right: 0;
-    }
-    /* 说明文字 */
-    .info {
-      position: absolute;
-      top: ${TEST_TOP_MARGIN + TEST_HEIGHT + 15}mm;
-      left: ${TEST_LEFT_MARGIN}mm;
-      font-size: 10px;
-      color: #666;
-      line-height: 1.4;
+      margin-top: 5mm;
     }
   </style>
 </head>
 <body>
-  <!-- 页面边界标记 -->
-  <div class="page-marker page-left"></div>
-  <div class="page-marker page-right"></div>
-  <div class="page-marker page-top"></div>
-  
-  <!-- 测试矩形 -->
-  <div class="test-rect">
-    <div class="width-markers"></div>
-    ${TEST_WIDTH}mm
-  </div>
-  
-  <!-- 说明信息 -->
-  <div class="info">
-    页面宽度: ${TEST_PAGE_WIDTH}mm<br>
-    矩形宽度: ${TEST_WIDTH}mm<br>
-    左边距: ${TEST_LEFT_MARGIN}mm<br>
-    右边距: ${TEST_RIGHT_MARGIN}mm<br>
-    上边距: ${TEST_TOP_MARGIN}mm<br>
-    <br>
-    <strong>注意：</strong><br>
-    如果打印出来宽度小于${TEST_WIDTH}mm，说明打印机驱动有默认边距<br>
-    如果上边框/右边框被裁剪，说明打印机有默认的上边距/右边距<br>
-    红色虚线标记页面边界，帮助识别实际可打印区域
+  <div class="test-container">
+    <div class="info">
+      <strong>打印宽度测试</strong><br>
+      安全基准宽度: ${testSafeBaseWidth.value}mm<br>
+      实际可打印宽度限制: ${testActualPrintableWidth.value}mm<br>
+      缩放系数: ${testZoomFactor.value}<br>
+      左边距: ${testLeftMargin.value}mm → ${scaledLeft.toFixed(2)}mm<br>
+      右边距: ${testRightMargin.value}mm → ${scaledRight.toFixed(2)}mm<br>
+      容器总宽度: ${containerWidth.toFixed(2)}mm<br>
+      内容区域宽度: ${contentWidth.toFixed(2)}mm
+    </div>
+    
+    <div class="width-display">
+      ${contentWidth.toFixed(2)} mm
+    </div>
+    
+    <div class="width-indicator"></div>
+    
+    <div class="ruler">
+      <span>0mm</span>
+      <span>${(contentWidth / 4).toFixed(1)}mm</span>
+      <span>${(contentWidth / 2).toFixed(1)}mm</span>
+      <span>${(contentWidth * 3 / 4).toFixed(1)}mm</span>
+      <span>${contentWidth.toFixed(1)}mm</span>
+    </div>
+    
+    <div style="margin-top: 10mm; text-align: center; font-size: 14px;">
+      如果右侧被裁剪，说明宽度超过了实际可打印宽度限制
+    </div>
   </div>
 </body>
 </html>
@@ -860,9 +952,8 @@ import deviceAdminApi from '../api/deviceAdmin.js';
           if (window.electronAPI && window.electronAPI.sendPrintRequestWithCallback) {
             const result = await window.electronAPI.sendPrintRequestWithCallback(htmlContent);
             if (result.success) {
-              console.log('✅ 打印测试已发送');
+              alert('打印测试已发送！\n\n请观察打印结果，检查右侧是否被裁剪。');
             } else {
-              console.error('❌ 打印失败:', result.error);
               alert('打印失败: ' + result.error);
             }
           } else {
@@ -914,7 +1005,20 @@ import deviceAdminApi from '../api/deviceAdmin.js';
         closePrinterModal,
         getPrinterStatusText,
         getPrinterStatusClass,
-        // 宽度测试
+        // 宽度测试相关
+        showWidthTestModal,
+        testSafeBaseWidth,
+        testActualPrintableWidth,
+        testZoomFactor,
+        testLeftMargin,
+        testRightMargin,
+        calculatedOriginalAvailableWidth,
+        calculatedScaledAvailableWidth,
+        calculatedContainerWidth,
+        calculatedContentWidth,
+        calculatedFinalWidth,
+        openWidthTest,
+        closeWidthTestModal,
         printWidthTest
       };
     }
@@ -1402,6 +1506,92 @@ import deviceAdminApi from '../api/deviceAdmin.js';
     margin: 0;
     color: #004085;
     font-size: 14px;
+  }
+
+  /* 打印宽度测试样式 */
+  .width-test-panel {
+    padding: 30px;
+  }
+
+  .width-test-panel h3 {
+    text-align: center;
+    margin-bottom: 25px;
+    color: #333;
+    font-size: 20px;
+  }
+
+  .test-params {
+    margin-bottom: 25px;
+  }
+
+  .param-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+    gap: 10px;
+  }
+
+  .param-group label {
+    min-width: 200px;
+    font-weight: 600;
+    color: #555;
+  }
+
+  .param-group input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+  }
+
+  .param-group input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  }
+
+  .calculated-info {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    border-left: 4px solid #17a2b8;
+  }
+
+  .calculated-info h4 {
+    margin-bottom: 15px;
+    color: #333;
+  }
+
+  .info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #e9ecef;
+  }
+
+  .info-item:last-child {
+    border-bottom: none;
+  }
+
+  .info-item span {
+    color: #666;
+  }
+
+  .info-item strong {
+    color: #333;
+    font-size: 16px;
+  }
+
+  .info-item strong.warning {
+    color: #dc3545;
+  }
+
+  .warning-text {
+    font-size: 12px;
+    margin-left: 8px;
   }
 
   /* 响应式设计 */

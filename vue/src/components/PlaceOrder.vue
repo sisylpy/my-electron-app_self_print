@@ -2,29 +2,13 @@
     <div class="save-order-tab"
          style="height: 100%; overflow: hidden; display: flex; flex-direction: column;">
         <!-- 上传方式选择 -->
-        <div class="mb-3" style="flex-shrink: 0;">
+        <div class="mb-1" style="flex-shrink: 0;">
             <div class="form-group d-flex gap-3 align-items-center flex-wrap">
+
                 <label class="mb-0" style="cursor: pointer;">
                     <input
                             type="radio"
-                            :checked="uploadType === 'excel'"
-                            value="excel"
-                            class="me-2"
-                            @change="handleUploadTypeChange('excel')">
-                    上传Excel表
-                </label>
-                <label class="mb-0" style="cursor: pointer;">
-                    <input
-                            type="radio"
-                            :checked="uploadType === 'image'"
-                            value="image"
-                            class="me-2"
-                            @change="handleUploadTypeChange('image')">
-                    上传图片
-                </label>
-                <label class="mb-0" style="cursor: pointer;">
-                    <input
-                            type="radio"
+                            name="uploadType"
                             :checked="uploadType === 'paste'"
                             value="paste"
                             class="me-2"
@@ -34,2595 +18,519 @@
                 <label class="mb-0" style="cursor: pointer;">
                     <input
                             type="radio"
+                            name="uploadType"
+                            :checked="uploadType === 'image'"
+                            value="image"
+                            class="me-2"
+                            @change="handleUploadTypeChange('image')">
+                    上传图片
+                </label>
+
+
+                <label class="mb-0" style="cursor: pointer;" @click="handleUploadTypeChange('excel-paste')">
+                    <input
+                            type="radio"
+                            name="uploadType"
+                            :checked="uploadType === 'excel-paste'"
+                            value="excel-paste"
+                            class="me-2"
+                            @change="handleUploadTypeChange('excel-paste')">
+                    📋 Excel 粘贴
+                </label>
+                <!-- <label class="mb-0" style="cursor: pointer;">
+                    <input
+                            type="radio"
+                            name="uploadType"
+                            :checked="uploadType === 'excel'"
+                            value="excel"
+                            class="me-2"
+                            @change="handleUploadTypeChange('excel')">
+                    上传Excel表
+                </label> -->
+
+                <!-- <label class="mb-0" style="cursor: pointer;">
+                    <input
+                            type="radio"
+                            name="uploadType"
                             :checked="uploadType === 'auto'"
                             value="auto"
                             class="me-2"
                             @change="handleUploadTypeChange('auto')">
-                    🔄 转订单
-                </label>
+                    自动
+                </label> -->
+
+                <!-- 自动上传：订单保存路径（选中「自动」时显示） -->
+                <!-- <div v-if="uploadType === 'auto'" class="d-flex align-items-center gap-2 ms-2">
+                    <span class="text-muted small">📁 订单保存路径：</span>
+                    <span v-if="customerFolderPath" class="text-muted small"
+                          style="max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                          :title="customerFolderPath">{{ customerFolderPath }}</span>
+                    <span v-else class="text-warning small">未设置</span>
+                    <button class="btn btn-sm btn-primary" @click="selectCustomerFolder" :disabled="selectingFolder">
+                        <span v-if="selectingFolder" class="spinner-border spinner-border-sm me-1"></span>
+                        {{ selectingFolder ? '选择中...' : '选择' }}
+                    </button>
+                    <button v-if="customerFolderPath" class="btn btn-sm btn-outline-secondary"
+                            @click="clearCustomerFolder">清除
+                    </button>
+                </div> -->
             </div>
         </div>
 
-        <!-- 内容区域 -->
+        <!-- 内容区域（min-height:0 配合子级让表格区域正确收缩，防止底部滚动条被遮挡） -->
         <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
-            <!-- Excel上传区域 - 参考复制粘贴区域设计 -->
-            <div v-if="uploadType === 'excel'" class="upload-section"
-                 style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
-                <div class="row g-3" style="flex: 1; min-height: 0; overflow: hidden; margin: 0; align-items: stretch;">
-                    <!-- 左侧：Excel文件上传和预览 -->
-                    <div class="col-md-6">
-                        <div class="card h-100">
-                            <div class="card-body p-1" style="display: flex; flex-direction: column; min-height: 0;">
-                                <div v-if="!hasCache" style="flex-shrink: 0;">
-                                    <input
-                                            type="file"
-                                            ref="excelFileInput"
-                                            accept=".xlsx,.xls"
-                                            @change="handleExcelUpload"
-                                            class="form-control mb-2"
-                                    />
-                                    <small class="text-muted">支持 .xlsx 和 .xls 格式</small>
-                                </div>
 
-                                <!-- 显示已上传的文件信息和Excel预览 -->
-                                <div v-if="uploadedExcelFile" class="flex-grow-1"
-                                     style="display: flex; flex-direction: column; min-height: 0;">
-                                    <div class="p-2 bg-light rounded mb-2" style="flex-shrink: 0;">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <div>
-                                                <div class="fw-bold">📄 {{ uploadedExcelFile.name }}</div>
-                                                <div class="small text-muted">
-                                                    大小: {{ formatFileSize(uploadedExcelFile.size) }}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+            <!-- 复制粘贴模式 -->
+            <PasteUpload
+                    ref="pasteUploadRef"
+                    v-if="uploadType === 'paste'"
+                    source="placeOrder"
+                    :dep-id="selectedSubDepartment || selectedAllCustomer"
+                    :task-type="3"
+                    :current-task="currentTask"
+                    :paste-input-text="pasteInputText"
+                    :paste-invalid-line-indices="pasteInvalidLineIndices"
+                    :paste-invalid-segments="pasteInvalidSegments"
+                    :paste-has-cache="hasDataForPaste"
+                    :paste-save-count="pasteSaveCount"
+                    :paste-order-items="orderItems"
+                    :show-deep-seek-loading="showDeepSeekLoading"
+                    :select-task-loading="taskLoading"
+                    :saving-order="savingOrder"
+                    :all-orders-are-draft="allOrdersAreDraft"
+                    @select-task="handleSelectPasteTask"
+                    @add-new-content="handlePasteAddNew"
+                    @close-new-content="handlePasteCloseNewContent"
+                    @paste-input="handlePasteInput"
+                    @paste-from-clipboard="pasteFromClipboard"
+                    @ai-recognise="aiRecogniseFirst"
+                    @local-parse="handlePasteLocalParse"
+                    @again-paste="againPaste"
+                    @save-paste-orders="pastSavePasteOrders"
+                    @clear-paste-save="clearPasteSave"
+                    @re-upload="reUpload"
+                    @show-fix-items="showFixItems"
+                    @finish-task="onFinishTask"
+                    :tts-playing="pasteTTSState.isTTSPlaying"
+                    :tts-loading="pasteTTSState.isTTSLoading"
+                    :tts-stopped-index="pasteTTSState.stoppedIndex"
+                    @read-order-list="() => handleReadOrderList('paste')"
+                    @pause-reading="() => handlePauseReading('paste')"
+                    @restart-reading="() => handleRestartReading('paste')"
+                    @stop-reading="() => handleStopReading('paste')"
+                    @edit-order="handleEditOrderFromPopup"
+                    @continue-reading="() => handleContinueReading('paste')"
+            >
+                <template #order-list>
+                    <!-- 草稿状态：使用 DraftOrderList -->
+                    <DraftOrderList
+                            v-if="pasteSaveCount == null"
+                            :order-items="orderItems"
+                            :selected-order-index="draftSelectedOrderIndex"
+                            empty-message="请粘贴订单文本并解析后，系统将显示订单列表"
+                            :adding-order-before-index="addingOrderBeforeIndex"
+                            :before-order-form="beforeOrderForm"
+                            :order-arr-index="orderArrIndex"
+                            :is-valid-order-quantity-and-standard="isValidOrderQuantityAndStandard"
+                            @before-order-goods-name-input="handleBeforeOrderGoodsNameInput"
+                            @before-order-quantity-input="handleBeforeOrderQuantityInput"
+                            @before-order-standard-input="handleBeforeOrderStandardInput"
+                            @before-order-remark-input="handleBeforeOrderRemarkInput"
+                            @goods-name-input="handleDraftOrderListGoodsNameInput"
+                            @quantity-input="handleDraftOrderListQuantityInput"
+                            @standard-change="handleDraftOrderListStandardChange"
+                            @delete-order="handleDraftOrderListDeleteOrder"
+                            @add-order-before="handleDraftOrderListAddOrderBefore"
+                            @add-remark="handleDraftOrderListAddRemark"
+                            @clear-remark="handleDraftOrderListClearRemark"
+                            @remark-input="handleDraftOrderListRemarkInput"
+                    />
 
-                                    <!-- Excel内容预览 -->
-                                    <div v-if="uploadedExcelPreview" class="border rounded p-2 flex-grow-1"
-                                         style="overflow: hidden; min-height: 0; display: flex; flex-direction: column; border: 1px solid #dee2e6 !important; border-bottom: 1px solid #dee2e6 !important;">
-                                        <div v-if="uploadedExcelPreview.sheets && uploadedExcelPreview.sheets.length > 0"
-                                             style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
-                                            <!-- 工作表选择 -->
-                                            <div v-if="uploadedExcelPreview.sheets.length > 1"
-                                                 class="mb-2"
-                                                 style="flex-shrink: 0; border-bottom: 1px solid #dee2e6; padding-bottom: 8px;">
-                                                <select
-                                                        class="form-select form-select-sm"
-                                                        :value="uploadedExcelPreview.currentSheet || 0"
-                                                        @change="changeUploadedExcelSheet($event.target.value)"
-                                                        style="border: 1px solid #dee2e6;">
-                                                    <option
-                                                            v-for="(sheet, sheetIndex) in uploadedExcelPreview.sheets"
-                                                            :key="sheetIndex"
-                                                            :value="sheetIndex">
-                                                        {{ sheet.name }}
-                                                    </option>
-                                                </select>
-                                            </div>
-                                            <!-- 表格显示 -->
-                                            <div class="table-responsive flex-grow-1"
-                                                 style="overflow-y: auto; min-height: 0; flex: 1; border-bottom: 1px solid #dee2e6;">
-                                                <table class="table table-sm table-bordered"
-                                                       style="font-size: 11px; margin-bottom: 0;">
-                                                    <tbody>
-                                                    <tr v-for="(row, rowIndex) in getUploadedExcelSheetData()"
-                                                        :key="rowIndex">
-                                                        <td
-                                                                v-for="(cell, cellIndex) in row"
-                                                                :key="cellIndex"
-                                                                :class="{ 'bg-light': rowIndex === 0 }"
-                                                                style="padding: 4px; white-space: nowrap;">
-                                                            {{ cell || '' }}
-                                                        </td>
-                                                    </tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                        <div v-else class="text-muted small">Excel文件为空或无法读取</div>
-                                    </div>
-                                    <div v-else-if="uploadedExcelFile"
-                                         class="border rounded p-2 text-center flex-grow-1">
-                                        <div class="spinner-border spinner-border-sm me-2"
-                                             role="status"></div>
-                                        <span class="small text-muted">加载Excel预览中...</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- 已保存状态：使用 OrderList -->
+                    <OrderList
+                            v-else
+                            ref="pasteOrderListRef"
+                            :order-items="orderItems"
+                            :dis-id="disUser?.nxDiuDistributerId"
+                            @tts-state="(p) => onTTSState('paste', p)"
+                            empty-message="请粘贴订单文本并解析后，系统将显示订单列表"
+                            :adding-order-before-index="addingOrderBeforeIndex"
+                            :before-order-form="beforeOrderForm"
+                            :show-matched-goods="showMatchedGoods"
+                            :order-arr-index="orderArrIndex"
+                            :str-arr="strArr"
+                            :nx-arr="nxArr"
+                            :is-valid-order-quantity-and-standard="isValidOrderQuantityAndStandard"
+                            @cancel-add-order-before="cancelAddOrderBefore"
+                            @before-order-goods-name-input="handleBeforeOrderGoodsNameInput"
+                            @select-before-order-goods="selectBeforeOrderGoods"
+                            @close-before-order-search-results="closeBeforeOrderSearchResults"
+                            @download-goods-nx="downLoadGoodsNx"
+                            @before-order-quantity-input="handleBeforeOrderQuantityInput"
+                            @before-order-standard-input="handleBeforeOrderStandardInput"
+                            @before-order-remark-input="handleBeforeOrderRemarkInput"
+                            @save-before-order="handleSaveBeforeOrder"
+                            @goods-name-input="handleOrderListGoodsNameInput"
+                            @goods-name-focus="handleOrderListGoodsNameFocus"
+                            @goods-name-blur="handleOrderListGoodsNameBlur"
+                            @toggle-matched-goods="toggleMatchedGoods"
+                            @close-all-matched-goods="closeAllMatchedGoods"
+                            @quantity-input="handleOrderListQuantityInput"
+                            @standard-change="handleOrderListStandardChange"
+                            @update-order="handleOrderListUpdateOrder"
+                            @save-new-goods="handleOrderListSaveNewGoods"
+                            @add-new-order-before="handleOrderListAddNewOrderBefore"
+                            @delete-order="handleOrderListDeleteOrder"
+                            @remark-input="handleOrderListRemarkInput"
+                            @select-matched-goods="handleOrderListSelectMatchedGoods"
+                            @close-str="closeStr"
+                            @select-search-result="handleOrderListSelectSearchResult"
 
-                    <!-- 右侧：订单列表（Excel模式）- 始终保留空间 -->
-                    <div class="col-md-6 order-items-section"
-                         style="display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;">
-                        <div class="card h-100 p-3"
-                             style="display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
-                            <div class="d-flex justify-content-between align-items-center mb-3" style="flex-shrink: 0;">
-                                <h6 class="mb-0">转换订单 ({{ orderItems.length }} 项)</h6>
-                                <div class="d-flex gap-2">
-                                    <button
-                                            v-if="hasCache && allOrdersAreDraft"
-                                            class="btn btn-success btn-sm"
-                                            @click="clearSave">
-                                        完成下单
-                                    </button>
-                                    <button
-                                            v-if="hasCache"
-                                            class="btn btn-danger btn-sm"
-                                            @click="reUpload">
-                                        重新上传
-                                    </button>
-                                </div>
-                            </div>
+                    />
+                </template>
+            </PasteUpload>
 
-                            <!-- 订单列表内容（Excel模式） -->
-                            <div class="order-list-container flex-grow-1"
-                                 style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0;">
-                                <div v-if="orderItems.length === 0" class="text-center text-muted p-4">
-                                    <div class="mb-2">📋 暂无订单</div>
-                                    <small>请在上传Excel文件后，系统将自动解析订单</small>
-                                </div>
-                                <!-- 表头 -->
-                                <div v-if="orderItems.length > 0"
-                                     class="table-header-fixed bg-light border-bottom p-1 d-flex align-items-center fw-bold small"
-                                     style="position: sticky; top: 0; z-index: 10;">
-                                    <div style="width: 50px; flex-shrink: 0;" class="text-center table-cell">序号</div>
-                                    <div style="flex: 2; min-width: 0;" class="table-cell">商品名称</div>
-                                    <div style="width: 50px; flex-shrink: 0;" class="text-center table-cell">数量</div>
-                                    <div style="width: 50px; flex-shrink: 0;" class="text-center table-cell">规格</div>
-                                    <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">状态</div>
-                                </div>
-                                <!-- 订单列表 -->
-                                <div style="padding: 0.5rem;">
-                                    <div
-                                            v-for="(item, orderIndex) in orderItems"
-                                            :key="orderIndex"
-                                            class="order-item-card mb-1 p-1 bg-white rounded border-bottom"
-                                            style="position: relative;">
 
-                                        <!-- 之前添加新订单的商品选择面板 -->
-                                        <div v-if="addingOrderBeforeIndex === orderIndex"
-                                             class="mb-3 p-3 border rounded"
-                                             style="background-color: #fff3cd; border-color: #ffc107;">
-                                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                                <h6 class="mb-0" style="color: #856404;">在之前添加新订单</h6>
-                                                <button class="btn btn-sm btn-link p-0"
-                                                        @click="cancelAddOrderBefore"
-                                                        style="font-size: 14px; color: #856404;">✕
-                                                </button>
-                                            </div>
+            <!-- 图片上传模式 -->
+            <ImageUpload
+                    ref="imageUploadRef"
+                    v-if="uploadType === 'image'"
+                    source="placeOrder"
+                    :dep-id="selectedSubDepartment || selectedAllCustomer"
+                    :task-type="1"
+                    :current-task="currentTask"
+                    :current-task-id="currentTaskId"
+                    :has-cache="hasDataForImage"
+                    :has-running-task="hasRunningTask"
+                    :uploaded-image-file="uploadedImageFile"
+                    :image-preview="imagePreview"
+                    :image-scale="imageScale"
+                    :image-translate-x="imageTranslateX"
+                    :image-translate-y="imageTranslateY"
+                    :select-task-loading="taskLoading"
+                    :show-deep-seek-loading="showDeepSeekLoading"
+                    :is-dragging="isDragging"
+                    :order-items="orderItems"
+                    :all-orders-are-draft="allOrdersAreDraft"
+                    :current-reading-text="getCurrentReadingText()"
+                    :current-reading-index="getCurrentReadingIndex()"
+                    @image-upload="handleImageUpload"
+                    @reset-transform="resetImageTransform"
+                    @zoom-in="zoomIn"
+                    @zoom-out="zoomOut"
+                    @image-load="handleImageLoad"
+                    @re-upload="reUpload"
+                    @show-fix-items="showFixItems"
+                    @start-drag="startDrag"
+                    @on-drag="onDrag"
+                    @end-drag="endDrag"
+                    @wheel="onWheel"
+                    @finish-task="onFinishTask"
+                    :tts-playing="imageTTSState.isTTSPlaying"
+                    :tts-loading="imageTTSState.isTTSLoading"
+                    :tts-stopped-index="imageTTSState.stoppedIndex"
+                    @read-order-list="() => handleReadOrderList('image')"
+                    @pause-reading="() => handlePauseReading('image')"
+                    @restart-reading="() => handleRestartReading('image')"
+                    @stop-reading="() => handleStopReading('image')"
+                    @edit-order="handleEditOrderFromPopup"
+                    @continue-reading="() => handleContinueReading('image')"
+                    @select-task="handleSelectImageTask"
+                    @add-new-image="handleImageAddNew"
+                    @close-new-image="handleImageCloseNewContent">
+                <template #order-list>
+                    <OrderList
+                            ref="imageOrderListRef"
+                            :order-items="orderItems"
+                            :dis-id="disUser?.nxDiuDistributerId"
+                            :source-type="'image'"
+                            @tts-state="(p) => onTTSState('image', p)"
+                            empty-message="请在上传图片并识别后，系统将自动解析订单"
+                            :adding-order-before-index="addingOrderBeforeIndex"
+                            :before-order-form="beforeOrderForm"
+                            :show-matched-goods="showMatchedGoods"
+                            :order-arr-index="orderArrIndex"
+                            :str-arr="strArr"
+                            :nx-arr="nxArr"
+                            :is-valid-order-quantity-and-standard="isValidOrderQuantityAndStandard"
+                            @cancel-add-order-before="cancelAddOrderBefore"
+                            @before-order-goods-name-input="handleBeforeOrderGoodsNameInput"
+                            @select-before-order-goods="selectBeforeOrderGoods"
+                            @close-before-order-search-results="closeBeforeOrderSearchResults"
+                            @download-goods-nx="downLoadGoodsNx"
+                            @before-order-quantity-input="handleBeforeOrderQuantityInput"
+                            @before-order-standard-input="handleBeforeOrderStandardInput"
+                            @before-order-remark-input="handleBeforeOrderRemarkInput"
+                            @save-before-order="handleSaveBeforeOrderImage"
+                            @save-new-goods-from-before-order="handleSaveNewGoodsFromBeforeOrder"
+                            @goods-name-input="handleOrderListGoodsNameInputImage"
+                            @goods-name-focus="handleOrderListGoodsNameFocusImage"
+                            @goods-name-blur="handleOrderListGoodsNameBlurImage"
+                            @toggle-matched-goods="toggleMatchedGoods"
+                            @close-all-matched-goods="closeAllMatchedGoods"
+                            @quantity-input="handleOrderListQuantityInputImage"
+                            @standard-change="handleOrderListStandardChangeImage"
+                            @update-order="handleOrderListUpdateOrderImage"
+                            @save-new-goods="handleOrderListSaveNewGoodsImage"
+                            @add-new-order-before="handleOrderListAddNewOrderBeforeImage"
+                            @delete-order="handleOrderListDeleteOrderImage"
+                            @remark-input="handleOrderListRemarkInputImage"
+                            @select-matched-goods="handleOrderListSelectMatchedGoodsImage"
+                            @close-str="closeStr"
+                            @select-search-result="handleOrderListSelectSearchResultImage"/>
+                </template>
+            </ImageUpload>
 
-                                            <!-- 商品搜索 -->
-                                            <div class="mb-2 position-relative">
-                                                <label class="form-label small mb-1"
-                                                       style="color: #856404;">商品名称</label>
-                                                <input
-                                                        type="text"
-                                                        class="form-control form-control-sm"
-                                                        v-model="beforeOrderForm.goodsName"
-                                                        @input="handleBeforeOrderGoodsNameInput"
-                                                        placeholder="搜索商品..."
-                                                        style="background-color: #fff;"
-                                                />
-                                                <!-- 搜索结果下拉框 -->
-                                                <div v-if="beforeOrderForm.showSearchResults && beforeOrderForm.searchResults.length > 0"
-                                                     class="border rounded mt-1 bg-white shadow-lg"
-                                                     style="max-height: 200px; overflow-y: auto; position: absolute; z-index: 1000; width: 100%;">
-                                                    <div v-for="(goods, idx) in beforeOrderForm.searchResults"
-                                                         :key="goods.nxDistributerGoodsId || idx"
-                                                         class="p-2 border-bottom"
-                                                         @click="selectBeforeOrderGoods(goods)"
-                                                         style="cursor: pointer;"
-                                                         :style="{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f8f9fa' }">
-                                                        <div class="d-flex justify-content-between align-items-center">
-                                                            <span>{{ goods.nxDgGoodsName }}</span>
-                                                            <span class="badge bg-secondary ms-2"
-                                                                  v-if="goods.nxDgGoodsStandardname">
-                                                                {{ goods.nxDgGoodsStandardname }}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
 
-                                            <!-- 已选商品显示 -->
-                                            <div v-if="beforeOrderForm.selectedGoods" class="mb-2 p-2 bg-light rounded">
-                                                <small class="text-muted">已选商品：</small>
-                                                <strong>{{ beforeOrderForm.selectedGoods.nxDgGoodsName }}</strong>
-                                                <span v-if="beforeOrderForm.selectedGoods.nxDgGoodsStandardname"
-                                                      class="ms-2 badge bg-info">
-                                                    {{ beforeOrderForm.selectedGoods.nxDgGoodsStandardname }}
-                                                </span>
-                                            </div>
+            <!-- Excel 粘贴区域（首次打开后保持挂载，避免每次切换都重建左侧 vxe-table） -->
+            <div v-if="uploadType === 'excel-paste' || excelPasteEverShown"
+                 v-show="uploadType === 'excel-paste'"
+                 style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
+            <ExcelPasteUpload
+                    ref="excelPasteUploadRef"
+                    :task-type="2"
+                    source="placeOrder"
+                    :dep-id="selectedSubDepartment || selectedAllCustomer"
+                    :current-task-id="currentTaskId"
+                    :current-task="currentTask"
+                    :select-task-loading="taskLoading"
+                    :table-data="excelPasteTableData"
+                    :has-table-data="hasExcelPasteTableData()"
+                    :excel-paste-order-items="orderItems"
+                    :excel-paste-has-cache="hasDataForExcelPaste"
+                    :excel-paste-save-count="excelPasteSaveCount"
+                    :show-deep-seek-loading="showDeepSeekLoading"
+                    :saving-order="savingOrder"
+                    :all-orders-are-draft="allOrdersAreDraft"
+                    :parse-excel-paste-data="parseExcelPasteData"
+                    @clear-table-data="clearExcelPasteTableData"
+                    @ai-recognise="handleExcelPasteAiRecognise"
+                    @ai-recognise-complete="handleExcelPasteAiRecogniseComplete"
+                    @direct-table-to-orders="handleDirectExcelPasteTableToOrders"
+                    @select-task="handleSelectExcelPasteTask"
+                    @add-new-content="handleExcelPasteAddNew"
+                    @close-new-content="handleExcelPasteCloseNewContent"
+                    @clear-order-items="clearExcelPasteOrderItems"
+                    @save-orders="saveExcelPasteOrders"
+                    @re-upload="reUpload"
+                    @finish-task="onFinishTask"
+                    @show-fix-items="showFixItems"
+                    @table-data-update="handleExcelPasteTableDataUpdate"
+                    @insert-row-above="handleExcelPasteInsertRowAbove"
+                    @delete-row="handleExcelPasteDeleteRow"
+                    @cell-click="handleExcelPasteCellClick"
+                    @edit-closed="handleExcelPasteEditClosed"
+                    :tts-playing="getTTSState('excelPaste').isTTSPlaying"
+                    :tts-loading="getTTSState('excelPaste').isTTSLoading"
+                    :tts-stopped-index="getTTSState('excelPaste').stoppedIndex"
+                    @read-order-list="() => handleReadOrderList('excelPaste')"
+                    @pause-reading="() => handlePauseReading('excelPaste')"
+                    @restart-reading="() => handleRestartReading('excelPaste')"
+                    @stop-reading="() => handleStopReading('excelPaste')"
+                    @continue-reading="() => handleContinueReading('excelPaste')">
+                <template #order-list>
+                    <!-- 草稿状态：使用 DraftOrderList（简化版，没有商品搜索） -->
+                    <DraftOrderList
+                            v-if="excelPasteSaveCount == null"
+                            :order-items="orderItems"
+                            :selected-order-index="draftSelectedOrderIndex"
+                            empty-message="请从 Excel 复制数据并粘贴后，点击'Ai解析订单'按钮"
+                            :adding-order-before-index="null"
+                            :before-order-form="{}"
+                            @goods-name-input="handleExcelPasteDraftGoodsNameInput"
+                            @quantity-input="handleExcelPasteDraftQuantityInput"
+                            @standard-change="handleExcelPasteDraftStandardChange"
+                            @delete-order="handleExcelPasteDraftDeleteOrder"
+                            @add-order-before="handleExcelPasteDraftAddOrderBefore"
+                            @add-remark="handleExcelPasteDraftAddRemark"
+                            @clear-remark="handleExcelPasteDraftClearRemark"
+                            @remark-input="handleExcelPasteDraftRemarkInput"/>
 
-                                            <!-- 数量、规格、备注 -->
-                                            <div class="row g-2 mb-2">
-                                                <div class="col-4">
-                                                    <label class="form-label small mb-1"
-                                                           style="color: #856404;">数量</label>
-                                                    <input
-                                                            type="number"
-                                                            class="form-control form-control-sm"
-                                                            v-model.number="beforeOrderForm.quantity"
-                                                            style="background-color: #fff;"
-                                                    />
-                                                </div>
-                                                <div class="col-4">
-                                                    <label class="form-label small mb-1"
-                                                           style="color: #856404;">规格</label>
-                                                    <input
-                                                            type="text"
-                                                            class="form-control form-control-sm"
-                                                            v-model="beforeOrderForm.standard"
-                                                            style="background-color: #fff;"
-                                                    />
-                                                </div>
-                                                <div class="col-4">
-                                                    <label class="form-label small mb-1"
-                                                           style="color: #856404;">备注</label>
-                                                    <input
-                                                            type="text"
-                                                            class="form-control form-control-sm"
-                                                            v-model="beforeOrderForm.remark"
-                                                            style="background-color: #fff;"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <!-- 操作按钮 -->
-                                            <div class="d-flex gap-2 justify-content-end">
-                                                <button class="btn btn-sm btn-secondary"
-                                                        @click="cancelAddOrderBefore">
-                                                    取消
-                                                </button>
-                                                <button class="btn btn-sm btn-primary"
-                                                        @click="saveBeforeOrder(item, orderIndex, uploadType || 'excel')"
-                                                        :disabled="!beforeOrderForm.selectedGoods || !beforeOrderForm.quantity || !beforeOrderForm.standard || !beforeOrderForm.standard.toString().trim()">
-                                                    保存订单
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <!-- 第一行：序号、商品名称、数量、规格、状态 -->
-                                        <div class="d-flex align-items-center gap-2 mb-1" style="min-height: 32px;">
-                                            <!-- 序号 -->
-                                            <div style="width: 50px; flex-shrink: 0;" class="text-center fw-bold">
-                                                {{ orderIndex + 1 }}
-                                            </div>
-                                            <!-- 商品名称输入框 -->
-                                            <div style="flex: 2; min-width: 0; display: flex; align-items: center; gap: 4px;"
-                                                 class="position-relative">
-                                                <input
-                                                        type="text"
-                                                        class="form-control form-control-sm"
-                                                        v-model="item.nxDoGoodsName"
-                                                        @input="handleGoodsNameInput(item, orderIndex, 'excel')"
-                                                        @focus="handleGoodsNameFocus(item, orderIndex, 'excel')"
-                                                        @blur="handleGoodsNameBlur(item, orderIndex, 'excel')"
-                                                        :disabled="item.nxDoStatus === 0"
-                                                        placeholder="请输入商品名称"
-                                                        style="font-size: 14px; background-color: transparent; flex: 1;"
-                                                />
-                                                <!-- 展开/收起匹配商品列表的图标 -->
-                                                <button
-                                                        v-if="item.nxDoStatus !== 0 && isValidOrderQuantityAndStandard(item) && item.nxDistributerGoodsEntityList && item.nxDistributerGoodsEntityList.length > 0"
-                                                        class="btn btn-link btn-sm p-1"
-                                                        @click="toggleMatchedGoods(orderIndex)"
-                                                        :title="showMatchedGoods[orderIndex] ? '收起匹配商品' : '展开匹配商品'"
-                                                        style="flex-shrink: 0; text-decoration: none; color: #6c757d; background-color: #f0f0f0; border-radius: 4px;"
-                                                >
-                                                    <span v-if="showMatchedGoods[orderIndex]">▼</span>
-                                                    <span v-else>▶</span>
-                                                </button>
-
-                                            </div>
-                                            <!-- 数量 -->
-                                            <div style="width: 50px; flex-shrink: 0;">
-                                                <input
-                                                        type="number"
-                                                        class="form-control form-control-sm text-center"
-                                                        v-model.number="item.nxDoQuantity"
-                                                        @input="handleQuantityInput(item, orderIndex, 'excel')"
-                                                        :disabled="item.nxDoStatus === 0"
-                                                        placeholder="数量"
-                                                        style="background-color: transparent;"
-                                                />
-                                            </div>
-                                            <!-- 规格 -->
-                                            <div style="width: 50px; flex-shrink: 0;">
-                                                <input
-                                                        type="text"
-                                                        class="form-control form-control-sm text-center"
-                                                        v-model="item.nxDoStandard"
-                                                        @input="handleStandardChange(item, orderIndex, 'excel')"
-                                                        :disabled="item.nxDoStatus === 0"
-                                                        placeholder="规格"
-                                                        style="background-color: transparent;"
-                                                />
-                                            </div>
-                                            <!-- 状态 -->
-                                            <div style="width: 100px; flex-shrink: 0;"
-                                                 class="d-flex align-items-center justify-content-center gap-1">
-                                                <button v-if="item.nxDoStatus === 0"
-                                                        class="btn btn-sm"
-                                                        style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
-                                                        @click="handleUpdateOrder(item, orderIndex, 'excel')"
-                                                        title="修改"
-                                                        @mouseenter="$event.target.style.color='#495057'"
-                                                        @mouseleave="$event.target.style.color='#6c757d'">
-                                                    ✏️
-                                                </button>
-                                                <template v-else-if="item.nxDoStatus === -2">
-                                                    <button class="btn btn-sm"
-                                                            :disabled="!isValidOrderQuantityAndStandard(item)"
-                                                            :style="!isValidOrderQuantityAndStandard(item) ? 'font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #adb5bd; cursor: not-allowed;' : 'font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;'"
-                                                            @click="handleSaveNewGoods(item, orderIndex, 'excel')"
-                                                            :title="!isValidOrderQuantityAndStandard(item) ? '请填写订单数量和规格' : '保存新商品'"
-                                                            @mouseenter="!isValidOrderQuantityAndStandard(item) ? null : $event.target.style.color='#495057'"
-                                                            @mouseleave="!isValidOrderQuantityAndStandard(item) ? null : $event.target.style.color='#6c757d'">
-                                                        {{ !isValidOrderQuantityAndStandard(item) ? '⚠️' : '💾' }}
-                                                    </button>
-                                                </template>
-
-                                                <button class="btn btn-sm"
-                                                        style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
-                                                        @click="handleAddNewOrderBefore(item, orderIndex, 'excel')"
-                                                        title="之前添加订单"
-                                                        @mouseenter="$event.target.style.color='#495057'"
-                                                        @mouseleave="$event.target.style.color='#6c757d'">
-                                                    ⬆️
-                                                </button>
-                                                <button class="btn btn-sm"
-                                                        style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
-                                                        @click="handleDeleteOrderFromExcel(item, orderIndex, 'excel')"
-                                                        title="删除"
-                                                        @mouseenter="$event.target.style.color='#dc3545'"
-                                                        @mouseleave="$event.target.style.color='#6c757d'">
-                                                    🗑️
-                                                </button>
-
-                                            </div>
-                                        </div>
-                                        <!-- 第二行：备注（如果有） -->
-                                        <div v-if="item.nxDoRemark" class="d-flex align-items-center gap-2 mt-1 ps-5">
-                                            <span class="text-muted small">备注:</span>
-                                            <input
-                                                    type="text"
-                                                    class="form-control form-control-sm"
-                                                    v-model="item.nxDoRemark"
-                                                    @input="handleRemarkInput(item, orderIndex, 'excel')"
-                                                    :disabled="item.nxDoStatus === 0"
-                                                    placeholder="备注"
-                                                    maxlength="15"
-                                                    style="font-size: 12px; background-color: transparent; width: 200px; flex-shrink: 0;"
-                                            />
-                                        </div>
-
-                                        <!-- 匹配的商品列表（可折叠） -->
-                                        <div v-if="item.nxDistributerGoodsEntityList && item.nxDistributerGoodsEntityList.length > 0 && showMatchedGoods[orderIndex] && !(orderArrIndex === orderIndex && (strArr.length > 0 || nxArr.length > 0))"
-                                             class="matched-goods-list mt-2"
-                                             style="margin-left: -0.5rem; margin-right: -0.5rem; width: calc(100% + 1rem);">
-                                            <div class="border rounded p-2 bg-light">
-                                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                                    <small class="text-muted fw-bold">已匹配商品列表</small>
-                                                    <button
-                                                            class="btn btn-sm btn-link p-0 text-muted"
-                                                            @click="toggleMatchedGoods(orderIndex)"
-                                                            style="font-size: 12px; text-decoration: none;"
-                                                            title="收起">
-                                                        ✕
-                                                    </button>
-                                                </div>
-                                                <!-- 配送商商品 -->
-                                                <div class="mb-2">
-                                                    <div class="text-muted small fw-bold mb-2">配送商商品 ({{
-                                                        item.nxDistributerGoodsEntityList.length }})
-                                                    </div>
-                                                    <div
-                                                            v-for="(matchedGoods, goodsIndex) in item.nxDistributerGoodsEntityList"
-                                                            :key="goodsIndex"
-                                                            class="matched-goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                            style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
-                                                        <!-- 商品信息 -->
-                                                        <div class="flex-grow-1" style="min-width: 0;">
-                                                            <span class="text-muted fw-bold me-2" style="color: #666;">{{ goodsIndex + 1 }}.</span>
-                                                            <span v-if="matchedGoods.nxDgGoodsBrand && matchedGoods.nxDgGoodsBrand !== 'null'"
-                                                                  class="badge bg-warning text-dark me-1">
-                            {{ matchedGoods.nxDgGoodsBrand }}
-                          </span>
-                                                            <span class="text-dark"
-                                                                  style="color: #333; font-weight: 500;">{{ matchedGoods.nxDgGoodsName }}</span>
-                                                            <span class="text-muted small ms-1" style="color: #666;">
-                            ({{ matchedGoods.nxDgGoodsStandardWeight && matchedGoods.nxDgGoodsStandardWeight !== 'null'
-                              ? matchedGoods.nxDgGoodsStandardWeight + '/' + matchedGoods.nxDgGoodsStandardname
-                              : matchedGoods.nxDgGoodsStandardname }})
-                          </span>
-                                                        </div>
-                                                        <!-- 选择按钮 -->
-                                                        <button
-                                                                class="btn btn-secondary btn-sm"
-                                                                @click.stop="selectMatchedGoods(item, orderIndex, goodsIndex, 'excel')"
-                                                                style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; background-color: #6c757d; border-color: #6c757d; color: #fff; margin-left: 8px;">
-                                                            选择
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- 商品搜索下拉框（相对于订单项定位，覆盖整个订单列表宽度） -->
-                                        <div
-                                                v-if="orderArrIndex === orderIndex && item.nxDoStatus !== 0 && (strArr.length > 0 || nxArr.length > 0)"
-                                                class="goods-search-dropdown position-absolute bg-white border rounded shadow-lg p-2"
-                                                style="top: 100%; left: -0.5rem; right: -0.5rem; width: calc(100% + 1rem); z-index: 1000; max-height: 400px; overflow-y: auto; margin-top: 4px;"
-                                        >
-
-                                            <!-- 搜索标题 -->
-                                            <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
-                                                <span class="text-muted small">搜索{{ strArr.length + nxArr.length }}个商品:</span>
-                                                <button class="btn btn-sm btn-link p-0" @click="closeStr"
-                                                        style="font-size: 12px;">✕
-                                                </button>
-                                            </div>
-
-                                            <!-- 配送商商品列表 -->
-                                            <div v-if="strArr.length > 0" class="mb-2">
-                                                <div class="text-muted small fw-bold mb-2">配送商商品 ({{ strArr.length }})
-                                                </div>
-                                                <div
-                                                        v-for="(goods, goodsIndex) in strArr"
-                                                        :key="goods.nxDistributerGoodsId || goodsIndex"
-                                                        class="goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                        @click.stop="selectSearchResult(goods, orderIndex, currentSourceType || uploadType || 'excel')"
-                                                        style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
-                                                    <!-- 商品信息 -->
-                                                    <div class="flex-grow-1" style="min-width: 0;">
-                                                        <span class="text-muted fw-bold me-2" style="color: #666;">{{ goodsIndex + 1 }}.</span>
-                                                        <span v-if="goods.nxDgGoodsBrand && goods.nxDgGoodsBrand !== 'null'"
-                                                              class="badge bg-warning text-dark me-1">
-                              {{ goods.nxDgGoodsBrand }}
-                            </span>
-                                                        <span class="text-dark">{{ goods.nxDgGoodsName }}</span>
-                                                        <span class="text-muted small ms-1">
-                              ({{ goods.nxDgGoodsStandardWeight && goods.nxDgGoodsStandardWeight !== 'null'
-                                ? goods.nxDgGoodsStandardWeight + '/' + goods.nxDgGoodsStandardname
-                                : goods.nxDgGoodsStandardname }})
-                            </span>
-                                                    </div>
-                                                    <!-- 选择按钮 -->
-                                                    <button
-                                                            class="btn btn-secondary btn-sm"
-                                                            @click.stop="selectSearchResult(goods, orderIndex, currentSourceType || uploadType || 'excel')"
-                                                            :class="{ 'btn-warning': !goods.nxDgNxGoodsId }"
-                                                            style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; background-color: #6c757d; border-color: #6c757d; color: #fff; margin-left: 8px;">
-                                                        {{ goods.nxDgNxGoodsId ? '选择' : '临时' }}
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            <!-- 系统商品列表 -->
-                                            <div v-if="nxArr.length > 0" class="mb-2">
-                                                <div class="text-muted small fw-bold mb-2">系统商品 ({{ nxArr.length }})
-                                                </div>
-                                                <div
-                                                        v-for="(goods, goodsIndex) in nxArr"
-                                                        :key="goods.nxGoodsId || goodsIndex"
-                                                        class="goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                        style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
-                                                    <!-- 商品信息 -->
-                                                    <div class="flex-grow-1" style="min-width: 0;">
-                                                        <span class="text-muted fw-bold me-2" style="color: #666;">{{ strArr.length + goodsIndex + 1 }}.</span>
-                                                        <span v-if="goods.nxGoodsBrand && goods.nxGoodsBrand !== 'null'"
-                                                              class="badge bg-warning text-dark me-1">
-                              {{ goods.nxGoodsBrand }}
-                            </span>
-                                                        <span class="text-dark">{{ goods.nxGoodsName }}</span>
-                                                        <span class="text-muted small ms-1">
-                              ({{ goods.nxGoodsStandardWeight && goods.nxGoodsStandardWeight !== 'null'
-                                ? goods.nxGoodsStandardWeight + '/' + goods.nxGoodsStandardname
-                                : goods.nxGoodsStandardname }})
-                            </span>
-                                                    </div>
-                                                    <!-- 下载按钮 -->
-                                                    <button
-                                                            class="btn btn-info btn-sm"
-                                                            @click.stop="downLoadGoodsNx(goods, orderIndex)"
-                                                            style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; margin-left: 8px;"
-                                                            title="下载商品">
-                                                        ⬇️
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                    <!-- 已保存状态：使用 OrderList -->
+                    <OrderList
+                            v-else
+                            ref="excelPasteOrderListRef"
+                            :order-items="orderItems"
+                            :dis-id="disUser?.nxDiuDistributerId"
+                            @tts-state="(p) => onTTSState('excelPaste', p)"
+                            empty-message="请从 Excel 复制数据并粘贴后，点击'Ai解析订单'按钮"
+                            :adding-order-before-index="addingOrderBeforeIndex"
+                            :before-order-form="beforeOrderForm"
+                            :show-matched-goods="showMatchedGoods"
+                            :order-arr-index="orderArrIndex"
+                            :str-arr="strArr"
+                            :nx-arr="nxArr"
+                            :is-valid-order-quantity-and-standard="isValidOrderQuantityAndStandard"
+                            @cancel-add-order-before="cancelAddOrderBefore"
+                            @before-order-goods-name-input="handleBeforeOrderGoodsNameInput"
+                            @select-before-order-goods="selectBeforeOrderGoods"
+                            @close-before-order-search-results="closeBeforeOrderSearchResults"
+                            @download-goods-nx="downLoadGoodsNx"
+                            @before-order-quantity-input="handleBeforeOrderQuantityInput"
+                            @before-order-standard-input="handleBeforeOrderStandardInput"
+                            @before-order-remark-input="handleBeforeOrderRemarkInput"
+                            @save-before-order="handleSaveBeforeOrderExcelPaste"
+                            @goods-name-input="handleOrderListGoodsNameInputExcelPaste"
+                            @goods-name-focus="handleOrderListGoodsNameFocusExcelPaste"
+                            @goods-name-blur="handleOrderListGoodsNameBlurExcelPaste"
+                            @toggle-matched-goods="toggleMatchedGoods"
+                            @close-all-matched-goods="closeAllMatchedGoods"
+                            @quantity-input="handleOrderListQuantityInputExcelPaste"
+                            @standard-change="handleOrderListStandardChangeExcelPaste"
+                            @update-order="handleOrderListUpdateOrderExcelPaste"
+                            @save-new-goods="handleOrderListSaveNewGoodsExcelPaste"
+                            @add-new-order-before="handleOrderListAddNewOrderBeforeExcelPaste"
+                            @delete-order="handleOrderListDeleteOrderExcelPaste"
+                            @remark-input="handleOrderListRemarkInputExcelPaste"
+                            @select-matched-goods="handleOrderListSelectMatchedGoodsExcelPaste"
+                            @close-str="closeStr"
+                            @select-search-result="handleOrderListSelectSearchResultExcelPaste"/>
+                </template>
+            </ExcelPasteUpload>
             </div>
+            <!-- Excel上传模式 -->
+            <ExcelUpload
+                    v-if="uploadType === 'excel'"
+                    ref="excelUploadRef"
+                    :has-cache="hasDataForImage"
+                    :has-running-task="hasRunningTask"
+                    :uploaded-excel-file="uploadedExcelFile"
+                    :uploaded-excel-preview="uploadedExcelPreview"
+                    :order-items="orderItems"
+                    :all-orders-are-draft="allOrdersAreDraft"
+                    @excel-upload="handleExcelUpload"
+                    @change-sheet="changeUploadedExcelSheet"
+                    @excel-preview-loaded="handleExcelPreviewLoaded"
+                    @re-upload="reUpload"
+                    @show-fix-items="showFixItems"
+                    :tts-playing="getTTSState('excel').isTTSPlaying"
+                    :tts-loading="getTTSState('excel').isTTSLoading"
+                    :tts-stopped-index="getTTSState('excel').stoppedIndex"
+                    @read-order-list="() => handleReadOrderList('excel')"
+                    @pause-reading="() => handlePauseReading('excel')"
+                    @restart-reading="() => handleRestartReading('excel')"
+                    @stop-reading="() => handleStopReading('excel')"
+                    @continue-reading="() => handleContinueReading('excel')">
+                <template #order-list>
+                    <OrderList
+                            ref="excelOrderListRef"
+                            :order-items="orderItems"
+                            :dis-id="disUser?.nxDiuDistributerId"
+                            @tts-state="(p) => onTTSState('excel', p)"
+                            empty-message="请在上传Excel文件后，系统将自动解析订单"
+                            :adding-order-before-index="addingOrderBeforeIndex"
+                            :before-order-form="beforeOrderForm"
+                            :show-matched-goods="showMatchedGoods"
+                            :order-arr-index="orderArrIndex"
+                            :str-arr="strArr"
+                            :nx-arr="nxArr"
+                            :is-valid-order-quantity-and-standard="isValidOrderQuantityAndStandard"
+                            @cancel-add-order-before="cancelAddOrderBefore"
+                            @before-order-goods-name-input="handleBeforeOrderGoodsNameInput"
+                            @select-before-order-goods="selectBeforeOrderGoods"
+                            @close-before-order-search-results="closeBeforeOrderSearchResults"
+                            @download-goods-nx="downLoadGoodsNx"
+                            @before-order-quantity-input="handleBeforeOrderQuantityInput"
+                            @before-order-standard-input="handleBeforeOrderStandardInput"
+                            @before-order-remark-input="handleBeforeOrderRemarkInput"
+                            @save-before-order="handleSaveBeforeOrder"
+                            @save-new-goods-from-before-order="handleSaveNewGoodsFromBeforeOrder"
+                            @goods-name-input="handleOrderListGoodsNameInput"
+                            @goods-name-focus="handleOrderListGoodsNameFocus"
+                            @goods-name-blur="handleOrderListGoodsNameBlur"
+                            @toggle-matched-goods="toggleMatchedGoods"
+                            @close-all-matched-goods="closeAllMatchedGoods"
+                            @quantity-input="handleOrderListQuantityInput"
+                            @standard-change="handleOrderListStandardChange"
+                            @update-order="handleOrderListUpdateOrder"
+                            @save-new-goods="handleOrderListSaveNewGoods"
+                            @add-new-order-before="handleOrderListAddNewOrderBefore"
+                            @delete-order="handleOrderListDeleteOrder"
+                            @remark-input="handleOrderListRemarkInput"
+                            @select-matched-goods="handleOrderListSelectMatchedGoods"
+                            @close-str="closeStr"
+                            @select-search-result="handleOrderListSelectSearchResult"/>
+                </template>
+            </ExcelUpload>
+
+            <!-- Auto 模式 -->
+            <AutoUpload
+                    v-if="uploadType === 'auto'"
+                    :has-cache="hasDataForImage"
+                    :customer-folder-path="customerFolderPath"
+                    :scanning-files="scanningFiles"
+                    :processing-files="processingFiles"
+                    :auto-process-files="autoProcessFiles"
+                    :pending-files="pendingFiles"
+                    :processed-files="processedFiles"
+                    :active-processed-file-tab="activeProcessedFileTab"
+                    :auto-process-progress="autoProcessProgress"
+                    :current-preview-image="currentPreviewImage"
+                    :current-preview-image-src="currentPreviewImageSrc"
+                    :image-translate-x="imageTranslateX"
+                    :image-translate-y="imageTranslateY"
+                    :image-scale="imageScale"
+                    :is-dragging="isDragging"
+                    :auto-process-excel-previews="autoProcessExcelPreviews"
+                    :filtered-order-items="filteredOrderItems"
+                    :all-orders-are-draft="allOrdersAreDraft"
+                    @scan-folder-files="scanFolderFiles"
+                    @start-auto-process="startAutoProcess"
+                    @active-processed-file-tab-change="handleActiveProcessedFileTabChange"
+                    @start-drag="startDrag"
+                    @wheel="onWheel"
+                    @reset-transform="resetImageTransform"
+                    @zoom-in="zoomIn"
+                    @zoom-out="zoomOut"
+                    @image-load="handleImageLoadAuto"
+                    @change-excel-sheet="changeExcelSheet"
+                    @open-file="openFile"
+                    @re-upload="reUpload"
+                    @show-fix-items="showFixItems">
+                <template #order-list>
+                    <OrderList
+                            ref="autoOrderListRef"
+                            :order-items="filteredOrderItems"
+                            :dis-id="disUser?.nxDiuDistributerId"
+                            empty-message="请处理文件夹中的文件后，系统将自动解析订单"
+                            :adding-order-before-index="addingOrderBeforeIndex"
+                            :before-order-form="beforeOrderForm"
+                            :show-matched-goods="showMatchedGoods"
+                            :order-arr-index="orderArrIndex"
+                            :str-arr="strArr"
+                            :nx-arr="nxArr"
+                            :is-valid-order-quantity-and-standard="isValidOrderQuantityAndStandard"
+                            @cancel-add-order-before="cancelAddOrderBefore"
+                            @before-order-goods-name-input="handleBeforeOrderGoodsNameInput"
+                            @select-before-order-goods="selectBeforeOrderGoods"
+                            @close-before-order-search-results="closeBeforeOrderSearchResults"
+                            @download-goods-nx="downLoadGoodsNx"
+                            @before-order-quantity-input="handleBeforeOrderQuantityInput"
+                            @before-order-standard-input="handleBeforeOrderStandardInput"
+                            @before-order-remark-input="handleBeforeOrderRemarkInput"
+                            @save-before-order="handleSaveBeforeOrderAuto"
+                            @goods-name-input="handleOrderListGoodsNameInputAuto"
+                            @goods-name-focus="handleOrderListGoodsNameFocusAuto"
+                            @goods-name-blur="handleOrderListGoodsNameBlurAuto"
+                            @toggle-matched-goods="toggleMatchedGoods"
+                            @close-all-matched-goods="closeAllMatchedGoods"
+                            @quantity-input="handleOrderListQuantityInputAuto"
+                            @standard-change="handleOrderListStandardChangeAuto"
+                            @update-order="handleOrderListUpdateOrderAuto"
+                            @save-new-goods="handleOrderListSaveNewGoodsAuto"
+                            @add-new-order-before="handleOrderListAddNewOrderBeforeAuto"
+                            @delete-order="handleOrderListDeleteOrderAuto"
+                            @remark-input="handleOrderListRemarkInputAuto"
+                            @select-matched-goods="handleOrderListSelectMatchedGoodsAuto"
+                            @close-str="closeStr"
+                            @select-search-result="handleOrderListSelectSearchResultAuto"/>
+                </template>
+            </AutoUpload>
+
+
+        </div>
 
 
-            <!-- 图片上传区域 - 参考Excel上传区域设计 -->
-            <div v-if="uploadType === 'image'" class="upload-section"
-                 style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
-                <div class="row g-3" style="flex: 1; min-height: 0; overflow: hidden; margin: 0; align-items: stretch;">
-                    <!-- 左侧：图片上传和预览 -->
-                    <div class="col-md-6">
-                        <div class="card h-100">
-                            <div class="card-body p-1" style="display: flex; flex-direction: column; min-height: 0;">
-                                <!-- 图片选择功能（有缓存时隐藏，避免重复操作） -->
-                                <div v-if="!hasCache" style="flex-shrink: 0;">
-                                    <input
-                                            type="file"
-                                            ref="imageFileInput"
-                                            accept="image/*"
-                                            @change="handleImageUpload"
-                                            class="form-control mb-2"
-                                    />
-                                    <small class="text-muted">支持JPG、PNG等图片格式，系统将自动识别图片中的订单信息</small>
-                                </div>
-
-                                <div v-if="uploadedImageFile" class=" flex-grow-1"
-                                     style="display: flex; flex-direction: column; min-height: 0;">
-                                    <div class="p-2 bg-light rounded mb-2" style="flex-shrink: 0;">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <div>
-                                                <div class="fw-bold">🖼️ {{ uploadedImageFile.name }}</div>
-                                                <div class="small text-muted">大小: {{
-                                                    formatFileSize(uploadedImageFile.size)
-                                                    }}
-                                                </div>
-                                            </div>
-
-                                        </div>
-                                    </div>
-
-                                    <!-- 图片预览 -->
-                                    <div v-if="imagePreview" class="border rounded p-0 position-relative flex-grow-1"
-                                         style="min-height: 0; overflow: hidden; cursor: move; background-color: #f5f5f5; display: flex; align-items: start; justify-content: start;"
-                                         @mousedown="startDrag"
-                                         @mousemove="onDrag"
-                                         @mouseup="endDrag"
-                                         @mouseleave="endDrag"
-                                         @wheel.prevent="onWheel">
-                                        <div class="position-absolute top-0 end-0 m-2 d-flex gap-1"
-                                             style="z-index: 1000; background-color: rgba(255, 255, 255, 0.9); padding: 4px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                                            <button class="btn btn-sm btn-outline-secondary"
-                                                    @click.stop="resetImageTransform"
-                                                    @mousedown.stop
-                                                    title="重置"
-                                                    style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
-                                                🔄
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-secondary"
-                                                    @click.stop="zoomIn"
-                                                    @mousedown.stop
-                                                    title="放大"
-                                                    style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
-                                                ➕
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-secondary"
-                                                    @click.stop="zoomOut"
-                                                    @mousedown.stop
-                                                    title="缩小"
-                                                    style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
-                                                ➖
-                                            </button>
-                                        </div>
-                                        <div class="d-flex align-items-start justify-content-start"
-                                             style="width: 100%; height: 100%; transform-origin: top left; position: relative;">
-                                            <img :src="imagePreview" alt="预览" class="img-fluid"
-                                                 ref="previewImage"
-                                                 :style="{
-                           transform: `translate(${imageTranslateX}px, ${imageTranslateY}px) scale(${imageScale})`,
-                           transition: isDragging ? 'none' : 'transform 0.1s',
-                           cursor: isDragging ? 'grabbing' : 'grab',
-                           maxWidth: '100%',
-                           width: 'auto',
-                           height: 'auto',
-                           objectFit: 'contain',
-                           display: 'block'
-                         }"
-                                                 @load="handleImageLoad($event, 'image')"
-                                                 @dragstart.prevent>
-                                        </div>
-                                    </div>
-
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 右侧：订单列表（图片模式）- 始终保留空间 -->
-                    <div class="col-md-6 order-items-section"
-                         style="display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;">
-                        <div class="card h-100 p-3"
-                             style="display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
-                            <div class="d-flex justify-content-between align-items-center mb-3" style="flex-shrink: 0;">
-                                <h6 class="mb-0">转换订单 ({{ orderItems.length }} 项)</h6>
-                                <div class="d-flex gap-2">
-                                    <button
-                                            v-if="hasCache && allOrdersAreDraft"
-                                            class="btn btn-success btn-sm"
-                                            @click="clearSave">
-                                        完成下单
-                                    </button>
-                                    <button
-                                            v-if="hasCache"
-                                            class="btn btn-danger btn-sm"
-                                            @click="reUpload">
-                                        重新上传
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- 订单列表内容（图片模式） -->
-                            <div class="order-list-container flex-grow-1"
-                                 style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0;">
-                                <div v-if="orderItems.length === 0" class="text-center text-muted p-4">
-                                    <div class="mb-2">📋 暂无订单</div>
-                                    <small>请在上传图片并识别后，系统将自动解析订单</small>
-                                </div>
-                                <!-- 表头 -->
-                                <div v-if="orderItems.length > 0"
-                                     class="table-header-fixed bg-light border-bottom p-1 d-flex align-items-center fw-bold small"
-                                     style="position: sticky; top: 0; z-index: 10;">
-                                    <div style="width: 50px; flex-shrink: 0;" class="text-center table-cell">序号</div>
-                                    <div style="flex: 2; min-width: 0;" class="table-cell">商品名称</div>
-                                    <div style="width: 50px; flex-shrink: 0;" class="text-center table-cell">数量</div>
-                                    <div style="width: 50px; flex-shrink: 0;" class="text-center table-cell">规格</div>
-                                    <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">状态</div>
-                                </div>
-                                <!-- 订单列表 -->
-                                <div style="padding: 0.5rem;">
-                                    <div
-                                            v-for="(item, orderIndex) in orderItems"
-                                            :key="orderIndex"
-                                            class="order-item-card mb-1 p-1 bg-white rounded border-bottom"
-                                            style="position: relative;">
-
-                                        <!-- 之前添加新订单的商品选择面板 -->
-                                        <div v-if="addingOrderBeforeIndex === orderIndex"
-                                             class="mb-3 p-3 border rounded"
-                                             style="background-color: #fff3cd; border-color: #ffc107;">
-                                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                                <h6 class="mb-0" style="color: #856404;">在之前添加新订单</h6>
-                                                <button class="btn btn-sm btn-link p-0"
-                                                        @click="cancelAddOrderBefore"
-                                                        style="font-size: 14px; color: #856404;">✕
-                                                </button>
-                                            </div>
-
-                                            <!-- 商品搜索 -->
-                                            <div class="mb-2 position-relative">
-                                                <label class="form-label small mb-1"
-                                                       style="color: #856404;">商品名称</label>
-                                                <input
-                                                        type="text"
-                                                        class="form-control form-control-sm"
-                                                        v-model="beforeOrderForm.goodsName"
-                                                        @input="handleBeforeOrderGoodsNameInput"
-                                                        placeholder="搜索商品..."
-                                                        style="background-color: #fff;"
-                                                />
-                                                <!-- 搜索结果下拉框 -->
-                                                <div v-if="beforeOrderForm.showSearchResults && beforeOrderForm.searchResults.length > 0"
-                                                     class="border rounded mt-1 bg-white shadow-lg"
-                                                     style="max-height: 200px; overflow-y: auto; position: absolute; z-index: 1000; width: 100%;">
-                                                    <div v-for="(goods, idx) in beforeOrderForm.searchResults"
-                                                         :key="goods.nxDistributerGoodsId || idx"
-                                                         class="p-2 border-bottom"
-                                                         @click="selectBeforeOrderGoods(goods)"
-                                                         style="cursor: pointer;"
-                                                         :style="{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f8f9fa' }">
-                                                        <div class="d-flex justify-content-between align-items-center">
-                                                            <span>{{ goods.nxDgGoodsName }}</span>
-                                                            <span class="badge bg-secondary ms-2"
-                                                                  v-if="goods.nxDgGoodsStandardname">
-                                                                {{ goods.nxDgGoodsStandardname }}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- 已选商品显示 -->
-                                            <div v-if="beforeOrderForm.selectedGoods" class="mb-2 p-2 bg-light rounded">
-                                                <small class="text-muted">已选商品：</small>
-                                                <strong>{{ beforeOrderForm.selectedGoods.nxDgGoodsName }}</strong>
-                                                <span v-if="beforeOrderForm.selectedGoods.nxDgGoodsStandardname"
-                                                      class="ms-2 badge bg-info">
-                                                    {{ beforeOrderForm.selectedGoods.nxDgGoodsStandardname }}
-                                                </span>
-                                            </div>
-
-                                            <!-- 数量、规格、备注 -->
-                                            <div class="row g-2 mb-2">
-                                                <div class="col-4">
-                                                    <label class="form-label small mb-1"
-                                                           style="color: #856404;">数量</label>
-                                                    <input
-                                                            type="number"
-                                                            class="form-control form-control-sm"
-                                                            v-model.number="beforeOrderForm.quantity"
-                                                            style="background-color: #fff;"
-                                                    />
-                                                </div>
-                                                <div class="col-4">
-                                                    <label class="form-label small mb-1"
-                                                           style="color: #856404;">规格</label>
-                                                    <input
-                                                            type="text"
-                                                            class="form-control form-control-sm"
-                                                            v-model="beforeOrderForm.standard"
-                                                            style="background-color: #fff;"
-                                                    />
-                                                </div>
-                                                <div class="col-4">
-                                                    <label class="form-label small mb-1"
-                                                           style="color: #856404;">备注</label>
-                                                    <input
-                                                            type="text"
-                                                            class="form-control form-control-sm"
-                                                            v-model="beforeOrderForm.remark"
-                                                            style="background-color: #fff;"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <!-- 操作按钮 -->
-                                            <div class="d-flex gap-2 justify-content-end">
-                                                <button class="btn btn-sm btn-secondary"
-                                                        @click="cancelAddOrderBefore">
-                                                    取消
-                                                </button>
-                                                <button class="btn btn-sm btn-primary"
-                                                        @click="saveBeforeOrder(item, orderIndex, uploadType || 'excel')"
-                                                        :disabled="!beforeOrderForm.selectedGoods || !beforeOrderForm.quantity || !beforeOrderForm.standard || !beforeOrderForm.standard.toString().trim()">
-                                                    保存订单
-                                                </button>
-                                            </div>
-                                        </div>
-
-
-                                        <!-- 第一行：序号、商品名称、数量、规格、状态 -->
-                                        <div class="d-flex align-items-center gap-2 mb-1" style="min-height: 32px;">
-                                            <!-- 序号 -->
-                                            <div style="width: 50px; flex-shrink: 0;" class="text-center fw-bold">
-                                                {{ orderIndex + 1 }}
-                                            </div>
-                                            <!-- 商品名称（可编辑） -->
-                                            <div style="flex: 2; min-width: 0; display: flex; align-items: center; gap: 4px;"
-                                                 class="position-relative">
-                                                <input
-                                                        type="text"
-                                                        v-model="item.nxDoGoodsName"
-                                                        @input="handleGoodsNameInput(item, orderIndex, 'image')"
-                                                        @focus="handleGoodsNameFocus(item, orderIndex, 'image')"
-                                                        @blur="handleGoodsNameBlur(item, orderIndex, 'image')"
-                                                        class="form-control form-control-sm"
-                                                        :disabled="item.nxDoStatus === 0 || !isValidOrderQuantityAndStandard(item)"
-                                                        :title="!isValidOrderQuantityAndStandard(item) ? '请先填写数量和规格' : ''"
-                                                        placeholder="请输入商品名称"
-                                                        style="font-size: 14px; background-color: transparent; flex: 1;"
-                                                />
-                                                <!-- 显示已匹配商品列表的图标 -->
-                                                <button
-                                                        v-if="item.nxDoStatus !== 0 && isValidOrderQuantityAndStandard(item) && (item.nxDistributerGoodsEntityList && item.nxDistributerGoodsEntityList.length > 0 || item.nxGoodsEntities && item.nxGoodsEntities.length > 0)"
-                                                        class="btn btn-link btn-sm p-1"
-                                                        @click="toggleMatchedGoods(orderIndex)"
-                                                        :title="showMatchedGoods[orderIndex] ? '隐藏已匹配商品' : '显示已匹配商品'"
-                                                        style="flex-shrink: 0; text-decoration: none; color: #6c757d; background-color: #f0f0f0; border-radius: 4px;"
-                                                >
-                                                    <span v-if="showMatchedGoods[orderIndex]">▼</span>
-                                                    <span v-else>▶</span>
-                                                </button>
-                                            </div>
-                                            <!-- 数量 -->
-                                            <div style="width: 50px; flex-shrink: 0;">
-                                                <input
-                                                        type="number"
-                                                        class="form-control form-control-sm text-center"
-                                                        v-model.number="item.nxDoQuantity"
-                                                        @input="handleQuantityInput(item, orderIndex, 'image')"
-                                                        :disabled="item.nxDoStatus === 0"
-                                                        placeholder="数量"
-                                                        style="background-color: transparent;"
-                                                />
-                                            </div>
-                                            <!-- 规格 -->
-                                            <div style="width: 50px; flex-shrink: 0;">
-                                                <input
-                                                        type="text"
-                                                        class="form-control form-control-sm text-center"
-                                                        v-model="item.nxDoStandard"
-                                                        @input="handleStandardChange(item, orderIndex, 'image')"
-                                                        :disabled="item.nxDoStatus === 0"
-                                                        placeholder="规格"
-                                                        style="background-color: transparent;"
-                                                />
-                                            </div>
-                                            <!-- 状态 -->
-                                            <div style="width: 100px; flex-shrink: 0;"
-                                                 class="d-flex align-items-center justify-content-center gap-1">
-                                                <button v-if="item.nxDoStatus === 0"
-                                                        class="btn btn-sm"
-                                                        style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
-                                                        @click="handleUpdateOrder(item, orderIndex, 'image')"
-                                                        title="修改"
-                                                        @mouseenter="$event.target.style.color='#495057'"
-                                                        @mouseleave="$event.target.style.color='#6c757d'">
-                                                    ✏️
-                                                </button>
-                                                <template v-else-if="item.nxDoStatus === -2">
-                                                    <button class="btn btn-sm"
-                                                            :disabled="!isValidOrderQuantityAndStandard(item)"
-                                                            :style="!isValidOrderQuantityAndStandard(item) ? 'font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #adb5bd; cursor: not-allowed;' : 'font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;'"
-                                                            @click="handleSaveNewGoods(item, orderIndex, 'image')"
-                                                            :title="!isValidOrderQuantityAndStandard(item) ? '请填写订单数量和规格' : '保存新商品'"
-                                                            @mouseenter="!isValidOrderQuantityAndStandard(item) ? null : $event.target.style.color='#495057'"
-                                                            @mouseleave="!isValidOrderQuantityAndStandard(item) ? null : $event.target.style.color='#6c757d'">
-                                                        {{ !isValidOrderQuantityAndStandard(item) ? '⚠️' : '💾' }}
-                                                    </button>
-
-                                                </template>
-                                                <button class="btn btn-sm"
-                                                        style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
-                                                        @click="handleAddNewOrderBefore(item, orderIndex, 'image')"
-                                                        title="之前添加订单"
-                                                        @mouseenter="$event.target.style.color='#495057'"
-                                                        @mouseleave="$event.target.style.color='#6c757d'">
-                                                    ⬆️
-                                                </button>
-                                                <button class="btn btn-sm"
-                                                        style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
-                                                        @click="handleDeleteOrderFromExcel(item, orderIndex, 'image')"
-                                                        title="删除"
-                                                        @mouseenter="$event.target.style.color='#dc3545'"
-                                                        @mouseleave="$event.target.style.color='#6c757d'">
-                                                    🗑️
-                                                </button>
-
-
-                                            </div>
-                                        </div>
-                                        <!-- 第二行：备注（如果有） -->
-                                        <div v-if="item.nxDoRemark" class="d-flex align-items-center gap-2 mt-1 ps-5">
-                                            <span class="text-muted small">备注:</span>
-                                            <input
-                                                    type="text"
-                                                    class="form-control form-control-sm"
-                                                    v-model="item.nxDoRemark"
-                                                    @input="handleRemarkInput(item, orderIndex, 'image')"
-                                                    :disabled="item.nxDoStatus === 0"
-                                                    placeholder="备注"
-                                                    maxlength="15"
-                                                    style="font-size: 12px; background-color: transparent; width: 200px; flex-shrink: 0;"
-                                            />
-                                        </div>
-
-                                        <!-- 商品搜索下拉框（相对于订单项定位，覆盖整个订单列表宽度） -->
-                                        <div
-                                                v-if="orderArrIndex === orderIndex && item.nxDoStatus !== 0 && (strArr.length > 0 || nxArr.length > 0)"
-                                                class="goods-search-dropdown position-absolute bg-white border rounded shadow-lg p-2"
-                                                style="top: 100%; left: -0.5rem; right: -0.5rem; width: calc(100% + 1rem); z-index: 1000; max-height: 400px; overflow-y: auto; margin-top: 4px;">
-
-                                            <!-- 搜索标题 -->
-                                            <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
-                                                <span class="text-muted small">搜索{{ strArr.length + nxArr.length }}个商品:</span>
-                                                <button class="btn btn-sm btn-link p-0" @click="closeStr"
-                                                        style="font-size: 12px;">✕
-                                                </button>
-                                            </div>
-
-                                            <!-- 配送商商品列表 -->
-                                            <div v-if="strArr.length > 0" class="mb-2">
-                                                <div class="text-muted small fw-bold mb-2">配送商商品 ({{
-                                                    strArr.length
-                                                    }})
-                                                </div>
-                                                <div
-                                                        v-for="(goods, goodsIndex) in strArr"
-                                                        :key="goods.nxDistributerGoodsId || goodsIndex"
-                                                        class="goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                        @click.stop="selectSearchResult(goods, orderIndex, currentSourceType || uploadType || 'image')"
-                                                        style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
-                                                    <!-- 商品信息 -->
-                                                    <div class="flex-grow-1" style="min-width: 0;">
-                                    <span class="text-muted fw-bold me-2"
-                                          style="color: #666;">{{ goodsIndex + 1 }}.</span>
-                                                        <span v-if="goods.nxDgGoodsBrand && goods.nxDgGoodsBrand !== 'null'"
-                                                              class="badge bg-warning text-dark me-1">
-                                        {{ goods.nxDgGoodsBrand }}
-                                    </span>
-                                                        <span class="text-dark">{{ goods.nxDgGoodsName }}</span>
-                                                        <span class="text-muted small ms-1">
-                                        ({{ goods.nxDgGoodsStandardWeight && goods.nxDgGoodsStandardWeight !== 'null'
-                                          ? goods.nxDgGoodsStandardWeight + '/' + goods.nxDgGoodsStandardname
-                                          : goods.nxDgGoodsStandardname }})
-                                    </span>
-                                                    </div>
-                                                    <!-- 选择按钮 -->
-                                                    <button
-                                                            class="btn btn-secondary btn-sm"
-                                                            @click.stop="selectSearchResult(goods, orderIndex, currentSourceType || uploadType || 'image')"
-                                                            :class="{ 'btn-warning': !goods.nxDgNxGoodsId }"
-                                                            style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; background-color: #6c757d; border-color: #6c757d; color: #fff; margin-left: 8px;">
-                                                        {{ goods.nxDgNxGoodsId ? '选择' : '临时' }}
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            <!-- 系统商品列表 -->
-                                            <div v-if="nxArr.length > 0" class="mb-2">
-                                                <div class="text-muted small fw-bold mb-2">系统商品 ({{ nxArr.length
-                                                    }})
-                                                </div>
-                                                <div
-                                                        v-for="(goods, goodsIndex) in nxArr"
-                                                        :key="goods.nxGoodsId || goodsIndex"
-                                                        class="goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                        style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
-                                                    <!-- 商品信息 -->
-                                                    <div class="flex-grow-1" style="min-width: 0;">
-                                    <span class="text-muted fw-bold me-2"
-                                          style="color: #666;">{{ strArr.length + goodsIndex + 1 }}.</span>
-                                                        <span v-if="goods.nxGoodsBrand && goods.nxGoodsBrand !== 'null'"
-                                                              class="badge bg-warning text-dark me-1">
-                                        {{ goods.nxGoodsBrand }}
-                                    </span>
-                                                        <span class="text-dark">{{ goods.nxGoodsName }}</span>
-                                                        <span class="text-muted small ms-1">
-                                        ({{ goods.nxGoodsStandardWeight && goods.nxGoodsStandardWeight !== 'null'
-                                          ? goods.nxGoodsStandardWeight + '/' + goods.nxGoodsStandardname
-                                          : goods.nxGoodsStandardname }})
-                                    </span>
-                                                    </div>
-                                                    <!-- 下载按钮 -->
-                                                    <button
-                                                            class="btn btn-info btn-sm"
-                                                            @click.stop="downLoadGoodsNx(goods, orderIndex)"
-                                                            style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; margin-left: 8px;"
-                                                            title="下载商品">
-                                                        ⬇️
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- 已匹配的商品列表 -->
-                                        <div
-                                                v-if="item.nxDoStatus !== 0 && showMatchedGoods[orderIndex] && (item.nxDistributerGoodsEntityList && item.nxDistributerGoodsEntityList.length > 0 || item.nxGoodsEntities && item.nxGoodsEntities.length > 0) && !(orderArrIndex === orderIndex && (strArr.length > 0 || nxArr.length > 0))"
-                                                class="matched-goods-list position-absolute bg-white border rounded shadow-lg p-2"
-                                                style="top: 100%; left: -0.5rem; right: -0.5rem; width: calc(100% + 1rem); z-index: 999; max-height: 400px; overflow-y: auto; margin-top: 4px; border-left: 1px solid gray;">
-
-                                            <!-- 标题栏和关闭按钮 -->
-                                            <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
-                                                <span class="text-muted small fw-bold">已匹配商品列表</span>
-                                                <button
-                                                        class="btn btn-sm btn-link p-0"
-                                                        @click="toggleMatchedGoods(orderIndex)"
-                                                        style="font-size: 12px; color: #6c757d;"
-                                                        title="隐藏">
-                                                    ✕
-                                                </button>
-                                            </div>
-
-                                            <!-- 配送商已匹配商品列表 -->
-                                            <div v-if="item.nxDistributerGoodsEntityList && item.nxDistributerGoodsEntityList.length > 0"
-                                                 class="mb-2">
-                                                <div class="text-muted small fw-bold mb-2">配送商商品 ({{
-                                                    item.nxDistributerGoodsEntityList.length }})
-                                                </div>
-                                                <div
-                                                        v-for="(orderGoods, orderGoodsIndex) in item.nxDistributerGoodsEntityList"
-                                                        :key="orderGoods.nxDistributerGoodsId || orderGoodsIndex"
-                                                        class="matched-goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                        style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
-                                                    <!-- 商品信息 -->
-                                                    <div class="flex-grow-1" style="min-width: 0;">
-                                                        <span class="text-muted fw-bold me-2" style="color: #666;">{{ orderGoodsIndex + 1 }}.</span>
-                                                        <span v-if="orderGoods.nxDgGoodsBrand && orderGoods.nxDgGoodsBrand !== 'null'"
-                                                              class="badge bg-warning text-dark me-1">
-                              {{ orderGoods.nxDgGoodsBrand }}
-                            </span>
-                                                        <span class="text-dark" style="color: #333; font-weight: 500;">{{ orderGoods.nxDgGoodsName }}</span>
-                                                        <span class="text-muted small ms-1" style="color: #666;">
-                              ({{ orderGoods.nxDgGoodsStandardWeight && orderGoods.nxDgGoodsStandardWeight !== 'null'
-                                ? orderGoods.nxDgGoodsStandardWeight + '/' + orderGoods.nxDgGoodsStandardname
-                                : orderGoods.nxDgGoodsStandardname }})
-                            </span>
-                                                    </div>
-                                                    <!-- 选择按钮 -->
-                                                    <button
-                                                            class="btn btn-secondary btn-sm"
-                                                            @click.stop="selectMatchedGoods(item, orderIndex, orderGoodsIndex, 'image')"
-                                                            style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; background-color: #6c757d; border-color: #6c757d; color: #fff; margin-left: 8px;">
-                                                        选择
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            <!-- 系统已匹配商品列表 -->
-                                            <div v-if="item.nxGoodsEntities && item.nxGoodsEntities.length > 0"
-                                                 class="mb-2">
-                                                <div class="text-muted small fw-bold mb-2">系统商品 ({{
-                                                    item.nxGoodsEntities.length }})
-                                                </div>
-                                                <div
-                                                        v-for="(goods, nxIndex) in item.nxGoodsEntities"
-                                                        :key="goods.nxGoodsId || nxIndex"
-                                                        class="matched-goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                        style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
-                                                    <!-- 商品信息 -->
-                                                    <div class="flex-grow-1" style="min-width: 0;">
-                                                        <span class="text-muted fw-bold me-2" style="color: #666;">{{ nxIndex + 1 }}.</span>
-                                                        <span v-if="goods.nxGoodsBrand && goods.nxGoodsBrand !== 'null'"
-                                                              class="badge bg-warning text-dark me-1">
-                                {{ goods.nxGoodsBrand }}
-                              </span>
-                                                        <span class="text-dark" style="color: #333; font-weight: 500;">{{ goods.nxGoodsName }}</span>
-                                                        <span v-if="goods.nxAliasEntities && goods.nxAliasEntities.length > 0"
-                                                              v-for="(alias, aliasIndex) in goods.nxAliasEntities"
-                                                              :key="alias.nxDaAliasName || aliasIndex"
-                                                              class="text-primary me-1"
-                                                              style="color: #1c7efb; margin-right: 8px;">
-                                @{{ alias.nxDaAliasName }}
-                              </span>
-                                                        <span class="text-muted small ms-1" style="color: #666;">
-                                <template v-if="goods.nxGoodsStandardWeight && goods.nxGoodsStandardWeight !== 'null'">
-                                  <template v-if="goods.nxGoodsStandardname !== '斤'">
-                                    ({{ goods.nxGoodsStandardWeight }}/{{ goods.nxGoodsStandardname }})
-                                  </template>
-                                </template>
-                                <template v-else>
-                                  ({{ goods.nxGoodsStandardname }})
-                                </template>
-                              </span>
-                                                        <span v-if="goods.nxGoodsPlace && goods.nxGoodsPlace !== 'null'"
-                                                              class="text-muted small me-2"
-                                                              style="color: #666; margin-right: 12px;">
-                                产地:{{ goods.nxGoodsPlace }}
-                              </span>
-                                                        <span v-if="goods.nxGoodsDetail && goods.nxGoodsDetail !== 'null'"
-                                                              class="text-muted small"
-                                                              style="color: #666;">
-                                {{ goods.nxGoodsDetail }}
-                              </span>
-                                                    </div>
-                                                    <!-- 下载按钮 -->
-                                                    <button
-                                                            class="btn btn-info btn-sm"
-                                                            @click.stop="downLoadGoodsNx(goods, orderIndex)"
-                                                            style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; margin-left: 8px;"
-                                                            title="下载商品">
-                                                        ⬇️
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 复制粘贴区域 -->
-            <div v-if="uploadType === 'paste'" class="upload-section"
-                 style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
-                <div class="row g-3" style="flex: 1; min-height: 0; overflow: hidden; margin: 0; align-items: stretch;">
-                    <!-- 左侧：粘贴输入框 -->
-                    <div class="col-md-4">
-                        <div class="card h-100">
-                            <div class="card-body p-1"
-                                 style="display: flex; flex-direction: column; min-height: 0; flex: 1;">
-                                <!-- 粘贴输入框 -->
-                                <div style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
-                <textarea
-                        v-model="pasteInputText"
-                        @input="onPasteInput"
-                        :disabled="pasteHasCache"
-                        class="form-control mb-2"
-                        :class="{ 'bg-light': pasteHasCache }"
-                        placeholder="请将订单文本粘贴到这里，例如：&#10;苹果 5 斤&#10;香蕉 3 斤&#10;橙子 2 斤"
-                        style="font-size: 14px; min-height: 0; flex: 1;  "
-                ></textarea>
-                                    <!-- 保存订单后隐藏这三个按钮 -->
-                                    <div v-if="!pasteHasCache && pasteSaveCount == null && pasteOrderItems.length === 0"
-                                         class="d-flex gap-2 mt-2 flex-wrap" style="margin-bottom:40px;">
-                                        <button class="btn btn-sm btn-primary" @click="pasteFromClipboard">从剪贴板粘贴
-                                        </button>
-                                        <button class="btn btn-sm btn-info" @click="aiRecogniseFirst"
-                                                :disabled="!pasteInputText || pasteInputText.trim() === '' || showDeepSeekLoading">
-                                            {{ showDeepSeekLoading ? 'AI识别中...' : 'AI识别' }}
-                                        </button>
-                                        <button class="btn btn-sm btn-success" @click="parsePasteText"
-                                                :disabled="!pasteInputText || pasteInputText.trim() === ''">人工识别
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 右侧：订单列表（复制粘贴独立）- 始终保留空间 -->
-                    <div class="col-md-8 order-items-section"
-                         style="display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;">
-                        <div class="card h-100 p-3"
-                             style="display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
-                            <div class="d-flex justify-content-between align-items-center mb-3" style="flex-shrink: 0;">
-                                <h6 class="mb-0">解析订单 ({{ pasteOrderItems.length }} 项)</h6>
-                                <div class="d-flex gap-2">
-                                    <!-- 状态1：草稿状态（pasteSaveCount == null） -->
-                                    <template v-if="pasteSaveCount == null">
-                                        <button v-if="pasteOrderItems.length > 0" class="btn btn-secondary btn-sm"
-                                                @click="againPaste">
-                                            清空内容
-                                        </button>
-                                        <button v-if="pasteOrderItems.length > 0" class="btn btn-success btn-sm"
-                                                @click="savePasteOrders" :disabled="savingOrder">
-                                            {{ savingOrder ? '保存中...' : '保存订单' }}
-                                        </button>
-                                    </template>
-                                    <!-- 状态2：已保存状态（pasteSaveCount != null） -->
-                                    <template v-else>
-                                        <button v-if="pasteHasCache && allOrdersAreDraft" class="btn btn-success btn-sm"
-                                                @click="clearPasteSave">
-                                            完成下单
-                                        </button>
-                                        <button v-if="pasteHasCache" class="btn btn-danger btn-sm"
-                                                @click="reUpload">
-                                            重新上传
-                                        </button>
-                                    </template>
-                                </div>
-                            </div>
-                            <!-- 订单列表内容（复制粘贴独立显示） -->
-                            <div class="order-list-container flex-grow-1"
-                                 style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0;">
-                                <div v-if="pasteOrderItems.length === 0" class="text-center text-muted p-4">
-                                    <div class="mb-2">📋 暂无订单</div>
-                                    <small>请粘贴订单文本并解析后，系统将显示订单列表</small>
-                                </div>
-
-                                <!-- 状态1：草稿状态（pasteSaveCount == null）- 可编辑界面 -->
-                                <template v-if="pasteSaveCount == null && pasteOrderItems.length > 0">
-                                    <!-- 表头 -->
-                                    <div class="table-header-fixed bg-light border-bottom p-1 d-flex align-items-center fw-bold small"
-                                         style="position: sticky; top: 0; z-index: 10; background-color: #eeeeee;">
-                                        <div style="width: 50px; flex-shrink: 0; margin-left: 15px;"
-                                             class="text-center table-cell">序号
-                                        </div>
-                                        <div style="flex: 2; min-width: 0;" class="table-cell">商品名称</div>
-                                        <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">数量
-                                        </div>
-                                        <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">规格
-                                        </div>
-                                    </div>
-                                    <!-- 订单列表 -->
-                                    <div style="padding: 0.5rem;">
-                                        <div
-                                                v-for="(item, orderIndex) in pasteOrderItems"
-                                                :key="orderIndex"
-                                                class="order-item-card mb-1 p-1 bg-white rounded border-bottom"
-                                                style="position: relative;">
-
-                                            <!-- 之前添加新订单的商品选择面板 -->
-                                            <div v-if="addingOrderBeforeIndex === orderIndex"
-                                                 class="mb-3 p-3 border rounded"
-                                                 style="background-color: #fff3cd; border-color: #ffc107;">
-                                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                                    <h6 class="mb-0" style="color: #856404;">在之前添加新订单</h6>
-                                                    <button class="btn btn-sm btn-link p-0"
-                                                            @click="cancelAddOrderBefore"
-                                                            style="font-size: 14px; color: #856404;">✕
-                                                    </button>
-                                                </div>
-
-                                                <!-- 商品搜索 -->
-                                                <div class="mb-2 position-relative">
-                                                    <label class="form-label small mb-1"
-                                                           style="color: #856404;">商品名称</label>
-                                                    <input
-                                                            type="text"
-                                                            class="form-control form-control-sm"
-                                                            v-model="beforeOrderForm.goodsName"
-                                                            @input="handleBeforeOrderGoodsNameInput"
-                                                            placeholder="搜索商品..."
-                                                            style="background-color: #fff;"
-                                                    />
-                                                    <!-- 搜索结果下拉框 -->
-                                                    <div v-if="beforeOrderForm.showSearchResults && beforeOrderForm.searchResults.length > 0"
-                                                         class="border rounded mt-1 bg-white shadow-lg"
-                                                         style="max-height: 200px; overflow-y: auto; position: absolute; z-index: 1000; width: 100%;">
-                                                        <div v-for="(goods, idx) in beforeOrderForm.searchResults"
-                                                             :key="goods.nxDistributerGoodsId || idx"
-                                                             class="p-2 border-bottom"
-                                                             @click="selectBeforeOrderGoods(goods)"
-                                                             style="cursor: pointer;"
-                                                             :style="{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f8f9fa' }">
-                                                            <div class="d-flex justify-content-between align-items-center">
-                                                                <span>{{ goods.nxDgGoodsName }}</span>
-                                                                <span class="badge bg-secondary ms-2"
-                                                                      v-if="goods.nxDgGoodsStandardname">
-                                                                {{ goods.nxDgGoodsStandardname }}
-                                                            </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <!-- 已选商品显示 -->
-                                                <div v-if="beforeOrderForm.selectedGoods"
-                                                     class="mb-2 p-2 bg-light rounded">
-                                                    <small class="text-muted">已选商品：</small>
-                                                    <strong>{{ beforeOrderForm.selectedGoods.nxDgGoodsName }}</strong>
-                                                    <span v-if="beforeOrderForm.selectedGoods.nxDgGoodsStandardname"
-                                                          class="ms-2 badge bg-info">
-                                                    {{ beforeOrderForm.selectedGoods.nxDgGoodsStandardname }}
-                                                </span>
-                                                </div>
-
-                                                <!-- 数量、规格、备注 -->
-                                                <div class="row g-2 mb-2">
-                                                    <div class="col-4">
-                                                        <label class="form-label small mb-1"
-                                                               style="color: #856404;">数量</label>
-                                                        <input
-                                                                type="number"
-                                                                class="form-control form-control-sm"
-                                                                v-model.number="beforeOrderForm.quantity"
-                                                                style="background-color: #fff;"
-                                                        />
-                                                    </div>
-                                                    <div class="col-4">
-                                                        <label class="form-label small mb-1"
-                                                               style="color: #856404;">规格</label>
-                                                        <input
-                                                                type="text"
-                                                                class="form-control form-control-sm"
-                                                                v-model="beforeOrderForm.standard"
-                                                                style="background-color: #fff;"
-                                                        />
-                                                    </div>
-                                                    <div class="col-4">
-                                                        <label class="form-label small mb-1"
-                                                               style="color: #856404;">备注</label>
-                                                        <input
-                                                                type="text"
-                                                                class="form-control form-control-sm"
-                                                                v-model="beforeOrderForm.remark"
-                                                                style="background-color: #fff;"
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                <!-- 操作按钮 -->
-                                                <div class="d-flex gap-2 justify-content-end">
-                                                    <button class="btn btn-sm btn-secondary"
-                                                            @click="cancelAddOrderBefore">
-                                                        取消
-                                                    </button>
-                                                    <button class="btn btn-sm btn-primary"
-                                                            @click="saveBeforeOrder(item, orderIndex, uploadType || 'excel')"
-                                                            :disabled="!beforeOrderForm.selectedGoods || !beforeOrderForm.quantity">
-                                                        保存订单
-                                                    </button>
-                                                </div>
-                                            </div>
-
-
-                                            <!-- 第一行：序号、商品名称、数量、规格 -->
-                                            <div class="d-flex align-items-center gap-2 mb-1" style="min-height: 32px;">
-                                                <!-- 序号 -->
-                                                <div style="width: 50px; flex-shrink: 0; margin-left: 15px;"
-                                                     class="text-center fw-bold">
-                                                    {{ orderIndex + 1 }}.
-                                                </div>
-                                                <!-- 商品名称输入框（草稿状态下只编辑，不搜索） -->
-                                                <div style="flex: 2; min-width: 0;">
-                                                    <input
-                                                            type="text"
-                                                            class="form-control form-control-sm"
-                                                            v-model="item.nxDoGoodsName"
-                                                            placeholder="请输入商品名称"
-                                                            style="font-size: 14px; background-color: transparent; width: 100%;"
-                                                    />
-                                                </div>
-                                                <!-- 数量 -->
-                                                <div style="width: 80px; flex-shrink: 0;">
-                                                    <input
-                                                            type="number"
-                                                            class="form-control form-control-sm text-center"
-                                                            v-model.number="item.nxDoQuantity"
-                                                            @input="handleQuantityInput(item, orderIndex, 'paste')"
-                                                            placeholder="数量"
-                                                            style="background-color: transparent;"
-                                                    />
-                                                </div>
-                                                <!-- 规格 -->
-                                                <div style="width: 80px; flex-shrink: 0;">
-                                                    <input
-                                                            type="text"
-                                                            class="form-control form-control-sm text-center"
-                                                            v-model="item.nxDoStandard"
-                                                            @input="handleStandardChange(item, orderIndex, 'paste')"
-                                                            placeholder="规格"
-                                                            style="background-color: transparent;"
-                                                    />
-                                                </div>
-                                                <!-- 操作按钮 -->
-                                                <div style="width: 100px; flex-shrink: 0;"
-                                                     class="d-flex align-items-center justify-content-center gap-1">
-                                                    <button class="btn btn-sm"
-                                                            style="font-size: 11px; padding: 2px 6px; background-color: #0056b3; border-color: #0056b3; color: #fff;"
-                                                            @click="handleDeleteOrderFromExcel(item, orderIndex, 'paste')">
-                                                        删除信息
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <!-- 第二行：备注（如果有） -->
-                                            <div v-if="item.nxDoAddRemark"
-                                                 class="d-flex align-items-center gap-2 mt-1 ps-5">
-                                                <span class="text-muted small">{{ orderIndex + 1 }}.</span>
-                                                <span class="text-muted small">备注:</span>
-                                                <input
-                                                        type="text"
-                                                        class="form-control form-control-sm"
-                                                        v-model="item.nxDoRemark"
-                                                        @input="handleRemarkInput(item, orderIndex, 'paste')"
-                                                        placeholder="备注"
-                                                        maxlength="15"
-                                                        style="font-size: 12px; background-color: transparent; width: 200px; flex-shrink: 0;"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </template>
-                                <template v-else-if="pasteSaveCount != null && pasteOrderItems.length > 0">
-                                    <!-- 表头 -->
-                                    <div class="table-header-fixed bg-light border-bottom p-1 d-flex align-items-center fw-bold small"
-                                         style="position: sticky; top: 0; z-index: 10;">
-                                        <div style="width: 50px; flex-shrink: 0;" class="text-center table-cell">序号
-                                        </div>
-                                        <div style="flex: 2; min-width: 0;" class="table-cell">商品名称</div>
-                                        <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">数量
-                                        </div>
-                                        <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">规格
-                                        </div>
-                                        <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">状态
-                                        </div>
-                                    </div>
-
-
-
-                                    <!-- 订单列表 -->
-                                    <div style="padding: 0.5rem;">
-                                        <div
-                                                v-for="(item, orderIndex) in pasteOrderItems"
-                                                :key="orderIndex"
-                                                class="order-item-card mb-1 p-1 bg-white rounded border-bottom"
-                                                style="position: relative;">
-
-                                            <!-- 之前添加新订单的商品选择面板 -->
-                                            <div v-if="addingOrderBeforeIndex === orderIndex"
-                                                 class="mb-3 p-3 border rounded"
-                                                 style="background-color: #fff3cd; border-color: #ffc107;">
-                                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                                    <h6 class="mb-0" style="color: #856404;">在之前添加新订单</h6>
-                                                    <button class="btn btn-sm btn-link p-0"
-                                                            @click="cancelAddOrderBefore"
-                                                            style="font-size: 14px; color: #856404;">✕
-                                                    </button>
-                                                </div>
-
-                                                <!-- 商品搜索 -->
-                                                <div class="mb-2 position-relative">
-                                                    <label class="form-label small mb-1"
-                                                           style="color: #856404;">商品名称</label>
-                                                    <input
-                                                            type="text"
-                                                            class="form-control form-control-sm"
-                                                            v-model="beforeOrderForm.goodsName"
-                                                            @input="handleBeforeOrderGoodsNameInput"
-                                                            placeholder="搜索商品..."
-                                                            style="background-color: #fff;"
-                                                    />
-                                                    <!-- 搜索结果下拉框 -->
-                                                    <div v-if="beforeOrderForm.showSearchResults && beforeOrderForm.searchResults.length > 0"
-                                                         class="border rounded mt-1 bg-white shadow-lg"
-                                                         style="max-height: 200px; overflow-y: auto; position: absolute; z-index: 1000; width: 100%;">
-                                                        <div v-for="(goods, idx) in beforeOrderForm.searchResults"
-                                                             :key="goods.nxDistributerGoodsId || idx"
-                                                             class="p-2 border-bottom"
-                                                             @click="selectBeforeOrderGoods(goods)"
-                                                             style="cursor: pointer;"
-                                                             :style="{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f8f9fa' }">
-                                                            <div class="d-flex justify-content-between align-items-center">
-                                                                <span>{{ goods.nxDgGoodsName }}</span>
-                                                                <span class="badge bg-secondary ms-2"
-                                                                      v-if="goods.nxDgGoodsStandardname">
-                                                                {{ goods.nxDgGoodsStandardname }}
-                                                            </span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <!-- 已选商品显示 -->
-                                                <div v-if="beforeOrderForm.selectedGoods"
-                                                     class="mb-2 p-2 bg-light rounded">
-                                                    <small class="text-muted">已选商品：</small>
-                                                    <strong>{{ beforeOrderForm.selectedGoods.nxDgGoodsName }}</strong>
-                                                    <span v-if="beforeOrderForm.selectedGoods.nxDgGoodsStandardname"
-                                                          class="ms-2 badge bg-info">
-                                                    {{ beforeOrderForm.selectedGoods.nxDgGoodsStandardname }}
-                                                </span>
-                                                </div>
-
-                                                <!-- 数量、规格、备注 -->
-                                                <div class="row g-2 mb-2">
-                                                    <div class="col-4">
-                                                        <label class="form-label small mb-1"
-                                                               style="color: #856404;">数量</label>
-                                                        <input
-                                                                type="number"
-                                                                class="form-control form-control-sm"
-                                                                v-model.number="beforeOrderForm.quantity"
-                                                                style="background-color: #fff;"
-                                                        />
-                                                    </div>
-                                                    <div class="col-4">
-                                                        <label class="form-label small mb-1"
-                                                               style="color: #856404;">规格</label>
-                                                        <input
-                                                                type="text"
-                                                                class="form-control form-control-sm"
-                                                                v-model="beforeOrderForm.standard"
-                                                                style="background-color: #fff;"
-                                                        />
-                                                    </div>
-                                                    <div class="col-4">
-                                                        <label class="form-label small mb-1"
-                                                               style="color: #856404;">备注</label>
-                                                        <input
-                                                                type="text"
-                                                                class="form-control form-control-sm"
-                                                                v-model="beforeOrderForm.remark"
-                                                                style="background-color: #fff;"
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                <!-- 操作按钮 -->
-                                                <div class="d-flex gap-2 justify-content-end">
-                                                    <button class="btn btn-sm btn-secondary"
-                                                            @click="cancelAddOrderBefore">
-                                                        取消
-                                                    </button>
-                                                    <button class="btn btn-sm btn-primary"
-                                                            @click="saveBeforeOrder(item, orderIndex, uploadType || 'excel')"
-                                                            :disabled="!beforeOrderForm.selectedGoods || !beforeOrderForm.quantity">
-                                                        保存订单
-                                                    </button>
-                                                </div>
-                                            </div>
-
-
-                                            <!-- 第一行：序号、商品名称、数量、规格、状态 -->
-                                            <div class="d-flex align-items-center gap-2 mb-1" style="min-height: 32px;">
-                                                <!-- 序号 -->
-                                                <div style="width: 50px; flex-shrink: 0;" class="text-center fw-bold">
-                                                    {{ orderIndex + 1 }}
-                                                </div>
-                                                <!-- 商品名称（可编辑） -->
-                                                <div style="flex: 2; min-width: 0; display: flex; align-items: center; gap: 4px;"
-                                                     class="position-relative">
-                                                    <input
-                                                            type="text"
-                                                            v-model="item.nxDoGoodsName"
-                                                            @input="handleGoodsNameInput(item, orderIndex, 'paste')"
-                                                            @focus="handleGoodsNameFocus(item, orderIndex, 'paste')"
-                                                            @blur="handleGoodsNameBlur(item, orderIndex, 'paste')"
-                                                            class="form-control form-control-sm"
-                                                            :disabled="item.nxDoStatus === 0"
-                                                            placeholder="请输入商品名称"
-                                                            style="font-size: 14px; background-color: transparent; flex: 1;"
-                                                    />
-                                                    <!-- 显示已匹配商品列表的图标 -->
-                                                    <button
-                                                            v-if="item.nxDoStatus !== 0 && isValidOrderQuantityAndStandard(item) && (item.nxDistributerGoodsEntityList && item.nxDistributerGoodsEntityList.length > 0 || item.nxGoodsEntities && item.nxGoodsEntities.length > 0)"
-                                                            class="btn btn-link btn-sm p-1"
-                                                            @click="toggleMatchedGoods(orderIndex)"
-                                                            :title="showMatchedGoods[orderIndex] ? '隐藏已匹配商品' : '显示已匹配商品'"
-                                                            style="flex-shrink: 0; text-decoration: none; color: #6c757d; background-color: #f0f0f0; border-radius: 4px;"
-                                                    >
-                                                        <span v-if="showMatchedGoods[orderIndex]">▼</span>
-                                                        <span v-else>▶</span>
-                                                    </button>
-                                                </div>
-                                                <!-- 数量 -->
-                                                <div style="width: 50px; flex-shrink: 0;">
-                                                    <input
-                                                            type="number"
-                                                            class="form-control form-control-sm text-center"
-                                                            v-model.number="item.nxDoQuantity"
-                                                            @input="handleQuantityInput(item, orderIndex, 'paste')"
-                                                            :disabled="item.nxDoStatus === 0"
-                                                            placeholder="数量"
-                                                            style="background-color: transparent;"
-                                                    />
-                                                </div>
-                                                <!-- 规格 -->
-                                                <div style="width: 50px; flex-shrink: 0;">
-                                                    <input
-                                                            type="text"
-                                                            class="form-control form-control-sm text-center"
-                                                            v-model="item.nxDoStandard"
-                                                            @input="handleStandardChange(item, orderIndex, 'paste')"
-                                                            :disabled="item.nxDoStatus === 0"
-                                                            placeholder="规格"
-                                                            style="background-color: transparent;"
-                                                    />
-                                                </div>
-                                                <!-- 状态 -->
-                                                <div style="width: 100px; flex-shrink: 0;"
-                                                     class="d-flex align-items-center justify-content-center gap-1">
-                                                    <button v-if="item.nxDoStatus === 0"
-                                                            class="btn btn-sm"
-                                                            style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
-                                                            @click="handleUpdateOrder(item, orderIndex, 'paste')"
-                                                            title="修改"
-                                                            @mouseenter="$event.target.style.color='#495057'"
-                                                            @mouseleave="$event.target.style.color='#6c757d'">
-                                                        ✏️
-                                                    </button>
-                                                    <template v-else-if="item.nxDoStatus === -2">
-                                                        <button class="btn btn-sm"
-                                                                :disabled="!isValidOrderQuantityAndStandard(item)"
-                                                                :style="!isValidOrderQuantityAndStandard(item) ? 'font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #adb5bd; cursor: not-allowed;' : 'font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;'"
-                                                                @click="handleSaveNewGoods(item, orderIndex, 'paste')"
-                                                                :title="!isValidOrderQuantityAndStandard(item) ? '请填写订单数量和规格' : '保存新商品'"
-                                                                @mouseenter="!isValidOrderQuantityAndStandard(item) ? null : $event.target.style.color='#495057'"
-                                                                @mouseleave="!isValidOrderQuantityAndStandard(item) ? null : $event.target.style.color='#6c757d'">
-                                                            {{ !isValidOrderQuantityAndStandard(item) ? '⚠️' : '💾' }}
-                                                        </button>
-
-                                                    </template>
-                                                    <button class="btn btn-sm"
-                                                            style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
-                                                            @click="handleAddNewOrderBefore(item, orderIndex, 'paste')"
-                                                            title="之前添加订单"
-                                                            @mouseenter="$event.target.style.color='#495057'"
-                                                            @mouseleave="$event.target.style.color='#6c757d'">
-                                                        ⬆️
-                                                    </button>
-                                                    <button class="btn btn-sm"
-                                                            style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
-                                                            @click="handleDeleteOrderFromExcel(item, orderIndex, 'paste')"
-                                                            title="删除"
-                                                            @mouseenter="$event.target.style.color='#dc3545'"
-                                                            @mouseleave="$event.target.style.color='#6c757d'">
-                                                        🗑️
-                                                    </button>
-
-
-                                                </div>
-                                            </div>
-                                            <!-- 第二行：备注（如果有） -->
-                                            <div v-if="item.nxDoRemark"
-                                                 class="d-flex align-items-center gap-2 mt-1 ps-5">
-                                                <span class="text-muted small">备注:</span>
-                                                <input
-                                                        type="text"
-                                                        class="form-control form-control-sm"
-                                                        v-model="item.nxDoRemark"
-                                                        @input="handleRemarkInput(item, orderIndex, 'paste')"
-                                                        :disabled="item.nxDoStatus === 0"
-                                                        placeholder="备注"
-                                                        maxlength="15"
-                                                        style="font-size: 12px; background-color: transparent; width: 200px; flex-shrink: 0;"
-                                                />
-                                            </div>
-
-                                            <!-- 商品搜索下拉框（相对于订单项定位，覆盖整个订单列表宽度） -->
-                                            <div
-                                                    v-if="orderArrIndex === orderIndex && item.nxDoStatus !== 0 && (strArr.length > 0 || nxArr.length > 0)"
-                                                    class="goods-search-dropdown position-absolute bg-white border rounded shadow-lg p-2"
-                                                    style="top: 100%; left: -0.5rem; right: -0.5rem; width: calc(100% + 1rem); z-index: 1000; max-height: 400px; overflow-y: auto; margin-top: 4px;">
-
-                                                <!-- 搜索标题 -->
-                                                <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
-                                                    <span class="text-muted small">搜索{{ strArr.length + nxArr.length }}个商品:</span>
-                                                    <button class="btn btn-sm btn-link p-0" @click="closeStr"
-                                                            style="font-size: 12px;">✕
-                                                    </button>
-                                                </div>
-
-                                                <!-- 配送商商品列表 -->
-                                                <div v-if="strArr.length > 0" class="mb-2">
-                                                    <div class="text-muted small fw-bold mb-2">配送商商品 ({{
-                                                        strArr.length
-                                                        }})
-                                                    </div>
-                                                    <div
-                                                            v-for="(goods, goodsIndex) in strArr"
-                                                            :key="goods.nxDistributerGoodsId || goodsIndex"
-                                                            class="goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                            @click.stop="selectSearchResult(goods, orderIndex, currentSourceType || uploadType || 'paste')"
-                                                            style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
-                                                        <!-- 商品信息 -->
-                                                        <div class="flex-grow-1" style="min-width: 0;">
-                                    <span class="text-muted fw-bold me-2"
-                                          style="color: #666;">{{ goodsIndex + 1 }}.</span>
-                                                            <span v-if="goods.nxDgGoodsBrand && goods.nxDgGoodsBrand !== 'null'"
-                                                                  class="badge bg-warning text-dark me-1">
-                                        {{ goods.nxDgGoodsBrand }}
-                                    </span>
-                                                            <span class="text-dark">{{ goods.nxDgGoodsName }}</span>
-                                                            <span class="text-muted small ms-1">
-                                        ({{ goods.nxDgGoodsStandardWeight && goods.nxDgGoodsStandardWeight !== 'null'
-                                          ? goods.nxDgGoodsStandardWeight + '/' + goods.nxDgGoodsStandardname
-                                          : goods.nxDgGoodsStandardname }})
-                                    </span>
-                                                        </div>
-                                                        <!-- 选择按钮 -->
-                                                        <button
-                                                                class="btn btn-secondary btn-sm"
-                                                                @click.stop="selectSearchResult(goods, orderIndex, currentSourceType || uploadType || 'paste')"
-                                                                :class="{ 'btn-warning': !goods.nxDgNxGoodsId }"
-                                                                style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; background-color: #6c757d; border-color: #6c757d; color: #fff; margin-left: 8px;">
-                                                            {{ goods.nxDgNxGoodsId ? '选择' : '临时' }}
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                <!-- 系统商品列表 -->
-                                                <div v-if="nxArr.length > 0" class="mb-2">
-                                                    <div class="text-muted small fw-bold mb-2">系统商品 ({{ nxArr.length
-                                                        }})
-                                                    </div>
-                                                    <div
-                                                            v-for="(goods, goodsIndex) in nxArr"
-                                                            :key="goods.nxGoodsId || goodsIndex"
-                                                            class="goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                            style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
-                                                        <!-- 商品信息 -->
-                                                        <div class="flex-grow-1" style="min-width: 0;">
-                                    <span class="text-muted fw-bold me-2"
-                                          style="color: #666;">{{ strArr.length + goodsIndex + 1 }}.</span>
-                                                            <span v-if="goods.nxGoodsBrand && goods.nxGoodsBrand !== 'null'"
-                                                                  class="badge bg-warning text-dark me-1">
-                                        {{ goods.nxGoodsBrand }}
-                                    </span>
-                                                            <span class="text-dark">{{ goods.nxGoodsName }}</span>
-                                                            <span class="text-muted small ms-1">
-                                        ({{ goods.nxGoodsStandardWeight && goods.nxGoodsStandardWeight !== 'null'
-                                          ? goods.nxGoodsStandardWeight + '/' + goods.nxGoodsStandardname
-                                          : goods.nxGoodsStandardname }})
-                                    </span>
-                                                        </div>
-                                                        <!-- 下载按钮 -->
-                                                        <button
-                                                                class="btn btn-info btn-sm"
-                                                                @click.stop="downLoadGoodsNx(goods, orderIndex)"
-                                                                style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; margin-left: 8px;"
-                                                                title="下载商品">
-                                                            ⬇️
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <!-- 已匹配的商品列表 -->
-                                            <div
-                                                    v-if="item.nxDoStatus !== 0 && showMatchedGoods[orderIndex] && (item.nxDistributerGoodsEntityList && item.nxDistributerGoodsEntityList.length > 0 || item.nxGoodsEntities && item.nxGoodsEntities.length > 0) && !(orderArrIndex === orderIndex && (strArr.length > 0 || nxArr.length > 0))"
-                                                    class="matched-goods-list position-absolute bg-white border rounded shadow-lg p-2"
-                                                    style="top: 100%; left: -0.5rem; right: -0.5rem; width: calc(100% + 1rem); z-index: 999; max-height: 400px; overflow-y: auto; margin-top: 4px; border-left: 1px solid gray;">
-
-                                                <!-- 标题栏和关闭按钮 -->
-                                                <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
-                                                    <span class="text-muted small fw-bold">已匹配商品列表</span>
-                                                    <button
-                                                            class="btn btn-sm btn-link p-0"
-                                                            @click="toggleMatchedGoods(orderIndex)"
-                                                            style="font-size: 12px; color: #6c757d;"
-                                                            title="隐藏">
-                                                        ✕
-                                                    </button>
-                                                </div>
-
-                                                <!-- 配送商已匹配商品列表 -->
-                                                <div v-if="item.nxDistributerGoodsEntityList && item.nxDistributerGoodsEntityList.length > 0"
-                                                     class="mb-2">
-                                                    <div class="text-muted small fw-bold mb-2">配送商商品 ({{
-                                                        item.nxDistributerGoodsEntityList.length }})
-                                                    </div>
-                                                    <div
-                                                            v-for="(orderGoods, orderGoodsIndex) in item.nxDistributerGoodsEntityList"
-                                                            :key="orderGoods.nxDistributerGoodsId || orderGoodsIndex"
-                                                            class="matched-goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                            style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
-                                                        <!-- 商品信息 -->
-                                                        <div class="flex-grow-1" style="min-width: 0;">
-                                                            <span class="text-muted fw-bold me-2" style="color: #666;">{{ orderGoodsIndex + 1 }}.</span>
-                                                            <span v-if="orderGoods.nxDgGoodsBrand && orderGoods.nxDgGoodsBrand !== 'null'"
-                                                                  class="badge bg-warning text-dark me-1">
-                              {{ orderGoods.nxDgGoodsBrand }}
-                            </span>
-                                                            <span class="text-dark"
-                                                                  style="color: #333; font-weight: 500;">{{ orderGoods.nxDgGoodsName }}</span>
-                                                            <span class="text-muted small ms-1" style="color: #666;">
-                              ({{ orderGoods.nxDgGoodsStandardWeight && orderGoods.nxDgGoodsStandardWeight !== 'null'
-                                ? orderGoods.nxDgGoodsStandardWeight + '/' + orderGoods.nxDgGoodsStandardname
-                                : orderGoods.nxDgGoodsStandardname }})
-                            </span>
-                                                        </div>
-                                                        <!-- 选择按钮 -->
-                                                        <button
-                                                                class="btn btn-secondary btn-sm"
-                                                                @click.stop="selectMatchedGoods(item, orderIndex, orderGoodsIndex, 'paste')"
-                                                                style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; background-color: #6c757d; border-color: #6c757d; color: #fff; margin-left: 8px;">
-                                                            选择
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                <!-- 系统已匹配商品列表 -->
-                                                <div v-if="item.nxGoodsEntities && item.nxGoodsEntities.length > 0"
-                                                     class="mb-2">
-                                                    <div class="text-muted small fw-bold mb-2">系统商品 ({{
-                                                        item.nxGoodsEntities.length }})
-                                                    </div>
-                                                    <div
-                                                            v-for="(goods, nxIndex) in item.nxGoodsEntities"
-                                                            :key="goods.nxGoodsId || nxIndex"
-                                                            class="matched-goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                            style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
-                                                        <!-- 商品信息 -->
-                                                        <div class="flex-grow-1" style="min-width: 0;">
-                                                            <span class="text-muted fw-bold me-2" style="color: #666;">{{ nxIndex + 1 }}.</span>
-                                                            <span v-if="goods.nxGoodsBrand && goods.nxGoodsBrand !== 'null'"
-                                                                  class="badge bg-warning text-dark me-1">
-                                {{ goods.nxGoodsBrand }}
-                              </span>
-                                                            <span class="text-dark"
-                                                                  style="color: #333; font-weight: 500;">{{ goods.nxGoodsName }}</span>
-                                                            <span v-if="goods.nxAliasEntities && goods.nxAliasEntities.length > 0"
-                                                                  v-for="(alias, aliasIndex) in goods.nxAliasEntities"
-                                                                  :key="alias.nxDaAliasName || aliasIndex"
-                                                                  class="text-primary me-1"
-                                                                  style="color: #1c7efb; margin-right: 8px;">
-                                @{{ alias.nxDaAliasName }}
-                              </span>
-                                                            <span class="text-muted small ms-1" style="color: #666;">
-                                <template v-if="goods.nxGoodsStandardWeight && goods.nxGoodsStandardWeight !== 'null'">
-                                  <template v-if="goods.nxGoodsStandardname !== '斤'">
-                                    ({{ goods.nxGoodsStandardWeight }}/{{ goods.nxGoodsStandardname }})
-                                </template>
-                                </template>
-                                <template v-else>
-                                  ({{ goods.nxGoodsStandardname }})
-                                </template>
-                              </span>
-                                                            <span v-if="goods.nxGoodsPlace && goods.nxGoodsPlace !== 'null'"
-                                                                  class="text-muted small me-2"
-                                                                  style="color: #666; margin-right: 12px;">
-                                产地:{{ goods.nxGoodsPlace }}
-                              </span>
-                                                            <span v-if="goods.nxGoodsDetail && goods.nxGoodsDetail !== 'null'"
-                                                                  class="text-muted small"
-                                                                  style="color: #666;">
-                                {{ goods.nxGoodsDetail }}
-                              </span>
-                                                        </div>
-                                                        <!-- 下载按钮 -->
-                                                        <button
-                                                                class="btn btn-info btn-sm"
-                                                                @click.stop="downLoadGoodsNx(goods, orderIndex)"
-                                                                style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; margin-left: 8px;"
-                                                                title="下载商品">
-                                                            ⬇️
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!--                                    /////-->
-                                </template>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <!-- 转订单区域 - 固定边框，左右分栏布局 -->
-            <div v-if="uploadType === 'auto'" class="upload-section"
-                 style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
-                <div class="row g-3" style="flex: 1; min-height: 0; overflow: hidden; margin: 0; align-items: stretch;">
-                        <!-- 左侧：文件列表和操作 / 图片预览 -->
-                    <div class="col-md-6 " style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;">
-                        <div class="card h-100" style="display: flex; flex-direction: column; border: 2px solid #007bff;">
-                                <div class="card-body p-1"
-                                     style="display: flex; flex-direction: column; min-height: 0;">
-
-
-                                    <!-- 文件列表和操作 -->
-                                <div class="" style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
-                                        <!-- 操作按钮 -->
-                                        <div v-if="!hasCache" class="mb-3 d-flex gap-2">
-                                            <button
-                                                    class="btn btn-primary"
-                                                    @click="scanFolderFiles"
-                                                    :disabled="!customerFolderPath || scanningFiles || processingFiles">
-                                                <span v-if="scanningFiles"
-                                                      class="spinner-border spinner-border-sm me-1"></span>
-                                                {{ scanningFiles ? '扫描中...' : '刷新文件夹' }}
-                                            </button>
-                                            <button
-                                                    class="btn btn-success"
-                                                    @click="startAutoProcess"
-                                                    :disabled="!customerFolderPath || autoProcessFiles.length === 0 || processingFiles">
-                                        <span v-if="processingFiles"
-                                              class="spinner-border spinner-border-sm me-1"></span>
-                                                {{ processingFiles ? '处理中...' : '开始处理' }}
-                                            </button>
-                                        </div>
-
-                                        <!-- 处理进度 -->
-                                        <div v-if="processingFiles" class="mb-3">
-                                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                                <span class="fw-bold">总体进度：</span>
-                                                <span>{{ autoProcessProgress.current }}/{{ autoProcessProgress.total }}</span>
-                                            </div>
-                                            <div class="progress" style="height: 20px;">
-                                                <div
-                                                        class="progress-bar progress-bar-striped progress-bar-animated"
-                                                        :style="{ width: autoProcessProgress.percent + '%' }">
-                                                    {{ autoProcessProgress.percent }}%
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- 文件列表 -->
-                                        <div v-if="autoProcessFiles.length > 0" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
-                                            <h6 class="mb-1 red" v-if="pendingFiles.length > 0"
-                                                style="background-color: #fff3cd; font-size: 12px; color: #dc3545; padding: 4px 8px; border-radius: 4px; flex-shrink: 0;">
-                                                待转换新文件{{ pendingFiles.length }}个</h6>
-                                        <div style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
-                                                <!-- 已处理的文件：标签页显示 -->
-                                            <div v-if="processedFiles.length > 0" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
-                                                    <!--                                        <h6 class="mb-2 small text-muted">已处理文件 ({{ processedFiles.length }})</h6>-->
-
-                                                    <!-- 标签页导航（固定，不滚动） -->
-                                                    <div style="flex-shrink: 0; overflow-x: auto; overflow-y: hidden; border-bottom: 1px solid #dee2e6;">
-                                                        <ul class="nav nav-tabs" role="tablist"
-                                                            style="flex-wrap: nowrap; white-space: nowrap; margin-bottom: 0;">
-                                                            <li
-                                                                    v-for="(file, index) in processedFiles"
-                                                                    :key="'tab-' + index"
-                                                                    class="nav-item"
-                                                                    role="presentation"
-                                                                    style="flex-shrink: 0;">
-                                                                <button
-                                                                        class="nav-link"
-                                                                        :class="{ 'active': activeProcessedFileTab === file.filePath }"
-                                                                        @click="activeProcessedFileTab = file.filePath"
-                                                                        type="button"
-                                                                        style="font-size: 12px; padding: 6px 12px; white-space: nowrap;"
-                                                                        :title="file.fileName">
-                                                                    {{ file.fileType === 'excel' ? '📄' : '🖼️' }} {{
-                                                                    file.fileName
-                                                                    }}
-                                                                </button>
-                                                            </li>
-                                                        </ul>
-                                                    </div>
-
-                                                    <!-- 标签页内容（可滚动） -->
-                                                    <div class="tab-content border border-top-0 p-1"
-                                                     style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;">
-                                                        <div
-                                                                v-for="(file, index) in processedFiles"
-                                                                :key="'content-' + index"
-                                                                class="tab-pane"
-                                                                :class="{ 'active': activeProcessedFileTab === file.filePath }"
-                                                            v-show="activeProcessedFileTab === file.filePath"
-                                                            style="height: 100%; display: flex; flex-direction: column;">
-
-                                                            <!-- 图片文件内容 -->
-                                                        <div v-if="file.fileType === 'image'" class="flex-grow-1" style="display: flex; flex-direction: column; min-height: 0;">
-
-                                                            <div class="row flex-grow-1" style="min-height: 0;">
-                                                                <!-- 图片预览区域（暂时隐藏，先确保左右布局正常） -->
-                                                                 <div v-if="currentPreviewImage" class="flex-grow-1"
-                                                                     style="display: flex; flex-direction: column; min-height: 0;">
-<!--                                                                    <div class="p-2 bg-light rounded mb-2" style="flex-shrink: 0;">-->
-<!--                                                                        <div class="d-flex justify-content-between align-items-center">-->
-<!--                                                                            <div>-->
-<!--                                                                                <div class="fw-bold">🖼️ {{ currentPreviewImage.fileName }}</div>-->
-<!--                                                                            </div>-->
-<!--                                                                        </div>-->
-<!--                                                                    </div>-->
-
-                                                                    <!-- 图片预览 -->
-                                                                    <div v-if="currentPreviewImageSrc"
-                                                                         class="border rounded p-0 position-relative flex-grow-1"
-                                                                         style="min-height: 0; overflow-y: auto; overflow-x: auto; cursor: move; background-color: #f5f5f5; display: flex; align-items: start; justify-content: start;"
-                                                                         @mousedown="startDrag"
-                                                                         @wheel.prevent="onWheel">
-                                                                        <div class="position-absolute top-0 end-0 m-2 d-flex gap-1"
-                                                                             style="z-index: 1000; background-color: rgba(255, 255, 255, 0.9); padding: 4px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                                                                            <button class="btn btn-sm btn-outline-secondary"
-                                                                                    @click.stop="resetImageTransform"
-                                                                                    @mousedown.stop
-                                                                                    title="重置"
-                                                                                    style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
-                                                                                🔄
-                                                                            </button>
-                                                                            <button class="btn btn-sm btn-outline-secondary"
-                                                                                    @click.stop="zoomIn"
-                                                                                    @mousedown.stop
-                                                                                    title="放大"
-                                                                                    style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
-                                                                                ➕
-                                                                            </button>
-                                                                            <button class="btn btn-sm btn-outline-secondary"
-                                                                                    @click.stop="zoomOut"
-                                                                                    @mousedown.stop
-                                                                                    title="缩小"
-                                                                                    style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
-                                                                                ➖
-                                                                            </button>
-                                                                </div>
-                                                                        <div class="d-flex align-items-start justify-content-start"
-                                                                             style="width: 100%; height: 100%; transform-origin: top left;">
-                                                                            <img :src="currentPreviewImageSrc" alt="预览" class="img-fluid"
-                                                                                 :style="{
-                                                      transform: `translate(${imageTranslateX}px, ${imageTranslateY}px) scale(${imageScale})`,
-                                                      transition: isDragging ? 'none' : 'transform 0.1s',
-                                                      cursor: isDragging ? 'grabbing' : 'grab',
-                                                           maxWidth: '100%',
-                                                           width: 'auto',
-                                                      height: 'auto',
-                                                           objectFit: 'contain',
-                                                           display: 'block'
-                                                    }"
-                                                                                 @load="handleImageLoad($event, 'auto')"
-                                                                                 @dragstart.prevent>
-                                                            </div>
-                                                                    </div>
-                                                                </div>
-<!--                                                                <div>🖼️ 图片已在上方预览区域显示</div>-->
-<!--                                                                <small>切换标签页可查看不同图片</small>-->
-                                                            </div>
-                                                        </div>
-                                                            <!-- Excel文件内容 -->
-                                                        <div v-if="file.fileType === 'excel'" style="padding: 0.25rem; overflow-y: auto;">
-                                                                <div>
-                                                                    <div v-if="autoProcessExcelPreviews && autoProcessExcelPreviews[file.filePath]">
-                                                                        <div v-if="autoProcessExcelPreviews[file.filePath].sheets && autoProcessExcelPreviews[file.filePath].sheets.length > 0">
-                                                                            <!-- 工作表选择 -->
-                                                                            <div v-if="autoProcessExcelPreviews[file.filePath].sheets.length > 1"
-                                                                                 class="mb-2">
-                                                                                <select
-                                                                                        class="form-select form-select-sm"
-                                                                                        :value="autoProcessExcelPreviews[file.filePath].currentSheet || 0"
-                                                                                        @change="changeExcelSheet(file.filePath, $event.target.value)">
-                                                                                    <option
-                                                                                            v-for="(sheet, sheetIndex) in autoProcessExcelPreviews[file.filePath].sheets"
-                                                                                            :key="sheetIndex"
-                                                                                            :value="sheetIndex">
-                                                                                        {{ sheet.name }}
-                                                                                    </option>
-                                                                                </select>
-                                                                            </div>
-                                                                            <!-- 表格显示 -->
-                                                                            <div class="table-responsive">
-                                                                                <table class="table table-sm table-bordered"
-                                                                                       style="font-size: 11px;">
-                                                                                    <tbody>
-                                                                                    <tr v-for="(row, rowIndex) in getCurrentExcelSheetData(file.filePath)"
-                                                                                        :key="rowIndex">
-                                                                                        <td
-                                                                                                v-for="(cell, cellIndex) in row"
-                                                                                                :key="cellIndex"
-                                                                                                :class="{ 'bg-light': rowIndex === 0 }"
-                                                                                                style="padding: 4px; white-space: nowrap;">
-                                                                                            {{ cell || '' }}
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                    </tbody>
-                                                                                </table>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div v-else class="text-muted small">
-                                                                            Excel文件为空或无法读取
-                                                                        </div>
-                                                                    </div>
-                                                                    <div v-else class="text-muted small">
-                                                                        <div class="spinner-border spinner-border-sm me-2"
-                                                                             role="status"></div>
-                                                                        加载中...
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <!-- 待处理的文件：列表显示 -->
-                                                <div v-if="pendingFiles.length > 0 && processedFiles.length == 0"
-                                                     class="mb-1">
-                                                    <h6 class="mb-2 small text-muted">待处理文件 ({{ pendingFiles.length
-                                                        }})</h6>
-                                                    <div class="list-group"
-                                                         style="max-height: 300px; overflow-y: auto;">
-                                                        <div
-                                                                v-for="(file, index) in pendingFiles"
-                                                                :key="'pending-' + index"
-                                                                class="list-group-item d-flex justify-content-between align-items-center"
-                                                                :class="{
-                          'list-group-item-warning': file.status === 'processing',
-                          'list-group-item-danger': file.status === 'error',
-                          'list-group-item-secondary': file.status === 'pending'
-                        }">
-                                                            <div class="d-flex align-items-center flex-grow-1"
-                                                                 style="min-width: 0;">
-                          <span class="me-2" style="font-size: 18px;">
-                            {{ file.fileType === 'excel' ? '📄' : '🖼️' }}
-                          </span>
-                                                                <div class="flex-grow-1" style="min-width: 0;">
-                                                                    <div class="fw-bold"
-                                                                         style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-                                                                         :title="file.fileName">
-                                                                        {{ file.fileName }}
-                                                                    </div>
-                                                                    <div class="small text-muted">
-                                                                        <span v-if="file.status === 'pending'">待处理</span>
-                                                                        <span v-else-if="file.status === 'processing'">处理中... ({{ file.progress }}%)</span>
-                                                                        <span v-else-if="file.status === 'success'">处理成功 ({{ file.orderCount || 0 }}条订单)</span>
-                                                                        <span v-else-if="file.status === 'error'">处理失败: {{ file.error }}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div class="d-flex gap-2 align-items-center"
-                                                                 style="flex-shrink: 0;">
-                                                                <!-- 处理进度条 -->
-                                                                <div v-if="file.status === 'processing'"
-                                                                     class="progress"
-                                                                     style="width: 100px; height: 20px;">
-                                                                    <div
-                                                                            class="progress-bar progress-bar-striped progress-bar-animated"
-                                                                            :style="{ width: file.progress + '%' }">
-                                                                        {{ file.progress }}%
-                                                                    </div>
-                                                                </div>
-                                                                <!-- 打开文件按钮 -->
-                                                                <button
-                                                                        v-if="file.status !== 'processing'"
-                                                                        class="btn btn-sm btn-outline-primary"
-                                                                        @click="openFile(file.filePath)"
-                                                                        title="打开文件">
-                                                                    📂
-                                                                </button>
-                                                                <!-- 预览图片按钮（仅图片文件） -->
-                                                                <!-- <button
-                            v-if="file.fileType === 'image' && file.status !== 'processing'"
-                            class="btn btn-sm btn-outline-info"
-                            @click="previewAutoProcessImage(file)"
-                            title="预览图片">
-                            👁️
-                              </button> -->
-                                                        </div>
-                                                    </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <!-- 右侧：订单列表 - 始终保留空间 -->
-                    <div class="col-md-6 order-items-section" style="display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;">
-                                    <div class="card h-100 p-2"
-                             style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; border: 2px solid #28a745;">
-                                        <div class="d-flex justify-content-between align-items-center mb-3"
-                                             style="flex-shrink: 0;">
-                                            <h6 class="mb-0">转换订单 ({{ filteredOrderItems.length }} 项)</h6>
-                                            <div class="d-flex gap-2">
-                                                <button
-                                                        v-if="hasCache && allOrdersAreDraft"
-                                                        class="btn btn-success btn-sm"
-                                                        @click="clearExcelOrImageSave">
-                                                    完成下单
-                                                </button>
-                                                <button
-                                            v-if="hasCache"
-                                            class="btn btn-danger btn-sm"
-                                            @click="reUpload">
-                                        重新上传
-                                    </button>
-                                            </div>
-                                        </div>
-
-                                        <!-- 订单列表 -->
-                                        <div class="order-list-container flex-grow-1"
-                                 ref="autoOrderListContainer"
-                                 style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0; background-color: #fff;">
-                                            <div v-if="filteredOrderItems.length === 0"
-                                                 class="text-center text-muted p-4" style="flex-shrink: 0;">
-                                                <div class="mb-2">📋 暂无订单</div>
-                                                <small>请处理文件夹中的文件后，系统将自动解析订单</small>
-                                            </div>
-                                            <template v-else>
-                                            <!-- 表头 -->
-                                                <div class="table-header-fixed bg-light border-bottom p-1 d-flex align-items-center fw-bold small"
-                                                     ref="autoOrderListHeader"
-                                                     style="flex-shrink: 0; position: sticky; top: 0; z-index: 10;">
-                                                <div style="width: 50px; flex-shrink: 0;"
-                                                     class="text-center table-cell">序号
-                                                </div>
-                                                <div style="flex: 2; min-width: 0;" class="table-cell">商品名称</div>
-                                                <div style="width: 50px; flex-shrink: 0;"
-                                                     class="text-center table-cell">数量
-                                                </div>
-                                                <div style="width: 50px; flex-shrink: 0;"
-                                                     class="text-center table-cell">规格
-                                                </div>
-                                                <div style="width: 100px; flex-shrink: 0;"
-                                                     class="text-center table-cell">状态
-                                                </div>
-                                            </div>
-                                            <!-- 订单列表 -->
-                                                <div ref="autoOrderListContent"
-                                                     style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0.5rem;">
-                                                <div
-                                                        v-for="(item, orderIndex) in filteredOrderItems"
-                                                        :key="orderIndex"
-                                                        class="order-item-card mb-1 p-1 bg-white rounded border-bottom"
-                                                        style="position: relative;">
-
-                                                    <!-- 之前添加新订单的商品选择面板 -->
-                                                    <div v-if="addingOrderBeforeIndex === orderIndex"
-                                                         class="mb-3 p-3 border rounded"
-                                                         style="background-color: #fff3cd; border-color: #ffc107;">
-                                                        <div class="d-flex justify-content-between align-items-center mb-2">
-                                                            <h6 class="mb-0" style="color: #856404;">在之前添加新订单</h6>
-                                                            <button class="btn btn-sm btn-link p-0"
-                                                                    @click="cancelAddOrderBefore"
-                                                                    style="font-size: 14px; color: #856404;">✕
-                                                            </button>
-                                                        </div>
-
-                                                        <!-- 商品搜索 -->
-                                                        <div class="mb-2 position-relative">
-                                                            <label class="form-label small mb-1"
-                                                                   style="color: #856404;">商品名称</label>
-                                                            <input
-                                                                    type="text"
-                                                                    class="form-control form-control-sm"
-                                                                    v-model="beforeOrderForm.goodsName"
-                                                                    @input="handleBeforeOrderGoodsNameInput"
-                                                                    placeholder="搜索商品..."
-                                                                    style="background-color: #fff;"
-                                                            />
-                                                            <!-- 搜索结果下拉框 -->
-                                                            <div v-if="beforeOrderForm.showSearchResults && beforeOrderForm.searchResults.length > 0"
-                                                                 class="border rounded mt-1 bg-white shadow-lg"
-                                                                 style="max-height: 200px; overflow-y: auto; position: absolute; z-index: 1000; width: 100%;">
-                                                                <div v-for="(goods, idx) in beforeOrderForm.searchResults"
-                                                                     :key="goods.nxDistributerGoodsId || idx"
-                                                                     class="p-2 border-bottom"
-                                                                     @click="selectBeforeOrderGoods(goods)"
-                                                                     style="cursor: pointer;"
-                                                                     :style="{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f8f9fa' }">
-                                                                    <div class="d-flex justify-content-between align-items-center">
-                                                                        <span>{{ goods.nxDgGoodsName }}</span>
-                                                                        <span class="badge bg-secondary ms-2"
-                                                                              v-if="goods.nxDgGoodsStandardname">
-                                                                {{ goods.nxDgGoodsStandardname }}
-                                                            </span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <!-- 已选商品显示 -->
-                                                        <div v-if="beforeOrderForm.selectedGoods"
-                                                             class="mb-2 p-2 bg-light rounded">
-                                                            <small class="text-muted">已选商品：</small>
-                                                            <strong>{{ beforeOrderForm.selectedGoods.nxDgGoodsName
-                                                                }}</strong>
-                                                            <span v-if="beforeOrderForm.selectedGoods.nxDgGoodsStandardname"
-                                                                  class="ms-2 badge bg-info">
-                                                    {{ beforeOrderForm.selectedGoods.nxDgGoodsStandardname }}
-                                                </span>
-                                                        </div>
-
-                                                        <!-- 数量、规格、备注 -->
-                                                        <div class="row g-2 mb-2">
-                                                            <div class="col-4">
-                                                                <label class="form-label small mb-1"
-                                                                       style="color: #856404;">数量</label>
-                                                                <input
-                                                                        type="number"
-                                                                        class="form-control form-control-sm"
-                                                                        v-model.number="beforeOrderForm.quantity"
-                                                                        
-                                                                        style="background-color: #fff;"
-                                                                />
-                                                            </div>
-                                                            <div class="col-4">
-                                                                <label class="form-label small mb-1"
-                                                                       style="color: #856404;">规格</label>
-                                                                <input
-                                                                        type="text"
-                                                                        class="form-control form-control-sm"
-                                                                        v-model="beforeOrderForm.standard"
-                                                                        style="background-color: #fff;"
-                                                                />
-                                                            </div>
-                                                            <div class="col-4">
-                                                                <label class="form-label small mb-1"
-                                                                       style="color: #856404;">备注</label>
-                                                                <input
-                                                                        type="text"
-                                                                        class="form-control form-control-sm"
-                                                                        v-model="beforeOrderForm.remark"
-                                                                        style="background-color: #fff;"
-                                                                />
-                                                            </div>
-                                                        </div>
-
-                                                        <!-- 操作按钮 -->
-                                                        <div class="d-flex gap-2 justify-content-end">
-                                                            <button class="btn btn-sm btn-secondary"
-                                                                    @click="cancelAddOrderBefore">
-                                                                取消
-                                                            </button>
-                                                            <button class="btn btn-sm btn-primary"
-                                                                    @click="saveBeforeOrder(item, orderIndex, uploadType || 'excel')"
-                                                                    :disabled="!beforeOrderForm.selectedGoods || !beforeOrderForm.quantity">
-                                                                保存订单
-                                                            </button>
-                                                        </div>
-                                                    </div>
-
-
-                                                    <!-- 第一行：序号、商品名称、数量、规格、状态 -->
-                                                    <div class="d-flex align-items-center gap-2 mb-1"
-                                                         style="min-height: 32px;">
-                                                        <!-- 序号 -->
-                                                        <div style="width: 50px; flex-shrink: 0;"
-                                                             class="text-center fw-bold">
-                                                            {{ orderIndex + 1 }}
-                                                        </div>
-                                                        <!-- 商品名称（可编辑） -->
-                                                        <div style="flex: 2; min-width: 0; display: flex; align-items: center; gap: 4px;"
-                                                             class="position-relative">
-                                                            <input
-                                                                    type="text"
-                                                                    v-model="item.nxDoGoodsName"
-                                                                    @input="handleGoodsNameInput(item, orderIndex, 'auto')"
-                                                                    @focus="handleGoodsNameFocus(item, orderIndex, 'auto')"
-                                                                    @blur="handleGoodsNameBlur(item, orderIndex, 'auto')"
-                                                                    class="form-control form-control-sm"
-                                                                    :disabled="item.nxDoStatus === 0"
-                                                                    placeholder="请输入商品名称"
-                                                                    style="font-size: 14px; background-color: transparent; flex: 1;"
-                                                            />
-                                                            <!-- 显示已匹配商品列表的图标 -->
-                                                            <button
-                                                                    v-if="item.nxDoStatus !== 0 && isValidOrderQuantityAndStandard(item) && (item?.nxDistributerGoodsEntityList && item.nxDistributerGoodsEntityList.length > 0 || item?.nxGoodsEntities && item.nxGoodsEntities.length > 0)"
-                                                                    class="btn btn-link btn-sm p-1"
-                                                                    @click.stop="toggleMatchedGoods(orderIndex)"
-                                                                    :title="showMatchedGoods[orderIndex] ? '隐藏已匹配商品' : '显示已匹配商品'"
-                                                                    style="flex-shrink: 0; text-decoration: none; color: #6c757d; background-color: #f0f0f0; border-radius: 4px;"
-                                                            >
-                                                                <span v-if="showMatchedGoods[orderIndex]">▼</span>
-                                                                <span v-else>▶</span>
-                                                            </button>
-                                                        </div>
-                                                        <!-- 数量 -->
-                                                        <div style="width: 50px; flex-shrink: 0;">
-                                                            <input
-                                                                    type="number"
-                                                                    v-model.number="item.nxDoQuantity"
-                                                                    @input="handleQuantityInput(item, orderIndex, 'auto')"
-                                                                    class="form-control form-control-sm text-center"
-                                                                    :disabled="item.nxDoStatus === 0"
-                                                                    placeholder="数量"
-                                                                    style="background-color: transparent;"
-                                                            />
-                                                        </div>
-                                                        <!-- 规格 -->
-                                                        <div style="width: 50px; flex-shrink: 0;">
-                                                            <input
-                                                                    type="text"
-                                                                    v-model="item.nxDoStandard"
-                                                                    @input="handleStandardChange(item, orderIndex, 'auto')"
-                                                                    class="form-control form-control-sm text-center"
-                                                                    :disabled="item.nxDoStatus === 0"
-                                                                    placeholder="规格"
-                                                                    style="background-color: transparent;"
-                                                            />
-                                                        </div>
-                                                        <!-- 状态 -->
-                                                        <div style="width: 100px; flex-shrink: 0;"
-                                                             class="d-flex align-items-center justify-content-center gap-1">
-                                                            <button v-if="item.nxDoStatus === 0"
-                                                                    class="btn btn-sm"
-                                                                    style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
-                                                                    @click="handleUpdateOrder(item, orderIndex, 'auto')"
-                                                                    title="修改"
-                                                                    @mouseenter="$event.target.style.color='#495057'"
-                                                                    @mouseleave="$event.target.style.color='#6c757d'">
-                                                                ✏️
-                                                            </button>
-                                                            <template v-else-if="item.nxDoStatus === -2">
-                                                                <button class="btn btn-sm"
-                                                                        :disabled="!isValidOrderQuantityAndStandard(item)"
-                                                                        :style="!isValidOrderQuantityAndStandard(item) ? 'font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #adb5bd; cursor: not-allowed;' : 'font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;'"
-                                                                        @click="handleSaveNewGoods(item, orderIndex, 'auto')"
-                                                                        :title="!isValidOrderQuantityAndStandard(item) ? '请填写订单数量和规格' : '保存新商品'"
-                                                                        @mouseenter="!isValidOrderQuantityAndStandard(item) ? null : $event.target.style.color='#495057'"
-                                                                        @mouseleave="!isValidOrderQuantityAndStandard(item) ? null : $event.target.style.color='#6c757d'">
-                                                                    {{ !isValidOrderQuantityAndStandard(item) ? '⚠️' : '💾' }}
-                                                                </button>
-                                                            </template>
-                                                            <button class="btn btn-sm"
-                                                                    style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
-                                                                    @click="handleAddNewOrderBefore(item, orderIndex, 'auto')"
-                                                                    title="之前添加订单"
-                                                                    @mouseenter="$event.target.style.color='#495057'"
-                                                                    @mouseleave="$event.target.style.color='#6c757d'">
-                                                                ⬆️
-                                                            </button>
-                                                            <button class="btn btn-sm"
-                                                                    style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
-                                                                    @click="handleDeleteOrderFromExcel(item, orderIndex, 'auto')"
-                                                                    title="删除"
-                                                                    @mouseenter="$event.target.style.color='#dc3545'"
-                                                                    @mouseleave="$event.target.style.color='#6c757d'">
-                                                                🗑️
-                                                            </button>
-
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- 商品搜索下拉框（相对于订单项定位，覆盖整个订单列表宽度） -->
-                                                    <div
-                                                            v-if="orderArrIndex === orderIndex && item.nxDoStatus !== 0 && (strArr.length > 0 || nxArr.length > 0)"
-                                                            class="goods-search-dropdown position-absolute bg-white border rounded shadow-lg p-2"
-                                                            style="top: 100%; left: -0.5rem; right: -0.5rem; width: calc(100% + 1rem); z-index: 1000; max-height: 400px; overflow-y: auto; margin-top: 4px;">
-
-                                                        <!-- 搜索标题 -->
-                                                        <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
-                                                            <span class="text-muted small">搜索{{ strArr.length + nxArr.length }}个商品:</span>
-                                                            <button class="btn btn-sm btn-link p-0" @click="closeStr"
-                                                                    style="font-size: 12px;">✕
-                                                            </button>
-                                                        </div>
-
-                                                        <!-- 配送商商品列表 -->
-                                                        <div v-if="strArr.length > 0" class="mb-2">
-                                                            <div class="text-muted small fw-bold mb-2">配送商商品 ({{
-                                                                strArr.length
-                                                                }})
-                                                            </div>
-                                                            <div
-                                                                    v-for="(goods, goodsIndex) in strArr"
-                                                                    :key="goods.nxDistributerGoodsId || goodsIndex"
-                                                                    class="goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                                    @click.stop="selectSearchResult(goods, orderIndex, currentSourceType || uploadType || 'auto')"
-                                                                    style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
-                                                                <!-- 商品信息 -->
-                                                                <div class="flex-grow-1" style="min-width: 0;">
-                                                        <span class="text-muted fw-bold me-2"
-                                                              style="color: #666;">{{ goodsIndex + 1 }}.</span>
-                                                                    <span v-if="goods.nxDgGoodsBrand && goods.nxDgGoodsBrand !== 'null'"
-                                                                          class="badge bg-warning text-dark me-1">
-                                  {{ goods.nxDgGoodsBrand }}
-                                </span>
-                                                                    <span class="text-dark">{{ goods.nxDgGoodsName }}</span>
-                                                                    <span class="text-muted small ms-1">
-                                  ({{ goods.nxDgGoodsStandardWeight && goods.nxDgGoodsStandardWeight !== 'null'
-                                    ? goods.nxDgGoodsStandardWeight + '/' + goods.nxDgGoodsStandardname
-                                    : goods.nxDgGoodsStandardname }})
-                                </span>
-                                                                </div>
-                                                                <!-- 选择按钮 -->
-                                                                <button
-                                                                        class="btn btn-secondary btn-sm"
-                                                                        @click.stop="selectSearchResult(goods, orderIndex, currentSourceType || uploadType || 'auto')"
-                                                                        :class="{ 'btn-warning': !goods.nxDgNxGoodsId }"
-                                                                        style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; background-color: #6c757d; border-color: #6c757d; color: #fff; margin-left: 8px;">
-                                                                    {{ goods.nxDgNxGoodsId ? '选择' : '临时' }}
-                                                                </button>
-                                                            </div>
-                                                        </div>
-
-                                                        <!-- 系统商品列表 -->
-                                                        <div v-if="nxArr.length > 0" class="mb-2">
-                                                            <div class="text-muted small fw-bold mb-2">系统商品 ({{
-                                                                nxArr.length
-                                                                }})
-                                                            </div>
-                                                            <div
-                                                                    v-for="(goods, nxIndex) in nxArr"
-                                                                    :key="goods.nxGoodsId || nxIndex"
-                                                                    class="goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                                    style="cursor: pointer;">
-                                                                <!-- 商品信息 -->
-                                                                <div class="flex-grow-1" style="min-width: 0;">
-                                                        <span class="text-muted fw-bold me-2"
-                                                              style="color: #666;">{{ strArr.length + nxIndex + 1 }}.</span>
-                                                                    <span v-if="goods.nxGoodsBrand && goods.nxGoodsBrand !== 'null'"
-                                                                          class="badge bg-warning text-dark me-1">
-                                {{ goods.nxGoodsBrand }}
-                              </span>
-                                                                    <span class="text-dark">{{ goods.nxGoodsName }}</span>
-                                                                    <span v-if="goods.nxAliasEntities && goods.nxAliasEntities.length > 0"
-                                                                          v-for="(alias, aliasIndex) in goods.nxAliasEntities"
-                                                                          :key="alias.nxDaAliasName || aliasIndex"
-                                                                          class="text-primary me-1">
-                                @{{ alias.nxDaAliasName }}
-                              </span>
-                                                                    <span class="text-muted small ms-1">
-                                <template v-if="goods.nxGoodsStandardWeight && goods.nxGoodsStandardWeight !== 'null'">
-                                  <template v-if="goods.nxGoodsStandardname !== '斤'">
-                                    ({{ goods.nxGoodsStandardWeight }}/{{ goods.nxGoodsStandardname }})
-                                  </template>
-                                </template>
-                                <template v-else>
-                                  ({{ goods.nxGoodsStandardname }})
-                                </template>
-                              </span>
-                                                                    <span v-if="goods.nxGoodsPlace && goods.nxGoodsPlace !== 'null'"
-                                                                          class="text-muted small me-2">
-                                产地:{{ goods.nxGoodsPlace }}
-                              </span>
-                                                                    <span v-if="goods.nxGoodsDetail && goods.nxGoodsDetail !== 'null'"
-                                                                          class="text-muted small">
-                                {{ goods.nxGoodsDetail }}
-                              </span>
-                                                                </div>
-                                                                <!-- 下载按钮 -->
-                                                                <button
-                                                                        class="btn btn-info btn-sm"
-                                                                        @click.stop="downLoadGoodsNx(goods, orderIndex)"
-                                                                        style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; margin-left: 8px;"
-                                                                        title="下载商品">
-                                                                    ⬇️
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- 第二行：备注（如果有） -->
-                                                    <div v-if="item?.nxDoAddRemark || item?.nxDoRemark"
-                                                         class="d-flex align-items-center gap-2 mt-1 ps-5">
-                                                        <span class="text-muted small">备注:</span>
-                                                        <input
-                                                                type="text"
-                                                                :value="item.nxDoRemark"
-                                                                @input="handleRemarkInput(item, orderIndex, 'auto')"
-                                                                class="form-control form-control-sm"
-                                                                :disabled="item.nxDoStatus === 0"
-                                                                placeholder="备注"
-                                                                maxlength="15"
-                                                                style="font-size: 12px; background-color: transparent; width: 200px; flex-shrink: 0;"
-                                                        />
-                                                    </div>
-
-                                                    <!-- 已匹配的商品列表（相对于整个订单项定位） -->
-                                                    <div
-                                                            v-if="item && item.nxDoStatus !== 0 && showMatchedGoods[orderIndex] && (item?.nxDistributerGoodsEntityList && item.nxDistributerGoodsEntityList.length > 0 || item?.nxGoodsEntities && item.nxGoodsEntities.length > 0) && !(orderArrIndex === orderIndex && (strArr.length > 0 || nxArr.length > 0))"
-                                                            class="matched-goods-list position-absolute bg-white border rounded shadow-lg p-2"
-                                                            style="top: 100%; left: -0.5rem; right: -0.5rem; width: calc(100% + 1rem); z-index: 999; max-height: 400px; overflow-y: auto; margin-top: 4px; border-left: 1px solid gray;">
-
-                                                        <!-- 标题栏和关闭按钮 -->
-                                                        <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
-                                                            <span class="text-muted small fw-bold">已匹配商品列表</span>
-                                                            <button
-                                                                    class="btn btn-sm btn-link p-0"
-                                                                    @click="toggleMatchedGoods(orderIndex)"
-                                                                    style="font-size: 12px; color: #6c757d;"
-                                                                    title="隐藏">
-                                                                ✕
-                                                            </button>
-                                                        </div>
-
-                                                        <!-- 配送商已匹配商品列表 -->
-                                                        <div v-if="item?.nxDistributerGoodsEntityList && item.nxDistributerGoodsEntityList.length > 0"
-                                                             class="mb-2">
-                                                            <div class="text-muted small fw-bold mb-2">配送商商品 ({{
-                                                                item?.nxDistributerGoodsEntityList?.length || 0 }})
-                                                            </div>
-                                                            <div
-                                                                    v-for="(orderGoods, orderGoodsIndex) in item?.nxDistributerGoodsEntityList || []"
-                                                                    :key="orderGoods.nxDistributerGoodsId || orderGoodsIndex"
-                                                                    class="matched-goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                                    style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
-                                                                <!-- 商品信息 -->
-                                                                <div class="flex-grow-1" style="min-width: 0;">
-                                                                    <span class="text-muted fw-bold me-2"
-                                                                          style="color: #666;">{{ orderGoodsIndex + 1 }}.</span>
-                                                                    <span v-if="orderGoods.nxDgGoodsBrand && orderGoods.nxDgGoodsBrand !== 'null'"
-                                                                          class="badge bg-warning text-dark me-1">
-                                {{ orderGoods.nxDgGoodsBrand }}
-                              </span>
-                                                                    <span class="text-dark"
-                                                                          @click.stop="choiceGoodsForApply(orderGoods, orderIndex, 'auto')">{{ orderGoods.nxDgGoodsName }}</span>
-                                                                    <span class="text-muted small ms-1">
-                                ({{ orderGoods.nxDgGoodsStandardWeight && orderGoods.nxDgGoodsStandardWeight !== 'null'
-                                  ? orderGoods.nxDgGoodsStandardWeight + '/' + orderGoods.nxDgGoodsStandardname
-                                  : orderGoods.nxDgGoodsStandardname }})
-                              </span>
-                                                                </div>
-                                                                <!-- 选择按钮 -->
-                                                                <button
-                                                                        class="btn btn-sm"
-                                                                        style="flex-shrink: 0; width: 53px; height: 20px; font-size: 11px; padding: 2px 6px; background-color: #6c757d; border-color: #6c757d; color: #fff; margin-left: 8px;"
-                                                                        @click.stop="choiceGoodsForApply(orderGoods, orderIndex, 'auto')">
-                                                                    选择
-                                                                </button>
-                                                            </div>
-                                                        </div>
-
-                                                        <!-- 系统商品已匹配商品列表 -->
-                                                        <div v-if="item?.nxGoodsEntities && item.nxGoodsEntities.length > 0"
-                                                             class="mb-2">
-                                                            <div class="text-muted small fw-bold mb-2">系统商品 ({{
-                                                                item?.nxGoodsEntities?.length || 0 }})
-                                                            </div>
-                                                            <div
-                                                                    v-for="(nxGoods, nxGoodsIndex) in item?.nxGoodsEntities || []"
-                                                                    :key="nxGoods.nxGoodsId || nxGoodsIndex"
-                                                                    class="matched-goods-item p-2 mb-1 rounded hover-bg d-flex align-items-center justify-content-between"
-                                                                    style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
-                                                                <!-- 商品信息 -->
-                                                                <div class="flex-grow-1" style="min-width: 0;">
-                                                                    <span class="text-muted fw-bold me-2"
-                                                                          style="color: #666;">{{ nxGoodsIndex + 1 }}.</span>
-                                                                    <span v-if="nxGoods.nxGoodsBrand && nxGoods.nxGoodsBrand !== 'null'"
-                                                                          class="badge bg-warning text-dark me-1">
-                          {{ nxGoods.nxGoodsBrand }}
-                                </span>
-                                                                    <span class="text-dark">{{ nxGoods.nxGoodsName }}</span>
-                                                                    <span class="text-muted small ms-1">
-                          ({{ nxGoods.nxGoodsStandardWeight && nxGoods.nxGoodsStandardWeight !== 'null'
-                            ? nxGoods.nxGoodsStandardWeight + '/' + nxGoods.nxGoodsStandardname
-                            : nxGoods.nxGoodsStandardname }})
-                                </span>
-                                                                </div>
-                                                                <!-- 下载按钮 -->
-                                                                <button
-                                                                        class="btn btn-sm btn-info"
-                                                                        style="flex-shrink: 0; width: 53px; height: 20px; font-size: 11px; padding: 2px 6px; margin-left: 8px;"
-                                                                        @click.stop="downLoadGoodsNx(nxGoods, orderIndex)">
-                                                                    ⬇️
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-<!--        </div>-->
         <!-- 修改订单弹窗（参考 TodayOrders.vue） -->
         <div v-if="showEditOrderModal" class="order-edit-overlay" @click.self="closeEditOrderModal">
             <div class="order-edit-popup">
@@ -2651,21 +559,22 @@
                 <!-- 输入内容 -->
                 <div class="popup-body p-3">
                     <!-- 订货数量 -->
-                    <div class="input-group mb-3 d-flex align-items-center justify-content-between">
-                        <label class="form-label mb-0 me-3">订货数量:</label>
-                        <input
-                                type="number"
-                                class="form-control form-control-sm"
-                                v-model="editOrderForm.quantity"
-                                style="width: 200px;"
-                                placeholder="请输入数量"
-                        />
+                    <div class="input-group mb-3 d-flex align-items-center">
+                        <label class="form-label mb-0" style="width: 90px; flex-shrink: 0;">订货数量:</label>
+                        <div style="width: 300px; flex-shrink: 0; text-align: left;">
+                            <input
+                                    type="number"
+                                    class="form-control form-control-sm"
+                                    v-model="editOrderForm.quantity"
+                                    placeholder="请输入数量"
+                            />
+                        </div>
                     </div>
 
                     <!-- 单位 -->
-                    <div class="input-group mb-3 d-flex align-items-start justify-content-between">
-                        <label class="form-label mb-0 me-3" style="flex-shrink: 0;">单位:</label>
-                        <div style="flex: 1;">
+                    <div class="input-group mb-3 d-flex align-items-start">
+                        <label class="form-label mb-0" style="width: 90px; flex-shrink: 0;">单位:</label>
+                        <div style="width: 300px; flex-shrink: 0; text-align: left;">
                             <div class="d-flex flex-wrap gap-2">
                                 <!-- 商品的标准单位 -->
                                 <button
@@ -2703,7 +612,7 @@
                                         placeholder="请输入规格名称"
                                         style="flex: 1; max-width: 200px;"
                                 />
-                                <button class="btn btn-sm btn-outline-secondary">取消
+                                <button class="btn btn-sm btn-outline-secondary" @click="showAddStandard = false">取消
                                 </button>
                                 <button class="btn btn-sm btn-primary" @click="confirmAddStandard">保存</button>
                             </div>
@@ -2711,16 +620,17 @@
                     </div>
 
                     <!-- 备注 -->
-                    <div class="input-group mb-3 d-flex align-items-center justify-content-between">
-                        <label class="form-label mb-0 me-3">备注:</label>
-                        <input
-                                type="text"
-                                class="form-control form-control-sm"
-                                v-model="editOrderForm.remark"
-                                style="width: 300px;"
-                                placeholder="请输入备注（最多15个字符）"
-                                maxlength="15"
-                        />
+                    <div class="input-group mb-3 d-flex align-items-center">
+                        <label class="form-label mb-0" style="width: 90px; flex-shrink: 0;">备注:</label>
+                        <div style="width: 300px; flex-shrink: 0; text-align: left;">
+                            <input
+                                    type="text"
+                                    class="form-control form-control-sm"
+                                    v-model="editOrderForm.remark"
+                                    placeholder="请输入备注（最多15个字符）"
+                                    maxlength="15"
+                            />
+                        </div>
                     </div>
                 </div>
 
@@ -2734,10 +644,17 @@
                     </button>
                     <div style="width: 48px; flex-shrink: 0;"></div>
                     <button
+                            class="btn btn-sm btn-warning"
+                            @click="handleRevertOrderFromEditModal"
+                            style="flex: 0 0 auto; width: 90px;">
+                        重新识别
+                    </button>
+                    <div style="width: 48px; flex-shrink: 0;"></div>
+                    <button
                             class="btn btn-sm btn-secondary"
                             @click="closeEditOrderModal"
                             style="flex: 0 0 auto; width: 80px;">
-                        取消
+                        关闭
                     </button>
                     <div style="width: 8px; flex-shrink: 0;"></div>
                     <button
@@ -2751,29 +668,239 @@
         </div>
     </div>
 
+    <!-- 调整订单内容弹窗 -->
+    <div v-if="showFixItemsModal" class="order-edit-overlay" @click.self="closeFixItemsModal">
+        <div class="order-edit-popup" style="max-width: 600px;">
+            <!-- 顶部标题 -->
+            <div class="popup-header text-center p-3 bg-light border-bottom">
+                <h5 class="mb-0">调整订单内容</h5>
+                <div class="small text-muted mt-2">请输入您的修改要求，系统将自动调整订单</div>
+            </div>
+
+            <!-- 输入内容 -->
+            <div class="popup-body p-3">
+                <!-- 当前订单信息预览 -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">当前订单列表：</label>
+                    <div class="border rounded p-2 bg-light" style="max-height: 200px; overflow-y: auto;">
+                        <div v-for="(item, index) in currentFixItemsOrderList" :key="index" class="mb-1 small">
+                            <span class="text-muted">{{ index + 1 }}.</span>
+                            <span class="ms-2">{{ item.nxDoGoodsName || '未命名商品' }}</span>
+                            <span class="text-muted ms-2">{{ item.nxDoQuantity || '0' }} {{ item.nxDoStandard || '' }}</span>
+                            <span v-if="item.nxDoRemark" class="text-muted ms-2">({{ item.nxDoRemark }})</span>
+                        </div>
+                        <div v-if="currentFixItemsOrderList.length === 0" class="text-muted text-center py-2">
+                            暂无订单
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 修改要求输入 -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">修改要求：</label>
+                    <textarea
+                            class="form-control form-control-sm"
+                            v-model="fixItemsRequirement"
+                            rows="5"
+                            placeholder='批量修改要求'
+                            style="resize: vertical;"
+                    ></textarea>
+                    <div class="form-text">请描述对解析订单的批量修改要求</div>
+                </div>
+
+                <!-- 处理状态 -->
+                <div v-if="isProcessingFixItems" class="text-center py-2">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                        <span class="visually-hidden">处理中...</span>
+                    </div>
+                    <span class="ms-2">正在处理您的修改要求，请稍候...</span>
+                </div>
+            </div>
+
+            <!-- 按钮组 -->
+            <div class="popup-footer d-flex p-3 border-top bg-light justify-content-center">
+                <button
+                        class="btn btn-sm btn-secondary"
+                        @click="closeFixItemsModal"
+                        :disabled="isProcessingFixItems"
+                        style="flex: 0 0 auto; width: 100px;">
+                    取消
+                </button>
+                <div style="width: 16px; flex-shrink: 0;"></div>
+                <button
+                        class="btn btn-sm btn-primary"
+                        @click.stop="confirmFixItems"
+                        :disabled="isProcessingFixItems || !fixItemsRequirement.trim()"
+                        style="flex: 0 0 auto; width: 100px;">
+                    确定
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任务全部完成提示弹窗 -->
+    <div v-if="showTaskCompleteModal" class="order-edit-overlay" @click.self="closeTaskCompleteModal">
+        <div class="order-edit-popup" style="max-width: 420px;" ref="taskCompleteModalRef" tabindex="-1">
+            <div class="popup-header text-center p-3 bg-light border-bottom">
+                <h5 class="mb-0">提示</h5>
+            </div>
+            <div class="popup-body p-3 text-center">
+                <div class="mb-3">这个任务订单已经全部处理完成，请检查订单是否正确</div>
+            </div>
+            <div class="popup-footer d-flex p-3 border-top bg-light justify-content-center gap-2">
+                <button class="btn btn-sm btn-secondary" @click="closeTaskCompleteModal"
+                        style="flex: 0 0 auto; width: 100px;">检查
+                </button>
+                <button ref="taskCompleteModalCompleteBtn" class="btn btn-sm btn-primary" @click="confirmTaskCompleteModal"
+                        style="flex: 0 0 auto; width: 100px;">完成
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 保存新商品弹窗 -->
+    <div v-if="showSaveNewGoodsModal" class="order-edit-overlay" @click.self="closeSaveNewGoodsModal">
+        <div class="order-edit-popup" style="max-width: 600px;">
+            <!-- 顶部标题 -->
+            <div class="popup-header text-center p-3 bg-light border-bottom">
+                <h5 class="mb-0">保存新商品</h5>
+                <!-- <div class="small text-muted mt-2">请确认并修改商品信息</div> -->
+            </div>
+
+            <!-- 输入内容 -->
+            <div class="popup-body p-3">
+                <!-- 商品名称 -->
+                <div class="mb-3 d-flex gap-3">
+                    <label class="form-label fw-bold mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">商品名称：</label>
+                    <div class="d-flex flex-column flex-grow-1">
+                        <input
+                                type="text"
+                                class="form-control-add"
+                                v-model="saveNewGoodsForm.goodsName"
+                                placeholder="请输入商品名称"
+                        />
+                 </div>
+                </div>
+
+                <!-- 商品规格名称 -->
+                <div class="mb-3 d-flex gap-3">
+                    <label class="form-label fw-bold mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">商品规格名称：</label>
+                    <div class="d-flex flex-column flex-grow-1">
+                        <input
+                                type="text"
+                                class="form-control-add"
+                                v-model="saveNewGoodsForm.standardName"
+                                placeholder="请输入商品规格名称（如：盒、箱、斤等）"
+                        />
+                    </div>
+                </div>
+
+                <!-- 商品规格重量 -->
+                <div class="mb-3 d-flex gap-3">
+                    <label class="form-label fw-bold mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">商品规格重量：</label>
+                    <div class="d-flex flex-column flex-grow-1">
+                        <input
+                                type="text"
+                                class="form-control-add"
+                                v-model="saveNewGoodsForm.standardWeight"
+
+                        />
+                        <div class="form-text">可选，如：250ml、500g等</div>
+                    </div>
+                </div>
+
+
+                <!-- 箱单位 -->
+                <div class="mb-3 d-flex gap-3">
+                    <label class="form-label fw-bold mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">大包装单位：</label>
+                    <div class="d-flex flex-column flex-grow-1">
+                        <input
+                                type="text"
+                                class="form-control-add"
+                                v-model="saveNewGoodsForm.cartonUnit"
+
+                        />
+                        <div class="form-text">可选，如：箱</div>
+                    </div>
+                </div>
+
+                <!-- 每箱数量 -->
+                <div class="mb-3 d-flex gap-3">
+                    <label class="form-label fw-bold mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">大包装数量：</label>
+                    <div class="d-flex flex-column flex-grow-1">
+                        <input
+                                type="number"
+                                class="form-control-add"
+                                v-model.number="saveNewGoodsForm.itemsPerCarton"
+
+                                min="0"
+                                step="1"
+                        />
+                        <div class="form-text">可选，只能输入数字，如：36</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 按钮组 -->
+            <div class="popup-footer d-flex p-3 border-top bg-light justify-content-center">
+                <button
+                        class="btn btn-sm btn-secondary"
+                        @click="closeSaveNewGoodsModal"
+                        style="flex: 0 0 auto; width: 100px;">
+                    取消
+                </button>
+                <div style="width: 16px; flex-shrink: 0;"></div>
+                <button
+                        class="btn btn-sm btn-primary"
+                        @click="confirmSaveNewGoods"
+                        :disabled="!saveNewGoodsForm.standardName || !saveNewGoodsForm.standardName.trim()"
+                        style="flex: 0 0 auto; width: 100px;">
+                    保存
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- 图片预览/裁剪弹窗组件 -->
     <ImageCropperModal
-        v-model="showImagePreviewModal"
-        :src="previewImageDataUrl"
-        title="图片预览与裁剪"
-        @cancel="closeImagePreviewModal"
-        @direct-recognize="handleDirectRecognize"
-        @confirm="handleCropConfirm"
+            v-model="showImagePreviewModal"
+            :src="previewImageDataUrl"
+            title="图片预览与裁剪"
+            @cancel="closeImagePreviewModal"
+            @direct-recognize="handleDirectRecognize"
+            @direct-recognize-ai="handleDirectRecognizeAi"
+            @confirm="handleCropConfirm"
     />
 
 </template>
 
 <script>
     import api from "../api/all";
-    import {useStore} from 'vuex';
+    import taskQueue from "../utils/taskQueue";
+    import taskExecutor from "../utils/taskExecutor";
+    import {parseOrderFromText} from '../utils/pasteOrderParser';
     import ImageCropperModal from './ImageCropperModal.vue';
+    import ExcelUpload from './upload/ExcelUpload.vue';
+    import ImageUpload from './upload/ImageUpload.vue';
+    import PasteUpload from './upload/PasteUpload.vue';
+    import ExcelPasteUpload from './upload/ExcelPasteUpload.vue';
+    import AutoUpload from './upload/AutoUpload.vue';
+    import OrderList from './OrderList.vue';
+    import DraftOrderList from './DraftOrderList.vue';
 
     export default {
         name: 'PlaceOrder',
         components: {
-            ImageCropperModal
+            ImageCropperModal,
+            ExcelUpload,
+            ImageUpload,
+            PasteUpload,
+            ExcelPasteUpload,
+            AutoUpload,
+            OrderList,
+            DraftOrderList
         },
-        emits: ['order-saved', 'upload-type-change'],
+        emits: ['order-saved', 'upload-type-change', 'switch-to-today-orders', 'task-added'],
         props: {
             // 从父组件传递的客户信息
             selectedAllCustomer: {
@@ -2796,15 +923,23 @@
         data() {
             return {
                 // 上传类型
-                uploadType: 'excel', // 'excel'、'image'、'paste' 或 'auto'（默认 excel，以便自动加载 excel 缓存）
+                uploadType: 'paste', // 'excel'、'image'、'paste' 或 'auto'（默认 excel，以便自动加载 excel 缓存）
+                excelPasteEverShown: false, // Excel 粘贴是否曾被打开过（用于保持挂载，避免每次切换都重建 vxe-table）
 
                 // 订单相关
-                orderItems: [], // 订单项列表（Excel 和图片上传共用）
-                pasteOrderItems: [], // 复制粘贴的订单项列表（独立）
+                orderItems: [], // 订单项列表（所有上传模式统一）
                 savingOrder: false, // 是否正在保存订单
                 recognizingImage: false, // 是否正在识别图片
-                hasCache: false, // 是否有当前部门的缓存数据（Excel 和图片）
-                pasteHasCache: false, // 复制粘贴是否有缓存数据
+                recognizingExcel: false, // 是否正在识别Excel
+                hasRunningTask: false, // 是否有进行中的识别任务
+                taskCheckTimer: null, // 任务状态检查定时器
+                currentTaskId: null, // 当前任务ID（后端 nxOcrTaskId，统一用于各上传模式）
+                currentTask: null, // 当前任务对象（后端返回的 task）
+                taskLoading: false, // 切换任务时请求任务内容中（用于蒙版）
+                taskStatusPollTimer: null, // nxOcrTaskStatus===0 时轮询 getTaskOrders 的定时器
+                pasteLastState: null, // 进入「添加新内容」前保存的状态，关闭时仅做页面恢复不请求接口
+                excelPasteLastState: null, // Excel 粘贴：进入「添加新表格」前保存的状态
+                imageLastState: null, // 进入「添加新图片」前保存的状态，关闭时仅做页面恢复不请求接口
 
                 // Excel上传相关
                 uploadedExcelFile: null, // 当前上传的Excel文件信息
@@ -2819,7 +954,14 @@
                 isDragging: false, // 是否正在拖拽
                 dragStartX: 0, // 拖拽起始X坐标
                 dragStartY: 0, // 拖拽起始Y坐标
-                
+                // 各上传模式的 TTS 状态（paste / image / excelPaste / excel），统一供播放/暂停/重读/继续按钮
+                ttsStateByMode: {
+                    paste: {isTTSPlaying: false, isTTSLoading: false, stoppedIndex: -1},
+                    image: {isTTSPlaying: false, isTTSLoading: false, stoppedIndex: -1},
+                    excelPaste: {isTTSPlaying: false, isTTSLoading: false, stoppedIndex: -1},
+                    excel: {isTTSPlaying: false, isTTSLoading: false, stoppedIndex: -1}
+                },
+
                 // 图片裁剪相关
                 showImagePreviewModal: false, // 是否显示图片预览/裁剪弹窗
                 previewImageDataUrl: null, // 弹窗中预览的图片DataURL
@@ -2827,9 +969,27 @@
                 // 复制粘贴相关
                 pasteInputText: '', // 粘贴的文本内容
                 pasteSaveCount: null, // 复制粘贴已保存订单数量（null=草稿状态，数字=已保存状态）
+                draftSelectedOrderIndex: -1, // 草稿列表中要滚动并选中的订单索引（0-based），-1 表示不选中
                 pasteOriginText: '', // 原始粘贴文本（用于重新粘贴）
                 pasteInputContent: '', // 输入框内容（与 pasteInputText 同步）
+                pasteInvalidLineIndices: [], // 解析后校验不合格的行索引（兼容）
+                pasteInvalidSegments: [], // 解析后校验不合格的片段 { lineIndex, segmentText }，用于片段级红色高亮
                 showDeepSeekLoading: false, // DeepSeek API 加载状态
+
+                // Excel 粘贴相关
+                excelPasteSaveCount: null, // Excel 粘贴已保存订单数量（null=草稿状态，数字=已保存状态）
+                excelPasteRawData: [], // Excel 粘贴的原始数据（用于预览）
+                excelPasteTableData: Array.from({length: 50}, () => ({
+                    goodsName: '',
+                    quantity: '',
+                    specification: '',
+                    specificationWeight: '',
+                    cartonQuantity: '',
+                    cartonName: '',
+                    remark: ''
+                })), // Excel 粘贴表格数据，包含固定列：商品名称、数量、规格、规格重量、大包装数量、大包装名称、备注，默认50行
+                currentPasteRowIndex: 0, // 当前粘贴的起始行索引
+                currentPasteColIndex: 0, // 当前粘贴的起始列索引
 
                 // 商品搜索相关
                 strArr: [], // 配送商商品搜索结果
@@ -2846,8 +1006,6 @@
                 showMatchedGoods: {}, // 跟踪每个订单的已匹配商品列表显示状态
 
                 // 缓存相关
-                ocrOrderDepList: null, // OCR订单缓存列表（按部门）
-                ocrOrderDepIndex: -1, // 当前部门的缓存索引
 
                 // 转订单相关
                 customerFolderPath: null, // 客户文件夹路径
@@ -2890,12 +1048,57 @@
                     standard: '',
                     remark: '',
                     selectedGoods: null, // 选中的商品对象
-                    searchResults: [], // 搜索结果
+                    searchResults: [], // 搜索结果（已废弃，保留兼容性）
+                    disArr: [], // 配送商商品搜索结果
+                    nxArr: [], // 系统商品搜索结果
                     showSearchResults: false // 是否显示搜索结果
+                },
+
+                // 调整订单内容弹窗相关
+                showFixItemsModal: false, // 是否显示调整订单内容弹窗
+                fixItemsRequirement: '', // 用户输入的修改要求
+                isProcessingFixItems: false, // 是否正在处理调整请求
+
+                // 任务全部完成提示弹窗
+                showTaskCompleteModal: false,
+                taskCompleteModalTaskId: null,
+                taskCompleteModalSourceType: null,
+                taskCompleteModalTask: null,
+
+                // 保存新商品弹窗相关
+                showSaveNewGoodsModal: false, // 是否显示保存新商品弹窗
+                currentSaveGoodsItem: null, // 当前要保存的商品项
+                currentSaveGoodsOrderIndex: -1, // 当前要保存的商品订单索引
+                currentSaveGoodsSourceType: null, // 当前要保存的商品来源类型
+                isSaveNewGoodsFromBeforeOrder: false, // 标记是否从"在之前添加新订单"表单中保存新商品
+                saveNewGoodsForm: { // 保存新商品表单数据
+                    goodsName: '',
+                    standardName: '', // 商品规格名称
+                    standardWeight: '', // 商品规格重量
+                    itemUnit: '', // 商品单位
+                    cartonUnit: '', // 箱单位
+                    itemsPerCarton: '' // 每箱数量
                 }
             }
         },
         computed: {
+            // 是否有数据（用于子组件 UI，替代已废弃的 hasCache）
+            hasDataForPaste() {
+                return (this.orderItems && this.orderItems.length > 0) || this.currentTask != null;
+            },
+            hasDataForImage() {
+                return (this.orderItems && this.orderItems.length > 0) || this.currentTask != null;
+            },
+            hasDataForExcelPaste() {
+                return (this.orderItems && this.orderItems.length > 0) || this.currentTask != null;
+            },
+            // 各模式 TTS 状态（从 ttsStateByMode 取出，便于模板与后续 excel/excelPaste 复用）
+            pasteTTSState() {
+                return this.getTTSState('paste');
+            },
+            imageTTSState() {
+                return this.getTTSState('image');
+            },
             // 从 Vuex store 获取 disUser
             disUser() {
                 return this.$store.state.disUser;
@@ -2911,23 +1114,17 @@
             // 判断当前模式下所有订单状态是否都为0（草稿状态）
             allOrdersAreDraft() {
                 let orderList = [];
-                
-                // 根据当前上传模式选择对应的订单列表
-                if (this.uploadType === 'paste') {
-                    // 粘贴模式使用 pasteOrderItems
-                    orderList = this.pasteOrderItems;
-                } else {
-                    // Excel、图片、自动处理模式都使用 orderItems
-                    orderList = this.orderItems;
-                }
-                
+                orderList = this.orderItems;
                 // 如果没有订单，返回false
                 if (!orderList || orderList.length === 0) {
                     return false;
                 }
-                
                 // 检查所有订单的状态是否都为0
                 return orderList.every(item => item.nxDoStatus === 0);
+            },
+            // 获取调整订单内容弹窗中显示的订单列表
+            currentFixItemsOrderList() {
+                return this.getCurrentOrderItems();
             },
             // 根据当前选中的文件过滤订单列表（转订单模式）
             filteredOrderItems() {
@@ -2944,20 +1141,44 @@
 
                 // 如果不是转订单模式，或者没有选中已处理文件，显示所有有效订单
                 if (this.uploadType !== 'auto' || !this.activeProcessedFileTab) {
+                    if (this.uploadType === 'auto') {
+                        console.log('🔍 [filteredOrderItems] auto 模式但没有 activeProcessedFileTab，返回所有订单，数量:', validItems.length);
+                    }
                     return validItems;
                 }
 
                 // 找到当前选中的文件
                 const activeFile = this.processedFiles.find(f => f.filePath === this.activeProcessedFileTab);
                 if (!activeFile) {
+                    console.warn('⚠️ [filteredOrderItems] 找不到 activeFile，activeProcessedFileTab:', this.activeProcessedFileTab, 'processedFiles:', this.processedFiles);
                     return validItems;
                 }
 
-                // 只显示来自当前选中文件的订单
-                return validItems.filter(order => {
-                    return order.sourceFile === activeFile.fileName;
+                console.log('🔍 [filteredOrderItems] auto 模式过滤订单:', {
+                    validItemsCount: validItems.length,
+                    activeFileFileName: activeFile.fileName,
+                    activeFilePath: activeFile.filePath,
+                    activeProcessedFileTab: this.activeProcessedFileTab,
+                    sampleOrderSourceFile: validItems[0]?.sourceFile
                 });
+
+                // 只显示来自当前选中文件的订单
+                const filtered = validItems.filter(order => {
+                    const matches = order.sourceFile === activeFile.fileName;
+                    if (!matches && validItems.indexOf(order) < 3) {
+                        console.log('🔍 [filteredOrderItems] 订单不匹配:', {
+                            orderSourceFile: order.sourceFile,
+                            activeFileFileName: activeFile.fileName,
+                            goodsName: order.nxDoGoodsName
+                        });
+                    }
+                    return matches;
+                });
+
+                console.log('🔍 [filteredOrderItems] 过滤后订单数量:', filtered.length, '原始数量:', validItems.length);
+                return filtered;
             },
+
             // 当前预览的图片文件（转订单模式）
             currentPreviewImage() {
                 if (this.uploadType !== 'auto' || !this.activeProcessedFileTab) {
@@ -2969,6 +1190,7 @@
                 }
                 return null;
             },
+
             // 当前预览图片的src（转订单模式）
             currentPreviewImageSrc() {
                 if (!this.currentPreviewImage) {
@@ -2980,43 +1202,89 @@
             }
         },
         watch: {
+            showTaskCompleteModal(val) {
+                if (val) {
+                    // 达到弹窗条件时立即停止朗读，避免影响回车键等操作
+                    this.stopAllReading();
+                    this.$nextTick(() => {
+                        this.$refs.taskCompleteModalCompleteBtn?.focus();
+                    });
+                }
+            },
             // 监听客户切换，自动加载缓存
             selectedAllCustomer: {
                 handler(newVal, oldVal) {
-                    if (newVal && newVal !== oldVal) {
-                        // 先清空所有旧客户的数据
-                        this.orderItems = [];
-                        this.pasteOrderItems = [];
-                        this.hasCache = false;
-                        this.pasteHasCache = false;
-                        this.uploadedExcelFile = null;
-                        this.uploadedExcelPreview = null;
-                        this.uploadedImageFile = null;
-                        this.imagePreview = null;
-                        this.ocrOrderDepIndex = -1;
+                    // 使用 try-catch 包裹整个 handler，避免任何错误影响其他逻辑
+                    try {
+                        if (newVal && newVal !== oldVal) {
+                            // 检查组件是否已挂载且在 DOM 中，避免在组件销毁或未挂载时执行
+                            if (!this.$el || !this.$el.parentElement) {
+                                console.warn('⚠️ [selectedAllCustomer watch] 组件未挂载或不在 DOM 中，跳过缓存加载');
+                                return;
+                            }
 
-                        // 如果是转订单模式，清空转订单相关的数据
-                        if (this.uploadType === 'auto') {
-                            // 先清空文件夹路径，避免使用旧路径扫描
-                            this.customerFolderPath = null;
-                            this.autoProcessFiles = [];
-                            this.autoProcessImagePreviews = {};
-                            this.autoProcessExcelPreviews = {};
-                            this.activeProcessedFileTab = null;
-                            this.autoProcessImagePreview = null;
-                            this.autoProcessImagePreviewFileName = '';
-                            this.autoProcessResults = [];
+                            // 检查组件是否正在被销毁
+                            if (this._isBeingDestroyed || this._isDestroyed) {
+                                console.warn('⚠️ [selectedAllCustomer watch] 组件正在被销毁，跳过缓存加载');
+                                return;
+                            }
+                            // 先清空所有旧客户的数据
+                            this.clearTaskStatusPollTimer();
+                            console.warn('⚠️ [selectedAllCustomer watch] 清空 orderItems，原因: 客户切换');
+                            this.orderItems = [];
+                            this.hasRunningTask = false;
+                            this.uploadedExcelFile = null;
+                            this.uploadedExcelPreview = null;
+                            this.uploadedImageFile = null;
+                            this.imagePreview = null;
+                            this.currentTaskId = null;
+                            this.currentTask = null;
+
+                            // 清空复制粘贴相关的文本内容
+                            this.pasteInputText = '';
+                            this.pasteInputContent = '';
+                            this.pasteOriginText = '';
+                            this.pasteSaveCount = null;
+
+                            // 清空搜索结果（确保搜索商品列表关闭）
+                            this.strArr = [];
+                            this.nxArr = [];
+                            this.orderArrIndex = -1;
+                            this.showMatchedGoods = {};
+
+                            this.excelPasteSaveCount = null;
+                            this.excelPasteTableData = Array.from({length: 50}, () => ({
+                                goodsName: '',
+                                quantity: '',
+                                specification: '',
+                                specificationWeight: '',
+                                cartonQuantity: '',
+                                cartonName: '',
+                                remark: ''
+                            }));
+                            this.currentPasteRowIndex = 0;
+                            this.currentPasteColIndex = 0;
+                            this.excelPasteRawData = [];
+
+                            // 如果是转订单模式，清空转订单相关的数据
+                            if (this.uploadType === 'auto') {
+                                // 先清空文件夹路径，避免使用旧路径扫描
+                                this.customerFolderPath = null;
+                                this.autoProcessFiles = [];
+                                this.autoProcessImagePreviews = {};
+                                this.autoProcessExcelPreviews = {};
+                                this.activeProcessedFileTab = null;
+                                this.autoProcessImagePreview = null;
+                                this.autoProcessImagePreviewFileName = '';
+                                this.autoProcessResults = [];
+                            }
+
+                            // 重置搜索和匹配商品列表状态
+                            this.resetSearchAndMatchedGoodsState();
+
                         }
-
-                        // 重置搜索和匹配商品列表状态
-                        this.resetSearchAndMatchedGoodsState();
-
-                        // 然后加载新客户的缓存
-                        this._loadCache();
-                        // 如果是转订单模式，加载文件夹路径（会重新扫描新客户的文件夹）
-                        if (this.uploadType === 'auto') {
-                            this.loadCustomerFolderPath();
-                        }
+                    } catch (error) {
+                        console.error('❌ [selectedAllCustomer watch] handler 执行失败:', error);
                     }
                 },
                 immediate: false
@@ -3026,16 +1294,15 @@
                 handler(newVal, oldVal) {
                     if (newVal !== oldVal && this.selectedAllCustomer) {
                         // 清空订单数据
+                        this.clearTaskStatusPollTimer();
+                        console.warn('⚠️ [selectedSubDepartment watch] 清空 orderItems，原因: 子部门切换');
                         this.orderItems = [];
-                        this.hasCache = false;
+                        this.currentTaskId = null;
+                        this.currentTask = null;
+                        this.pasteSaveCount = null;
                         // 重置搜索和匹配商品列表状态
                         this.resetSearchAndMatchedGoodsState();
-                        // 重新加载缓存
-                        this._loadCache();
-                        // 如果是转订单模式，重新加载文件夹路径
-                        if (this.uploadType === 'auto') {
-                            this.loadCustomerFolderPath();
-                        }
+
                     }
                 }
             },
@@ -3058,98 +1325,342 @@
 
                         // 重置搜索和匹配商品列表状态
                         this.resetSearchAndMatchedGoodsState();
-
-                        // 重新加载缓存（同步执行，会再次清空转订单数据如果没有缓存）
-                        this._loadCache();
-
-                        // 如果是转订单模式，加载文件夹路径（在加载缓存之后，此时 customerFolderPath 已经是 null）
-                        if (newVal === 'auto') {
-                            // 使用 nextTick 确保 _loadCache 的清空操作已完成
-                            this.$nextTick(() => {
-                                this.loadCustomerFolderPath();
-                            });
-                        }
-                        }
-                    
-                    // 如果是转订单模式，调试容器高度
-                    if (newVal === 'auto') {
-                        this.$nextTick(() => {
-                            this.debugAutoOrderListHeight();
-                        });
                     }
                 },
                 immediate: false
             },
             // 监听订单列表变化，调试容器高度
             filteredOrderItems: {
-                handler() {
-                    if (this.uploadType === 'auto') {
-                        this.$nextTick(() => {
-                            this.debugAutoOrderListHeight();
-                        });
-                    }
-                },
+
                 immediate: false
             }
         },
         mounted() {
-            // 组件挂载时，如果已选择客户，加载缓存
-            if (this.selectedAllCustomer) {
-                this._loadCache();
-            }
 
             // 如果是转订单模式且已选择客户，加载文件夹路径
             if (this.uploadType === 'auto' && this.selectedAllCustomer) {
                 this.loadCustomerFolderPath();
             }
 
-            // 监听缓存更新事件，重新加载缓存
-            window.addEventListener('cache-updated', this.handleCacheUpdated);
-
-            // 调试：检查转订单模式的订单列表容器高度
-            this.$nextTick(() => {
-                this.debugAutoOrderListHeight();
-            });
-        },
-        // 如果使用了 keep-alive，组件激活时也会调用
-        activated() {
-            // 组件激活时，如果已选择客户，重新加载缓存（确保数据是最新的）
-            if (this.selectedAllCustomer) {
-                this._loadCache();
-            }
         },
         beforeUnmount() {
-            // 移除事件监听
-            window.removeEventListener('cache-updated', this.handleCacheUpdated);
+            this.clearTaskStatusPollTimer();
         },
-        methods: {
-            // 调试：检查转订单模式的订单列表容器高度
-            debugAutoOrderListHeight() {
-                // 调试方法已移除日志
-            },
-            // 处理缓存更新事件
-            handleCacheUpdated(event) {
-                const {sourceType, depId} = event.detail || {};
 
-                // 如果更新的是当前客户和当前上传类型的缓存，重新加载缓存
-                if (depId && String(depId) === String(this.selectedAllCustomer)) {
-                    const currentSourceType = this.uploadType || 'paste';
-                    if (!sourceType || sourceType === currentSourceType) {
-                        this._loadCache();
-                    }
-                }
-            },
+        methods: {
+
             // 处理上传方式切换
             handleUploadTypeChange(type) {
+                this.stopAllReading();
+                this.clearTaskStatusPollTimer();
+                // 切换上传类型时清空订单数据，避免 paste 的订单显示在 excel-paste 等模式
+                this.orderItems = [];
+                this.currentTaskId = null;
+                this.currentTask = null;
+                this.pasteSaveCount = null;
+                this.pasteInputText = '';
+                this.pasteInputContent = '';
+                this.pasteOriginText = '';
+                this.excelPasteSaveCount = null;
+                this.excelPasteTableData = Array.from({ length: 50 }, () => ({
+                    goodsName: '', quantity: '', specification: '', specificationWeight: '',
+                    cartonQuantity: '', cartonName: '', remark: ''
+                }));
+                this.excelPasteRawData = [];
+                this.uploadedImageFile = null;
+                this.imagePreview = null;
+                this.uploadedExcelFile = null;
+                this.uploadedExcelPreview = null;
+                this.resetSearchAndMatchedGoodsState();
+                if (type === 'excel-paste') this.excelPasteEverShown = true;
                 this.uploadType = type;
+                this.$emit('upload-type-change', type);
+            },
 
-                // 切换模式时，重新加载对应模式的缓存
-                if (this.selectedAllCustomer) {
-                    this._loadCache();
+            // 停止所有正在进行的朗读
+            stopAllReading() {
+                console.log('[PlaceOrder] 停止所有朗读');
+
+                // 停止图片模式的朗读
+                if (this.$refs.imageOrderListRef && this.$refs.imageOrderListRef.stopReading) {
+                    this.$refs.imageOrderListRef.stopReading();
                 }
 
-                // 发出事件通知父组件
-                this.$emit('upload-type-change', type);
+                // 停止自动模式的朗读
+                if (this.$refs.autoOrderListRef && this.$refs.autoOrderListRef.stopReading) {
+                    this.$refs.autoOrderListRef.stopReading();
+                }
+
+                // 停止 Excel 模式的朗读
+                if (this.$refs.excelOrderListRef && this.$refs.excelOrderListRef.stopReading) {
+                    this.$refs.excelOrderListRef.stopReading();
+                }
+
+                // 停止粘贴模式的朗读
+                if (this.$refs.pasteOrderListRef && this.$refs.pasteOrderListRef.stopReading) {
+                    this.$refs.pasteOrderListRef.stopReading();
+                }
+
+                // 停止 Excel 粘贴模式的朗读
+                if (this.$refs.excelPasteOrderListRef && this.$refs.excelPasteOrderListRef.stopReading) {
+                    this.$refs.excelPasteOrderListRef.stopReading();
+                }
+            },
+
+
+            // 解析 Excel 粘贴数据（正确处理包含换行符的字段）
+            parseExcelPasteData(pasteData) {
+                console.log('🔧 [解析数据] 开始解析 Excel 粘贴数据');
+                console.log('🔧 [解析数据] 原始数据:', pasteData);
+
+                const rows = [];
+                let currentRow = [];
+                let currentCell = '';
+                let inQuotes = false;
+                let i = 0;
+
+                while (i < pasteData.length) {
+                    const char = pasteData[i];
+                    const nextChar = pasteData[i + 1];
+
+                    if (char === '"') {
+                        // 处理引号
+                        if (inQuotes && nextChar === '"') {
+                            // 双引号转义，表示一个引号字符
+                            currentCell += '"';
+                            i += 2;
+                        } else {
+                            // 切换引号状态
+                            inQuotes = !inQuotes;
+                            i++;
+                        }
+                    } else if (char === '\t' && !inQuotes) {
+                        // Tab 分隔符（不在引号内）
+                        currentRow.push(currentCell.trim());
+                        currentCell = '';
+                        i++;
+                    } else if ((char === '\n' || char === '\r') && !inQuotes) {
+                        // 换行符（不在引号内）
+                        if (char === '\r' && nextChar === '\n') {
+                            // 处理 \r\n
+                            i += 2;
+                        } else {
+                            i++;
+                        }
+                        // 保存当前单元格和行
+                        if (currentCell.trim() || currentRow.length > 0) {
+                            currentRow.push(currentCell.trim());
+                            if (currentRow.length > 0) {
+                                rows.push(currentRow);
+                            }
+                            currentRow = [];
+                            currentCell = '';
+                        }
+                    } else {
+                        // 普通字符
+                        currentCell += char;
+                        i++;
+                    }
+                }
+
+                // 处理最后一行
+                if (currentCell.trim() || currentRow.length > 0) {
+                    currentRow.push(currentCell.trim());
+                    if (currentRow.length > 0) {
+                        rows.push(currentRow);
+                    }
+                }
+
+                console.log('🔧 [解析数据] 解析完成，共', rows.length, '行');
+                return rows;
+            },
+            // 处理单元格点击事件（记录当前选中的单元格位置）
+            handleCellClick({row, column, rowIndex, columnIndex}) {
+                console.log('🖱️ [单元格点击] 行索引:', rowIndex, '列索引:', columnIndex);
+                console.log('🖱️ [单元格点击] 行数据:', row);
+                console.log('🖱️ [单元格点击] 列信息:', column);
+
+                // 验证 rowIndex 是否正确：通过 row 对象在数组中的实际位置
+                const actualRowIndex = this.excelPasteTableData.findIndex(item => item === row);
+                console.log('🖱️ [单元格点击] 实际行索引（通过数据查找）:', actualRowIndex);
+
+                // 使用实际的行索引，如果找不到则使用 rowIndex
+                const finalRowIndex = actualRowIndex !== -1 ? actualRowIndex : rowIndex;
+
+                // 保存当前选中的单元格位置
+                this.currentPasteRowIndex = finalRowIndex;
+
+                // 根据列字段名找到列索引
+                const columns = ['goodsName', 'quantity', 'specification', 'specificationWeight', 'cartonQuantity', 'cartonName', 'remark'];
+                if (column && column.field) {
+                    const colIndex = columns.findIndex(col => col === column.field);
+                    if (colIndex !== -1) {
+                        this.currentPasteColIndex = colIndex;
+                    }
+                }
+
+                console.log('🖱️ [单元格点击] 保存位置 - 行:', this.currentPasteRowIndex, '列:', this.currentPasteColIndex);
+                console.log('🖱️ [单元格点击] 这是第', this.currentPasteRowIndex + 1, '行（从1开始计数）');
+            },
+            // 处理编辑关闭事件（只做数据保存，不更新粘贴位置）
+            handleEditClosed({row, column, rowIndex, columnIndex}) {
+                console.log('✏️ [编辑关闭] 行索引:', rowIndex, '列索引:', columnIndex);
+                console.log('✏️ [编辑关闭] 注意：不更新粘贴位置，粘贴位置只由点击事件决定');
+                // ❌ 不要在这里更新 currentPasteRowIndex 和 currentPasteColIndex
+                // 因为当用户点击新单元格时，旧单元格的编辑关闭事件会覆盖新位置
+                // 粘贴位置应该只由 handleCellClick 事件决定
+            },
+            // 处理键盘事件（拦截 Ctrl+V）
+            handleTableKeydown(event) {
+                if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
+                    console.log('⌨️ [键盘事件] 检测到 Ctrl+V 或 Cmd+V');
+                    // 不阻止默认行为，让浏览器处理粘贴
+                }
+            },
+            // 处理 Excel 粘贴表格数据更新事件
+            handleExcelPasteTableDataUpdate(updates) {
+                // 更新表格数据
+                updates.forEach(({rowIndex, updates: rowUpdates}) => {
+                    if (rowIndex >= 0 && rowIndex < this.excelPasteTableData.length) {
+                        Object.assign(this.excelPasteTableData[rowIndex], rowUpdates);
+                    }
+                });
+            },
+            handleExcelPasteInsertRowAbove(rowIndex) {
+                const blank = {
+                    goodsName: '',
+                    quantity: '',
+                    specification: '',
+                    specificationWeight: '',
+                    cartonQuantity: '',
+                    cartonName: '',
+                    remark: '',
+                    _justInserted: true
+                };
+                this.excelPasteTableData.splice(rowIndex, 0, blank);
+                setTimeout(() => {
+                    const row = this.excelPasteTableData[rowIndex];
+                    if (row && row._justInserted) delete row._justInserted;
+                }, 350);
+            },
+            handleExcelPasteDeleteRow(rowIndex) {
+                if (rowIndex < 0 || rowIndex >= this.excelPasteTableData.length) return;
+                const row = this.excelPasteTableData[rowIndex];
+                row._deleting = true;
+                setTimeout(() => {
+                    this.excelPasteTableData.splice(rowIndex, 1);
+                    if (this.excelPasteTableData.length === 0) {
+                        this.excelPasteTableData.push({
+                            goodsName: '',
+                            quantity: '',
+                            specification: '',
+                            specificationWeight: '',
+                            cartonQuantity: '',
+                            cartonName: '',
+                            remark: ''
+                        });
+                    }
+                }, 280);
+            },
+            // 检查表格是否有数据
+            hasExcelPasteTableData() {
+                if (!this.excelPasteTableData || this.excelPasteTableData.length === 0) {
+                    return false;
+                }
+                // 检查是否有至少一行包含商品名称
+                return this.excelPasteTableData.some(row => row.goodsName && row.goodsName.trim() !== '');
+            },
+            // 清空表格数据
+            clearExcelPasteTableData() {
+                if (!this.hasExcelPasteTableData()) {
+                    return;
+                }
+                if (confirm('确定要清空表格中的所有数据吗？')) {
+                    // 重置所有行为空数据
+                    this.excelPasteTableData = Array.from({length: 50}, () => ({
+                        goodsName: '',
+                        quantity: '',
+                        specification: '',
+                        specificationWeight: '',
+                        cartonQuantity: '',
+                        cartonName: '',
+                        remark: ''
+                    }));
+                    // 重置位置
+                    this.currentPasteRowIndex = 0;
+                    this.currentPasteColIndex = 0;
+                }
+            },
+            // 清空订单列表数据
+            clearExcelPasteOrderItems() {
+                if (this.orderItems.length === 0) {
+                    return;
+                }
+                if (confirm('确定要清空订单列表中的所有数据吗？')) {
+                    this.orderItems = [];
+                    // 重置搜索和匹配商品列表状态
+                    this.resetSearchAndMatchedGoodsState();
+                }
+            },
+            // 处理 Excel 粘贴 AI 识别开始事件
+            handleExcelPasteAiRecognise() {
+                // 设置加载状态
+                this.showDeepSeekLoading = true;
+            },
+            // 处理 Excel 粘贴 AI 识别完成事件
+            async handleExcelPasteAiRecogniseComplete(csvData, userPrompt) {
+                // 重置搜索和匹配商品列表状态
+                this.resetSearchAndMatchedGoodsState();
+
+                // 设置加载状态
+                this.showDeepSeekLoading = true;
+
+                try {
+                    // 调用统一的 AI 识别方法
+                    const orderItems = await this.aiRecogniseExcelPasteTable(csvData, userPrompt);
+
+                    // 更新订单项
+                    this.orderItems = orderItems;
+
+                    // 重置加载状态
+                    this.showDeepSeekLoading = false;
+
+                    alert(`成功解析 ${orderItems.length} 条订单数据`);
+                } catch (error) {
+                    console.error('❌ [handleExcelPasteAiRecogniseComplete] AI 识别失败:', error);
+                    alert('AI识别失败：' + (error.message || '未知错误'));
+                    this.showDeepSeekLoading = false;
+                }
+            },
+
+            // 表格直接转订单（不调 AI）：按列映射为订单项并写入 orderItems
+            handleDirectExcelPasteTableToOrders(rows) {
+                const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
+                const orderItems = rows
+                    .filter(item => item.name && String(item.name).trim())
+                    .map(item => ({
+                        nxDoGoodsName: item.name || '',
+                        nxDoGoodsNameOriginal: item.name || '',
+                        nxDoQuantity: item.quantity ?? '',
+                        nxDoStandard: item.spec || '',
+                        nxDoRemark: item.remark || '',
+                        nxDoAddRemark: !!(item.remark && String(item.remark).trim()),
+                        standardWeight: item.standardWeight || '',
+                        itemUnit: item.itemUnit || '',
+                        itemsPerCarton: item.itemsPerCarton ?? '',
+                        cartonUnit: item.cartonUnit || '',
+                        nxDoStatus: -2,
+                        nxDoDepartmentId: targetDepId,
+                        nxDoDepartmentFatherId: this.selectedAllCustomer,
+                        nxDoDisGoodsId: null,
+                        nxDoStandardWarn: 0,
+                        goodsNameWarn: 0,
+                        nxDoDistributerId: this.disUser?.nxDiuDistributerId,
+                        nxDoPurchaseUserId: -1,
+                        nxDoOrderUserId: this.disUser?.nxDistributerUserId || this.disUser?.nxDiuDistributerId,
+                        nxDoIsAgent: -1
+                    }));
+                this.orderItems = orderItems;
             },
 
             // 检查是否选择了子部门（如果有子部门的话）
@@ -3169,394 +1680,15 @@
                     }
                     return true;
                 }
-
                 return true;
             },
 
-            // 加载缓存数据（参考微信小程序 _loadCache）
-            _loadCache() {
-
-                try {
-                    // 确定当前模式对应的 orderSourceType
-                    const currentSourceType = this.uploadType || 'paste';
-
-                    // 根据来源类型使用不同的 localStorage key
-                    const storageKey = `ocrOrderDepList_${currentSourceType}`;
-
-                    // 先尝试从新的存储方式读取（按来源类型分离）
-                    let ocrOrderDepList = null;
-                    try {
-                        const ocrOrderDepListStr = localStorage.getItem(storageKey);
-                        if (ocrOrderDepListStr) {
-                            ocrOrderDepList = JSON.parse(ocrOrderDepListStr);
-                        }
-                    } catch (error) {
-                        console.error('读取新格式缓存失败:', error);
-                    }
-
-                    // 如果新格式没有数据，尝试兼容旧格式（ocrOrderDepList）
-                    if (!ocrOrderDepList || !Array.isArray(ocrOrderDepList) || ocrOrderDepList.length === 0) {
-                        const oldOcrOrderDepListStr = localStorage.getItem('ocrOrderDepList');
-                        if (oldOcrOrderDepListStr) {
-                            const oldOcrOrderDepList = JSON.parse(oldOcrOrderDepListStr);
-                            if (Array.isArray(oldOcrOrderDepList)) {
-                                // 从旧格式中过滤出匹配当前来源类型的缓存
-                                ocrOrderDepList = oldOcrOrderDepList.filter(item => {
-                                    const cacheSourceType = item.orderSourceType || 'paste';
-                                    return cacheSourceType === currentSourceType;
-                                });
-                            }
-                        }
-                    }
-
-                    if (ocrOrderDepList && Array.isArray(ocrOrderDepList) && ocrOrderDepList.length > 0) {
-                        this.ocrOrderDepList = ocrOrderDepList;
-
-                        for (let i = 0; i < ocrOrderDepList.length; i++) {
-                            const pDepId = ocrOrderDepList[i].depId;
-
-                            // 匹配 depId（使用宽松相等比较，处理字符串和数字类型不匹配的情况）
-                            const pDepIdStr = String(pDepId);
-                            const selectedDepIdStr = String(this.selectedAllCustomer);
-
-                            if (pDepIdStr === selectedDepIdStr || pDepId == this.selectedAllCustomer) {
-                                // 从缓存恢复订单数据
-                                let orders = ocrOrderDepList[i].arr || [];
-
-                                // 确保每个订单都有原始商品名称字段（兼容旧数据）
-                                orders = orders.map((order) => {
-                                    if (order && !order.nxDoGoodsNameOriginal) {
-                                        return {
-                                            ...order,
-                                            nxDoGoodsNameOriginal: order.nxDoGoodsName || ''
-                                        };
-                                    }
-                                    return order;
-                                });
-
-                                // 去重：如果已保存的订单（有 nxDepartmentOrdersId）和草稿订单（没有 nxDepartmentOrdersId）有相同的 ID，移除草稿订单
-                                // 或者，如果已保存的订单和草稿订单的商品名称、数量、规格完全相同，移除草稿订单
-                                const savedOrders = new Map(); // 用于存储已保存订单的 ID
-                                const savedOrdersByContent = new Map(); // 用于存储已保存订单的内容（商品名称+数量+规格）
-
-                                // 第一遍：收集所有已保存订单的 ID 和内容
-                                orders.forEach((order, idx) => {
-                                    if (order.nxDepartmentOrdersId) {
-                                        savedOrders.set(order.nxDepartmentOrdersId, idx);
-                                        const contentKey = `${order.nxDoGoodsName || ''}_${order.nxDoQuantity || ''}_${order.nxDoStandard || ''}`;
-                                        if (!savedOrdersByContent.has(contentKey)) {
-                                            savedOrdersByContent.set(contentKey, idx);
-                                        }
-                                    }
-                                });
-
-                                // 第二遍：移除重复的草稿订单
-                                const filteredOrders = [];
-                                orders.forEach((order, idx) => {
-                                    if (order.nxDepartmentOrdersId) {
-                                        // 已保存的订单，直接添加
-                                        filteredOrders.push(order);
-                                    } else {
-                                        // 草稿订单，检查是否与已保存订单重复
-                                        const contentKey = `${order.nxDoGoodsName || ''}_${order.nxDoQuantity || ''}_${order.nxDoStandard || ''}`;
-                                        if (!savedOrdersByContent.has(contentKey)) {
-                                            // 没有重复，保留草稿订单
-                                            filteredOrders.push(order);
-                                        }
-                                    }
-                                });
-
-                                orders = filteredOrders;
-
-                                // 恢复搜索相关数据
-                                const searchData = ocrOrderDepList[i];
-                                const hasCacheData = orders && orders.length > 0;
-
-                                this.ocrOrderDepIndex = i;
-
-                                // 根据来源类型更新对应的订单列表和缓存状态
-                                if (currentSourceType === 'paste') {
-                                    this.pasteOrderItems = orders;
-                                    this.pasteHasCache = hasCacheData;
-                                    // 恢复粘贴文本（如果有的话）
-                                    if (searchData.pasteInputText) {
-                                        this.pasteInputText = searchData.pasteInputText;
-                                        this.pasteInputContent = searchData.pasteInputText;
-                                    }
-                                    // 恢复保存计数（如果有的话）
-                                    if (searchData.saveCount !== undefined) {
-                                        this.pasteSaveCount = searchData.saveCount;
-                                    }
-                                } else {
-                                    this.orderItems = orders;
-                                    this.hasCache = hasCacheData;
-                                }
-
-                                this.strArr = searchData.strArr || [];
-                                this.nxArr = searchData.nxArr || [];
-                                this.orderArrIndex = searchData.orderArrIndex !== undefined ? searchData.orderArrIndex : -1;
-                                this.searchStr = searchData.searchStr || "";
-
-                                // 恢复上传的文件信息
-                                if (searchData.uploadedFile) {
-                                    if (currentSourceType === 'excel') {
-                                        this.uploadedExcelFile = {
-                                            name: searchData.uploadedFile.name,
-                                            size: searchData.uploadedFile.size,
-                                            type: searchData.uploadedFile.type,
-                                            lastModified: searchData.uploadedFile.lastModified
-                                        };
-                                        // 恢复Excel预览数据
-                                        if (searchData.uploadedFile.preview) {
-                                            this.uploadedExcelPreview = JSON.parse(JSON.stringify(searchData.uploadedFile.preview));
-                                        }
-                                        // 强制更新视图，确保显示
-                                        this.$nextTick(() => {
-                                            if (this.uploadedExcelFile) {
-                                                this.$forceUpdate();
-                                            }
-                                        });
-                                    } else if (currentSourceType === 'image') {
-                                        this.uploadedImageFile = searchData.uploadedFile;
-                                        // 如果有图片预览数据，恢复预览
-                                        if (searchData.uploadedFile.dataUrl) {
-                                            this.imagePreview = searchData.uploadedFile.dataUrl;
-                                        }
-                                        // 强制更新视图，确保显示
-                                        this.$nextTick(() => {
-                                            this.$forceUpdate();
-                                        });
-                                    }
-                                }
-
-                                return; // 找到匹配的缓存，退出循环
-                            }
-                        }
-
-                        // 如果没有找到匹配的缓存（depId 不匹配）
-                        if (currentSourceType === 'paste') {
-                            this.pasteHasCache = false;
-                            this.pasteOrderItems = [];
-                        } else {
-                            this.hasCache = false;
-                            this.orderItems = [];
-                        }
-                        // 清空上传的文件信息（因为当前客户没有缓存）
-                        this.uploadedExcelFile = null;
-                        this.uploadedExcelPreview = null;
-                        this.uploadedImageFile = null;
-                        this.imagePreview = null;
-                        this.ocrOrderDepIndex = -1;
-
-                        // 如果是转订单模式，清空转订单相关的数据
-                        if (currentSourceType === 'auto') {
-                            this.autoProcessFiles = [];
-                            this.autoProcessImagePreviews = {};
-                            this.autoProcessExcelPreviews = {};
-                            this.activeProcessedFileTab = null;
-                            this.autoProcessImagePreview = null;
-                            this.autoProcessImagePreviewFileName = '';
-                            this.autoProcessResults = [];
-                        }
-                    } else {
-                        this.ocrOrderDepList = [];
-                        this.ocrOrderDepIndex = -1;
-                        if (currentSourceType === 'paste') {
-                            this.pasteHasCache = false;
-                            this.pasteOrderItems = [];
-                        } else {
-                            this.hasCache = false;
-                            this.orderItems = [];
-                        }
-                        // 清空上传的文件信息
-                        this.uploadedExcelFile = null;
-                        this.uploadedExcelPreview = null;
-                        this.uploadedImageFile = null;
-                        this.imagePreview = null;
-
-                        // 如果是转订单模式，清空转订单相关的数据
-                        if (currentSourceType === 'auto') {
-                            this.autoProcessFiles = [];
-                            this.autoProcessImagePreviews = {};
-                            this.autoProcessExcelPreviews = {};
-                            this.activeProcessedFileTab = null;
-                            this.autoProcessImagePreview = null;
-                            this.autoProcessImagePreviewFileName = '';
-                            this.autoProcessResults = [];
-                        }
-                    }
-                } catch (error) {
-                    const currentSourceType = this.uploadType || 'paste';
-                    if (currentSourceType === 'paste') {
-                        this.pasteHasCache = false;
-                        this.pasteOrderItems = [];
-                    } else {
-                        this.hasCache = false;
-                        this.orderItems = [];
-                    }
-                    this.uploadedExcelFile = null;
-                    this.uploadedExcelPreview = null;
-                    this.uploadedImageFile = null;
-                    this.imagePreview = null;
-
-                    // 如果是转订单模式，清空转订单相关的数据
-                    if (currentSourceType === 'auto') {
-                        this.autoProcessFiles = [];
-                        this.autoProcessImagePreviews = {};
-                        this.autoProcessExcelPreviews = {};
-                        this.activeProcessedFileTab = null;
-                        this.autoProcessImagePreview = null;
-                        this.autoProcessImagePreviewFileName = '';
-                        this.autoProcessResults = [];
-                    }
-                }
-            },
-
-            // 保存到缓存（参考微信小程序 _saveToStorage）
-            _saveToStorage(orders, orderSourceType) {
-                const orderArr = orders || this.orderItems;
-
-                console.log('💾 [_saveToStorage] 开始保存到缓存:', {
-                    ordersProvided: !!orders,
-                    orderArrLength: orderArr?.length,
-                    orderSourceType,
-                    uploadType: this.uploadType,
-                    selectedAllCustomer: this.selectedAllCustomer
-                });
-
-                // 如果没有订单数据，跳过
-                if (!orderArr || orderArr.length === 0) {
-                    console.log('⚠️ [_saveToStorage] 订单数据为空，跳过保存');
-                    return;
-                }
-
-                // 如果没有指定订单来源类型，使用当前的 uploadType
-                const sourceType = orderSourceType || this.uploadType || 'paste';
-
-                // 根据来源类型使用不同的 localStorage key
-                const storageKey = `ocrOrderDepList_${sourceType}`;
-                console.log('💾 [_saveToStorage] 缓存 key:', storageKey, 'sourceType:', sourceType);
-
-                // 从 localStorage 读取对应来源类型的缓存
-                let ocrOrderDepList = [];
-                try {
-                    const ocrOrderDepListStr = localStorage.getItem(storageKey);
-                    if (ocrOrderDepListStr) {
-                        ocrOrderDepList = JSON.parse(ocrOrderDepListStr);
-                        if (!Array.isArray(ocrOrderDepList)) {
-                            ocrOrderDepList = [];
-                        }
-                    }
-                } catch (error) {
-                    console.error('读取缓存失败:', error);
-                    ocrOrderDepList = [];
-                }
-
-                // 查找是否已经存在当前部门的缓存
-                let existingIndex = -1;
-                for (let i = 0; i < ocrOrderDepList.length; i++) {
-                    if (ocrOrderDepList[i].depId === this.selectedAllCustomer) {
-                        existingIndex = i;
-                        break;
-                    }
-                }
-
-                if (existingIndex >= 0) {
-                    console.log('💾 [_saveToStorage] 更新现有缓存，索引:', existingIndex, '订单数量:', orderArr.length);
-                    // 更新现有缓存
-                    ocrOrderDepList[existingIndex].depId = this.selectedAllCustomer;
-                    ocrOrderDepList[existingIndex].depFatherId = this.selectedAllCustomer;
-                    ocrOrderDepList[existingIndex].depName = this.selectedCustomerName;
-                    ocrOrderDepList[existingIndex].arr = orderArr;
-                    ocrOrderDepList[existingIndex].strArr = this.strArr || [];
-                    ocrOrderDepList[existingIndex].nxArr = this.nxArr || [];
-                    ocrOrderDepList[existingIndex].orderArrIndex = this.orderArrIndex !== undefined ? this.orderArrIndex : -1;
-                    ocrOrderDepList[existingIndex].searchStr = this.searchStr || "";
-                    ocrOrderDepList[existingIndex].orderSourceType = sourceType;
-                    // 如果是复制粘贴，保存输入文本和保存计数
-                    if (sourceType === 'paste') {
-                        ocrOrderDepList[existingIndex].pasteInputText = this.pasteInputText || '';
-                        ocrOrderDepList[existingIndex].saveCount = this.pasteSaveCount;
-                    }
-                    // 更新上传的文件信息（包括预览数据）
-                    if (sourceType === 'excel' && this.uploadedExcelFile) {
-                        ocrOrderDepList[existingIndex].uploadedFile = {
-                            ...this.uploadedExcelFile,
-                            preview: this.uploadedExcelPreview
-                        };
-                    } else if (sourceType === 'image' && this.uploadedImageFile) {
-                        ocrOrderDepList[existingIndex].uploadedFile = this.uploadedImageFile;
-                    } else {
-                        // 保留原有的文件信息
-                        ocrOrderDepList[existingIndex].uploadedFile = ocrOrderDepList[existingIndex].uploadedFile;
-                    }
-                    this.ocrOrderDepIndex = existingIndex;
-                } else {
-                    console.log('💾 [_saveToStorage] 创建新的缓存项，订单数量:', orderArr.length);
-                    // 创建新的缓存项
-                    const newDepData = {
-                        depId: this.selectedAllCustomer,
-                        depFatherId: this.selectedAllCustomer,
-                        depName: this.selectedCustomerName,
-                        arr: orderArr,
-                        saveCount: null,
-                        strArr: this.strArr || [],
-                        nxArr: this.nxArr || [],
-                        orderArrIndex: this.orderArrIndex !== undefined ? this.orderArrIndex : -1,
-                        searchStr: this.searchStr || "",
-                        orderSourceType: sourceType,
-                        // 如果是复制粘贴，保存输入文本和保存计数
-                        pasteInputText: sourceType === 'paste' ? (this.pasteInputText || '') : undefined,
-                        saveCount: sourceType === 'paste' ? this.pasteSaveCount : null,
-                        // 保存上传的文件信息（包括预览数据）
-                        uploadedFile: sourceType === 'excel' && this.uploadedExcelFile ? {
-                                ...this.uploadedExcelFile,
-                                preview: this.uploadedExcelPreview
-                        } : sourceType === 'image' ? this.uploadedImageFile : null
-                    };
-                    ocrOrderDepList.push(newDepData);
-                    this.ocrOrderDepIndex = ocrOrderDepList.length - 1;
-                }
-
-                // 更新内存中的数据（用于当前来源类型）
-                this.ocrOrderDepList = ocrOrderDepList;
-
-                try {
-                    // 立即同步到 localStorage（使用对应来源类型的 key）
-                    localStorage.setItem(storageKey, JSON.stringify(ocrOrderDepList));
-                    console.log('✅ [_saveToStorage] 缓存已保存到 localStorage，订单数量:', orderArr.length);
-
-                    // 更新 hasCache 状态（根据来源类型更新对应的缓存状态）
-                    if (orderArr.length > 0) {
-                        if (sourceType === 'paste') {
-                            this.pasteHasCache = true;
-                        } else {
-                            this.hasCache = true;
-                        }
-                    }
-                    console.log('✅ [_saveToStorage] 缓存更新完成');
-                } catch (error) {
-                    console.error('缓存同步失败:', error);
-                }
-            },
 
             // ========== Excel上传相关方法 ==========
-
-            // 处理Excel文件上传（使用新的 recognizeOrderFromExcel 接口）
+            // 处理Excel文件上传（使用异步任务队列）
             async handleExcelUpload(event) {
                 const file = event.target.files[0];
                 if (!file) return;
-
-                // 保存上传的文件信息（用于缓存和显示）
-                this.uploadedExcelFile = {
-                    name: file.name,
-                    size: file.size,
-                    type: file.type,
-                    lastModified: file.lastModified
-                };
-
-                // 读取并解析Excel文件，用于预览
-                await this.loadUploadedExcelPreview(file);
 
                 // 验证文件类型
                 const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -3589,216 +1721,148 @@
                 // 确定要使用的部门ID（如果有子部门选择，使用子部门ID，否则使用父部门ID）
                 const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
 
-                try {
-                    this.$store.commit('SET_LOADING', true);
+                // 检查是否已有进行中的任务
+                if (taskQueue.hasActiveTask(targetDepId)) {
+                    // 不再弹窗提示，静默处理
+                    return;
+                }
 
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    // 使用确定的部门ID（可能是子部门ID）
-                    formData.append('depId', targetDepId);
-                    formData.append('depFatherId', this.selectedAllCustomer); // 父部门ID始终是选中的客户ID
-                    formData.append('disId', this.disUser.nxDiuDistributerId);
-                    formData.append('userId', this.disUser.nxDepartmentUserId || this.disUser.nxDistributerUserId || -1);
+                // 保存上传的文件信息（用于缓存和显示）
+                this.uploadedExcelFile = {
+                    name: file.name,
+                    size: file.size,
+                    type: file.type,
+                    lastModified: file.lastModified,
+                    file: file // 保存File对象，用于任务执行
+                };
 
-                    // 调用新的Excel解析接口
-                    const res = await api.recognizeOrderFromExcel(formData);
+                // 读取并解析Excel文件，用于预览（通过组件方法）
+                // 注意：预览数据是异步生成的，通过 handleExcelPreviewLoaded 事件回调
+                if (this.$refs.excelUploadRef) {
+                    await this.$refs.excelUploadRef.loadExcelPreview(file);
+                }
 
-                    if (res && res.data) {
-                        // 根据文档，如果提供了 depId 和 disId，返回的是 data 数组（已保存的订单）
-                        if (res.data.code === 200 || res.data.code === 0) {
-                            // 检查是否返回了已保存的订单（data 数组）
-                            if (Array.isArray(res.data.data) && res.data.data.length > 0) {
-                                // 转换为订单格式
-                                this.orderItems = res.data.data.map(item => ({
-                                    nxDoGoodsName: item.goodsName || item.nxDoGoodsName || '',
-                                    nxDoGoodsNameOriginal: item.goodsName || item.nxDoGoodsName || '',
-                                    nxDoQuantity: item.quantity || item.nxDoQuantity || '',
-                                    nxDoStandard: item.standard || item.nxDoStandard || '斤',
-                                    nxDoRemark: item.remark || item.nxDoRemark || '',
-                                    nxDoAddRemark: !!(item.remark || item.nxDoRemark),
-                                    nxDoStatus: item.status !== undefined ? item.status : (item.nxDoStatus !== undefined ? item.nxDoStatus : -2),
-                                    nxDoDepartmentId: targetDepId, // 使用确定的部门ID（可能是子部门ID）
-                                    nxDoDepartmentFatherId: this.selectedAllCustomer,
-                                    nxDoDisGoodsId: item.disGoodsId || item.nxDoDisGoodsId || null,
-                                    nxDoStandardWarn: 0,
-                                    goodsNameWarn: 0,
-                                    nxDoDistributerId: this.disUser.nxDiuDistributerId,
-                                    nxDoPurchaseUserId: -1,
-                                    nxDoOrderUserId: this.disUser.nxDepartmentUserId || this.disUser.nxDistributerUserId || -1,
-                                    nxDoIsAgent: -1,
-                                    nxDepartmentOrdersId: item.orderId || item.nxDepartmentOrdersId || null,
-                                    // 保留匹配的商品信息
-                                    nxDistributerGoodsEntityList: item.matchedGoods || item.nxDistributerGoodsEntityList || [],
-                                    nxGoodsEntities: item.matchedGoods || item.nxGoodsEntities || []
-                                }));
+                console.log('🔍 [handleExcelUpload] 准备创建任务，当前客户信息:', {
+                    selectedAllCustomer: this.selectedAllCustomer,
+                    selectedSubDepartment: this.selectedSubDepartment,
+                    selectedCustomerName: this.selectedCustomerName,
+                    targetDepId: targetDepId,
+                    disId: this.disUser?.nxDiuDistributerId,
+                    userId: this.disUser?.nxDistributerUserId || this.disUser?.nxDiuDistributerId,
+                    hasPreview: !!this.uploadedExcelPreview
+                });
 
-                                alert('Excel解析并保存成功！');
-                                // 确保预览数据已加载完成后再保存到缓存
-                                if (!this.uploadedExcelPreview) {
-                                    let waitCount = 0;
-                                    while (!this.uploadedExcelPreview && waitCount < 20) {
-                                        await new Promise(resolve => setTimeout(resolve, 100));
-                                        waitCount++;
-                                    }
-                                }
-                                // 保存到缓存（会保留 uploadedExcelFile 和 uploadedExcelPreview）
-                                this._saveToStorage(this.orderItems, 'excel');
-                                // 重置搜索和匹配商品列表状态
-                                this.resetSearchAndMatchedGoodsState();
-                                // 发出事件通知父组件刷新客户列表
-                                this.$emit('order-saved');
-                            }
-                            // 如果返回的是 items 数组（仅解析，未保存）
-                            else if (Array.isArray(res.data.items) && res.data.items.length > 0) {
-                                // 转换为订单格式
-                                this.orderItems = res.data.items.map(item => ({
-                                    nxDoGoodsName: item.name || '',
-                                    nxDoGoodsNameOriginal: item.name || '',
-                                    nxDoQuantity: item.qty || '',
-                                    nxDoStandard: item.unit || '斤',
-                                    nxDoRemark: item.remark || '',
-                                    nxDoAddRemark: !!(item.remark && item.remark.trim()),
-                                    nxDoStatus: -2, // 未保存的草稿
-                                    nxDoDepartmentId: targetDepId, // 使用确定的部门ID（可能是子部门ID）
-                                    nxDoDepartmentFatherId: this.selectedAllCustomer,
-                                    nxDoDisGoodsId: null,
-                                    nxDoStandardWarn: 0,
-                                    goodsNameWarn: 0,
-                                    nxDoDistributerId: this.disUser.nxDiuDistributerId,
-                                    nxDoPurchaseUserId: -1,
-                                    nxDoOrderUserId: this.disUser.nxDepartmentUserId || this.disUser.nxDistributerUserId || -1,
-                                    nxDoIsAgent: -1
-                                }));
+                // 创建任务
+                const taskInfo = {
+                    depId: targetDepId,
+                    depFatherId: this.selectedAllCustomer,
+                    depName: this.selectedCustomerName || '客户',
+                    type: taskQueue.TASK_TYPE.EXCEL,
+                    excelFile: file, // 保存File对象
+                    disId: this.disUser?.nxDiuDistributerId,
+                    userId: this.disUser?.nxDistributerUserId || this.disUser?.nxDiuDistributerId,
+                    // ✅ 如果预览数据已经生成，保存到任务信息中
+                    excelPreview: this.uploadedExcelPreview ? JSON.parse(JSON.stringify(this.uploadedExcelPreview)) : null
+                };
 
-                                alert('Excel解析成功！');
-                                // 确保预览数据已加载完成后再保存到缓存
-                                if (!this.uploadedExcelPreview) {
-                                    let waitCount = 0;
-                                    while (!this.uploadedExcelPreview && waitCount < 20) {
-                                        await new Promise(resolve => setTimeout(resolve, 100));
-                                        waitCount++;
-                                    }
-                                }
-                                // 保存到缓存
-                                this._saveToStorage(this.orderItems, 'excel');
-                                // 重置搜索和匹配商品列表状态
-                                this.resetSearchAndMatchedGoodsState();
-                            } else {
-                                alert('Excel文件中没有可读取的数据');
-                            }
+                console.log('📝 [handleExcelUpload] 创建任务，任务信息:', {
+                    depId: taskInfo.depId,
+                    depFatherId: taskInfo.depFatherId,
+                    depName: taskInfo.depName,
+                    type: taskInfo.type,
+                    fileName: file.name,
+                    hasPreview: !!taskInfo.excelPreview
+                });
+
+                const taskId = taskQueue.addTask(taskInfo);
+
+                if (!taskId) {
+                    // 不再弹窗提示，静默处理
+                    return;
+                }
+
+                // 设置识别中状态
+                this.hasRunningTask = true;
+                this.recognizingExcel = true;
+
+                console.log('✅ [handleExcelUpload] 任务创建成功，设置状态:', {
+                    taskId,
+                    hasRunningTask: this.hasRunningTask,
+                    recognizingExcel: this.recognizingExcel,
+                    uploadedExcelFile: this.uploadedExcelFile,
+                    uploadedExcelPreview: !!this.uploadedExcelPreview
+                });
+
+                // 确保任务执行器已启动
+                taskExecutor.checkAndStartExecutor();
+
+                // 清空文件输入
+                if (this.$refs.excelFileInput) {
+                    this.$refs.excelFileInput.value = '';
+                }
+            },
+
+            // 处理 Excel 预览加载完成事件
+            handleExcelPreviewLoaded(preview) {
+                // 保存预览数据
+                this.uploadedExcelPreview = preview;
+
+                // 同时保存到缓存的文件信息中
+                if (this.uploadedExcelFile) {
+                    this.uploadedExcelFile.preview = preview;
+                }
+
+                // ✅ 重要：如果当前有正在运行的任务，更新任务对象中的预览数据
+                // 这样即使切换了客户，任务完成时也能获取到预览数据
+                if (this.hasRunningTask && this.uploadedExcelFile) {
+                    const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
+                    const activeTask = taskQueue.getTaskByDepId(targetDepId);
+                    if (activeTask && activeTask.type === taskQueue.TASK_TYPE.EXCEL &&
+                        activeTask.excelFile && activeTask.excelFile.name === this.uploadedExcelFile.name) {
+                        // 更新任务对象中的预览数据（保存在excelFile对象中）
+                        activeTask.excelFile.preview = JSON.parse(JSON.stringify(preview));
+                        // 保存更新后的任务到localStorage
+                        const tasks = taskQueue.loadTasks();
+                        const taskIndex = tasks.findIndex(t => t.taskId === activeTask.taskId);
+                        if (taskIndex >= 0) {
+                            tasks[taskIndex] = activeTask;
+                            taskQueue.saveTasks(tasks);
+                            console.log('✅ [handleExcelPreviewLoaded] 预览数据已保存到任务对象:', {
+                                taskId: activeTask.taskId,
+                                fileName: activeTask.excelFile.name,
+                                sheetsCount: preview.sheets?.length || 0
+                            });
                         } else {
-                            const errorMsg = res.data.msg || 'Excel解析失败';
-                            alert(errorMsg);
+                            console.warn('⚠️ [handleExcelPreviewLoaded] 未找到任务，无法保存预览数据');
+                        }
+                    } else {
+                        // 如果没有找到匹配的任务，尝试查找所有Excel任务
+                        const allTasks = taskQueue.getAllTasks();
+                        const matchingTask = allTasks.find(t =>
+                            t.type === taskQueue.TASK_TYPE.EXCEL &&
+                            t.excelFile &&
+                            t.excelFile.name === this.uploadedExcelFile.name &&
+                            (t.status === taskQueue.TASK_STATUS.PENDING || t.status === taskQueue.TASK_STATUS.RUNNING)
+                        );
+                        if (matchingTask) {
+                            matchingTask.excelFile.preview = JSON.parse(JSON.stringify(preview));
+                            const tasks = taskQueue.loadTasks();
+                            const taskIndex = tasks.findIndex(t => t.taskId === matchingTask.taskId);
+                            if (taskIndex >= 0) {
+                                tasks[taskIndex] = matchingTask;
+                                taskQueue.saveTasks(tasks);
+                                console.log('✅ [handleExcelPreviewLoaded] 预览数据已保存到匹配的任务对象:', {
+                                    taskId: matchingTask.taskId,
+                                    fileName: matchingTask.excelFile.name,
+                                    sheetsCount: preview.sheets?.length || 0
+                                });
+                            }
                         }
                     }
-                } catch (error) {
-                    console.error('Excel上传失败:', error);
-                    const errorMsg = error.response?.data?.msg || error.message || 'Excel上传失败，请重试';
-                    alert(errorMsg);
-                } finally {
-                    this.$store.commit('SET_LOADING', false);
-                    // 清空文件输入
-                    if (this.$refs.excelFileInput) {
-                        this.$refs.excelFileInput.value = '';
-                    }
-                }
-            },
-
-            // 加载上传的Excel文件预览
-            async loadUploadedExcelPreview(file) {
-                if (!file) {
-                    return;
                 }
 
-                // 动态导入 xlsx 库
-                let XLSX;
-                try {
-                    XLSX = await import('xlsx');
-                } catch (error) {
-                    console.error('无法加载 xlsx 库:', error);
-                    this.uploadedExcelPreview = {
-                        sheets: [],
-                        currentSheet: 0,
-                        error: '无法加载 xlsx 库'
-                    };
-                    return;
-                }
-
-                try {
-                    // 使用 Promise 包装 FileReader
-                    const fileData = await new Promise((resolve, reject) => {
-                        const reader = new FileReader();
-
-                        reader.onload = (e) => {
-                            try {
-                                const data = new Uint8Array(e.target.result);
-                                resolve(data);
-                            } catch (error) {
-                                reject(error);
-                            }
-                        };
-
-                        reader.onerror = (error) => {
-                            reject(new Error('读取文件失败'));
-                        };
-
-                        // 以 ArrayBuffer 方式读取
-                        reader.readAsArrayBuffer(file);
-                    });
-
-                    // 使用 xlsx 读取 Excel
-                    const workbook = XLSX.read(fileData, {type: 'array'});
-
-                    // 提取所有工作表的数据
-                    const sheets = workbook.SheetNames.map((sheetName, index) => {
-                        const worksheet = workbook.Sheets[sheetName];
-                        // 转换为 JSON 数组（保留原始格式）
-                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: null });
-
-                        return {
-                            name: sheetName,
-                            index: index,
-                            data: jsonData
-                        };
-                    });
-
-                    // 保存预览数据
-                    this.uploadedExcelPreview = {
-                        sheets: sheets,
-                        currentSheet: 0
-                    };
-
-
-                    // 同时保存到缓存的文件信息中
-                    if (this.uploadedExcelFile) {
-                        this.uploadedExcelFile.preview = this.uploadedExcelPreview;
-                    }
-
-                    // 强制触发 Vue 响应式更新
-                    this.$forceUpdate();
-                } catch (error) {
-                    console.error('加载Excel预览失败:', error);
-                    this.uploadedExcelPreview = {
-                        sheets: [],
-                        currentSheet: 0,
-                        error: error.message || '加载失败'
-                    };
-                }
-            },
-
-            // 获取上传的Excel当前工作表数据
-            getUploadedExcelSheetData() {
-                if (!this.uploadedExcelPreview || !this.uploadedExcelPreview.sheets) {
-                    return [];
-                }
-
-                const currentSheetIndex = this.uploadedExcelPreview.currentSheet || 0;
-
-                if (this.uploadedExcelPreview.sheets[currentSheetIndex]) {
-                    return this.uploadedExcelPreview.sheets[currentSheetIndex].data || [];
-                }
-
-                return [];
+                // 强制触发 Vue 响应式更新
+                this.$forceUpdate();
             },
 
             // 切换上传的Excel工作表
@@ -3830,6 +1894,7 @@
 
             // 重置搜索和匹配商品列表相关的状态
             resetSearchAndMatchedGoodsState() {
+                console.log("🔄 [resetSearchAndMatchedGoodsState] 重置搜索和匹配商品列表状态");
                 // 关闭所有已匹配商品列表
                 this.showMatchedGoods = {};
                 // 重置当前编辑的订单索引
@@ -3844,6 +1909,8 @@
                 this.selectedGoodsName = '';
                 // 清空当前来源类型
                 this.currentSourceType = null;
+                // 清空上一次搜索的值，确保切换客户后可以重新搜索
+                this.lastSearchValue = '';
             },
 
             // 关闭搜索下拉框（关闭商品搜索下拉框）
@@ -3851,18 +1918,70 @@
                 this.resetSearchAndMatchedGoodsState();
             },
 
-            // 切换匹配商品列表显示
-            toggleMatchedGoods(orderIndex) {
-                // Vue 3 中直接赋值即可，不需要 $set
-                this.showMatchedGoods = {
-                    ...this.showMatchedGoods,
-                    [orderIndex]: !this.showMatchedGoods[orderIndex]
-                };
+            // 关闭所有已展开的推荐商品
+            closeAllMatchedGoods() {
+                this.showMatchedGoods = {};
+            },
+            // 切换匹配商品列表显示：展开时先关闭其他订单的，再打开当前订单
+            // payload 为 number 时兼容旧调用；为 { orderIndex, hasSearchResults } 时使用子组件传入的 hasSearchResults
+            toggleMatchedGoods(payload) {
+                const orderIndex = typeof payload === 'object' ? payload.orderIndex : payload;
+                const hasSearchResultsFromChild = typeof payload === 'object' ? payload.hasSearchResults : undefined;
+                const isExpanded = !!this.showMatchedGoods[orderIndex];
+                const hasSearchResults = hasSearchResultsFromChild !== undefined
+                    ? hasSearchResultsFromChild
+                    : (this.orderArrIndex === orderIndex && ((this.strArr?.length || 0) + (this.nxArr?.length || 0)) > 0);
+                console.log('[PlaceOrder] toggleMatchedGoods', {
+                    orderIndex,
+                    isExpanded,
+                    hasSearchResults,
+                    hasSearchResultsFromChild,
+                    orderArrIndex: this.orderArrIndex,
+                    strArrLen: this.strArr?.length,
+                    nxArrLen: this.nxArr?.length
+                });
+                if (isExpanded || hasSearchResults) {
+                    // 关闭：情况1-收起匹配商品；情况2-关闭搜索商品
+                    const items = this.uploadType === 'auto' ? this.filteredOrderItems : this.orderItems;
+                    const item = items && items[orderIndex];
+                    const original = item?.nxDoGoodsNameOriginal;
+                    console.log('[PlaceOrder] toggleMatchedGoods 关闭', {
+                        hasItem: !!item,
+                        nxDoGoodsName: item?.nxDoGoodsName,
+                        nxDoGoodsNameOriginal: original
+                    });
+                    if (item) {
+                        item.nxDoGoodsName = original != null ? original : (item.nxDoGoodsName ?? '');
+                    }
+                    if (hasSearchResults) {
+                        this.strArr = [];
+                        this.nxArr = [];
+                        this.orderArrIndex = -1;
+                        this.lastSearchValue = '';
+                    }
+                    this.showMatchedGoods = { ...this.showMatchedGoods, [orderIndex]: false };
+                } else {
+                    // 展开：设置 orderArrIndex 以便 nxGoodsEntities（推荐系统商品）能显示（关闭时 blur 可能已将 orderArrIndex 置为 -1）
+                    this.orderArrIndex = orderIndex;
+                    this.showMatchedGoods = { [orderIndex]: true };
+                }
             },
 
-            // 获取当前操作的订单列表（根据 sourceType）
-            getCurrentOrderItems(sourceType) {
-                return sourceType === 'paste' ? this.pasteOrderItems : this.orderItems;
+            // 获取当前操作的订单列表（统一使用 orderItems）
+            getCurrentOrderItems() {
+                return this.orderItems;
+            },
+
+            // 辅助方法：根据 uploadType 和订单列表情况确定 sourceType
+            // 这个方法用于处理 OrderList 组件的事件适配器方法
+            determineSourceTypeForOrderList(orderIndex, item) {
+                // 优先使用 uploadType
+                let sourceType = this.uploadType;
+
+                if (!sourceType || sourceType === 'excel') {
+                    sourceType = this.uploadType || 'excel';
+                }
+                return sourceType;
             },
 
             // 处理商品名称输入（触发搜索）
@@ -3875,10 +1994,6 @@
                 if (value === this.lastSearchValue) {
                     this.orderArrIndex = orderIndex;
                     this.currentSourceType = sourceType;
-                    // 保存到缓存（只有 Excel 和图片需要）
-                    if (sourceType !== 'paste') {
-                        this._saveToStorage();
-                    }
                     return;
                 }
 
@@ -3896,14 +2011,20 @@
                     this.lastSearchValue = ''; // 清空搜索值
                 }
 
-                // 保存到缓存（只有 Excel 和图片需要）
-                if (sourceType !== 'paste') {
-                    this._saveToStorage();
-                }
+
             },
 
             // 处理商品名称获得焦点
             handleGoodsNameFocus(item, orderIndex, sourceType) {
+                // 切换到不同订单时清空搜索结果，否则 nxGoodsEntities（推荐系统商品）无法显示
+                if (this.orderArrIndex >= 0 && this.orderArrIndex !== orderIndex) {
+                    this.strArr = [];
+                    this.nxArr = [];
+                }
+                // 若 nxDoGoodsNameOriginal 未设置，用当前 nxDoGoodsName 初始化，便于收起时恢复
+                if (item && (item.nxDoGoodsNameOriginal == null || item.nxDoGoodsNameOriginal === '')) {
+                    item.nxDoGoodsNameOriginal = item.nxDoGoodsName ?? '';
+                }
                 // 设置当前编辑的订单索引
                 this.orderArrIndex = orderIndex;
                 this.currentSourceType = sourceType; // 保存当前来源类型
@@ -3914,54 +2035,53 @@
                     this.lastSearchValue = ''; // 重置，允许新输入框的首次搜索
                 }
 
-                // 不在获得焦点时触发查询，只在输入时触发
             },
 
             // 处理商品名称失去焦点
             handleGoodsNameBlur(item, orderIndex, sourceType) {
                 // 延迟重置，以便点击按钮时不会立即隐藏
                 setTimeout(() => {
-                    // 如果当前焦点不在这个输入框上，重置 orderArrIndex
+                    // 搜索结果显示时不要重置（blur 是为让用户用上下键+回车选商品），避免列表闪退
+                    const hasSearchResults = this.orderArrIndex === orderIndex && ((this.strArr?.length || 0) + (this.nxArr?.length || 0)) > 0;
+                    if (hasSearchResults) return;
                     if (this.orderArrIndex === orderIndex) {
                         this.orderArrIndex = -1;
                     }
                 }, 200);
             },
 
-            // 处理数量输入
-            handleQuantityInput(item, orderIndex, sourceType) {
-                // 保存到缓存（只有 Excel 和图片需要）
-                if (sourceType !== 'paste') {
-                    this._saveToStorage();
-                }
-            },
-
-            // 处理规格改变
-            handleStandardChange(item, orderIndex, sourceType) {
-                // 保存到缓存（只有 Excel 和图片需要）
-                if (sourceType !== 'paste') {
-                    this._saveToStorage();
-                }
-            },
 
             // 处理备注输入
             handleRemarkInput(item, orderIndex, sourceType) {
                 // 更新备注相关字段
                 item.nxDoAddRemark = !!(item.nxDoRemark && item.nxDoRemark.trim());
 
-                // 保存到缓存（只有 Excel 和图片需要）
-                if (sourceType !== 'paste') {
-                    this._saveToStorage();
-                }
             },
 
             // 打开修改订单弹窗（参考 TodayOrders.vue 的 loadGoodsInfoAndOpenModal）
             async handleUpdateOrder(item, orderIndex, sourceType) {
+                console.log('[PlaceOrder] handleUpdateOrder 被调用:', {
+                    item,
+                    orderIndex,
+                    sourceType,
+                    hasNxDepartmentOrdersId: item?.nxDepartmentOrdersId
+                });
 
-                if (!item || !item.nxDepartmentOrdersId) {
+                // 对于图片识别模式，允许没有 nxDepartmentOrdersId（未保存的订单）
+                if (!item) {
+                    console.error('[PlaceOrder] 订单项为空，无法修改');
                     alert('订单信息错误，无法修改');
                     return;
                 }
+
+                // 只有已保存的订单才需要 nxDepartmentOrdersId
+                if (sourceType !== 'image' && !item.nxDepartmentOrdersId) {
+                    console.error('[PlaceOrder] 订单信息错误，缺少 nxDepartmentOrdersId:', item);
+                    alert('订单信息错误，无法修改');
+                    return;
+                }
+
+                console.log('[PlaceOrder] 开始打开修改订单弹窗...');
 
                 // 设置当前编辑的订单项
                 this.currentEditOrderItem = item;
@@ -4053,13 +2173,8 @@
                             nxDoGoodsNameOriginal: preservedOriginalName, // 保留原有的原始名称
                         };
 
-                        // 根据来源类型更新对应的订单列表
-                        if (this.currentEditOrderSourceType === 'paste') {
-                            if (this.currentEditOrderIndex >= 0 && this.currentEditOrderIndex < this.pasteOrderItems.length) {
-                                this.pasteOrderItems[this.currentEditOrderIndex] = updatedOrder;
-                            }
-                        } else if (this.currentEditOrderSourceType === 'auto' && this.uploadType === 'auto') {
-                            // auto 模式下，需要找到在 orderItems 中的实际索引
+                        // 更新订单列表
+                        if (this.currentEditOrderSourceType === 'auto' && this.uploadType === 'auto') {
                             const filteredItems = this.filteredOrderItems;
                             if (filteredItems && this.currentEditOrderIndex >= 0 && this.currentEditOrderIndex < filteredItems.length) {
                                 const order = filteredItems[this.currentEditOrderIndex];
@@ -4068,11 +2183,8 @@
                                     this.orderItems[actualIndex] = updatedOrder;
                                 }
                             }
-                        } else {
-                            // excel 和 image 模式
-                            if (this.currentEditOrderIndex >= 0 && this.currentEditOrderIndex < this.orderItems.length) {
-                                this.orderItems[this.currentEditOrderIndex] = updatedOrder;
-                            }
+                        } else if (this.currentEditOrderIndex >= 0 && this.currentEditOrderIndex < this.orderItems.length) {
+                            this.orderItems[this.currentEditOrderIndex] = updatedOrder;
                         }
 
                         // 更新缓存
@@ -4080,8 +2192,19 @@
                             this._updateStorage(updatedOrder, this.currentEditOrderIndex);
                         }
 
-                        alert('修改成功');
+                        // 如果是朗读状态（停止的订单），修改完成后继续朗读（forceContinue 跳过 nxDoStatus 检查）
+                        const orderIndex = this.currentEditOrderIndex;
+                        const sourceType = this.currentEditOrderSourceType;
                         this.closeEditOrderModal();
+                        if (sourceType && orderIndex >= 0) {
+                            const mode = sourceType === 'excel-paste' ? 'excelPaste' : sourceType;
+                            const ref = this.getOrderListRef(mode);
+                            if (ref && ref.stoppedIndex !== undefined && ref.stoppedIndex !== null && ref.stoppedIndex === orderIndex) {
+                                this.$nextTick(() => {
+                                    if (ref && ref.continueReading) ref.continueReading(true);
+                                });
+                            }
+                        }
                     } else {
                         alert(res?.data?.msg || '修改失败');
                     }
@@ -4108,6 +2231,263 @@
                     standard: '',
                     remark: ''
                 };
+            },
+
+            // 显示调整订单内容弹窗
+            showFixItems() {
+                // 根据 uploadType 获取正确的订单列表
+                const uploadType = this.uploadType;
+                const currentOrderItems = this.getCurrentOrderItems();
+
+                if (!currentOrderItems || currentOrderItems.length === 0) {
+                    alert('当前没有订单，无法调整');
+                    return;
+                }
+
+                // 根据订单模式确定要获取的 prompt 字段名
+                let promptFieldName = '';
+
+                if (uploadType === 'image') {
+                    promptFieldName = 'nxDepartmentOcrPromptImage';
+                } else if (uploadType === 'excel') {
+                    promptFieldName = 'nxDepartmentOcrPromptExcel';
+                } else if (uploadType === 'paste') {
+                    promptFieldName = 'nxDepartmentOcrPromptPaste';
+                } else if (uploadType === 'excel-paste') {
+                    promptFieldName = 'nxDepartmentOcrPromptExcelPaste';
+                } else if (uploadType === 'auto') {
+                    // auto 模式默认使用 image 的 prompt
+                    promptFieldName = 'nxDepartmentOcrPromptImage';
+                }
+
+                // 尝试获取部门的默认调整内容
+                let defaultPrompt = '';
+
+                // 如果有子部门且已选择，从子部门中获取
+                if (this.selectedSubDepartment && this.selectedCustomerEntity?.nxDepartmentEntities) {
+                    const subDepartment = this.selectedCustomerEntity.nxDepartmentEntities.find(
+                        dep => dep.nxDepartmentId === this.selectedSubDepartment ||
+                            String(dep.nxDepartmentId) === String(this.selectedSubDepartment)
+                    );
+                    if (subDepartment && promptFieldName && subDepartment[promptFieldName]) {
+                        defaultPrompt = subDepartment[promptFieldName];
+                    }
+                }
+
+                // 如果没有从子部门获取到，尝试从主部门获取
+                if (!defaultPrompt && this.selectedCustomerEntity && promptFieldName && this.selectedCustomerEntity[promptFieldName]) {
+                    defaultPrompt = this.selectedCustomerEntity[promptFieldName];
+                }
+
+                this.showFixItemsModal = true;
+                this.fixItemsRequirement = defaultPrompt || '';
+            },
+
+            // 关闭调整订单内容弹窗
+            closeFixItemsModal() {
+                this.showFixItemsModal = false;
+                this.fixItemsRequirement = '';
+                // 注意：不要在这里重置 isProcessingFixItems，应该在 confirmFixItems 的 finally 块中重置
+                // 这样可以防止在请求进行中关闭弹窗时导致重复请求
+            },
+
+            // 确认并处理调整订单内容
+            async confirmFixItems() {
+                // 防止重复点击 - 在方法开始就检查并设置标志
+                if (this.isProcessingFixItems) {
+                    console.warn('⚠️ [confirmFixItems] 正在处理中，忽略重复点击');
+                    return;
+                }
+
+                // 立即设置处理标志，防止重复请求
+                this.isProcessingFixItems = true;
+                console.log('🔄 [confirmFixItems] 开始处理，设置 isProcessingFixItems = true');
+
+                try {
+                    if (!this.fixItemsRequirement || !this.fixItemsRequirement.trim()) {
+                        alert('请输入修改要求');
+                        this.isProcessingFixItems = false;
+                        return;
+                    }
+
+                    // 根据 uploadType 获取正确的订单列表
+                    const uploadType = this.uploadType;
+                    const currentOrderItems = this.getCurrentOrderItems();
+
+                    if (!currentOrderItems || currentOrderItems.length === 0) {
+                        alert('当前没有订单');
+                        this.isProcessingFixItems = false;
+                        return;
+                    }
+
+                    console.log('📤 [confirmFixItems] 准备发送请求，订单数量:', currentOrderItems.length, 'uploadType:', uploadType);
+
+                    this.$store.commit('SET_LOADING', true);
+
+                    // 确定 inputType（根据 uploadType 转换）
+                    let inputType = 'image'; // 默认值
+
+                    if (uploadType === 'image') {
+                        inputType = 'image';
+                    } else if (uploadType === 'excel') {
+                        inputType = 'excel';
+                    } else if (uploadType === 'paste') {
+                        inputType = 'paste';
+                    } else if (uploadType === 'excel-paste') {
+                        inputType = 'excel-paste'; // Excel 粘贴模式
+                    } else if (uploadType === 'auto') {
+                        // auto 模式默认使用 image
+                        inputType = 'image';
+                    }
+
+                    // 准备请求参数
+                    // 注意：orderItems 需要包含订单ID（nxDepartmentOrdersId），如果是新订单可能没有ID
+                    const requestData = {
+                        orderItems: currentOrderItems,
+                        userInstructions: this.fixItemsRequirement.trim(),
+                        inputType: inputType
+                    };
+
+                    // 如果是 auto 模式，保存原始订单的 sourceFile 映射，以便校正后恢复
+                    let sourceFileMap = null;
+                    if (uploadType === 'auto') {
+                        sourceFileMap = new Map();
+                        currentOrderItems.forEach((order, index) => {
+                            if (order.sourceFile) {
+                                // 使用订单的唯一标识（优先使用 ID，否则使用索引）作为 key
+                                const key = order.nxDepartmentOrdersId || `index_${index}`;
+                                sourceFileMap.set(key, order.sourceFile);
+                            }
+                        });
+                        console.log('💾 [confirmFixItems] auto 模式，保存 sourceFile 映射，数量:', sourceFileMap.size);
+                    }
+
+                    // 调用后台订单修正接口
+                    const res = await api.correctionOrder(requestData);
+
+                    if (res && res.data && res.data.code === 0) {
+                        // 后台返回修正并更新后的订单列表（包含重新查询的商品信息）
+                        let correctedOrders = res.data.data;
+
+                        if (correctedOrders && Array.isArray(correctedOrders)) {
+                            console.log('✅ [confirmFixItems] OCR 校正成功，订单数量:', correctedOrders.length);
+
+                            // 如果是 auto 模式，恢复 sourceFile 属性
+                            if (uploadType === 'auto' && sourceFileMap && sourceFileMap.size > 0) {
+                                // 获取当前激活文件的文件名，作为默认值
+                                let defaultSourceFile = null;
+                                if (this.activeProcessedFileTab) {
+                                    const activeFile = this.processedFiles.find(f => f.filePath === this.activeProcessedFileTab);
+                                    if (activeFile) {
+                                        defaultSourceFile = activeFile.fileName;
+                                        console.log('💾 [confirmFixItems] 当前激活文件:', activeFile.fileName);
+                                    }
+                                }
+
+                                correctedOrders = correctedOrders.map((order, index) => {
+                                    // 尝试通过 ID 匹配
+                                    let sourceFile = null;
+                                    if (order.nxDepartmentOrdersId) {
+                                        sourceFile = sourceFileMap.get(order.nxDepartmentOrdersId);
+                                    }
+                                    // 如果通过 ID 没找到，尝试通过索引匹配（适用于新订单）
+                                    if (!sourceFile && index < currentOrderItems.length) {
+                                        sourceFile = sourceFileMap.get(`index_${index}`);
+                                    }
+                                    // 如果还是没找到，使用当前激活文件的文件名作为默认值
+                                    if (!sourceFile && defaultSourceFile) {
+                                        sourceFile = defaultSourceFile;
+                                    }
+
+                                    if (!sourceFile) {
+                                        console.warn('⚠️ [confirmFixItems] 订单无法匹配 sourceFile:', {
+                                            index,
+                                            orderId: order.nxDepartmentOrdersId,
+                                            goodsName: order.nxDoGoodsName
+                                        });
+                                    }
+
+                                    return {
+                                        ...order,
+                                        ...(sourceFile && {sourceFile: sourceFile})
+                                    };
+                                });
+
+                                // 检查恢复后的 sourceFile
+                                const ordersWithSourceFile = correctedOrders.filter(o => o.sourceFile).length;
+                                console.log('✅ [confirmFixItems] auto 模式，已恢复 sourceFile 属性:', {
+                                    totalOrders: correctedOrders.length,
+                                    ordersWithSourceFile: ordersWithSourceFile,
+                                    defaultSourceFile: defaultSourceFile,
+                                    sampleSourceFile: correctedOrders[0]?.sourceFile
+                                });
+                            } else if (uploadType === 'auto') {
+                                // 如果没有 sourceFileMap，使用当前激活文件的文件名
+                                if (this.activeProcessedFileTab) {
+                                    const activeFile = this.processedFiles.find(f => f.filePath === this.activeProcessedFileTab);
+                                    if (activeFile) {
+                                        const defaultSourceFile = activeFile.fileName;
+                                        correctedOrders = correctedOrders.map(order => ({
+                                            ...order,
+                                            sourceFile: defaultSourceFile
+                                        }));
+                                        console.log('✅ [confirmFixItems] auto 模式，使用默认 sourceFile:', defaultSourceFile);
+                                    }
+                                }
+                            }
+
+                            this.orderItems = correctedOrders;
+                            console.log('✅ [confirmFixItems] 已更新 orderItems，数量:', this.orderItems.length);
+
+                            // 如果是 auto 模式，保存 activeProcessedFileTab，防止被清空
+                            let savedActiveProcessedFileTab = null;
+                            if (uploadType === 'auto') {
+                                savedActiveProcessedFileTab = this.activeProcessedFileTab;
+                                console.log('💾 [confirmFixItems] auto 模式，保存 activeProcessedFileTab:', savedActiveProcessedFileTab);
+                            }
+
+
+                            // 如果是 auto 模式，恢复 activeProcessedFileTab（如果被清空了）
+                            if (uploadType === 'auto' && savedActiveProcessedFileTab && !this.activeProcessedFileTab) {
+                                console.warn('⚠️ [confirmFixItems] activeProcessedFileTab 被清空，恢复为:', savedActiveProcessedFileTab);
+                                this.activeProcessedFileTab = savedActiveProcessedFileTab;
+                            }
+
+                            const currentOrderItems = this.orderItems;
+                            console.log('✅ [confirmFixItems] 保存缓存后，订单数量:', currentOrderItems?.length || 0);
+
+                            // 如果是 auto 模式，检查 filteredOrderItems 的数量
+                            if (uploadType === 'auto') {
+                                const filteredCount = this.filteredOrderItems?.length || 0;
+                                console.log('✅ [confirmFixItems] auto 模式，filteredOrderItems 数量:', filteredCount,
+                                    'activeProcessedFileTab:', this.activeProcessedFileTab,
+                                    'processedFiles 数量:', this.processedFiles?.length || 0);
+                            }
+
+                            // 如果订单被清空了，重新设置订单列表（不从缓存加载，因为缓存可能还没更新）
+                            if (!currentOrderItems || currentOrderItems.length === 0) {
+                                console.warn('⚠️ [confirmFixItems] 订单列表被清空，重新设置订单列表');
+                                // 直接重新设置订单列表，而不是从缓存加载
+                                this.orderItems = correctedOrders;
+                                console.log('✅ [confirmFixItems] 已重新设置订单列表，数量:', correctedOrders.length);
+                            }
+
+                            // 关闭弹窗（不需要额外弹窗提示）
+                            this.closeFixItemsModal();
+                        } else {
+                            throw new Error('后台返回的数据格式不正确');
+                        }
+                    } else {
+                        throw new Error(res?.data?.msg || '订单调整失败');
+                    }
+                } catch (error) {
+                    console.error('❌ [confirmFixItems] 调整订单失败:', error);
+                    alert('调整订单失败：' + (error.message || '未知错误'));
+                } finally {
+                    console.log('✅ [confirmFixItems] 处理完成，重置 isProcessingFixItems = false');
+                    this.isProcessingFixItems = false;
+                    this.$store.commit('SET_LOADING', false);
+                }
             },
 
             // 确认添加规格（参考 TodayOrders.vue 的 confirmAddStandard）
@@ -4155,24 +2535,88 @@
                 }
             },
 
-            // 从编辑弹窗中删除订单（参考 TodayOrders.vue 的 handleDeleteOrderFromEditModal）
+            // 从编辑弹窗中删除订单（无需确认弹窗）
             handleDeleteOrderFromEditModal() {
                 if (!this.currentEditOrderItem) {
                     return;
                 }
+                this.handleDeleteOrder();
+            },
 
-                const goodsName = this.currentEditOrderItem.nxDistributerGoodsEntity?.nxDgGoodsName || this.currentEditOrderItem.nxDoGoodsName || '该订单';
-                if (!confirm(`确定要删除订单 "${goodsName}" 吗？`)) {
+            /**
+             * 重新识别：将已保存订单（status=0）恢复到待识别状态（status=-2），用原始解析数据覆盖，需重新选择商品
+             */
+            async handleRevertOrderFromEditModal() {
+                if (!this.currentEditOrderItem || !this.currentEditOrderItem.nxDepartmentOrdersId) {
+                    alert('订单未保存，无法重新识别');
                     return;
                 }
+                const orderId = this.currentEditOrderItem.nxDepartmentOrdersId;
+                const orderIndex = this.currentEditOrderIndex;
+                const sourceType = this.currentEditOrderSourceType;
+                const orderItem = this.currentEditOrderItem;
 
-                this.handleDeleteOrder();
+                try {
+                    this.$store.commit('SET_LOADING', true);
+                    const res = await api.revertTaskOrder(orderId);
+
+                    if (res && res.data && res.data.code === 0) {
+                        const updatedOrder = res.data.data;
+                        if (!updatedOrder) {
+                            alert('接口返回数据异常');
+                            return;
+                        }
+
+                        // 合并更新到订单项
+                        const newItem = { ...orderItem, ...updatedOrder };
+
+                        // 更新订单列表
+                        if (orderIndex >= 0 && orderIndex < this.orderItems.length) {
+                            this.orderItems.splice(orderIndex, 1, newItem);
+                        }
+
+                        // 更新任务统计（已完成数减1，待处理数加1）
+                        const wasCompleted = orderItem.nxDoStatus === 0;
+                        if (wasCompleted && this.currentTask) {
+                            this.currentTask = {
+                                ...this.currentTask,
+                                nxOcrTaskCompletedOrders: Math.max(0, (this.currentTask.nxOcrTaskCompletedOrders || 0) - 1),
+                                nxOcrTaskPendingOrders: (this.currentTask.nxOcrTaskPendingOrders || 0) + 1
+                            };
+                        }
+                        if (this.currentTaskId != null && Array.isArray(this.taskListFromParent)) {
+                            const idx = this.taskListFromParent.findIndex(t => t && t.nxOcrTaskId === this.currentTaskId);
+                            if (idx >= 0 && wasCompleted) {
+                                const task = this.taskListFromParent[idx];
+                                this.taskListFromParent = this.taskListFromParent.map((t, i) =>
+                                    i === idx ? {
+                                        ...t,
+                                        nxOcrTaskCompletedOrders: Math.max(0, (task.nxOcrTaskCompletedOrders || 0) - 1),
+                                        nxOcrTaskPendingOrders: (task.nxOcrTaskPendingOrders || 0) + 1
+                                    } : t
+                                );
+                            }
+                        }
+
+                        this.resetSearchAndMatchedGoodsState();
+                        this.closeEditOrderModal();
+                        this.$emit('task-added');
+                        alert('已恢复为待识别，请重新选择商品');
+                    } else {
+                        alert(res?.data?.msg || '重新识别失败');
+                    }
+                } catch (error) {
+                    console.error('重新识别失败:', error);
+                    alert('请检查网络');
+                } finally {
+                    this.$store.commit('SET_LOADING', false);
+                }
             },
 
             // 删除订单（参考 TodayOrders.vue 的 handleDeleteOrder）
             async handleDeleteOrder() {
                 console.log('🗑️ [handleDeleteOrder] 开始删除订单');
-                
+
                 if (!this.currentEditOrderItem) {
                     console.warn('⚠️ [handleDeleteOrder] currentEditOrderItem 不存在');
                     return;
@@ -4208,15 +2652,39 @@
 
                     if (res && res.data && res.data.code === 0) {
                         console.log('✅ [handleDeleteOrder] 删除成功，开始更新页面数据');
-                        
+                        this.$emit('task-added');
+
+                        const updatedTask = res.data.task;
+                        if (updatedTask && this.currentTaskId != null && updatedTask.nxOcrTaskId === this.currentTaskId) {
+                            this.currentTask = {...this.currentTask, ...updatedTask};
+                        }
+                        if (updatedTask && Array.isArray(this.taskListFromParent)) {
+                            const idx = this.taskListFromParent.findIndex(t => t && t.nxOcrTaskId === updatedTask.nxOcrTaskId);
+                            if (idx >= 0) {
+                                this.taskListFromParent = this.taskListFromParent.map((t, i) =>
+                                    i === idx ? {...t, ...updatedTask} : t
+                                );
+                            }
+                        }
+
+                        // 删除后若当前任务 status=2（全部完成），弹窗提示
+                        if (updatedTask && updatedTask.nxOcrTaskStatus === 2) {
+                            this.closeEditOrderModal();
+                            this.stopAllReading();
+                            this.showTaskCompleteModal = true;
+                            this.taskCompleteModalTaskId = updatedTask.nxOcrTaskId;
+                            this.taskCompleteModalSourceType = sourceType || 'paste';
+                            this.taskCompleteModalTask = updatedTask;
+                        }
+
                         // 从订单列表中删除
                         if (sourceType === 'paste') {
-                            console.log('📝 [handleDeleteOrder] paste 模式，删除前 pasteOrderItems 数量:', this.pasteOrderItems?.length);
-                            if (orderIndex >= 0 && orderIndex < this.pasteOrderItems.length) {
-                                this.pasteOrderItems.splice(orderIndex, 1);
-                                console.log('✅ [handleDeleteOrder] paste 模式，删除后 pasteOrderItems 数量:', this.pasteOrderItems?.length);
+                            console.log('📝 [handleDeleteOrder] paste 模式，删除前 orderItems 数量:', this.orderItems?.length);
+                            if (orderIndex >= 0 && orderIndex < this.orderItems.length) {
+                                this.orderItems.splice(orderIndex, 1);
+                                console.log('✅ [handleDeleteOrder] paste 模式，删除后 orderItems 数量:', this.orderItems?.length);
                             } else {
-                                console.error('❌ [handleDeleteOrder] paste 模式，索引越界:', orderIndex, this.pasteOrderItems?.length);
+                                console.error('❌ [handleDeleteOrder] paste 模式，索引越界:', orderIndex, this.orderItems?.length);
                             }
                         } else if (sourceType === 'auto' && this.uploadType === 'auto') {
                             // auto 模式下，需要找到在 orderItems 中的实际索引
@@ -4228,14 +2696,14 @@
                                 activeProcessedFileTab: this.activeProcessedFileTab,
                                 currentOrderSourceFile: this.currentEditOrderItem.sourceFile
                             });
-                            
+
                             if (filteredItems && orderIndex >= 0 && orderIndex < filteredItems.length) {
                                 const order = filteredItems[orderIndex];
                                 console.log('🔍 [handleDeleteOrder] 从 filteredOrderItems 获取订单:', order);
-                                
+
                                 const actualIndex = this.orderItems.findIndex(item => item === order);
                                 console.log('🔍 [handleDeleteOrder] 在 orderItems 中找到的实际索引:', actualIndex);
-                                
+
                                 if (actualIndex >= 0) {
                                     console.log('🗑️ [handleDeleteOrder] 删除前 orderItems 数量:', this.orderItems.length);
                                     this.orderItems.splice(actualIndex, 1);
@@ -4275,18 +2743,19 @@
                         console.log('🔄 [handleDeleteOrder] 重置搜索和匹配商品列表状态');
                         this.resetSearchAndMatchedGoodsState();
 
-                        // 更新缓存（保存更新后的订单列表）
-                        console.log('💾 [handleDeleteOrder] 开始更新缓存，sourceType:', sourceType);
-                        if (sourceType === 'paste') {
-                            console.log('💾 [handleDeleteOrder] 保存 pasteOrderItems 到缓存');
-                            this._saveToStorage(this.pasteOrderItems, 'paste');
-                        } else {
-                            console.log('💾 [handleDeleteOrder] 保存 orderItems 到缓存，数量:', this.orderItems?.length);
-                            this._saveToStorage();
-                            console.log('✅ [handleDeleteOrder] 缓存更新完成');
+                        this.closeEditOrderModal();
+
+                        // 如果是朗读状态（停止的订单），删除完成后继续朗读（forceContinue 跳过 nxDoStatus 检查）；若已弹任务完成窗则不继续朗读
+                        if (sourceType && orderIndex >= 0 && !this.showTaskCompleteModal) {
+                            const mode = sourceType === 'excel-paste' ? 'excelPaste' : sourceType;
+                            const ref = this.getOrderListRef(mode);
+                            if (ref && ref.stoppedIndex !== undefined && ref.stoppedIndex !== null && ref.stoppedIndex >= 0) {
+                                this.$nextTick(() => {
+                                    if (ref && ref.continueReading) ref.continueReading(true);
+                                });
+                            }
                         }
 
-                        this.closeEditOrderModal();
                         console.log('✅ [handleDeleteOrder] 删除订单完成');
                     } else {
                         console.error('❌ [handleDeleteOrder] 删除失败:', res?.data?.msg);
@@ -4300,97 +2769,176 @@
                 }
             },
 
-            // 从缓存中删除订单
-            _removeOrderFromStorage(orderId, sourceType) {
-                if (!orderId || !this.selectedAllCustomer) {
-                    return;
-                }
-
-                const storageKey = `ocrOrderDepList_${sourceType}`;
-
-                try {
-                    const ocrOrderDepListStr = localStorage.getItem(storageKey);
-                    if (!ocrOrderDepListStr) {
-                        return;
-                    }
-
-                    let ocrOrderDepList = JSON.parse(ocrOrderDepListStr);
-                    if (!Array.isArray(ocrOrderDepList)) {
-                        return;
-                    }
-
-                    // 查找当前部门的缓存
-                    const depIndex = ocrOrderDepList.findIndex(dep =>
-                        String(dep.depId) === String(this.selectedAllCustomer) ||
-                        String(dep.depFatherId) === String(this.selectedAllCustomer)
-                    );
-
-                    if (depIndex >= 0) {
-                        const depData = ocrOrderDepList[depIndex];
-                        if (depData.arr && Array.isArray(depData.arr)) {
-                            // 从订单数组中删除
-                            const orderIndex = depData.arr.findIndex(order =>
-                                order.nxDepartmentOrdersId === orderId
-                            );
-
-                            if (orderIndex >= 0) {
-                                depData.arr.splice(orderIndex, 1);
-
-                                // 如果订单数组为空，删除整个部门缓存
-                                if (depData.arr.length === 0) {
-                                    ocrOrderDepList.splice(depIndex, 1);
-                                }
-
-                                // 保存回缓存
-                                localStorage.setItem(storageKey, JSON.stringify(ocrOrderDepList));
-                            }
-                        }
-                    }
-                } catch (error) {
-                    console.error('从缓存中删除订单失败:', error);
-                }
-            },
-
             // 检查订单数量和规格是否有效
             isValidOrderQuantityAndStandard(item) {
                 const quantity = item.nxDoQuantity;
                 const standard = item.nxDoStandard;
-                
+
                 // 检查数量：不能为 null、undefined、空字符串或 NaN
-                const isValidQuantity = quantity != null && 
-                                       quantity !== '' && 
-                                       !isNaN(quantity);
-                
+                const isValidQuantity = quantity != null &&
+                    quantity !== '' &&
+                    !isNaN(quantity);
+
                 // 检查规格：不能为 null、undefined 或空字符串（trim后）
-                const isValidStandard = standard != null && 
-                                       standard !== '' && 
-                                       String(standard).trim() !== '';
-                
+                const isValidStandard = standard != null &&
+                    standard !== '' &&
+                    String(standard).trim() !== '';
+
                 return isValidQuantity && isValidStandard;
             },
 
             // 保存新商品（参考小程序 disAddGoodsLinshi 实现）
-            async handleSaveNewGoods(item, orderIndex, sourceType) {
+            handleSaveNewGoods(item, orderIndex, sourceType, goodsNameOverride) {
                 // 重置搜索和匹配商品列表状态
                 this.resetSearchAndMatchedGoodsState();
 
-                // 检查必填字段
-                const goodsName = item.nxDoGoodsName || '';
+                // 检查必填字段（优先使用 OrderList 传入的修改后商品名称）
+                const goodsName = (goodsNameOverride != null && String(goodsNameOverride).trim() !== '') ? String(goodsNameOverride).trim() : (item.nxDoGoodsName || '');
                 const standard = item.nxDoStandard || '';
+                const itemUnit = item.itemUnit || '';
 
                 if (!goodsName || !goodsName.trim()) {
                     alert('请填写商品名称');
                     return;
                 }
 
-                if (!standard || !standard.trim()) {
-                    alert('请填写商品规格');
+                // 如果没有商品单位，则使用订货单位；只有当两者都为空时才提示
+                const finalUnit = itemUnit.trim() || standard.trim();
+                if (!finalUnit) {
+                    alert('请填写商品单位或订货单位');
                     return;
                 }
 
-                // 弹出确认对话框
-                const confirmMessage = `确定要保存新商品吗？\n\n商品名称：${goodsName.trim()}\n商品规格：${standard.trim()}`;
-                if (!confirm(confirmMessage)) {
+                // 保存当前商品信息，用于弹窗
+                this.currentSaveGoodsItem = item;
+                this.currentSaveGoodsOrderIndex = orderIndex;
+                this.currentSaveGoodsSourceType = sourceType;
+
+                // 初始化表单数据
+                this.saveNewGoodsForm = {
+                    goodsName: goodsName.trim(),
+                    standardName: finalUnit, // 使用商品单位，如果没有则使用订货单位
+                    standardWeight: item.standardWeight || '',
+                    itemUnit: itemUnit.trim() || '',
+                    cartonUnit: item.cartonUnit || '',
+                    itemsPerCarton: item.itemsPerCarton || ''
+                };
+
+                // 显示弹窗
+                this.showSaveNewGoodsModal = true;
+            },
+
+
+            // 完成任务（PasteUpload / ExcelPasteUpload / ImageUpload 的「完成」按钮）
+            async onFinishTask() {
+                const taskId = this.currentTaskId;
+                const task = this.currentTask;
+                const sourceType = this.uploadType || 'paste';
+                if (taskId == null) {
+                    alert('当前没有可完成的任务');
+                    return;
+                }
+                try {
+                    await api.finishTask(taskId);
+                } catch (e) {
+                    console.error('finishTask failed:', e);
+                    alert(e?.message || '完成任务失败');
+                    return;
+                }
+                this.$emit('task-added');
+                this.currentTaskId = null;
+                this.currentTask = null;
+                // 清空当前任务的订单数据
+                this.clearLocalByUploadType(sourceType);
+                // 刷新任务列表
+                let taskList = [];
+                try {
+                    if (sourceType === 'paste' && this.$refs.pasteUploadRef?.loadTaskList) {
+                        taskList = await this.$refs.pasteUploadRef.loadTaskList() || [];
+                    } else if (sourceType === 'excel-paste' && this.$refs.excelPasteUploadRef?.loadTaskList) {
+                        taskList = await this.$refs.excelPasteUploadRef.loadTaskList() || [];
+                    } else if (sourceType === 'image' && this.$refs.imageUploadRef?.loadTaskList) {
+                        const taskType = task?.nxOcrTaskType != null ? task.nxOcrTaskType : 1;
+                        taskList = await this.$refs.imageUploadRef.loadTaskList(null, {type: taskType}) || [];
+                    }
+                } catch (e) {
+                    console.error('[PlaceOrder] loadTaskList after onFinishTask failed:', e);
+                }
+                // 若无任务，跳转到今日订单标签页
+                if (taskList.length === 0) {
+                    this.$emit('switch-to-today-orders');
+                }
+            },
+
+            // 关闭任务完成提示弹窗（检查）
+            closeTaskCompleteModal() {
+                this.showTaskCompleteModal = false;
+                this.taskCompleteModalTaskId = null;
+                this.taskCompleteModalSourceType = null;
+                this.taskCompleteModalTask = null;
+                this.stopAllReading();
+            },
+            // 完成任务完成弹窗（完成 - 调用接口完成任务，清空当前任务并刷新任务列表）
+            async confirmTaskCompleteModal() {
+                const taskId = this.taskCompleteModalTaskId;
+                const sourceType = this.taskCompleteModalSourceType;
+                const task = this.taskCompleteModalTask;
+                this.closeTaskCompleteModal();
+                //关闭播放器
+                this.stopAllReading();
+                this.currentTaskId = null;
+                this.currentTask = null;
+                if (taskId == null) return;
+                try {
+                    await api.finishTask(taskId);
+                } catch (e) {
+                    console.error('finishTask failed:', e);
+                    alert(e?.message || '完成任务失败');
+                    return;
+                }
+                this.$emit('task-added');
+                // 清空当前任务的订单数据，避免任务完成后仍显示旧数据（特别是只剩一个任务时）
+                this.clearLocalByUploadType(sourceType);
+                let taskList = [];
+                try {
+                    if (sourceType === 'paste' && this.$refs.pasteUploadRef?.loadTaskList) {
+                        taskList = await this.$refs.pasteUploadRef.loadTaskList() || [];
+                    } else if (sourceType === 'excel-paste' && this.$refs.excelPasteUploadRef?.loadTaskList) {
+                        taskList = await this.$refs.excelPasteUploadRef.loadTaskList() || [];
+                    } else if (sourceType === 'image' && this.$refs.imageUploadRef?.loadTaskList) {
+                        const taskType = task?.nxOcrTaskType != null ? task.nxOcrTaskType : 1;
+                        taskList = await this.$refs.imageUploadRef.loadTaskList(null, {type: taskType}) || [];
+                    }
+                } catch (e) {
+                    console.error('[PlaceOrder] loadTaskList after finishTask failed:', e);
+                }
+                // 若无任务，跳转到今日订单标签页
+                if (taskList.length === 0) {
+                    this.$emit('switch-to-today-orders');
+                }
+            },
+
+            // 关闭保存新商品弹窗
+            closeSaveNewGoodsModal() {
+                this.showSaveNewGoodsModal = false;
+                this.currentSaveGoodsItem = null;
+                this.currentSaveGoodsOrderIndex = -1;
+                this.currentSaveGoodsSourceType = null;
+                this.isSaveNewGoodsFromBeforeOrder = false; // 重置标记
+                this.saveNewGoodsForm = {
+                    goodsName: '',
+                    standardName: '',
+                    standardWeight: '',
+                    itemUnit: '',
+                    cartonUnit: '',
+                    itemsPerCarton: ''
+                };
+            },
+
+            // 确认保存新商品
+            async confirmSaveNewGoods() {
+                if (!this.saveNewGoodsForm.standardName || !this.saveNewGoodsForm.standardName.trim()) {
+                    alert('请填写商品规格名称');
                     return;
                 }
 
@@ -4417,17 +2965,20 @@
                     nxDgBuyingPrice: "1", // 默认价格
                     nxDgBuyingPriceUpdate: arriveDate,
                     nxDgDistributerId: disId,
-                    nxDgGoodsName: goodsName.trim(),
-                    nxDgGoodsStandardname: standard.trim(),
-                    nxDgGoodsStandardWeight: "-1",
+                    nxDgGoodsName: this.saveNewGoodsForm.goodsName.trim(),
+                    nxDgGoodsStandardname: this.saveNewGoodsForm.standardName.trim(),
+                    nxDgGoodsStandardWeight: this.saveNewGoodsForm.standardWeight.trim() || "-1",
+                    nxDgItemUnit: this.saveNewGoodsForm.itemUnit.trim() || "",
                     nxDgGoodsBrand: "-1",
                     nxDgGoodsPlace: "-1",
                     nxDgGoodsInventoryType: 1,
                     nxDgNxGoodsFatherColor: "#20afb8",
                     nxDgGoodsFile: 'goodsImage/logo.jpg',
                     nxDistributerStandardEntities: [],
-                    nxDgCartonUnit: "",
-                    nxDgItemsPerCarton: ""
+                    nxDgCartonUnit: this.saveNewGoodsForm.cartonUnit.trim() || "",
+                    nxDgItemsPerCarton: this.saveNewGoodsForm.itemsPerCarton != null && this.saveNewGoodsForm.itemsPerCarton !== ''
+                        ? String(this.saveNewGoodsForm.itemsPerCarton)
+                        : ""
                 };
 
                 try {
@@ -4440,51 +2991,60 @@
                         // 保存成功，获取返回的商品ID
                         const savedGoods = res.data.data;
                         const goodsId = savedGoods.nxDistributerGoodsId;
-                        const savedGoodsName = savedGoods.nxDgGoodsName || goodsName;
+                        const savedGoodsName = savedGoods.nxDgGoodsName || this.saveNewGoodsForm.goodsName;
 
-                        // 设置当前编辑的订单索引和来源类型
-                        this.orderArrIndex = orderIndex;
-                        this.currentSourceType = sourceType;
+                        // 如果是从"在之前添加新订单"表单中保存的，需要特殊处理
+                        if (this.isSaveNewGoodsFromBeforeOrder) {
+                            // 自动触发商品搜索，这样新商品会出现在搜索结果中
+                            await this.handleBeforeOrderGoodsNameInput(this.beforeOrderForm.goodsName);
 
-                        // 设置商品ID和名称，然后调用 _choiceGoods 来应用这个商品
-                        this.goodsId = goodsId;
-                        this.selectedGoodsName = savedGoodsName;
+                            // 关闭弹窗
+                            this.closeSaveNewGoodsModal();
+                        } else {
+                            // 原有的处理逻辑：设置当前编辑的订单索引和来源类型
+                            const orderIndex = this.currentSaveGoodsOrderIndex;
+                            const sourceType = this.currentSaveGoodsSourceType;
+                            this.orderArrIndex = orderIndex;
+                            this.currentSourceType = sourceType;
 
-                        // 调用保存商品选择（会自动更新订单状态）
-                        await this._choiceGoods();
+                            this.goodsId = goodsId;
+                            this.selectedGoodsName = savedGoodsName;
+                            // 调用保存商品选择（会自动更新订单状态）
+                            await this._choiceGoods();
 
-                        // 保存到缓存
-                        if (sourceType !== 'paste') {
-                            this._saveToStorage();
+                            // 关闭弹窗
+                            this.closeSaveNewGoodsModal();
+
+                            // 如果是朗读状态（停止的订单），保存新商品后继续朗读（从停止处继续，而非从第1条）
+                            if (sourceType && sourceType !== 'beforeOrder' && orderIndex >= 0) {
+                                const mode = sourceType === 'excel-paste' ? 'excelPaste' : sourceType;
+                                const ref = this.getOrderListRef(mode);
+                                if (ref && ref.stoppedIndex !== undefined && ref.stoppedIndex !== null && ref.stoppedIndex === orderIndex) {
+                                    this.$nextTick(() => {
+                                        if (ref && ref.continueReading) ref.continueReading(true);
+                                    });
+                                }
+                            }
                         }
                     } else {
                         // 保存失败
                         const errorMsg = res?.data?.message || '保存失败，可能存在相同商品';
                         alert(errorMsg);
-                        console.error('❌ [handleSaveNewGoods] 保存新商品失败:', res);
+                        console.error('❌ [confirmSaveNewGoods] 保存新商品失败:', res);
                     }
                 } catch (error) {
-                    console.error('❌ [handleSaveNewGoods] 保存新商品异常:', error);
+                    console.error('❌ [confirmSaveNewGoods] 保存新商品异常:', error);
                     alert('保存新商品失败，请检查网络连接');
                 } finally {
                     this.$store.commit('SET_LOADING', false);
                 }
             },
 
-            // 删除订单项
+            // 删除订单项（无需确认弹窗）
             handleDeleteOrderItem(orderIndex, sourceType) {
-                const orderItems = this.getCurrentOrderItems(sourceType);
-                if (confirm('确定要删除这个订单项吗？')) {
-                    orderItems.splice(orderIndex, 1);
-                    // 重置搜索和匹配商品列表状态
-                    this.resetSearchAndMatchedGoodsState();
-                    // 保存到缓存
-                    if (sourceType === 'paste') {
-                        this._saveToStorage(this.pasteOrderItems, 'paste');
-                    } else {
-                        this._saveToStorage();
-                    }
-                }
+                const orderItems = this.getCurrentOrderItems();
+                orderItems.splice(orderIndex, 1);
+                this.resetSearchAndMatchedGoodsState();
             },
 
             // 在当前订单之前添加新订单（显示商品选择面板）
@@ -4520,15 +3080,76 @@
                     remark: '',
                     selectedGoods: null,
                     searchResults: [],
+                    disArr: [],
+                    nxArr: [],
                     showSearchResults: false
                 };
             },
 
+            // 处理从"在之前添加新订单"表单中保存新商品
+            handleSaveNewGoodsFromBeforeOrder({item, orderIndex}) {
+                // 检查必填字段
+                const goodsName = this.beforeOrderForm.goodsName || '';
+                const standard = this.beforeOrderForm.standard || '';
+
+                if (!goodsName || !goodsName.trim()) {
+                    alert('请填写商品名称');
+                    return;
+                }
+
+                if (!standard || !standard.toString().trim()) {
+                    alert('请填写商品规格');
+                    return;
+                }
+
+                // 标记这是从 beforeOrderForm 来的保存
+                this.isSaveNewGoodsFromBeforeOrder = true;
+
+                // 构建一个临时的商品对象，用于调用现有的保存新商品逻辑
+                const tempItem = {
+                    nxDoGoodsName: goodsName.trim(),
+                    nxDoStandard: standard.trim(),
+                    itemUnit: standard.trim(), // 使用规格作为商品单位
+                    standardWeight: '',
+                    cartonUnit: '',
+                    itemsPerCarton: ''
+                };
+
+                // 保存当前商品信息，用于弹窗
+                this.currentSaveGoodsItem = tempItem;
+                this.currentSaveGoodsOrderIndex = orderIndex;
+                this.currentSaveGoodsSourceType = 'beforeOrder'; // 特殊标记
+
+                // 初始化表单数据
+                this.saveNewGoodsForm = {
+                    goodsName: goodsName.trim(),
+                    standardName: standard.trim(),
+                    standardWeight: '',
+                    itemUnit: standard.trim(),
+                    cartonUnit: '',
+                    itemsPerCarton: ''
+                };
+
+                // 显示弹窗
+                this.showSaveNewGoodsModal = true;
+            },
+
             // 处理之前添加订单的商品名称输入（搜索商品）
-            async handleBeforeOrderGoodsNameInput() {
-                const searchStr = this.beforeOrderForm.goodsName.trim();
+            async handleBeforeOrderGoodsNameInput(value) {
+                console.log('🔍 [handleBeforeOrderGoodsNameInput] 函数被调用');
+                console.log('📥 [handleBeforeOrderGoodsNameInput] 接收到的输入值:', value);
+                console.log('📥 [handleBeforeOrderGoodsNameInput] 值类型:', typeof value);
+
+                // 先更新表单中的值
+                this.beforeOrderForm.goodsName = value || '';
+                console.log('📦 [handleBeforeOrderGoodsNameInput] beforeOrderForm:', this.beforeOrderForm);
+                console.log('📝 [handleBeforeOrderGoodsNameInput] 更新后的输入值:', this.beforeOrderForm.goodsName);
+
+                const searchStr = (value || '').trim();
+                console.log('✂️ [handleBeforeOrderGoodsNameInput] 修剪后的搜索字符串:', searchStr);
 
                 if (!searchStr || searchStr.length < 1) {
+                    console.log('⚠️ [handleBeforeOrderGoodsNameInput] 搜索字符串为空，清空结果并返回');
                     this.beforeOrderForm.showSearchResults = false;
                     this.beforeOrderForm.searchResults = [];
                     return;
@@ -4537,7 +3158,11 @@
                 try {
                     // 获取部门ID
                     const depId = this.selectedSubDepartment || this.selectedAllCustomer;
+                    console.log('🏢 [handleBeforeOrderGoodsNameInput] 部门ID:', depId);
+                    console.log('🏢 [handleBeforeOrderGoodsNameInput] selectedSubDepartment:', this.selectedSubDepartment);
+                    console.log('🏢 [handleBeforeOrderGoodsNameInput] selectedAllCustomer:', this.selectedAllCustomer);
                     if (!depId) {
+                        console.log('❌ [handleBeforeOrderGoodsNameInput] 部门ID为空，返回');
                         return;
                     }
 
@@ -4547,32 +3172,48 @@
                         searchStr: searchStr,
                         depId: depId
                     };
+                    console.log('📤 [handleBeforeOrderGoodsNameInput] 准备调用API，请求参数:', data);
+                    console.log('👤 [handleBeforeOrderGoodsNameInput] disUser:', this.disUser);
 
                     const res = await api.queryDisGoodsByQuickSearchWithDepId(data);
+                    console.log('📥 [handleBeforeOrderGoodsNameInput] API响应:', res);
 
                     if (res && res.data && res.data.code === 0) {
                         // 返回数据结构：res.data.data.disArr 和 res.data.data.nxArr
                         const disArr = res.data.data.disArr || [];
                         const nxArr = res.data.data.nxArr || [];
+                        console.log('✅ [handleBeforeOrderGoodsNameInput] API调用成功');
+                        console.log('📦 [handleBeforeOrderGoodsNameInput] 配送商商品数量:', disArr.length);
+                        console.log('📦 [handleBeforeOrderGoodsNameInput] 系统商品数量:', nxArr.length);
 
-                        // 合并配送商商品和系统商品
-                        const allResults = [
-                            ...disArr,
-                            ...nxArr
-                        ];
-
-                        this.beforeOrderForm.searchResults = allResults;
-                        this.beforeOrderForm.showSearchResults = allResults.length > 0;
+                        // 分开存储配送商商品和系统商品
+                        this.beforeOrderForm.disArr = disArr;
+                        this.beforeOrderForm.nxArr = nxArr;
+                        // 保留 searchResults 用于兼容性（只包含配送商商品，用于选择）
+                        this.beforeOrderForm.searchResults = disArr;
+                        this.beforeOrderForm.showSearchResults = disArr.length > 0 || nxArr.length > 0;
+                        console.log('💾 [handleBeforeOrderGoodsNameInput] 已更新搜索结果，显示状态:', this.beforeOrderForm.showSearchResults);
                     } else {
                         // 搜索失败，清空结果
+                        console.log('❌ [handleBeforeOrderGoodsNameInput] API返回失败，响应码:', res?.data?.code);
                         this.beforeOrderForm.showSearchResults = false;
                         this.beforeOrderForm.searchResults = [];
+                        this.beforeOrderForm.disArr = [];
+                        this.beforeOrderForm.nxArr = [];
                     }
                 } catch (error) {
-                    console.error('搜索商品失败:', error);
+                    console.error('❌ [handleBeforeOrderGoodsNameInput] 搜索商品失败:', error);
+                    console.error('❌ [handleBeforeOrderGoodsNameInput] 错误堆栈:', error.stack);
                     this.beforeOrderForm.showSearchResults = false;
                     this.beforeOrderForm.searchResults = [];
+                    this.beforeOrderForm.disArr = [];
+                    this.beforeOrderForm.nxArr = [];
                 }
+            },
+
+            // 关闭之前添加订单的搜索结果列表
+            closeBeforeOrderSearchResults() {
+                this.beforeOrderForm.showSearchResults = false;
             },
 
             // 选择之前添加订单的商品
@@ -4746,8 +3387,10 @@
                         nxDoPurchaseUserId: nxDoPurchaseUserId,
                         nxDoPrintStandard: printStandard || standard,
                         nxDoCostPriceLevel: level,
-                        nxDoGoodsName: itemDis.nxDgGoodsName || ''
+                        nxDoGoodsName: itemDis.nxDgGoodsName || '',
+                        nxDoOcrTaskId: this.currentTaskId,
                     };
+                    console.log("abccccurrentTaskIdcurrentTaskIdppppp", this.currentTaskId)
 
                     // 调用 saveOrderBefore API（参考 resGoodsList.js）
                     const res = await api.saveOrderBefore(orderData);
@@ -4755,8 +3398,21 @@
                     // Vue 中 axios 返回 res.data，后端返回 { code: 0, data: {...} }
                     // 所以访问 res.data.code 和 res.data.data
                     if (res && res.data && res.data.code === 0) {
+                        const updatedTask = res.data.task;
+                        if (updatedTask && this.currentTaskId != null && updatedTask.nxOcrTaskId === this.currentTaskId) {
+                            this.currentTask = {...this.currentTask, ...updatedTask};
+                        }
+                        if (updatedTask && Array.isArray(this.taskListFromParent)) {
+                            const idx = this.taskListFromParent.findIndex(t => t && t.nxOcrTaskId === updatedTask.nxOcrTaskId);
+                            if (idx >= 0) {
+                                this.taskListFromParent = this.taskListFromParent.map((t, i) =>
+                                    i === idx ? {...t, ...updatedTask} : t
+                                );
+                            }
+                        }
+
                         // 保存成功，将新订单插入到指定位置（参考 resGoodsList.js 第812行）
-                        const orderItems = this.getCurrentOrderItems(sourceType);
+                        const orderItems = this.getCurrentOrderItems();
 
                         // 如果是转订单模式，需要设置 sourceFile 属性，以便在 filteredOrderItems 中正确显示
                         let sourceFile = null;
@@ -4799,14 +3455,6 @@
                         // 重置状态
                         this.cancelAddOrderBefore();
 
-                        // 保存到缓存
-                        if (sourceType === 'paste') {
-                            this._saveToStorage(this.pasteOrderItems, 'paste');
-                        } else {
-                            this._saveToStorage();
-                        }
-
-                        // alert('订单添加成功');
                     } else {
                         const errorMsg = res?.data?.msg || res?.data?.message || '保存失败';
                         alert(errorMsg);
@@ -4840,10 +3488,10 @@
                     orderId: item?.nxDepartmentOrdersId
                 });
 
-                const orderItems = this.getCurrentOrderItems(sourceType);
+                const orderItems = this.getCurrentOrderItems();
                 console.log('📋 [handleDeleteOrderFromExcel] 当前订单列表:', {
                     orderItemsLength: orderItems?.length,
-                    orderItemsType: sourceType === 'paste' ? 'pasteOrderItems' : 'orderItems',
+                    orderItemsType: 'orderItems',
                     filteredOrderItemsLength: sourceType === 'auto' ? this.filteredOrderItems?.length : 'N/A'
                 });
 
@@ -4855,12 +3503,6 @@
 
                 // 如果订单有 nxDepartmentOrdersId，说明已经保存到服务器，需要调用接口删除
                 if (item.nxDepartmentOrdersId) {
-
-                    if (!confirm('确定要删除这个订单吗？')) {
-                        console.log('⚠️ [handleDeleteOrderFromExcel] 用户取消删除');
-                        return;
-                    }
-
                     try {
                         this.$store.commit('SET_LOADING', true);
 
@@ -4869,7 +3511,19 @@
 
                         if (res && res.data && res.data.code === 0) {
                             console.log('✅ [handleDeleteOrderFromExcel] 删除成功，开始更新页面数据');
-                            
+                            this.$emit('task-added');
+                            const updatedTask = res.data.task;
+                            if (updatedTask && this.currentTaskId != null && updatedTask.nxOcrTaskId === this.currentTaskId) {
+                                this.currentTask = {...this.currentTask, ...updatedTask};
+                            }
+                            if (updatedTask && Array.isArray(this.taskListFromParent)) {
+                                const idx = this.taskListFromParent.findIndex(t => t && t.nxOcrTaskId === updatedTask.nxOcrTaskId);
+                                if (idx >= 0) {
+                                    this.taskListFromParent = this.taskListFromParent.map((t, i) =>
+                                        i === idx ? {...t, ...updatedTask} : t
+                                    );
+                                }
+                            }
                             // 对于 auto 模式，需要特殊处理
                             if (sourceType === 'auto' && this.uploadType === 'auto') {
                                 console.log('🔄 [handleDeleteOrderFromExcel] auto 模式，删除前数据:', {
@@ -4879,16 +3533,16 @@
                                     activeProcessedFileTab: this.activeProcessedFileTab,
                                     itemSourceFile: item.sourceFile
                                 });
-                                
+
                                 // orderIndex 是 filteredOrderItems 的索引，需要找到在 orderItems 中的实际索引
                                 const filteredItems = this.filteredOrderItems;
                                 if (filteredItems && orderIndex >= 0 && orderIndex < filteredItems.length) {
                                     const filteredOrder = filteredItems[orderIndex];
                                     console.log('🔍 [handleDeleteOrderFromExcel] 从 filteredOrderItems 获取订单:', filteredOrder);
-                                    
+
                                     const actualIndex = this.orderItems.findIndex(order => order === filteredOrder);
                                     console.log('🔍 [handleDeleteOrderFromExcel] 在 orderItems 中找到的实际索引:', actualIndex);
-                                    
+
                                     if (actualIndex >= 0) {
                                         console.log('🗑️ [handleDeleteOrderFromExcel] 删除前 orderItems 数量:', this.orderItems.length);
                                         this.orderItems.splice(actualIndex, 1);
@@ -4925,15 +3579,12 @@
                             console.log('🔄 [handleDeleteOrderFromExcel] 重置搜索和匹配商品列表状态');
                             this.resetSearchAndMatchedGoodsState();
 
-                            // 更新缓存（从缓存中删除订单）
-                            console.log('💾 [handleDeleteOrderFromExcel] 开始更新缓存，sourceType:', sourceType);
-                            if (sourceType === 'paste') {
-                                console.log('💾 [handleDeleteOrderFromExcel] 保存 pasteOrderItems 到缓存');
-                                this._saveToStorage(this.pasteOrderItems, 'paste');
-                            } else {
-                                console.log('💾 [handleDeleteOrderFromExcel] 保存 orderItems 到缓存，数量:', this.orderItems?.length);
-                                this._saveToStorage();
-                                console.log('✅ [handleDeleteOrderFromExcel] 缓存更新完成');
+                            // 删除后刷新任务列表（可能是最后一条订单，任务已被后端删除）
+                            if (sourceType === 'paste' && this.$refs.pasteUploadRef?.loadTaskList) {
+                                this.$nextTick(() => this.$refs.pasteUploadRef.loadTaskList());
+                            }
+                            if (sourceType === 'excel-paste' && this.$refs.excelPasteUploadRef?.loadTaskList) {
+                                this.$nextTick(() => this.$refs.excelPasteUploadRef.loadTaskList());
                             }
 
                             console.log('✅ [handleDeleteOrderFromExcel] 删除订单完成');
@@ -4951,15 +3602,11 @@
                 }
 
                 // 如果订单没有 nxDepartmentOrdersId，说明只是草稿，直接从数组中删除
-                if (!confirm('确定要删除这个订单项吗？')) {
-                    return;
-                }
-
                 orderItems.splice(orderIndex, 1);
 
                 // 重置搜索和匹配商品列表状态
                 // this.resetSearchAndMatchedGoodsState();
-                 if(orderItems.length == 0){
+                if (orderItems.length == 0) {
                     this.pasteInputText = "";
                 }
 
@@ -4967,39 +3614,93 @@
             },
 
             // 选择匹配的商品
-            selectMatchedGoods(item, orderIndex, goodsIndex, sourceType) {
+            async selectMatchedGoods(item, orderIndex, goodsIndex, sourceType) {
+                // 安全检查
+                if (!item || !item.nxDistributerGoodsEntityList || !Array.isArray(item.nxDistributerGoodsEntityList)) {
+                    console.error('[selectMatchedGoods] 订单项或商品列表不存在:', {item, orderIndex, goodsIndex});
+                    return;
+                }
+                if (goodsIndex === undefined || goodsIndex === null || goodsIndex < 0 || goodsIndex >= item.nxDistributerGoodsEntityList.length) {
+                    console.error('[selectMatchedGoods] 商品索引无效:', {
+                        orderIndex,
+                        goodsIndex,
+                        listLength: item.nxDistributerGoodsEntityList.length
+                    });
+                    return;
+                }
+                const selectedGoods = item.nxDistributerGoodsEntityList[goodsIndex];
+                if (!selectedGoods) {
+                    console.error('[selectMatchedGoods] 选中的商品不存在:', {orderIndex, goodsIndex});
+                    return;
+                }
+
                 this.orderArrIndex = orderIndex;
                 this.currentSourceType = sourceType; // 保存当前来源类型
-                this.goodsId = item.nxDistributerGoodsEntityList[goodsIndex].nxDistributerGoodsId;
-                this.selectedGoodsName = item.nxDistributerGoodsEntityList[goodsIndex].nxDgGoodsName || '';
+                this.goodsId = selectedGoods.nxDistributerGoodsId;
+                this.selectedGoodsName = selectedGoods.nxDgGoodsName || '';
 
                 // 标记选中的商品索引
                 item.selectedGoodsIndex = goodsIndex;
 
                 // 调用保存商品选择
-                this._choiceGoods();
+                await this._choiceGoods();
+
+                // 如果是停止的订单（image 模式），选择完成后继续朗读
+                if (sourceType === 'image' && this.$refs.imageOrderListRef) {
+                    const stoppedIndex = this.$refs.imageOrderListRef.stoppedIndex;
+                    if (stoppedIndex !== undefined && stoppedIndex !== null && stoppedIndex === orderIndex) {
+                        console.log('[PlaceOrder] 停止的订单已完成选择，继续朗读，索引:', orderIndex);
+                        this.$nextTick(() => {
+                            if (this.$refs.imageOrderListRef && this.$refs.imageOrderListRef.continueReading) {
+                                this.$refs.imageOrderListRef.continueReading();
+                            }
+                        });
+                    }
+                }
             },
 
             // 选择匹配商品（转订单模式，直接传入商品对象）
-            choiceGoodsForApply(orderGoods, orderIndex, sourceType) {
+            async choiceGoodsForApply(orderGoods, orderIndex, sourceType) {
                 this.orderArrIndex = orderIndex;
                 this.currentSourceType = sourceType; // 保存当前来源类型
                 this.goodsId = orderGoods.nxDistributerGoodsId;
                 this.selectedGoodsName = orderGoods.nxDgGoodsName || '';
 
                 // 调用保存商品选择
-                this._choiceGoods();
+                await this._choiceGoods();
+
+                // 如果是朗读状态（停止的订单），选择完成后继续朗读（forceContinue 跳过 nxDoStatus 检查）
+                const mode = sourceType === 'excel-paste' ? 'excelPaste' : sourceType;
+                const ref = this.getOrderListRef(mode);
+                if (ref && ref.stoppedIndex !== undefined && ref.stoppedIndex !== null && ref.stoppedIndex === orderIndex) {
+                    this.$nextTick(() => {
+                        if (ref && ref.continueReading) ref.continueReading(true);
+                    });
+                }
             },
 
             // 选择搜索结果中的商品
-            selectSearchResult(goods, orderIndex, sourceType) {
+            async selectSearchResult(goods, orderIndex, sourceType) {
                 this.orderArrIndex = orderIndex;
                 this.currentSourceType = sourceType; // 保存当前来源类型
                 this.goodsId = goods.nxDistributerGoodsId;
                 this.selectedGoodsName = goods.nxDgGoodsName || '';
 
                 // 调用保存商品选择
-                this._choiceGoods();
+                await this._choiceGoods();
+
+                // 选择完成后清空搜索结果下拉框，避免再次点击触发重复请求
+                this.resetSearchAndMatchedGoodsState();
+
+                // 若是停止的订单，选择完成后继续朗读（所有模式，forceContinue 跳过 nxDoStatus 检查）
+                const mode = sourceType === 'excel-paste' ? 'excelPaste' : sourceType;
+                const ref = this.getOrderListRef(mode);
+                if (ref && ref.stoppedIndex !== undefined && ref.stoppedIndex !== null && ref.stoppedIndex === orderIndex) {
+                    console.log('[PlaceOrder] 停止的订单已完成选择，继续朗读，索引:', orderIndex);
+                    this.$nextTick(() => {
+                        if (ref && ref.continueReading) ref.continueReading(true);
+                    });
+                }
             },
 
             // 下载商品后应用商品到订单（公共流程）
@@ -5019,7 +3720,6 @@
                 this.orderArrIndex = orderIndex;
                 this.currentSourceType = sourceType;
 
-                // 调用 _choiceGoods 更新订单
                 await this._choiceGoods();
             },
 
@@ -5034,7 +3734,7 @@
                 try {
                     // 获取部门ID
                     const depId = this.selectedSubDepartment || this.selectedAllCustomer;
-                    
+
                     if (!depId) {
                         console.warn("⚠️ [_searchExistingGoods] 部门ID不存在");
                         return null;
@@ -5046,41 +3746,41 @@
                         searchStr: goods.nxGoodsName,
                         depId: depId
                     };
-                    
+
                     const searchRes = await api.queryDisGoodsByQuickSearchWithDepId(searchData);
-                    
+
                     if (searchRes && searchRes.data && searchRes.data.code === 0) {
                         const disArr = searchRes.data.data.disArr || [];
-                        
+
                         // 优先使用 nxGoodsId 精确匹配
-                        let foundGoods = disArr.find(item => 
+                        let foundGoods = disArr.find(item =>
                             item.nxDgNxGoodsId === goods.nxGoodsId
                         );
-                        
+
                         // 如果 nxGoodsId 匹配失败，使用商品名称精确匹配
                         if (!foundGoods) {
-                            foundGoods = disArr.find(item => 
+                            foundGoods = disArr.find(item =>
                                 item.nxDgGoodsName === goods.nxGoodsName
                             );
                         }
-                        
+
                         // 如果精确匹配失败，使用第一个匹配的商品
                         if (!foundGoods && disArr.length > 0) {
                             foundGoods = disArr[0];
                             console.log("⚠️ [_searchExistingGoods] 使用第一个匹配的商品（非精确匹配）");
                         }
-                        
+
                         if (foundGoods && foundGoods.nxDistributerGoodsId) {
                             console.log("✅ [_searchExistingGoods] 找到已存在的商品:", {
                                 nxDistributerGoodsId: foundGoods.nxDistributerGoodsId,
                                 nxDgGoodsName: foundGoods.nxDgGoodsName,
-                                matchedBy: foundGoods.nxDgNxGoodsId === goods.nxGoodsId ? 'nxGoodsId' : 
-                                          foundGoods.nxDgGoodsName === goods.nxGoodsName ? 'goodsName' : 'first'
+                                matchedBy: foundGoods.nxDgNxGoodsId === goods.nxGoodsId ? 'nxGoodsId' :
+                                    foundGoods.nxDgGoodsName === goods.nxGoodsName ? 'goodsName' : 'first'
                             });
                             return foundGoods;
                         }
                     }
-                    
+
                     return null;
                 } catch (searchError) {
                     console.error("❌ [_searchExistingGoods] 搜索已存在商品失败:", searchError);
@@ -5089,29 +3789,62 @@
             },
 
             // 下载商品（参考微信小程序 downLoadGoodsNx）
-            async downLoadGoodsNx(goods, orderIndex) {
+            async downLoadGoodsNx(eventData) {
+                console.log("🚀 [downLoadGoodsNx] ========== 开始执行 ==========");
+                console.log("📥 [downLoadGoodsNx] 接收到原始参数 eventData:", eventData);
+                console.log("📥 [downLoadGoodsNx] eventData 类型:", typeof eventData);
+                console.log("📥 [downLoadGoodsNx] eventData 是否为对象:", typeof eventData === 'object');
+                console.log("📥 [downLoadGoodsNx] eventData 是否包含 goods:", eventData && 'goods' in eventData);
+
+                // 处理事件数据：可能是一个对象 { goods, orderIndex } 或者是两个参数
+                let goods, orderIndex;
+
+                if (eventData && typeof eventData === 'object' && 'goods' in eventData) {
+                    // 从事件对象中解构
+                    ({goods, orderIndex} = eventData);
+                    console.log("✅ [downLoadGoodsNx] 从事件对象中解构数据");
+                } else {
+                    // 兼容旧的两参数调用方式（向后兼容）
+                    goods = eventData;
+                    orderIndex = arguments[1];
+                    console.log("✅ [downLoadGoodsNx] 使用兼容模式（两参数）");
+                }
+
+                console.log("📦 [downLoadGoodsNx] 解构后的 goods:", goods);
+                console.log("📦 [downLoadGoodsNx] 解构后的 orderIndex:", orderIndex);
+                console.log("📦 [downLoadGoodsNx] goods 的所有键:", goods ? Object.keys(goods) : 'goods 为空');
 
                 if (!goods || !goods.nxGoodsId) {
-                    console.error("❌ 商品数据错误: goods 或 goods.nxGoodsId 不存在");
+                    console.error("❌ [downLoadGoodsNx] 商品数据错误: goods 或 goods.nxGoodsId 不存在");
+                    console.error("❌ [downLoadGoodsNx] goods:", goods);
+                    console.error("❌ [downLoadGoodsNx] goods.nxGoodsId:", goods?.nxGoodsId);
+                    console.error("❌ [downLoadGoodsNx] 原始 eventData:", eventData);
                     alert('商品数据错误');
                     return;
                 }
 
                 if (orderIndex === undefined || orderIndex === null) {
-                    console.error("❌ orderIndex 为 undefined 或 null");
+                    console.error("❌ [downLoadGoodsNx] orderIndex 为 undefined 或 null");
+                    console.error("❌ [downLoadGoodsNx] orderIndex:", orderIndex);
+                    console.error("❌ [downLoadGoodsNx] 原始 eventData:", eventData);
                     alert('订单索引错误');
                     return;
                 }
 
                 try {
+                    console.log("⏳ [downLoadGoodsNx] 开始执行下载流程...");
                     this.$store.commit('SET_LOADING', true);
                     this.selectedGoodsName = goods.nxGoodsName;
+                    console.log("📝 [downLoadGoodsNx] 设置 selectedGoodsName:", goods.nxGoodsName);
 
                     // 根据当前 uploadType 确定 sourceType
                     // 注意：在 auto 模式下，orderIndex 是 filteredOrderItems 的索引
                     const sourceType = this.uploadType || 'excel';
                     this.currentSourceType = sourceType;
                     this.orderArrIndex = orderIndex;
+                    console.log("🔧 [downLoadGoodsNx] sourceType:", sourceType);
+                    console.log("🔧 [downLoadGoodsNx] orderArrIndex:", orderIndex);
+                    console.log("🔧 [downLoadGoodsNx] uploadType:", this.uploadType);
 
                     // 构建下载商品的数据对象（参考小程序实现）
                     const dg = {
@@ -5137,56 +3870,142 @@
                         ...(goods.nxAliasEntities && {nxAliasEntities: goods.nxAliasEntities}),
                     };
 
+                    console.log("📤 [downLoadGoodsNx] 准备发送 API 请求，请求数据 dg:", dg);
+                    console.log("📤 [downLoadGoodsNx] nxDgDistributerId:", dg.nxDgDistributerId);
+                    console.log("📤 [downLoadGoodsNx] nxDgNxGoodsId:", dg.nxDgNxGoodsId);
+                    console.log("📤 [downLoadGoodsNx] nxDgGoodsName:", dg.nxDgGoodsName);
+
                     const res = await api.downDisGoods(dg);
+
+                    console.log("📥 [downLoadGoodsNx] API 响应:", res);
+                    console.log("📥 [downLoadGoodsNx] res.data:", res?.data);
+                    console.log("📥 [downLoadGoodsNx] res.data.code:", res?.data?.code);
+                    console.log("📥 [downLoadGoodsNx] res.data.msg:", res?.data?.msg);
 
                     if (res && res.data && res.data.code === 0) {
                         // 下载成功：应用商品到订单
                         console.log("✅ [downLoadGoodsNx] 下载成功，应用商品到订单");
-                        await this._applyGoodsToOrder(
-                            res.data.data.nxDistributerGoodsId,
-                            res.data.data.nxDgGoodsName || goods.nxGoodsName,
-                            orderIndex,
-                            sourceType
-                        );
+                        console.log("✅ [downLoadGoodsNx] 返回的商品ID:", res.data.data.nxDistributerGoodsId);
+                        console.log("✅ [downLoadGoodsNx] 返回的商品名称:", res.data.data.nxDgGoodsName);
+                        console.log("✅ [downLoadGoodsNx] 完整返回数据:", res.data.data);
+
+                        // 判断是否是"之前插入订单"场景
+                        const isBeforeOrderForm = this.addingOrderBeforeIndex === orderIndex;
+                        console.log("🔍 [downLoadGoodsNx] 是否是之前插入订单场景:", isBeforeOrderForm);
+                        console.log("🔍 [downLoadGoodsNx] addingOrderBeforeIndex:", this.addingOrderBeforeIndex);
+                        console.log("🔍 [downLoadGoodsNx] orderIndex:", orderIndex);
+
+                        if (isBeforeOrderForm) {
+                            // "之前插入订单"场景：将下载的商品设置为 beforeOrderForm.selectedGoods
+                            console.log("📝 [downLoadGoodsNx] 之前插入订单场景，设置 beforeOrderForm.selectedGoods");
+                            const downloadedGoods = res.data.data;
+                            this.beforeOrderForm.selectedGoods = downloadedGoods;
+                            this.beforeOrderForm.goodsName = downloadedGoods.nxDgGoodsName || goods.nxGoodsName;
+                            this.beforeOrderForm.showSearchResults = false;
+
+                            // 设置规格信息
+                            if (downloadedGoods.nxDgGoodsStandardname) {
+                                this.beforeOrderForm.standard = downloadedGoods.nxDgGoodsStandardname;
+                            } else if (goods.nxGoodsStandardname) {
+                                this.beforeOrderForm.standard = goods.nxGoodsStandardname;
+                            } else {
+                                this.beforeOrderForm.standard = '';
+                            }
+
+                            console.log("✅ [downLoadGoodsNx] 商品已成功设置到之前插入订单表单");
+                        } else {
+                            // 普通订单场景：使用原来的逻辑
+                            await this._applyGoodsToOrder(
+                                res.data.data.nxDistributerGoodsId,
+                                res.data.data.nxDgGoodsName || goods.nxGoodsName,
+                                orderIndex,
+                                sourceType
+                            );
+                            console.log("✅ [downLoadGoodsNx] 商品已成功应用到订单");
+                        }
                     } else {
                         const errorMsg = res?.data?.msg || '下载商品失败';
-                        
+                        console.log("⚠️ [downLoadGoodsNx] API 返回非成功状态");
+                        console.log("⚠️ [downLoadGoodsNx] 错误消息:", errorMsg);
+                        console.log("⚠️ [downLoadGoodsNx] 错误码:", res?.data?.code);
+
                         // 如果商品已经下载，尝试搜索已存在的商品
                         if (errorMsg.includes('已经下载') || errorMsg.includes('已存在')) {
                             console.log("ℹ️ [downLoadGoodsNx] 商品已存在，尝试搜索已存在的商品...");
-                            
+                            console.log("🔍 [downLoadGoodsNx] 搜索参数:", {
+                                goodsName: goods.nxGoodsName,
+                                goodsId: goods.nxGoodsId,
+                                orderIndex,
+                                sourceType
+                            });
+
                             const foundGoods = await this._searchExistingGoods(goods, orderIndex, sourceType);
-                            
+                            console.log("🔍 [downLoadGoodsNx] 搜索结果:", foundGoods);
+
                             if (foundGoods && foundGoods.nxDistributerGoodsId) {
                                 // 找到已存在的商品：应用商品到订单
                                 console.log("✅ [downLoadGoodsNx] 找到已存在的商品，应用商品到订单");
-                                await this._applyGoodsToOrder(
-                                    foundGoods.nxDistributerGoodsId,
-                                    foundGoods.nxDgGoodsName || goods.nxGoodsName,
-                                    orderIndex,
-                                    sourceType
-                                );
+                                console.log("✅ [downLoadGoodsNx] 找到的商品ID:", foundGoods.nxDistributerGoodsId);
+                                console.log("✅ [downLoadGoodsNx] 找到的商品名称:", foundGoods.nxDgGoodsName);
+
+                                // 判断是否是"之前插入订单"场景
+                                const isBeforeOrderForm = this.addingOrderBeforeIndex === orderIndex;
+                                console.log("🔍 [downLoadGoodsNx] 是否是之前插入订单场景:", isBeforeOrderForm);
+
+                                if (isBeforeOrderForm) {
+                                    // "之前插入订单"场景：将找到的商品设置为 beforeOrderForm.selectedGoods
+                                    console.log("📝 [downLoadGoodsNx] 之前插入订单场景，设置 beforeOrderForm.selectedGoods");
+                                    this.beforeOrderForm.selectedGoods = foundGoods;
+                                    this.beforeOrderForm.goodsName = foundGoods.nxDgGoodsName || goods.nxGoodsName;
+                                    this.beforeOrderForm.showSearchResults = false;
+
+                                    // 设置规格信息
+                                    if (foundGoods.nxDgGoodsStandardname) {
+                                        this.beforeOrderForm.standard = foundGoods.nxDgGoodsStandardname;
+                                    } else if (goods.nxGoodsStandardname) {
+                                        this.beforeOrderForm.standard = goods.nxGoodsStandardname;
+                                    } else {
+                                        this.beforeOrderForm.standard = '';
+                                    }
+
+                                    console.log("✅ [downLoadGoodsNx] 已存在商品已成功设置到之前插入订单表单");
+                                } else {
+                                    // 普通订单场景：使用原来的逻辑
+                                    await this._applyGoodsToOrder(
+                                        foundGoods.nxDistributerGoodsId,
+                                        foundGoods.nxDgGoodsName || goods.nxGoodsName,
+                                        orderIndex,
+                                        sourceType
+                                    );
+                                    console.log("✅ [downLoadGoodsNx] 已存在商品已成功应用到订单");
+                                }
                             } else {
                                 // 搜索失败或没找到商品：触发搜索显示下拉框，让用户手动选择
                                 console.log("ℹ️ [downLoadGoodsNx] 未找到已存在的商品，触发搜索显示下拉框");
-                                
+                                console.log("🔍 [downLoadGoodsNx] 准备搜索商品名称:", goods.nxGoodsName);
+
                                 // 触发搜索，显示搜索结果下拉框
                                 await this.getSearchString(goods.nxGoodsName, sourceType);
-                                
+
                                 // 提示用户可以从搜索结果中选择
                                 console.log("💡 [downLoadGoodsNx] 已显示搜索结果，请从下拉框中选择商品");
                             }
                         } else {
                             // 其他错误，直接显示错误信息
                             console.error("❌ [downLoadGoodsNx] 下载失败:", errorMsg);
+                            console.error("❌ [downLoadGoodsNx] 完整响应:", res);
                             alert(errorMsg);
                         }
                     }
                 } catch (error) {
-                    console.error("❌ [downLoadGoodsNx] 下载商品失败:", error);
+                    console.error("❌ [downLoadGoodsNx] 下载商品失败，捕获到异常:");
+                    console.error("❌ [downLoadGoodsNx] 错误对象:", error);
+                    console.error("❌ [downLoadGoodsNx] 错误消息:", error.message);
+                    console.error("❌ [downLoadGoodsNx] 错误堆栈:", error.stack);
                     alert('下载商品失败: ' + (error.message || '未知错误'));
                 } finally {
                     this.$store.commit('SET_LOADING', false);
+                    console.log("🏁 [downLoadGoodsNx] ========== 执行完成 ==========");
                 }
             },
 
@@ -5220,7 +4039,7 @@
                         let actualOrderIndex = this.orderArrIndex;
 
                         if (sourceType === 'paste') {
-                            currentOrderItems = this.pasteOrderItems;
+                            currentOrderItems = this.orderItems;
                         } else if (sourceType === 'auto' && this.uploadType === 'auto') {
                             // auto 模式下，orderArrIndex 是 filteredOrderItems 的索引
                             const filteredItems = this.filteredOrderItems;
@@ -5247,11 +4066,6 @@
                             currentOrder.nxGoodsEntities = this.nxArr || [];
                         }
 
-                        // 保存到缓存（所有类型都需要，以便刷新后恢复搜索结果）
-                        if (currentOrderItems) {
-                            this._saveToStorage(currentOrderItems, sourceType);
-                        } else {
-                        }
 
                         // 强制更新视图，确保搜索结果下拉框显示
                         this.$nextTick(() => {
@@ -5282,122 +4096,34 @@
                 }
             },
 
-            // 保存订单（选择商品后，参考微信小程序 _choiceGoods）
             async _choiceGoods() {
                 const index = this.orderArrIndex;
-                const sourceType = this.currentSourceType || this.uploadType || 'excel';
+                let sourceType = this.currentSourceType || this.uploadType || 'excel';
 
-                console.log("========== _choiceGoods 开始 ==========");
-                console.log("📋 [_choiceGoods] 参数:", {
-                    orderArrIndex: index,
-                    currentSourceType: this.currentSourceType,
-                    uploadType: this.uploadType,
-                    sourceType: sourceType,
-                    goodsId: this.goodsId,
-                    selectedGoodsName: this.selectedGoodsName
-                });
-
-                if (index === undefined || index === null || index < 0) {
-                    console.error('❌ [_choiceGoods] orderArrIndex 无效:', index);
-                    return;
-                }
 
                 // 根据来源类型获取对应的订单列表
                 // 对于 auto 模式，如果当前是转订单模式，需要使用 filteredOrderItems
                 let currentOrderItems;
                 let actualIndex = index; // 在 orderItems 中的实际索引
 
-                console.log("🔍 [_choiceGoods] 开始查找订单列表:", {
-                    sourceType,
-                    uploadType: this.uploadType,
-                    index,
-                    orderItemsLength: this.orderItems?.length,
-                    pasteOrderItemsLength: this.pasteOrderItems?.length,
-                    filteredOrderItemsLength: this.uploadType === 'auto' ? this.filteredOrderItems?.length : 'N/A'
-                });
 
-                if (sourceType === 'paste') {
-                    currentOrderItems = this.pasteOrderItems;
-                    console.log("✅ [_choiceGoods] 使用 pasteOrderItems, 索引:", index);
+                if (sourceType === 'paste' || sourceType === 'excel-paste') {
+                    currentOrderItems = this.orderItems;
                 } else if (sourceType === 'auto' && this.uploadType === 'auto') {
                     // auto 模式下，index 是 filteredOrderItems 的索引
                     // 需要先获取 filteredOrderItems，然后找到在 orderItems 中的实际索引
                     const filteredItems = this.filteredOrderItems;
-                    console.log("🔍 [_choiceGoods] auto 模式，filteredOrderItems:", {
-                        filteredItemsLength: filteredItems?.length,
-                        index,
-                        orderItemsLength: this.orderItems?.length
-                    });
-
-                    if (!filteredItems || index >= filteredItems.length) {
-                        console.error('❌ [_choiceGoods] filteredOrderItems 不存在或索引越界:', {
-                            filteredItemsExists: !!filteredItems,
-                            filteredItemsLength: filteredItems?.length,
-                            index
-                        });
-                        return;
-                    }
                     const order = filteredItems[index];
-                    if (!order) {
-                        console.error('❌ [_choiceGoods] 订单项不存在, index:', index);
-                        return;
-                    }
-                    console.log("🔍 [_choiceGoods] 从 filteredOrderItems 获取订单:", {
-                        index,
-                        orderGoodsName: order.nxDoGoodsName,
-                        orderId: order.nxDepartmentOrdersId
-                    });
-                    // 找到这个订单在 orderItems 中的实际索引
                     actualIndex = this.orderItems.findIndex(item => item === order);
-                    if (actualIndex === -1) {
-                        console.error('❌ [_choiceGoods] 无法在 orderItems 中找到对应的订单:', {
-                            orderGoodsName: order.nxDoGoodsName,
-                            orderId: order.nxDepartmentOrdersId,
-                            orderItemsLength: this.orderItems?.length
-                        });
-                        return;
-                    }
-                    console.log("✅ [_choiceGoods] 找到订单在 orderItems 中的实际索引:", actualIndex);
+
                     currentOrderItems = this.orderItems;
                 } else {
-                    // excel 和 image 模式，直接使用 orderItems
                     currentOrderItems = this.orderItems;
                     actualIndex = index;
-                    console.log("✅ [_choiceGoods] 使用 orderItems (excel/image 模式), 索引:", index);
-                }
-
-                if (!currentOrderItems || actualIndex >= currentOrderItems.length || actualIndex < 0) {
-                    console.error('❌ [_choiceGoods] 订单列表不存在或索引越界:', {
-                        sourceType,
-                        uploadType: this.uploadType,
-                        index,
-                        actualIndex,
-                        currentOrderItemsExists: !!currentOrderItems,
-                        currentOrderItemsLength: currentOrderItems?.length
-                    });
-                    return;
                 }
 
                 const order = currentOrderItems[actualIndex];
-                console.log("✅ [_choiceGoods] 找到订单:", {
-                    actualIndex,
-                    orderGoodsName: order?.nxDoGoodsName,
-                    orderId: order?.nxDepartmentOrdersId
-                });
-
-                if (!order) {
-                    console.error('❌ [_choiceGoods] 订单项不存在');
-                    return;
-                }
-
-                if (!this.goodsId) {
-                    console.error('goodsId 不存在，无法更新订单');
-                    alert('商品ID不存在');
-                    return;
-                }
-
                 const selectedGoodsName = this.selectedGoodsName || order.nxDoGoodsName || '';
-
                 // 准备发送的订单对象
                 const orderToSend = {
                     ...order,
@@ -5411,6 +4137,26 @@
                     const res = await api.choiceGoodsForApply(orderToSend);
 
                     if (res && res.data && res.data.code === 0) {
+                        const updatedTask = res.data.task;
+
+                        if (updatedTask && updatedTask.nxOcrTaskStatus === 2) {
+                            this.stopAllReading(); // 立即停止朗读，弹窗显示前就停
+                            this.showTaskCompleteModal = true;
+                            this.taskCompleteModalTaskId = updatedTask.nxOcrTaskId;
+                            this.taskCompleteModalSourceType = sourceType;
+                            this.taskCompleteModalTask = updatedTask;
+                        }
+                        if (updatedTask && this.currentTaskId != null && updatedTask.nxOcrTaskId === this.currentTaskId) {
+                            this.currentTask = {...this.currentTask, ...updatedTask};
+                        }
+                        if (updatedTask && Array.isArray(this.taskListFromParent)) {
+                            const idx = this.taskListFromParent.findIndex(t => t && t.nxOcrTaskId === updatedTask.nxOcrTaskId);
+                            if (idx >= 0) {
+                                this.taskListFromParent = this.taskListFromParent.map((t, i) =>
+                                    i === idx ? {...t, ...updatedTask} : t
+                                );
+                            }
+                        }
                         // 合并原有订单对象的所有字段 + 后端返回的字段
                         const currentOrderBeforeUpdate = currentOrderItems[actualIndex];
                         const updatedOrder = {
@@ -5430,28 +4176,14 @@
                             );
 
                             if (existingIndex >= 0) {
-                                // 如果已存在相同 ID 的订单，移除旧的草稿订单（当前索引的订单）
-                                console.log('发现重复的已保存订单，移除草稿订单:', {
-                                    existingIndex,
-                                    actualIndex,
-                                    nxDepartmentOrdersId: updatedOrder.nxDepartmentOrdersId
-                                });
+
                                 currentOrderItems.splice(actualIndex, 1);
                             } else {
-                                // 如果不存在重复，直接更新
-                                currentOrderItems[actualIndex] = updatedOrder;
+                                // 如果不存在重复，直接更新（使用 Object.assign 确保响应式更新）
+                                Object.assign(currentOrderItems[actualIndex], updatedOrder);
+
                             }
-                        } else {
-                            // 如果还没有保存（没有 nxDepartmentOrdersId），直接更新
-                            currentOrderItems[actualIndex] = updatedOrder;
                         }
-
-                        // 更新缓存（只有 Excel 和图片需要）
-                        if (sourceType !== 'paste') {
-                            // 传递正确的索引给 _updateStorage
-                            this._updateStorage(updatedOrder, actualIndex);
-                        }
-
                         // 重置搜索和匹配商品列表状态（选择商品后关闭所有列表）
                         this.resetSearchAndMatchedGoodsState();
                     } else {
@@ -5470,15 +4202,23 @@
                 // 使用传入的 orderIndex，如果没有则使用 orderArrIndex
                 const index = orderIndex !== undefined ? orderIndex : this.orderArrIndex;
 
+                console.log('💾 [_updateStorage] 开始更新存储:', {
+                    index,
+                    orderIndex,
+                    orderArrIndex: this.orderArrIndex,
+                    orderItemsLength: this.orderItems.length,
+                    order: order
+                });
+
                 // 检查索引是否有效
                 if (index === undefined || index === null || index < 0) {
-                    console.error('订单索引无效，无法更新存储:', index);
+                    console.error('❌ [_updateStorage] 订单索引无效，无法更新存储:', index);
                     return;
                 }
 
                 // 检查索引是否越界
                 if (index >= this.orderItems.length) {
-                    console.error('订单索引越界，无法更新存储:', {
+                    console.error('❌ [_updateStorage] 订单索引越界，无法更新存储:', {
                         index,
                         orderItemsLength: this.orderItems.length
                     });
@@ -5487,117 +4227,140 @@
 
                 // 更新内存中的 orderItems（如果订单还在原位置）
                 if (this.orderItems[index]) {
-                    const currentOrder = this.orderItems[index];
-                    const mergedOrder = {
-                        ...currentOrder,
-                        ...order,
-                    };
-
-                    // Vue 3 中直接赋值即可，不需要 $set
-                    this.orderItems[index] = mergedOrder;
+                    // 使用 Object.assign 更新现有对象的属性，确保 Vue 响应式系统能检测到变化
+                    const beforeUpdate = {...this.orderItems[index]};
+                    Object.assign(this.orderItems[index], order);
+                    console.log('✅ [_updateStorage] 订单已更新:', {
+                        index,
+                        beforeUpdate,
+                        afterUpdate: {...this.orderItems[index]}
+                    });
+                } else {
+                    console.warn('⚠️ [_updateStorage] 订单不存在，索引:', index);
                 }
 
-                // 更新缓存
-                this._saveToStorage();
             },
 
-            // 检查订单内容（参考微信小程序的 _checkOrderContent）
+            // 检查订单内容：商品名称必有、数量必为有效数字、规格必为汉字且汉字数量不大于 2 个
+            // 通过时返回 true，失败时返回失败条目的 0-based 索引（便于父组件滚动并高亮该条）
             checkOrderContent(orderArr = null) {
                 const orders = orderArr || this.orderItems;
 
                 if (!orders || orders.length === 0) {
                     alert('没有可保存的订单');
-                    return false;
+                    return -1;
                 }
 
                 for (let i = 0; i < orders.length; i++) {
                     const order = orders[i];
+                    const rowNum = i + 1;
 
+                    // 商品名称必须有
                     if (!order.nxDoGoodsName || order.nxDoGoodsName.trim() === '') {
-                        alert(`第${i + 1}条订单商品名称为空`);
-                        return false;
+                        alert(`第${rowNum}条订单商品名称为空`);
+                        return i;
                     }
 
-                    if (!order.nxDoQuantity || Number(order.nxDoQuantity) <= 0) {
-                        alert(`第${i + 1}条订单数量无效`);
-                        return false;
+                    // 数量必须有且必须是有效数字且大于 0
+                    const qty = order.nxDoQuantity;
+                    if (qty === undefined || qty === null || String(qty).trim() === '') {
+                        alert(`第${rowNum}条订单数量为空`);
+                        return i;
+                    }
+                    const qtyNum = Number(qty);
+                    if (Number.isNaN(qtyNum)) {
+                        alert(`第${rowNum}条订单数量必须是数字`);
+                        return i;
+                    }
+                    if (qtyNum <= 0) {
+                        alert(`第${rowNum}条订单数量必须大于 0`);
+                        return i;
                     }
 
+                    // 规格必须有
                     if (!order.nxDoStandard || order.nxDoStandard.trim() === '') {
-                        alert(`第${i + 1}条订单规格为空`);
-                        return false;
+                        alert(`第${rowNum}条订单规格为空`);
+                        return i;
+                    }
+
+                    const spec = order.nxDoStandard.trim();
+                    // 规格必须是汉字（仅允许中文字符）
+                    const chineseOnly = /^[\u4e00-\u9fff]+$/;
+                    if (!chineseOnly.test(spec)) {
+                        alert(`第${rowNum}条订单规格必须为汉字`);
+                        return i;
+                    }
+                    // 规格汉字数量不大于 2 个
+                    if (spec.length > 2) {
+                        alert(`第${rowNum}条订单规格汉字数量不能大于 2 个，当前为 ${spec.length} 个`);
+                        return i;
                     }
                 }
 
                 return true;
             },
 
-            // 保存订单（使用 pasteSearchGoods，参考微信小程序）
-            async pasteSearchGoods() {
-                const canSave = this.checkOrderContent();
-                if (!canSave) {
+            // 保存复制粘贴的订单（独立方法）
+            async pastSavePasteOrders() {
+                if (this.savingOrder) return;
+                const checkResult = this.checkOrderContent(this.orderItems);
+                if (checkResult !== true) {
+                    this.draftSelectedOrderIndex = checkResult >= 0 ? checkResult : -1;
                     return;
                 }
-
+                this.draftSelectedOrderIndex = -1;
+                this.savingOrder = true;
                 try {
-                    this.savingOrder = true;
                     this.$store.commit('SET_LOADING', true);
 
                     // 确定要使用的部门ID（优先使用子部门ID）
                     const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
 
-                    // 准备订单数据，确保包含必要的字段
+                    // 准备订单数据（格式与内容已由 checkOrderContent 校验：商品名称、数量为数字、规格为汉字且不超过 2 个字）
                     const originalOrderArr = [...this.orderItems];
                     const orderData = this.orderItems.map(item => ({
                         ...item,
-                        nxDoDepartmentId: targetDepId, // 使用确定的部门ID
+                        nxDoDepartmentId: targetDepId,
                         nxDoDepartmentFatherId: this.selectedAllCustomer,
                         nxDoDistributerId: this.disUser.nxDiuDistributerId,
                         nxDoIsAgent: this.disUser.nxDistributerUserId || this.disUser.nxDiuDistributerId
                     }));
 
-                    const res = await api.pasteSearchGoods(orderData);
+                    const res = await api.pasteSearchGoods({
+                        orderList: orderData,
+                        pasteText: this.pasteInputText || '',
+                        type: 3,
+                    });
 
                     if (res && res.data && res.data.code === 0) {
-                        const tempArr = res.data.data || [];
+                        const taskId = res.data.taskId;
+                        const task = res.data.task;
+                        this.orderItems = res.data.data;
+                        if (taskId != null && task) {
+                            this.currentTaskId = taskId;
+                            this.currentTask = task;
+                            // 保存成功后，订单已保存，应显示 OrderList（pasteSaveCount 为数字表示已保存）
+                            this.pasteSaveCount = this.orderItems.length > 0 ? this.orderItems.length : null;
 
-                        const listArr = [];
-                        let haveId = 0;
-
-                        for (let i = 0; i < tempArr.length; i++) {
-                            const status = tempArr[i].nxDoStatus;
-                            if (status !== -2) {
-                                haveId = haveId + 1;
+                            if (task.nxOcrTaskStatus === 2) {
+                                this.stopAllReading(); // 立即停止朗读，弹窗显示前就停
+                                this.showTaskCompleteModal = true;
+                                this.taskCompleteModalTaskId = taskId;
+                                this.taskCompleteModalSourceType = 'paste';
+                                this.taskCompleteModalTask = task;
                             }
 
-                            const item = {
-                                ...tempArr[i],
-                                nxDoStandardWarn: 0
-                            };
-
-                            // 保留原有的 nxDoGoodsNameOriginal
-                            const originalOrder = originalOrderArr[i];
-                            if (originalOrder && originalOrder.nxDoGoodsNameOriginal) {
-                                item.nxDoGoodsNameOriginal = originalOrder.nxDoGoodsNameOriginal;
-                            } else {
-                                item.nxDoGoodsNameOriginal = originalOrder?.nxDoGoodsName || item.nxDoGoodsName || '';
-                            }
-
-                            listArr.push(item);
+                            this.$nextTick(() => {
+                                if (this.$refs.pasteUploadRef && this.$refs.pasteUploadRef.addOrUpdateTaskAndSelect) {
+                                    this.$refs.pasteUploadRef.addOrUpdateTaskAndSelect(task);
+                                }
+                            });
                         }
-
-                        this.orderItems = listArr;
-
-                        // 保存到缓存
-                        this._saveToStorage(listArr, this.uploadType);
 
                         // 重置搜索和匹配商品列表状态
                         this.resetSearchAndMatchedGoodsState();
 
-                        alert('保存成功！');
-
-                        // 发出事件通知父组件刷新客户列表
-                        this.$emit('order-saved');
+                        this.$emit('task-added');
                     } else {
                         const errorMsg = res?.data?.msg || '保存失败';
                         alert(errorMsg);
@@ -5611,12 +4374,89 @@
                 }
             },
 
-            // 保存复制粘贴的订单（独立方法）
-            async savePasteOrders() {
-                const canSave = this.checkOrderContent(this.pasteOrderItems);
-                if (!canSave) {
+            /** 将 nxOcrTaskOcrText 中的 CSV 解析为表格行数组（与 excelPasteTableData 结构一致），不足 50 行用空行补齐 */
+            parseCsvToExcelPasteTableData(csvText) {
+                const columns = ['goodsName', 'quantity', 'specification', 'specificationWeight', 'cartonQuantity', 'cartonName', 'remark'];
+                const emptyRow = () => ({
+                    goodsName: '',
+                    quantity: '',
+                    specification: '',
+                    specificationWeight: '',
+                    cartonQuantity: '',
+                    cartonName: '',
+                    remark: ''
+                });
+                if (!csvText || typeof csvText !== 'string' || !csvText.trim()) {
+                    return Array.from({length: 50}, emptyRow);
+                }
+                const lines = csvText.trim().split(/\r?\n/).filter(Boolean);
+                if (lines.length < 2) return Array.from({length: 50}, emptyRow); // 只有表头或无数据
+                const dataLines = lines.slice(1); // 跳过表头
+                const parseCsvLine = (line) => {
+                    const out = [];
+                    let i = 0;
+                    while (i < line.length) {
+                        if (line[i] === '"') {
+                            let cell = '';
+                            i++;
+                            while (i < line.length && (line[i] !== '"' || line[i + 1] === '"')) {
+                                cell += line[i] === '"' && line[i + 1] === '"' ? '"' : line[i];
+                                i++;
+                            }
+                            if (line[i] === '"') i++;
+                            out.push(cell);
+                            if (line[i] === ',') i++;
+                        } else {
+                            const j = line.indexOf(',', i);
+                            const end = j === -1 ? line.length : j;
+                            out.push(line.slice(i, end).trim());
+                            i = j === -1 ? line.length : j + 1;
+                        }
+                    }
+                    return out;
+                };
+                const rows = dataLines.map(line => {
+                    const cells = parseCsvLine(line);
+                    const row = emptyRow();
+                    columns.forEach((col, idx) => {
+                        row[col] = cells[idx] != null ? String(cells[idx]).trim() : '';
+                    });
+                    return row;
+                });
+                const total = 50;
+                while (rows.length < total) rows.push(emptyRow());
+                return rows.slice(0, total);
+            },
+
+            /** 将 Excel 粘贴表格转为 CSV 字符串，供后端存入 nxOcrTaskOcrText，任务页可还原表格 */
+            excelPasteTableDataToCsv() {
+                const columns = ['goodsName', 'quantity', 'specification', 'specificationWeight', 'cartonQuantity', 'cartonName', 'remark'];
+                const headers = ['商品名称', '数量', '规格', '规格重量', '大包装数量', '大包装名称', '备注'];
+                const data = this.excelPasteTableData || [];
+                const dataRows = data.filter(row => row.goodsName && String(row.goodsName).trim() !== '');
+                if (dataRows.length === 0) return '';
+                const csvLines = [headers.join(',')];
+                dataRows.forEach(row => {
+                    const values = columns.map(col => {
+                        let value = row[col] ?? '';
+                        if (String(value).includes(',') || String(value).includes('"') || String(value).includes('\n')) {
+                            value = '"' + String(value).replace(/"/g, '""') + '"';
+                        }
+                        return value;
+                    });
+                    csvLines.push(values.join(','));
+                });
+                return csvLines.join('\n');
+            },
+
+            // 保存 Excel 粘贴订单
+            async saveExcelPasteOrders() {
+                const checkResult = this.checkOrderContent(this.orderItems);
+                if (checkResult !== true) {
+                    this.draftSelectedOrderIndex = checkResult >= 0 ? checkResult : -1;
                     return;
                 }
+                this.draftSelectedOrderIndex = -1;
 
                 try {
                     this.savingOrder = true;
@@ -5626,8 +4466,8 @@
                     const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
 
                     // 准备订单数据，确保包含必要的字段
-                    const originalOrderArr = [...this.pasteOrderItems];
-                    const orderData = this.pasteOrderItems.map(item => ({
+                    const originalOrderArr = [...this.orderItems];
+                    const orderData = this.orderItems.map(item => ({
                         ...item,
                         nxDoDepartmentId: targetDepId,
                         nxDoDepartmentFatherId: this.selectedAllCustomer,
@@ -5635,50 +4475,41 @@
                         nxDoIsAgent: this.disUser.nxDistributerUserId || this.disUser.nxDiuDistributerId
                     }));
 
-                    const res = await api.pasteSearchGoods(orderData);
+                    // 表格转 CSV 存入 nxOcrTaskOcrText，任务页可据此还原表格
+                    const tableCsv = this.excelPasteTableDataToCsv();
+                    const res = await api.pasteSearchGoods({
+                        orderList: orderData,
+                        pasteText: tableCsv || '',
+                        type: 2
+                    });
 
                     if (res && res.data && res.data.code === 0) {
-                        const tempArr = res.data.data || [];
+                        const taskId = res.data.taskId;
+                        const task = res.data.task;
+                        this.orderItems = res.data.data;
+                        if (taskId != null && task) {
+                            this.currentTaskId = taskId;
+                            this.currentTask = task;
+                            this.excelPasteSaveCount = this.orderItems.length > 0 ? this.orderItems.length : null;
 
-                        const listArr = [];
-                        let haveId = 0;
-
-                        for (let i = 0; i < tempArr.length; i++) {
-                            const status = tempArr[i].nxDoStatus;
-                            if (status !== -2) {
-                                haveId = haveId + 1;
+                            if (task.nxOcrTaskStatus === 2) {
+                                this.stopAllReading(); // 立即停止朗读，弹窗显示前就停
+                                this.showTaskCompleteModal = true;
+                                this.taskCompleteModalTaskId = taskId;
+                                this.taskCompleteModalSourceType = 'excel-paste';
+                                this.taskCompleteModalTask = task;
                             }
 
-                            const item = {
-                                ...tempArr[i],
-                                nxDoStandardWarn: 0
-                            };
-
-                            // 保留原有的 nxDoGoodsNameOriginal
-                            const originalOrder = originalOrderArr[i];
-                            if (originalOrder && originalOrder.nxDoGoodsNameOriginal) {
-                                item.nxDoGoodsNameOriginal = originalOrder.nxDoGoodsNameOriginal;
-                            } else {
-                                item.nxDoGoodsNameOriginal = originalOrder?.nxDoGoodsName || item.nxDoGoodsName || '';
-                            }
-
-                            listArr.push(item);
+                            this.$nextTick(() => {
+                                if (this.$refs.excelPasteUploadRef && this.$refs.excelPasteUploadRef.addOrUpdateTaskAndSelect) {
+                                    this.$refs.excelPasteUploadRef.addOrUpdateTaskAndSelect(task);
+                                }
+                            });
                         }
-
-                        // 保存后保留订单列表，更新状态（参考小程序 pasteSearchGoods 和 Excel/图片保存方式）
-                        this.pasteOrderItems = listArr;
-                        this.pasteSaveCount = haveId; // 更新已保存订单数量
-
-                        // 保存到缓存（与 Excel/图片保存方式一致）
-                        this._saveToStorage(listArr, 'paste');
-
                         // 重置搜索和匹配商品列表状态
                         this.resetSearchAndMatchedGoodsState();
 
-                        alert('保存成功！');
-
-                        // 发出事件通知父组件刷新客户列表
-                        this.$emit('order-saved');
+                        this.$emit('task-added');
                     } else {
                         const errorMsg = res?.data?.msg || '保存失败';
                         alert(errorMsg);
@@ -5716,601 +4547,323 @@
                     }
                 }
 
-                // if (folderPath && window.electronAPI && typeof window.electronAPI.moveProcessedToCompleted === 'function') {
-                //     console.log('📁 [clearPasteSave] 开始移动"已处理"文件夹中的文件到"已完成"文件夹');
-                //     console.log('   - 文件夹路径:', folderPath);
-                //     try {
-                //         const moveResult = await window.electronAPI.moveProcessedToCompleted(folderPath);
-                //         if (moveResult.success) {
-                //             console.log(`✅ [clearPasteSave] 文件移动成功: 已将 ${moveResult.movedCount} 个文件从"已处理"移动到"已完成"文件夹`);
-                //             if (moveResult.errors && moveResult.errors.length > 0) {
-                //                 console.warn('⚠️ [clearPasteSave] 部分文件移动失败:', moveResult.errors);
-                //             }
-                //         } else {
-                //             console.warn('❌ [clearPasteSave] 移动文件到已完成文件夹失败:', moveResult.error);
-                //         }
-                //     } catch (error) {
-                //         console.error('❌ [clearPasteSave] 移动文件到已完成文件夹异常:', error);
-                //     }
-                // }
-                //
 
-                // 从 localStorage 中删除该部门的缓存
-                const storageKey = `ocrOrderDepList_paste`;
-
-                try {
-                    let ocrOrderDepList = [];
-                    const ocrOrderDepListStr = localStorage.getItem(storageKey);
-                    if (ocrOrderDepListStr) {
-                        ocrOrderDepList = JSON.parse(ocrOrderDepListStr);
-                        if (Array.isArray(ocrOrderDepList)) {
-                            // 过滤掉当前部门的缓存
-                            const beforeCount = ocrOrderDepList.length;
-                            const filteredList = ocrOrderDepList.filter(item => {
-                                const itemDepIdStr = String(item.depId);
-                                const selectedDepIdStr = String(this.selectedAllCustomer);
-                                return itemDepIdStr !== selectedDepIdStr;
-                            });
-                            const afterCount = filteredList.length;
-                            // 如果过滤后没有数据了，删除整个缓存
-                            if (filteredList.length === 0) {
-                                localStorage.removeItem(storageKey);
-                            } else {
-                                // 保存更新后的缓存
-                                localStorage.setItem(storageKey, JSON.stringify(filteredList));
-                            }
-                        }
-                    } else {
-                        console.log('   - 缓存不存在或为空');
-                    }
-                } catch (error) {
-                    console.error('❌ [clearPasteSave] 删除复制粘贴缓存失败:', error);
-                }
-
-                this.pasteOrderItems = [];
-                this.pasteHasCache = false;
+                this.orderItems = [];
                 this.pasteInputText = '';
                 this.pasteInputContent = '';
                 this.pasteSaveCount = null;
-                this.ocrOrderDepIndex = -1;
+                this.pasteInvalidLineIndices = [];
+                this.pasteInvalidSegments = [];
 
                 // 重置搜索和匹配商品列表状态
                 this.resetSearchAndMatchedGoodsState();
 
             },
 
-            // 清除Excel或图片模式的草稿（转订单模式使用）
-            clearExcelOrImageSave() {
-                // 直接调用通用的清除方法（clearSave内部会处理重置）
-                this.clearSave();
-            },
-
-            // 清除草稿订单（参考微信小程序 clearSave）
-            async clearSave() {
-
-
-                // 重置搜索和匹配商品列表状态（在确认前重置，确保点击按钮时立即关闭）
-                this.resetSearchAndMatchedGoodsState();
-
-                if (!confirm('确定要清除所有草稿订单吗？')) {
-                    console.log('❌ [clearSave] 用户取消清除操作');
-                    return;
-                }
-
-                // 从 orderItems 中删除所有状态为 -2 的订单
-                const originalOrderArr = [...this.orderItems];
-                const filteredOrderArr = [];
-                const ordersToDeleteFromServer = [];
-
-                console.log('📋 [clearSave] 开始筛选订单');
-                for (let k = 0; k < originalOrderArr.length; k++) {
-                    const currentOrder = originalOrderArr[k];
-
-                    // 直接判断状态是否为 -2
-                    if (currentOrder.nxDoStatus === -2) {
-                        console.log(`   - 发现草稿订单 [${k}]:`, {
-                            goodsName: currentOrder.nxDoGoodsName,
-                            nxDepartmentOrdersId: currentOrder.nxDepartmentOrdersId || '(无ID)',
-                            status: currentOrder.nxDoStatus
-                        });
-                        // 如果订单有 nxDepartmentOrdersId，需要调用接口删除
-                        if (currentOrder.nxDepartmentOrdersId) {
-                            ordersToDeleteFromServer.push({
-                                index: k,
-                                nxDepartmentOrdersId: currentOrder.nxDepartmentOrdersId,
-                                goodsName: currentOrder.nxDoGoodsName
-                            });
-                        }
-                    } else {
-                        filteredOrderArr.push(currentOrder);
-                    }
-                }
-
-
-                // 调用接口删除服务器上的订单
-                if (ordersToDeleteFromServer.length > 0) {
-                    try {
-                        this.$store.commit('SET_LOADING', true);
-
-                        const deletePromises = ordersToDeleteFromServer.map(order =>
-                            api.deleteOrder(order.nxDepartmentOrdersId)
-                        );
-
-                        const results = await Promise.all(deletePromises);
-
-                        let allSuccess = true;
-                        const failedOrders = [];
-                        const successCount = 0;
-
-                        results.forEach((res, idx) => {
-                            const order = ordersToDeleteFromServer[idx];
-                            if (res && res.data && res.data.code === 0) {
-                            } else {
-                                allSuccess = false;
-                                failedOrders.push(order);
-                            }
-                        });
-
-
-                    } catch (error) {
-                        console.error('❌ [clearSave] 删除订单异常:', error);
-                        alert('删除失败，请检查网络');
-                    } finally {
-                        this.$store.commit('SET_LOADING', false);
-                    }
+            /** 按上传类型清空本地订单、文件等状态 */
+            clearLocalByUploadType(sourceType) {
+                const st = sourceType || this.uploadType || 'image';
+                if (st === 'paste') {
+                    this.orderItems = [];
+                    this.pasteInputText = '';
+                    this.pasteInputContent = '';
+                    this.pasteOriginText = '';
+                    this.pasteSaveCount = null;
+                    this.pasteInvalidLineIndices = [];
+                    this.pasteInvalidSegments = [];
+                } else if (st === 'excel-paste') {
+                    this.orderItems = [];
+                    this.excelPasteSaveCount = null;
+                    this.excelPasteTableData = Array.from({length: 50}, () => ({
+                        goodsName: '', quantity: '', specification: '', specificationWeight: '',
+                        cartonQuantity: '', cartonName: '', remark: ''
+                    }));
+                    this.excelPasteRawData = [];
                 } else {
-                    console.log('⏭️ [clearSave] 没有需要从服务器删除的订单');
-                }
-
-                // 无论接口是否成功，都从 orderItems 中删除
-                this.orderItems = filteredOrderArr;
-
-                // 检查删除后是否还有草稿订单（status == -2）
-                const hasDraftOrders = filteredOrderArr.some(order => order.nxDoStatus === -2);
-
-
-                // 如果删除后没有订单了，或者所有订单都是已保存的（没有草稿），删除该部门的缓存
-                if (filteredOrderArr.length === 0 || !hasDraftOrders) {
-                    // 将"已处理"文件夹中的文件移动到"已完成"文件夹
-                    let folderPath = this.customerFolderPath;
-
-                    // 如果文件夹路径为空，尝试重新加载（特别是对于 auto 模式）
-                    // if (!folderPath && this.uploadType === 'auto' && this.selectedAllCustomer) {
-                    //     console.log('📂 [clearSave] 文件夹路径为空，尝试重新加载');
-                    //     try {
-                    //         await this.loadCustomerFolderPath();
-                    //         folderPath = this.customerFolderPath;
-                    //         console.log('   - 重新加载后的文件夹路径:', folderPath);
-                    //     } catch (error) {
-                    //         console.error('❌ [clearSave] 重新加载文件夹路径失败:', error);
-                    //     }
-                    // }
-
-                    // if (folderPath && window.electronAPI && typeof window.electronAPI.moveProcessedToCompleted === 'function') {
-                    //     console.log('📁 [clearSave] 开始移动"已处理"文件夹中的文件到"已完成"文件夹');
-                    //     console.log('   - 文件夹路径:', folderPath);
-                    //     try {
-                    //         const moveResult = await window.electronAPI.moveProcessedToCompleted(folderPath);
-                    //         if (moveResult.success) {
-                    //             console.log(`✅ [clearSave] 文件移动成功: 已将 ${moveResult.movedCount} 个文件从"已处理"移动到"已完成"文件夹`);
-                    //             if (moveResult.errors && moveResult.errors.length > 0) {
-                    //                 console.warn('⚠️ [clearSave] 部分文件移动失败:', moveResult.errors);
-                    //             }
-                    //         } else {
-                    //             console.warn('❌ [clearSave] 移动文件到已完成文件夹失败:', moveResult.error);
-                    //         }
-                    //     } catch (error) {
-                    //         console.error('❌ [clearSave] 移动文件到已完成文件夹异常:', error);
-                    //     }
-                    // } else {
-                    //
-                    //
-                    // }
-
-                    // 从 localStorage 中删除该部门的缓存
-                    const currentSourceType = this.uploadType || 'paste';
-                    const storageKey = `ocrOrderDepList_${currentSourceType}`;
-
-                    try {
-                        let ocrOrderDepList = [];
-                        const ocrOrderDepListStr = localStorage.getItem(storageKey);
-                        if (ocrOrderDepListStr) {
-                            ocrOrderDepList = JSON.parse(ocrOrderDepListStr);
-                            if (Array.isArray(ocrOrderDepList)) {
-                                // 过滤掉当前部门的缓存
-                                const beforeCount = ocrOrderDepList.length;
-                                const filteredList = ocrOrderDepList.filter(item => {
-                                    const itemDepIdStr = String(item.depId);
-                                    const selectedDepIdStr = String(this.selectedAllCustomer);
-                                    return itemDepIdStr !== selectedDepIdStr;
-                                });
-                                const afterCount = filteredList.length;
-                                // 如果过滤后没有数据了，删除整个缓存
-                                if (filteredList.length === 0) {
-                                    localStorage.removeItem(storageKey);
-                                } else {
-                                    // 保存更新后的缓存
-                                    localStorage.setItem(storageKey, JSON.stringify(filteredList));
-                                }
-                            }
-                        } else {
-                            console.log('   - 缓存不存在或为空');
-                        }
-                    } catch (error) {
-                        console.error('❌ [clearSave] 删除缓存失败:', error);
-                    }
-
-                    // 如果当前是 Excel 上传模式，清除已选择的 Excel 文件
-                    if (this.uploadType === 'excel') {
-                        console.log('🔄 [clearSave] 清除Excel文件信息');
-                        this.uploadedExcelFile = null;
-                        this.uploadedExcelPreview = null;
-                        if (this.$refs.excelFileInput) {
-                            this.$refs.excelFileInput.value = '';
-                        }
-                    }
-
-                    // 如果当前是图片上传模式，清除已选择的图片文件
-                    if (this.uploadType === 'image') {
-                        console.log('🔄 [clearSave] 清除图片文件信息');
+                    this.orderItems = [];
+                    if (st === 'image') {
                         this.uploadedImageFile = null;
                         this.imagePreview = null;
-                        if (this.$refs.imageFileInput) {
-                            this.$refs.imageFileInput.value = '';
-                        }
+                        this.stopAllReading();
+                        if (this.$refs.imageFileInput) this.$refs.imageFileInput.value = '';
+                    } else if (st === 'excel') {
+                        this.uploadedExcelFile = null;
+                        this.uploadedExcelPreview = null;
+                        if (this.$refs.excelFileInput) this.$refs.excelFileInput.value = '';
+                    } else if (st === 'auto') {
+                        this.uploadedImageFile = null;
+                        this.uploadedExcelFile = null;
+                        this.uploadedExcelPreview = null;
+                        this.customerFolderPath = null;
+                        this.autoProcessFiles = [];
+                        this.autoProcessImagePreviews = {};
+                        this.autoProcessExcelPreviews = {};
+                        this.activeProcessedFileTab = null;
+                        this.autoProcessImagePreview = null;
+                        this.autoProcessImagePreviewFileName = '';
+                        this.autoProcessResults = [];
                     }
-
-                    // 重置相关状态
-                    console.log('🔄 [clearSave] 重置状态数据');
-                    this.orderItems = [];
-                    this.hasCache = false;
-                    this.ocrOrderDepIndex = -1;
-
-                    // 重置搜索和匹配商品列表状态
-                    this.resetSearchAndMatchedGoodsState();
-
-                    // 如果是转订单模式，刷新文件夹列表（因为文件已移动到"已完成"文件夹）
-                    if (this.uploadType === 'auto' && this.customerFolderPath) {
-                        console.log('🔄 [clearSave] 转订单模式：刷新文件夹列表');
-                        try {
-                            await this.scanFolderFiles();
-                            console.log('✅ [clearSave] 文件夹列表已刷新');
-                        } catch (error) {
-                            console.error('❌ [clearSave] 刷新文件夹列表失败:', error);
-                        }
-                    }
-
-                    console.log('✅ [clearSave] 清除草稿订单完成');
-                } else {
-                    // 如果还有草稿订单，更新缓存
-                    console.log('💾 [clearSave] 还有草稿订单，更新缓存');
-                    this._saveToStorage(filteredOrderArr, this.uploadType);
-                    console.log('✅ [clearSave] 清除草稿订单完成（保留部分订单）');
                 }
+                this.resetSearchAndMatchedGoodsState();
             },
 
-            // 重新上传：批量删除所有订单
+            /** 刷新当前上传类型的任务列表 */
+            refreshTaskList(sourceType) {
+                this.$nextTick(() => {
+                    if (sourceType === 'paste' && this.$refs.pasteUploadRef?.loadTaskList) {
+                        this.$refs.pasteUploadRef.loadTaskList();
+                    } else if (sourceType === 'excel-paste' && this.$refs.excelPasteUploadRef?.loadTaskList) {
+                        this.$refs.excelPasteUploadRef.loadTaskList();
+                    } else if (sourceType === 'image' && this.$refs.imageUploadRef?.loadTaskList) {
+                        const taskType = this.currentTask?.nxOcrTaskType != null ? this.currentTask.nxOcrTaskType : 1;
+                        this.$refs.imageUploadRef.loadTaskList(null, {type: taskType});
+                    }
+                });
+            },
+
+            // 重新上传：删除任务并清空本地（所有模式统一使用 deleteTaskData）
             async reUpload() {
-                console.log('========== [reUpload] 开始执行 ==========');
-                
                 if (!this.selectedAllCustomer) {
-                    console.log('❌ [reUpload] 未选择客户');
                     alert('请先选择客户');
                     return;
                 }
-
-                // 根据上传类型获取对应的订单列表
-                let currentOrderItems;
-                let sourceType = this.uploadType || 'image';
-                
-                console.log('📋 [reUpload] 上传类型:', sourceType);
-                console.log('📋 [reUpload] 客户ID:', this.selectedAllCustomer);
-                
-                if (sourceType === 'paste') {
-                    // 复制粘贴模式使用 pasteOrderItems
-                    currentOrderItems = this.pasteOrderItems || [];
-                    console.log('📋 [reUpload] 使用 pasteOrderItems, 数量:', currentOrderItems.length);
-                    console.log('📋 [reUpload] pasteOrderItems:', currentOrderItems);
-                } else {
-                    // image/excel/auto 模式使用 orderItems
-                    currentOrderItems = this.orderItems || [];
-                    console.log('📋 [reUpload] 使用 orderItems, 数量:', currentOrderItems.length);
-                    console.log('📋 [reUpload] orderItems:', currentOrderItems);
-                }
-
-                // 收集当前上传类型的所有已保存订单ID（有nxDepartmentOrdersId的订单）
-                const allOrderIds = currentOrderItems
-                    .map(item => item?.nxDepartmentOrdersId)
-                    .filter(id => id != null);
-                
-                console.log('📋 [reUpload] 所有订单的ID列表:', allOrderIds);
-                
-                // 详细输出每个订单的信息，特别是检查nxDepartmentOrdersId字段
-                console.log('📋 [reUpload] 订单详情（前5个）:', currentOrderItems.slice(0, 5).map((item, index) => {
-                    const orderInfo = {
-                        index: index,
-                        goodsName: item?.nxDoGoodsName,
-                        orderId: item?.nxDepartmentOrdersId,
-                        orderIdType: typeof item?.nxDepartmentOrdersId,
-                        orderIdValue: item?.nxDepartmentOrdersId,
-                        status: item?.nxDoStatus,
-                        hasOrderId: !!item?.nxDepartmentOrdersId,
-                        orderIdIsNull: item?.nxDepartmentOrdersId === null,
-                        orderIdIsUndefined: item?.nxDepartmentOrdersId === undefined,
-                        // 输出完整的订单对象（仅前5个）
-                        fullItem: item
-                    };
-                    return orderInfo;
-                }));
-                
-                // 统计订单状态
-                const orderStats = {
-                    total: currentOrderItems.length,
-                    withOrderId: currentOrderItems.filter(item => item?.nxDepartmentOrdersId).length,
-                    withoutOrderId: currentOrderItems.filter(item => !item?.nxDepartmentOrdersId).length,
-                    statusCounts: {}
-                };
-                
-                currentOrderItems.forEach(item => {
-                    const status = item?.nxDoStatus ?? 'unknown';
-                    orderStats.statusCounts[status] = (orderStats.statusCounts[status] || 0) + 1;
-                });
-                
-                console.log('📊 [reUpload] 订单统计:', orderStats);
-
-                const orderIds = currentOrderItems
-                    .filter(item => item && item.nxDepartmentOrdersId)
-                    .map(item => item.nxDepartmentOrdersId);
-
-                console.log('📋 [reUpload] 过滤后的订单ID列表:', orderIds);
-                console.log('📋 [reUpload] 需要删除的订单数量:', orderIds.length);
-
-                if (orderIds.length === 0) {
-                    console.log('⚠️ [reUpload] 没有需要删除的订单（没有已保存的订单）');
-                    
-                    // 检查是否有草稿订单
-                    const draftOrders = currentOrderItems.filter(item => 
-                        item && (item.nxDoStatus === -2 || !item.nxDepartmentOrdersId)
-                    );
-                    
-                    if (draftOrders.length > 0) {
-                        console.log(`⚠️ [reUpload] 发现 ${draftOrders.length} 个草稿订单（未保存到服务器）`);
-                        console.log('💡 [reUpload] 提示：草稿订单无法删除，因为它们还没有保存到服务器');
-                        alert(`当前有 ${currentOrderItems.length} 个订单，但都是草稿订单（未保存到服务器），无法删除。\n\n如果需要清空草稿订单，请使用"清空内容"功能。`);
-                    } else {
-                        alert('没有需要删除的订单');
-                    }
-                    return;
-                }
-
-                // 确认删除
-                const uploadTypeName = sourceType === 'paste' ? '复制粘贴' : 
-                                      sourceType === 'excel' ? 'Excel上传' : 
-                                      sourceType === 'auto' ? '转订单' : '图片上传';
-                const confirmMessage = `确定要删除所有 ${orderIds.length} 个订单吗？\n删除后可以重新${uploadTypeName}。`;
-                console.log('📋 [reUpload] 确认删除对话框:', confirmMessage);
-                
-                if (!confirm(confirmMessage)) {
-                    console.log('❌ [reUpload] 用户取消删除操作');
-                    return;
-                }
-
-                console.log('✅ [reUpload] 用户确认删除，开始调用批量删除接口');
+                const sourceType = this.uploadType || 'image';
+                const uploadTypeName = sourceType === 'paste' ? '复制粘贴' : sourceType === 'excel-paste' ? 'Excel粘贴' :
+                    sourceType === 'excel' ? 'Excel上传' : sourceType === 'auto' ? '转订单' : '图片上传';
+                const confirmMsg = this.currentTaskId != null
+                    ? `确定要删除该任务并重新${uploadTypeName}吗？`
+                    : `确定要清空当前显示并重新${uploadTypeName}吗？`;
+                if (!confirm(confirmMsg)) return;
 
                 try {
                     this.$store.commit('SET_LOADING', true);
-                    console.log('📤 [reUpload] 调用批量删除接口，订单ID:', orderIds);
-                    console.log('📤 [reUpload] 请求开始时间:', new Date().toISOString());
-                    
-                    const startTime = Date.now();
-
-                    // 调用批量删除接口（超时时间已设置为5分钟）
-                    const res = await api.deleteBatchOrders(orderIds);
-                    
-                    const endTime = Date.now();
-                    const duration = ((endTime - startTime) / 1000).toFixed(2);
-                    console.log('📥 [reUpload] 批量删除接口响应:', res);
-                    console.log(`⏱️ [reUpload] 请求耗时: ${duration} 秒`);
-                    console.log('📥 [reUpload] 请求结束时间:', new Date().toISOString());
-
-                    if (res && res.data && res.data.code === 0) {
-                        // 删除成功，清空当前上传类型的所有订单列表和缓存
-                        console.log('✅ [reUpload] 批量删除订单成功');
-                        console.log('📋 [reUpload] 删除响应数据:', res.data);
-
-                        // 根据上传类型清空对应的订单列表
-                        if (sourceType === 'paste') {
-                            // 复制粘贴模式
-                            console.log('🔄 [reUpload] 清空复制粘贴模式的数据');
-                            console.log('🔄 [reUpload] 删除前 pasteOrderItems 数量:', this.pasteOrderItems?.length);
-                            this.pasteOrderItems = [];
-                            this.pasteHasCache = false;
-                            this.pasteInputText = '';
-                            this.pasteInputContent = '';
-                            this.pasteOriginText = '';
-                            this.pasteSaveCount = null;
-                            console.log('✅ [reUpload] 复制粘贴模式数据已清空');
-                        } else {
-                            // image/excel/auto 模式
-                            console.log('🔄 [reUpload] 清空 image/excel/auto 模式的数据');
-                            console.log('🔄 [reUpload] 删除前 orderItems 数量:', this.orderItems?.length);
-                            this.orderItems = [];
-                            this.hasCache = false;
-                            this.ocrOrderDepIndex = -1;
-                            console.log('✅ [reUpload] image/excel/auto 模式数据已清空');
+                    if (this.currentTaskId != null) {
+                        const res = await api.deleteTaskData(this.currentTaskId);
+                        if (!res || !res.data || res.data.code !== 0) {
+                            alert(res?.data?.msg || res?.data?.message || '删除失败');
+                            return;
                         }
-
-                        // 重置搜索和匹配商品列表状态
-                        this.resetSearchAndMatchedGoodsState();
-
-                        // 清除缓存
-                        const storageKey = `ocrOrderDepList_${sourceType}`;
-                        console.log('🔄 [reUpload] 清除缓存，storageKey:', storageKey, 'sourceType:', sourceType);
-                        try {
-                            // 读取缓存
-                            const ocrOrderDepListStr = localStorage.getItem(storageKey);
-                            if (ocrOrderDepListStr) {
-                                let ocrOrderDepList = JSON.parse(ocrOrderDepListStr);
-                                if (Array.isArray(ocrOrderDepList)) {
-                                    // 过滤掉当前部门的缓存
-                                    const beforeCount = ocrOrderDepList.length;
-                                    const filteredList = ocrOrderDepList.filter(item => {
-                                        const itemDepIdStr = String(item.depId);
-                                        const selectedDepIdStr = String(this.selectedAllCustomer);
-                                        return itemDepIdStr !== selectedDepIdStr;
-                                    });
-                                    const afterCount = filteredList.length;
-                                    console.log(`🔄 [reUpload] 缓存过滤: ${beforeCount} -> ${afterCount}`);
-                                    
-                                    // 如果过滤后没有数据了，删除整个缓存
-                                    if (filteredList.length === 0) {
-                                        localStorage.removeItem(storageKey);
-                                        console.log('✅ [reUpload] 缓存已完全清除（没有其他部门的缓存）');
-                                    } else {
-                                        // 保存更新后的缓存（移除当前部门的缓存）
-                                        localStorage.setItem(storageKey, JSON.stringify(filteredList));
-                                        console.log('✅ [reUpload] 缓存已更新（移除了当前部门的缓存）');
-                                    }
-                                } else {
-                                    // 如果不是数组，直接删除
-                                    localStorage.removeItem(storageKey);
-                                    console.log('✅ [reUpload] 缓存已清除（格式不正确，直接删除）');
-                                }
-                            } else {
-                                console.log('⚠️ [reUpload] 缓存不存在，无需清除');
-                            }
-                        } catch (error) {
-                            console.error('❌ [reUpload] 清除缓存失败:', error);
-                        }
-
-                        // 清除所有上传文件路径和预览
-                        // 图片上传模式
-                        if (sourceType === 'image') {
-                            console.log('🔄 [reUpload] 清除图片上传文件');
-                            this.uploadedImageFile = null;
-                            this.imagePreview = null;
-                            if (this.$refs.imageFileInput) {
-                                this.$refs.imageFileInput.value = '';
-                            }
-                            console.log('✅ [reUpload] 图片上传文件已清除');
-                        }
-
-                        // Excel上传模式
-                        if (sourceType === 'excel') {
-                            console.log('🔄 [reUpload] 清除Excel上传文件');
-                            this.uploadedExcelFile = null;
-                            this.uploadedExcelPreview = null;
-                            if (this.$refs.excelFileInput) {
-                                this.$refs.excelFileInput.value = '';
-                            }
-                            console.log('✅ [reUpload] Excel上传文件已清除');
-                        }
-
-                        // 转订单模式：将"已处理"文件夹中的文件移回上一层，然后清除文件夹路径和相关文件信息
-                        if (sourceType === 'auto') {
-                            console.log('🔄 [reUpload] 转订单模式，开始处理文件移动');
-                            
-                            // 保存文件夹路径，因为后面会清除
-                            let folderPath = this.customerFolderPath;
-                            
-                            // 如果文件夹路径为空，尝试从 electron API 重新获取
-                            if (!folderPath && window.electronAPI && typeof window.electronAPI.getCustomerFolderPath === 'function' && this.selectedAllCustomer) {
-                                console.log('📂 [reUpload] customerFolderPath 为空，尝试重新获取文件夹路径');
-                                try {
-                                    // 确定要加载的客户ID（如果有子部门且已选择，使用子部门ID；否则使用主客户ID）
-                                    const hasSubDepartments = this.selectedCustomerEntity &&
-                                        this.selectedCustomerEntity.nxDepartmentEntities &&
-                                        Array.isArray(this.selectedCustomerEntity.nxDepartmentEntities) &&
-                                        this.selectedCustomerEntity.nxDepartmentEntities.length > 0;
-                                    const targetCustomerId = hasSubDepartments && this.selectedSubDepartment
-                                        ? this.selectedSubDepartment
-                                        : this.selectedAllCustomer;
-                                    
-                                    const result = await window.electronAPI.getCustomerFolderPath(targetCustomerId);
-                                    if (result.success && result.path) {
-                                        folderPath = result.path;
-                                        console.log('✅ [reUpload] 成功获取文件夹路径:', folderPath);
-                                    } else {
-                                        console.log('⚠️ [reUpload] 无法获取文件夹路径:', result.error || '未知错误');
-                                    }
-                                } catch (error) {
-                                    console.error('❌ [reUpload] 获取文件夹路径异常:', error);
-                                }
-                            }
-                            
-                            // 如果有文件夹路径，将"已处理"文件夹中的文件移回上一层
-                            if (folderPath) {
-                                if (window.electronAPI && typeof window.electronAPI.moveProcessedToParent === 'function') {
-                                    console.log('📁 [reUpload] 开始将"已处理"文件夹中的文件移回上一层文件夹');
-                                    console.log('   - 文件夹路径:', folderPath);
-                                    try {
-                                        const moveResult = await window.electronAPI.moveProcessedToParent(folderPath);
-                                        if (moveResult.success) {
-                                            console.log(`✅ [reUpload] 文件移动成功: 已将 ${moveResult.movedCount} 个文件从"已处理"移回上一层文件夹`);
-                                            if (moveResult.errors && moveResult.errors.length > 0) {
-                                                console.warn('⚠️ [reUpload] 部分文件移动失败:', moveResult.errors);
-                                            }
-                                        } else {
-                                            console.error('❌ [reUpload] 文件移动失败:', moveResult.error);
-                                        }
-                                    } catch (error) {
-                                        console.error('❌ [reUpload] 移动文件异常:', error);
-                                    }
-                                } else {
-                                    console.error('❌ [reUpload] moveProcessedToParent API 不可用！');
-                                    console.error('   - folderPath:', folderPath);
-                                    console.error('   - window.electronAPI:', !!window.electronAPI);
-                                    console.error('   - moveProcessedToParent:', window.electronAPI ? typeof window.electronAPI.moveProcessedToParent : 'N/A');
-                                    console.error('   - 可用的 API 方法:', window.electronAPI ? Object.keys(window.electronAPI).filter(k => k.includes('move') || k.includes('Move')) : []);
-                                    console.error('⚠️ [reUpload] 请重启应用以加载最新的 API！');
-                                }
-                            } else {
-                                console.log('⚠️ [reUpload] 文件夹路径为空，跳过文件移动');
-                            }
-                            
-                            console.log('🔄 [reUpload] 清除转订单模式的文件信息');
-                            this.customerFolderPath = null;
-                            this.autoProcessFiles = [];
-                            this.autoProcessImagePreviews = {};
-                            this.autoProcessExcelPreviews = {};
-                            this.activeProcessedFileTab = null;
-                            this.autoProcessImagePreview = null;
-                            this.autoProcessImagePreviewFileName = '';
-                            this.autoProcessResults = [];
-                            console.log('✅ [reUpload] 转订单模式文件信息已清除');
-                        }
-
-                        // 复制粘贴模式不需要清除文件，因为它是文本输入
-
-                        const uploadTypeName = sourceType === 'paste' ? '复制粘贴' : 
-                                              sourceType === 'excel' ? 'Excel上传' : 
-                                              sourceType === 'auto' ? '转订单' : '图片上传';
-                        console.log('✅ [reUpload] 所有操作完成，显示成功提示');
-                        alert(`成功删除 ${orderIds.length} 个订单，可以重新${uploadTypeName}`);
-                        console.log('========== [reUpload] 执行完成 ==========');
-                    } else {
-                        const errorMsg = res?.data?.msg || res?.data?.message || '删除失败';
-                        console.error('❌ [reUpload] 批量删除订单失败');
-                        console.error('❌ [reUpload] 错误信息:', errorMsg);
-                        console.error('❌ [reUpload] 响应数据:', res?.data);
-                        alert(errorMsg);
-                        console.log('========== [reUpload] 执行失败 ==========');
                     }
-                } catch (error) {
-                    console.error('❌ [reUpload] 批量删除订单异常');
-                    console.error('❌ [reUpload] 异常详情:', error);
-                    console.error('❌ [reUpload] 异常堆栈:', error.stack);
-                    alert('删除失败，请检查网络连接');
-                    console.log('========== [reUpload] 执行异常 ==========');
+
+                    this.$emit('task-added');
+                    this.clearLocalByUploadType(sourceType);
+                    this.currentTaskId = null;
+                    this.currentTask = null;
+                    if (sourceType === 'auto' && this.customerFolderPath && window.electronAPI?.moveProcessedToParent) {
+                        try {
+                            await window.electronAPI.moveProcessedToParent(this.customerFolderPath);
+                        } catch (e) {
+                            console.error('[reUpload] 移动文件失败:', e);
+                        }
+                        if (this.selectedAllCustomer) {
+                            try {
+                                await this.loadCustomerFolderPath();
+                            } catch (e) {
+                                console.error('[reUpload] 重新加载文件夹失败:', e);
+                            }
+                        }
+                    }
+                    this.refreshTaskList(sourceType);
+                    this.$emit('order-updated');
+                } catch (e) {
+                    console.error('[reUpload] 失败:', e);
+                    alert('删除失败：' + (e.message || '请检查网络'));
                 } finally {
                     this.$store.commit('SET_LOADING', false);
-                    console.log('🔄 [reUpload] 关闭加载状态');
                 }
             },
 
-            // ========== 图片上传相关方法 ==========
 
-            // 处理图片文件上传（打开预览弹窗）
+            // ---------- 统一 TTS 逻辑（paste / image / excelPaste / excel 共用） ----------
+            // 扩展 excel / excelPaste 朗读：在对应 OrderList 上 @tts-state="(p) => onTTSState('excelPaste', p)" 等，
+            // 传 :tts-playing="getTTSState('excelPaste').isTTSPlaying" 及 @read-order-list="() => handleReadOrderList('excelPaste')" 等即可。
+            /** 各模式 TTS 状态，mode: 'paste' | 'image' | 'excelPaste' | 'excel' */
+            getTTSState(mode) {
+                const state = this.ttsStateByMode[mode];
+                return state || {isTTSPlaying: false, isTTSLoading: false, stoppedIndex: -1};
+            },
+            /** 按模式取 OrderList 的 ref，便于统一调用 readOrderList / pauseReading 等 */
+            getOrderListRef(mode) {
+                const refMap = {
+                    paste: 'pasteOrderListRef',
+                    image: 'imageOrderListRef',
+                    excelPaste: 'excelPasteOrderListRef',
+                    excel: 'excelOrderListRef',
+                    auto: 'autoOrderListRef'
+                };
+                const refName = refMap[mode];
+                return refName ? this.$refs[refName] : null;
+            },
+            /** 统一：接收某模式的 TTS 状态（OrderList 通过 @tts-state 上报） */
+            onTTSState(mode, payload) {
+                if (!this.ttsStateByMode[mode]) return;
+                this.ttsStateByMode[mode] = {
+                    isTTSPlaying: !!payload.isTTSPlaying,
+                    isTTSLoading: !!payload.isTTSLoading,
+                    stoppedIndex: payload.stoppedIndex != null ? payload.stoppedIndex : -1
+                };
+            },
+            /** 统一：开始朗读 */
+            handleReadOrderList(mode) {
+                const ref = this.getOrderListRef(mode);
+                if (ref && ref.readOrderList) ref.readOrderList();
+            },
+            /** 统一：暂停朗读 */
+            handlePauseReading(mode) {
+                const ref = this.getOrderListRef(mode);
+                if (ref && ref.pauseReading) ref.pauseReading();
+            },
+            /** 统一：重读（从暂停处重播） */
+            handleRestartReading(mode) {
+                this.showMatchedGoods = {}; // 关闭已展开的推荐商品
+                const ref = this.getOrderListRef(mode);
+                if (ref && ref.restartReading) ref.restartReading();
+            },
+            /** 统一：停止朗读 */
+            handleStopReading(mode) {
+                const ref = this.getOrderListRef(mode);
+                if (ref && ref.stopReading) {
+                    const stoppedIndex = ref.stopReading();
+                    console.log('[PlaceOrder] 已停止朗读，模式:', mode, '停止的序号:', stoppedIndex);
+                }
+            },
+            /** 统一：继续朗读 */
+            handleContinueReading(mode) {
+                const ref = this.getOrderListRef(mode);
+                if (ref && ref.continueReading) ref.continueReading();
+            },
+
+            // 获取当前朗读的订单文本（图片模式用，其他模式可传 mode 扩展）
+            getCurrentReadingText(mode = 'image') {
+                const ref = this.getOrderListRef(mode);
+                return (ref && ref.currentReadingText) ? ref.currentReadingText : '';
+            },
+            // 获取当前朗读的订单索引
+            getCurrentReadingIndex(mode = 'image') {
+                const ref = this.getOrderListRef(mode);
+                return (ref && ref.currentReadingIndex !== undefined) ? ref.currentReadingIndex : -1;
+            },
+
+            // 处理从弹窗修改订单
+            handleEditOrderFromPopup(data) {
+                console.log('[PlaceOrder] 从弹窗修改订单，数据:', data);
+                const {item, index} = data;
+
+                if (!item) {
+                    console.error('[PlaceOrder] 订单项为空，无法修改');
+                    return;
+                }
+
+                console.log('[PlaceOrder] 订单项详情:', {
+                    nxDepartmentOrdersId: item.nxDepartmentOrdersId,
+                    nxDoGoodsName: item.nxDoGoodsName,
+                    nxDoQuantity: item.nxDoQuantity,
+                    nxDoStandard: item.nxDoStandard
+                });
+
+                // 调用修改订单方法（使用 image 模式）
+                this.handleUpdateOrder(item, index, 'image');
+            },
+
+
+            // // 处理AI再次解析（从订单中获取taskId或使用图片模式）
+            // async handleAiParseAgain() {
+            //     if (!this.selectedAllCustomer) {
+            //         alert('请先选择客户');
+            //         return;
+            //     }
+            //
+            //     const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
+            //
+            //     // 优先从订单中获取 taskId（nxDoOcrTaskId）
+            //     let taskId = null;
+            //
+            //     // 从订单列表中查找第一个有 nxDoOcrTaskId 的订单
+            //     if (this.orderItems && this.orderItems.length > 0) {
+            //         const orderWithTaskId = this.orderItems.find(order => order.nxDoOcrTaskId);
+            //         if (orderWithTaskId && orderWithTaskId.nxDoOcrTaskId) {
+            //             taskId = orderWithTaskId.nxDoOcrTaskId;
+            //         }
+            //     }
+            //
+            //     // 如果订单中没有，尝试从已完成的任务中获取
+            //     if (!taskId) {
+            //         const allTasks = taskQueue.getAllTasks();
+            //         const completedTask = allTasks.find(t =>
+            //             String(t.depId) === String(targetDepId) &&
+            //             t.status === taskQueue.TASK_STATUS.COMPLETED &&
+            //             t.type === taskQueue.TASK_TYPE.IMAGE
+            //         );
+            //
+            //         if (completedTask) {
+            //             taskId = completedTask.taskId;
+            //         }
+            //     }
+            //
+            //
+            //
+            //     // 设置识别中状态
+            //     this.hasRunningTask = true;
+            //     this.recognizingImage = true;
+            //
+            //     try {
+            //         let requestData;
+            //
+            //         if (taskId) {
+            //             // 模式1：使用 taskId
+            //             console.log('🤖 [handleAiParseAgain] 调用AI识别接口（模式1：taskId模式）', {taskId});
+            //             requestData = {
+            //                 taskId: taskId
+            //             };
+            //         } else {
+            //             // 模式2：使用图片（需要图片base64）
+            //             if (!this.imagePreview) {
+            //                 alert('无法获取图片数据，请重新上传图片');
+            //                 return;
+            //             }
+            //
+            //             // 将图片DataURL转换为Base64
+            //             const imageBase64 = this.imagePreview.includes(',')
+            //                 ? this.imagePreview.split(',')[1]
+            //                 : this.imagePreview;
+            //
+            //             requestData = {
+            //                 ImageBase64: imageBase64,
+            //                 depId: targetDepId,
+            //                 depFatherId: this.selectedAllCustomer,
+            //                 disId: this.disUser?.nxDiuDistributerId,
+            //                 userId: this.disUser?.nxDistributerUserId || this.disUser?.nxDiuDistributerId
+            //             };
+            //         }
+            //
+            //         const res = await api.recognizeOrderOCRWithAi(requestData, {showLoading: false});
+            //
+            //         if (res && res.data && res.data.code === 0) {
+            //             // 检查后端是否已经保存了订单
+            //             if (Array.isArray(res.data.data) && res.data.data.length > 0) {
+            //                 this.orderItems = res.data.data;
+            //             } else {
+            //                 // 检查后端是否返回了解析后的商品列表
+            //                 const items = res.data.items || (res.data.data && res.data.data.items);
+            //                 if (items && items.length > 0) {
+            //                     this.orderItems = items;
+            //                 } else {
+            //                     this.orderItems = [];
+            //                 }
+            //             }
+            //         } else {
+            //             const errorMsg = res?.data?.msg || res?.data?.message || 'AI识别失败';
+            //             alert(errorMsg);
+            //         }
+            //     } catch (error) {
+            //         alert('AI识别失败：' + (error.message || '未知错误'));
+            //     } finally {
+            //         // 清除识别中状态
+            //         this.hasRunningTask = false;
+            //         this.recognizingImage = false;
+            //     }
+            // },
+
             async handleImageUpload(event) {
                 const file = event.target.files[0];
                 if (!file) return;
@@ -6352,7 +4905,7 @@
                     lastModified: file.lastModified
                 };
 
-                    // 创建预览并打开弹窗
+                // 创建预览并打开弹窗
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     this.previewImageDataUrl = e.target.result;
@@ -6380,7 +4933,7 @@
                                     const imgRect = imgElement.getBoundingClientRect();
                                     const imgDisplayWidth = imgRect.width;
                                     const imgDisplayHeight = imgRect.height;
-                                    
+
                                     // 裁剪框默认大小为图片显示尺寸的80%
                                     this.cropBox.width = Math.max(100, imgDisplayWidth * 0.8);
                                     this.cropBox.height = Math.max(100, imgDisplayHeight * 0.8);
@@ -6399,39 +4952,599 @@
             // 关闭图片预览弹窗
             closeImagePreviewModal() {
                 this.showImagePreviewModal = false;
-                this.previewImageDataUrl = null;
+                // 延后清空 src，避免弹窗尚未卸载时传入 null 触发 Vue prop 警告
+                this.$nextTick(() => {
+                    this.previewImageDataUrl = null;
+                });
                 // 清空文件输入
                 if (this.$refs.imageFileInput) {
                     this.$refs.imageFileInput.value = '';
                 }
             },
 
-            // 处理直接识别（不裁剪）
+            // 处理直接识别（不裁剪）- 直接调单列接口，不走任务队列
             async handleDirectRecognize(imageDataUrl) {
+                this.closeImagePreviewModal();
+                const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
+                if (!targetDepId || !this.disUser) {
+                    alert('请先选择客户');
+                    return;
+                }
+                this.imagePreview = imageDataUrl;
+                this.uploadedImageFile = {
+                    name: '单列识别',
+                    size: 0,
+                    type: 'image/jpeg',
+                    dataUrl: imageDataUrl
+                };
+                const imageBase64 = imageDataUrl.includes(',') ? imageDataUrl.split(',')[1] : imageDataUrl;
+                const ocrData = {
+                    ImageBase64: imageBase64,
+                    depId: targetDepId,
+                    depFatherId: this.selectedAllCustomer,
+                    disId: this.disUser.nxDiuDistributerId,
+                    userId: this.disUser.nxDistributerUserId || this.disUser.nxDiuDistributerId
+                };
+                try {
+                    const res = await api.recognizeOrderOCR(ocrData);
+                    if (res && res.data && res.data.code === 0) {
+                        const taskId = res.data.taskId;
+                        const task = res.data.task;
+                        this.currentTaskId = taskId;
+                        this.currentTask = task;
+                        this.orderItems = res.data.items;
+                        // fast 模式：刷新任务列表并默认选中本次返回的任务
+                        if (taskId != null && task && this.uploadType === 'image') {
+                            this.$nextTick(() => {
+                                if (this.$refs.imageUploadRef && typeof this.$refs.imageUploadRef.loadTaskList === 'function') {
+                                    const taskType = task.nxOcrTaskType != null ? task.nxOcrTaskType : 1;
+                                    this.$refs.imageUploadRef.loadTaskList(taskId, {type: taskType});
+                                }
+                            });
+                        }
+                    } else {
+                        const msg = res?.data?.msg || res?.data?.message || '识别失败';
+                        alert(msg);
+                    }
+                } catch (err) {
+                    alert(err?.message || '单列识别失败，请重试');
+                }
+            },
+
+            // 点击「添加新图片」：先保存当前状态，再清空显示上传区
+            handleImageAddNew() {
+                if (this.currentTaskId != null || (this.orderItems && this.orderItems.length > 0)) {
+                    this.imageLastState = {
+                        currentTaskId: this.currentTaskId,
+                        currentTask: this.currentTask,
+                        orderItems: (this.orderItems || []).slice(),
+                        uploadedImageFile: this.uploadedImageFile,
+                        imagePreview: this.imagePreview,
+                        imageScale: this.imageScale,
+                        imageTranslateX: this.imageTranslateX,
+                        imageTranslateY: this.imageTranslateY
+                    };
+                }
+                this.currentTaskId = null;
+                this.currentTask = null;
+                this.orderItems = [];
+                this.uploadedImageFile = null;
+                this.imagePreview = null;
+                this.imageScale = 1;
+                this.imageTranslateX = 0;
+                this.imageTranslateY = 0;
+            },
+            // 在「添加新图片」状态下再次点击「+」：仅恢复上次保存的状态，不请求接口
+            handleImageCloseNewContent() {
+                if (!this.imageLastState) return;
+                const s = this.imageLastState;
+                this.currentTaskId = s.currentTaskId;
+                this.currentTask = s.currentTask;
+                this.orderItems = s.orderItems || [];
+                this.uploadedImageFile = s.uploadedImageFile;
+                this.imagePreview = s.imagePreview;
+                this.imageScale = s.imageScale != null ? s.imageScale : 1;
+                this.imageTranslateX = s.imageTranslateX != null ? s.imageTranslateX : 0;
+                this.imageTranslateY = s.imageTranslateY != null ? s.imageTranslateY : 0;
+                this.imageLastState = null;
+            },
+
+            // 点击「添加新内容」：先保存当前状态，再清空显示输入区
+            handlePasteAddNew() {
+                if (this.currentTaskId != null) {
+                    this.pasteLastState = {
+                        currentTaskId: this.currentTaskId,
+                        currentTask: this.currentTask,
+                        orderItems: (this.orderItems || []).slice(),
+                        pasteInputText: this.pasteInputText || '',
+                        pasteSaveCount: this.pasteSaveCount,
+                        pasteInputContent: this.pasteInputContent || ''
+                    };
+                }
+                this.currentTaskId = null;
+                this.currentTask = null;
+                this.orderItems = [];
+                this.pasteInputText = '';
+                this.pasteSaveCount = null;
+                this.pasteInputContent = '';
+            },
+            // 在「添加新内容」状态下再次点击「+」：仅恢复上次保存的状态，不请求接口
+            handlePasteCloseNewContent() {
+                if (!this.pasteLastState) return;
+                const s = this.pasteLastState;
+                this.currentTaskId = s.currentTaskId;
+                this.currentTask = s.currentTask;
+                this.orderItems = s.orderItems || [];
+                this.pasteInputText = s.pasteInputText || '';
+                this.pasteSaveCount = s.pasteSaveCount;
+                this.pasteInputContent = s.pasteInputContent || '';
+                this.pasteLastState = null;
+            },
+
+            // Excel 粘贴：点击「+」进入添加新表格
+            handleExcelPasteAddNew() {
+                if (this.currentTaskId != null) {
+                    this.excelPasteLastState = {
+                        currentTaskId: this.currentTaskId,
+                        currentTask: this.currentTask,
+                        orderItems: (this.orderItems || []).slice(),
+                        excelPasteSaveCount: this.excelPasteSaveCount,
+                        excelPasteTableData: (this.excelPasteTableData || []).map(row => ({...row}))
+                    };
+                }
+                this.currentTaskId = null;
+                this.currentTask = null;
+                this.orderItems = [];
+                this.excelPasteSaveCount = null;
+                this.excelPasteTableData = Array.from({length: 50}, () => ({
+                    goodsName: '',
+                    quantity: '',
+                    specification: '',
+                    specificationWeight: '',
+                    cartonQuantity: '',
+                    cartonName: '',
+                    remark: ''
+                }));
+            },
+            // Excel 粘贴：在「添加新表格」状态下再次点击「+」恢复上一任务
+            handleExcelPasteCloseNewContent() {
+                if (!this.excelPasteLastState) return;
+                const s = this.excelPasteLastState;
+                this.currentTaskId = s.currentTaskId;
+                this.currentTask = s.currentTask;
+                this.orderItems = s.orderItems || [];
+                this.excelPasteSaveCount = s.excelPasteSaveCount;
+                this.excelPasteTableData = s.excelPasteTableData && s.excelPasteTableData.length ? s.excelPasteTableData.slice() : Array.from({length: 50}, () => ({
+                    goodsName: '',
+                    quantity: '',
+                    specification: '',
+                    specificationWeight: '',
+                    cartonQuantity: '',
+                    cartonName: '',
+                    remark: ''
+                }));
+                this.excelPasteLastState = null;
+            },
+            // Excel 粘贴模式：选中任务后拉取该任务订单
+            async handleSelectExcelPasteTask({taskId, task}) {
+                if (taskId == null) {
+                    alert('任务ID不存在');
+                    return;
+                }
+                this.taskLoading = true;
+                // 刷新/切换任务时清空右侧列表的播放、选择、编辑等状态
+                this.draftSelectedOrderIndex = -1;
+                this.orderArrIndex = -1;
+                this.cancelAddOrderBefore();
+                if (this.ttsStateByMode.excelPaste) {
+                    this.ttsStateByMode.excelPaste = {isTTSPlaying: false, isTTSLoading: false, stoppedIndex: -1};
+                }
+                const excelPasteRef = this.getOrderListRef('excelPaste');
+                if (excelPasteRef && excelPasteRef.stopReading) excelPasteRef.stopReading();
+                this.resetSearchAndMatchedGoodsState();
+                try {
+                    const pageSize = 10;
+                    const res = await api.getTaskOrders(taskId, {
+                        page: 1,
+                        limit: pageSize,
+                        processStatus: true,
+                        showLoading: false
+                    });
+                    const data = res && res.data;
+                    if (!data || data.code !== 0) return;
+                    const resTask = data.task || task || null;
+                    const pageInfo = data.page || data;
+                    const totalPages = pageInfo.totalPage != null ? pageInfo.totalPage : 1;
+                    const resPageSize = pageInfo.pageSize != null ? pageInfo.pageSize : pageSize;
+                    let orderArr = Array.isArray(pageInfo.list) ? pageInfo.list : (Array.isArray(pageInfo.data) ? pageInfo.data : []);
+
+                    this.orderItems = orderArr;
+                    this.currentTaskId = taskId;
+                    this.currentTask = resTask;
+                    this.excelPasteSaveCount = this.orderItems.length > 0 ? this.orderItems.length : null;
+                    // 从 nxOcrTaskOcrText（CSV）还原左侧表格
+                    const taskOcrText = (resTask && (resTask.nxOcrTaskOcrText != null ? resTask.nxOcrTaskOcrText : resTask.ocrText)) || '';
+                    this.excelPasteTableData = this.parseCsvToExcelPasteTableData(taskOcrText);
+
+                    if (totalPages > 1) {
+                        const fetchRemainingPages = (page) => {
+                            if (page > totalPages) return Promise.resolve();
+                            // 已切换客户/任务时不再请求下一页，避免旧请求结果覆盖新客户数据
+                            if (this.currentTaskId !== taskId) return Promise.resolve();
+                            return api.getTaskOrders(taskId, {
+                                page,
+                                limit: resPageSize,
+                                processStatus: true,
+                                showLoading: false
+                            }).then(r => {
+                                const d = r && r.data;
+                                if (d && d.code === 0 && d.page && Array.isArray(d.page.list) && d.page.list.length > 0 && this.currentTaskId === taskId) {
+                                    orderArr = [...orderArr, ...d.page.list];
+                                    this.orderItems = orderArr;
+                                    this.excelPasteSaveCount = orderArr.length;
+                                }
+                                if (this.currentTaskId !== taskId) return Promise.resolve();
+                                return fetchRemainingPages(page + 1);
+                            }).catch(() => {
+                            });
+                        };
+                        fetchRemainingPages(2).catch(() => {
+                        });
+                    }
+                } catch (e) {
+                    console.error('[PlaceOrder] handleSelectExcelPasteTask failed:', e);
+                    alert('加载任务订单失败：' + (e.message || '请稍后重试'));
+                } finally {
+                    this.taskLoading = false;
+                }
+            },
+
+            // 粘贴模式：选中任务后拉取该任务订单（先第一页+蒙板，多页静默加载）
+            async handleSelectPasteTask({taskId, task}) {
+                if (taskId == null) {
+                    alert('任务ID不存在');
+                    return;
+                }
+                this.taskLoading = true;
+                // 刷新/切换任务时清空右侧列表的播放、选择、编辑等状态
+                this.draftSelectedOrderIndex = -1;
+                this.orderArrIndex = -1;
+                this.cancelAddOrderBefore();
+                if (this.ttsStateByMode.paste) {
+                    this.ttsStateByMode.paste = {isTTSPlaying: false, isTTSLoading: false, stoppedIndex: -1};
+                }
+                const pasteRef = this.getOrderListRef('paste');
+                if (pasteRef && pasteRef.stopReading) pasteRef.stopReading();
+                this.resetSearchAndMatchedGoodsState();
+                try {
+                    const pageSize = 10;
+                    const res = await api.getTaskOrders(taskId, {
+                        page: 1,
+                        limit: pageSize,
+                        processStatus: true,
+                        showLoading: false
+                    });
+                    const data = res && res.data;
+                    if (!data || data.code !== 0) {
+                        return;
+                    }
+                    const resTask = data.task || task || null;
+                    const pageInfo = data.page || data;
+                    const totalPages = pageInfo.totalPage != null ? pageInfo.totalPage : 1;
+                    const resPageSize = pageInfo.pageSize != null ? pageInfo.pageSize : pageSize;
+                    let orderArr = Array.isArray(pageInfo.list) ? pageInfo.list : (Array.isArray(pageInfo.data) ? pageInfo.data : []);
+
+                    this.orderItems = orderArr;
+                    this.currentTaskId = taskId;
+                    this.currentTask = resTask;
+                    this.pasteSaveCount = this.orderItems.length > 0 ? this.orderItems.length : null;
+                    // 同步任务原文到左侧输入框，切换任务时左侧内容及时更新
+                    const taskOcrText = (resTask && (resTask.nxOcrTaskOcrText != null ? resTask.nxOcrTaskOcrText : resTask.ocrText)) || '';
+                    this.pasteInputText = taskOcrText;
+                    this.pasteInputContent = taskOcrText;
+
+                    if (totalPages <= 1) return;
+
+                    const fetchRemainingPages = (page) => {
+                        if (page > totalPages) return Promise.resolve();
+                        if (this.currentTaskId !== taskId) return Promise.resolve();
+                        return api.getTaskOrders(taskId, {
+                            page,
+                            limit: resPageSize,
+                            processStatus: true,
+                            showLoading: false
+                        }).then(r => {
+                            const d = r && r.data;
+                            if (d && d.code === 0 && d.page && Array.isArray(d.page.list) && d.page.list.length > 0) {
+                                if (this.currentTaskId === taskId) {
+                                    orderArr = [...orderArr, ...d.page.list];
+                                    this.orderItems = orderArr;
+                                    this.pasteSaveCount = orderArr.length;
+                                }
+                            }
+                            if (this.currentTaskId !== taskId) return Promise.resolve();
+                            return fetchRemainingPages(page + 1);
+                        }).catch(() => {
+                        });
+                    };
+                    fetchRemainingPages(2).catch(() => {
+                    });
+                } catch (e) {
+                    console.error('[PlaceOrder] handleSelectPasteTask failed:', e);
+                    alert('加载任务订单失败：' + (e.message || '请稍后重试'));
+                } finally {
+                    this.taskLoading = false;
+                }
+            },
+
+            // 在任务列表中选中某个任务：先拉第一页展示，多页时后台静默加载剩余页（参考小程序 _initTaskOrder）
+            async handleSelectImageTask({taskId, task}) {
+                if (taskId == null) {
+                    alert('任务ID不存在');
+                    return;
+                }
+                this.clearTaskStatusPollTimer();
+                this.taskLoading = true;
+                // 刷新/切换任务时清空右侧列表的播放、选择、编辑等状态
+                this.draftSelectedOrderIndex = -1;
+                this.orderArrIndex = -1;
+                this.cancelAddOrderBefore();
+                if (this.ttsStateByMode.image) {
+                    this.ttsStateByMode.image = {isTTSPlaying: false, isTTSLoading: false, stoppedIndex: -1};
+                }
+                const imageRef = this.getOrderListRef('image');
+                if (imageRef && imageRef.stopReading) imageRef.stopReading();
+                this.resetSearchAndMatchedGoodsState();
+                try {
+                    const pageSize = 10;
+                    const res = await api.getTaskOrders(taskId, {
+                        page: 1,
+                        limit: pageSize,
+                        processStatus: true,
+                        showLoading: false
+                    });
+                    const data = res && res.data;
+                    if (!data || data.code !== 0) {
+                        console.warn('[PlaceOrder] getTaskOrders 返回异常', data);
+                        return;
+                    }
+                    const resTask = data.task || task || null;
+                    const totalOrders = data.totalOrders;
+                    const pageInfo = data.page || data;
+                    const totalPages = pageInfo.totalPage != null ? pageInfo.totalPage : 1;
+                    const resPageSize = pageInfo.pageSize != null ? pageInfo.pageSize : pageSize;
+                    let orderArr = Array.isArray(pageInfo.list) ? pageInfo.list : (Array.isArray(pageInfo.data) ? pageInfo.data : []);
+
+                    this.orderItems = orderArr;
+                    this.currentTaskId = taskId;
+                    this.currentTask = resTask;
+
+                    // nxOcrTaskStatus===0 表示后台异步处理中，轮询直到状态变为 1 或 2
+                    if (resTask && resTask.nxOcrTaskStatus === 0) {
+                        this.startTaskStatusPolling(taskId, pageSize);
+                        return;
+                    }
+
+                    if (resTask && resTask.nxOcrTaskImagePath) {
+                        const base = (api.getImageServerURL && api.getImageServerURL()) || '';
+                        const path = String(resTask.nxOcrTaskImagePath);
+                        this.imagePreview = path.startsWith('http') ? path : (base.replace(/\/$/, '') + '/' + path.replace(/^\//, ''));
+                        this.uploadedImageFile = {
+                            name: resTask.nxOcrTaskFileName || '任务图片',
+                            size: 0,
+                            type: 'image/jpeg',
+                            dataUrl: this.imagePreview
+                        };
+                    }
+
+                    if (totalPages <= 1) return;
+
+                    const fetchRemainingPages = (page) => {
+                        if (page > totalPages) return Promise.resolve();
+                        // 已切换客户/任务时不再请求下一页，避免旧请求结果覆盖新客户数据
+                        if (this.currentTaskId !== taskId) return Promise.resolve();
+                        return api.getTaskOrders(taskId, {
+                            page,
+                            limit: resPageSize,
+                            processStatus: true,
+                            showLoading: false
+                        }).then(r => {
+                            const d = r && r.data;
+                            if (d && d.code === 0 && d.page && Array.isArray(d.page.list) && d.page.list.length > 0) {
+                                if (this.currentTaskId === taskId) {
+                                    orderArr = [...orderArr, ...d.page.list];
+                                    this.orderItems = orderArr;
+                                }
+                            }
+                            if (this.currentTaskId !== taskId) return Promise.resolve();
+                            return fetchRemainingPages(page + 1);
+                        }).catch(() => {
+                        });
+                    };
+                    fetchRemainingPages(2).catch(() => {
+                    });
+                } catch (e) {
+                    console.error('[PlaceOrder] handleSelectImageTask failed:', e);
+                    alert('加载任务订单失败：' + (e.message || '请稍后重试'));
+                } finally {
+                    this.taskLoading = false;
+                }
+            },
+
+            /** 清除任务状态轮询定时器（切换任务、离开页面时调用） */
+            clearTaskStatusPollTimer() {
+                if (this.taskStatusPollTimer) {
+                    clearInterval(this.taskStatusPollTimer);
+                    this.taskStatusPollTimer = null;
+                }
+            },
+
+            /** 切换部门时由 Bills 调用，立即清除任务状态和轮询，避免「后台处理中」蒙版残留 */
+            clearTaskStatusOnCustomerChange() {
+                this.clearTaskStatusPollTimer();
+                this._taskStatusPollProcessed = null;
+                this.currentTaskId = null;
+                this.currentTask = null;
+                this.orderItems = [];
+                this.hasRunningTask = false;
+                this.uploadedImageFile = null;
+                this.imagePreview = null;
+                this.taskLoading = false;
+            },
+
+            /** nxOcrTaskStatus===0 时轮询 getTaskOrders，直到状态变为 1 或 2 */
+            startTaskStatusPolling(taskId, pageSize = 10) {
+                this.clearTaskStatusPollTimer();
+                this._taskStatusPollProcessed = null; // 防止多个 poll 并发时重复处理
+                const poll = async () => {
+                    if (this.currentTaskId !== taskId) return;
+                    try {
+                        const res = await api.getTaskOrders(taskId, {
+                            page: 1,
+                            limit: pageSize,
+                            processStatus: true,
+                            showLoading: false
+                        });
+                        const data = res && res.data;
+                        if (!data || data.code !== 0) return;
+                        const resTask = data.task || null;
+                        const status = resTask && resTask.nxOcrTaskStatus;
+                        if (status === 1 || status === 2) {
+                            if (this._taskStatusPollProcessed === taskId) return; // 已由其他并发 poll 处理，避免重复请求
+                            this._taskStatusPollProcessed = taskId;
+                            this.clearTaskStatusPollTimer();
+                            const pageInfo = data.page || data;
+                            const totalPages = pageInfo.totalPage != null ? pageInfo.totalPage : 1;
+                            const resPageSize = pageInfo.pageSize != null ? pageInfo.pageSize : pageSize;
+                            let orderArr = Array.isArray(pageInfo.list) ? pageInfo.list : (Array.isArray(pageInfo.data) ? pageInfo.data : []);
+                            this.orderItems = orderArr;
+                            this.currentTask = resTask;
+                            if (resTask && resTask.nxOcrTaskImagePath) {
+                                const base = (api.getImageServerURL && api.getImageServerURL()) || '';
+                                const path = String(resTask.nxOcrTaskImagePath);
+                                this.imagePreview = path.startsWith('http') ? path : (base.replace(/\/$/, '') + '/' + path.replace(/^\//, ''));
+                                this.uploadedImageFile = {
+                                    name: resTask.nxOcrTaskFileName || '任务图片',
+                                    size: 0,
+                                    type: 'image/jpeg',
+                                    dataUrl: this.imagePreview
+                                };
+                            }
+                            if (totalPages > 1) {
+                                const fetchRemainingPages = (page) => {
+                                    if (page > totalPages) return Promise.resolve();
+                                    if (this.currentTaskId !== taskId) return Promise.resolve();
+                                    return api.getTaskOrders(taskId, { page, limit: resPageSize, processStatus: true, showLoading: false }).then(r => {
+                                        const d = r && r.data;
+                                        if (d && d.code === 0 && d.page && Array.isArray(d.page.list) && d.page.list.length > 0 && this.currentTaskId === taskId) {
+                                            orderArr = [...orderArr, ...d.page.list];
+                                            this.orderItems = orderArr;
+                                        }
+                                        return this.currentTaskId === taskId ? fetchRemainingPages(page + 1) : Promise.resolve();
+                                    }).catch(() => {});
+                                };
+                                fetchRemainingPages(2).catch(() => {});
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('[PlaceOrder] 任务状态轮询失败:', e);
+                    }
+                };
+                this.taskStatusPollTimer = setInterval(poll, 20000);
+                poll(); // 立即执行一次（3秒后再执行）
+            },
+
+            // 处理AI识别（带DeepSeek，不裁剪）
+            async handleDirectRecognizeAi(imageDataUrl) {
+                if (!this.selectedAllCustomer) {
+                    alert('请先选择客户');
+                    return;
+                }
+
                 // 关闭弹窗
                 this.closeImagePreviewModal();
-                // 设置预览图片并执行识别
+
+                // 确定要使用的部门ID（如果有子部门选择，使用子部门ID，否则使用父部门ID）
+                const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
+
+                // 将图片DataURL转换为Base64（去掉data:image/...;base64,前缀）
+                const imageBase64 = imageDataUrl.includes(',') ? imageDataUrl.split(',')[1] : imageDataUrl;
+
+                // 确保 uploadedImageFile 已设置
+                if (!this.uploadedImageFile) {
+                    const fileName = this.originalImageFile?.name || 'image.jpg';
+                    const fileSize = this.originalImageFile?.size || 0;
+                    const fileType = this.originalImageFile?.type || 'image/jpeg';
+                    this.uploadedImageFile = {
+                        name: fileName,
+                        size: fileSize,
+                        type: fileType,
+                        dataUrl: imageDataUrl
+                    };
+                } else {
+                    this.uploadedImageFile.dataUrl = imageDataUrl;
+                }
+
+                // 设置预览图片
                 this.imagePreview = imageDataUrl;
-                await this.recognizeImage(imageDataUrl);
+
+                // 设置识别中状态
+                this.hasRunningTask = true;
+                this.recognizingImage = true;
+
+                try {
+                    // 调用AI识别接口（模式2：图片模式）
+                    const requestData = {
+                        ImageBase64: imageBase64,
+                        depId: targetDepId,
+                        depFatherId: this.selectedAllCustomer,
+                        disId: this.disUser?.nxDiuDistributerId,
+                        userId: this.disUser?.nxDistributerUserId || this.disUser?.nxDiuDistributerId
+                    };
+
+                    const res = await api.recognizeOrderOCRWithAi(requestData, {showLoading: false});
+                    if (res && res.data && res.data.code === 0) {
+                        const taskId = res.data.taskId;
+                        const task = res.data.task || null;
+                        if (taskId != null && taskId > 0) {
+                            await this.handleSelectImageTask({ taskId, task });
+                            if (this.uploadType === 'image' && this.$refs.imageUploadRef?.loadTaskList) {
+                                this.$nextTick(() => {
+                                    this.$refs.imageUploadRef.loadTaskList(taskId, { type: 1 });
+                                });
+                            }
+                            this.$emit('task-added');
+                        }
+                    } else {
+                        const errorMsg = res?.data?.msg || res?.data?.message || 'AI识别失败';
+                        alert(errorMsg);
+                    }
+                } catch (error) {
+                    alert('AI识别失败：' + (error.message || '未知错误'));
+                } finally {
+                    // 清除识别中状态
+                    this.hasRunningTask = false;
+                    this.recognizingImage = false;
+                }
             },
 
             // 处理裁剪确认
             async handleCropConfirm(result) {
                 // result 包含 { croppedDataUrl, cropRect, naturalWidth, naturalHeight, zoom, panX, panY }
                 const croppedDataUrl = result.croppedDataUrl;
-                
+
                 // 关闭弹窗
                 this.closeImagePreviewModal();
-                
+
                 // 更新预览
                 this.imagePreview = croppedDataUrl;
                 if (this.uploadedImageFile) {
                     this.uploadedImageFile.dataUrl = croppedDataUrl;
                 }
-                
+
                 // 重置变换
                 this.resetImageTransform();
-                
+
                 // 执行OCR识别
                 await this.recognizeImage(croppedDataUrl);
             },
@@ -6446,105 +5559,90 @@
                 // 确定要使用的部门ID（如果有子部门选择，使用子部门ID，否则使用父部门ID）
                 const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
 
-                try {
-                    this.recognizingImage = true;
-                    this.$store.commit('SET_LOADING', true);
+                console.log('🔍 [recognizeImage] 准备创建任务，当前客户信息:', {
+                    selectedAllCustomer: this.selectedAllCustomer,
+                    selectedSubDepartment: this.selectedSubDepartment,
+                    selectedCustomerName: this.selectedCustomerName,
+                    targetDepId: targetDepId,
+                    disId: this.disUser?.nxDiuDistributerId,
+                    userId: this.disUser?.nxDistributerUserId || this.disUser?.nxDiuDistributerId
+                });
 
-                    // 将图片DataURL转换为Base64（去掉data:image/...;base64,前缀）
-                    const imageBase64 = imageDataUrl.includes(',') ? imageDataUrl.split(',')[1] : imageDataUrl;
-
-                    // 调用OCR识别API（参考微信小程序 callTencentOCR）
-                    const ocrData = {
-                        ImageBase64: imageBase64,
-                        depId: targetDepId, // 使用确定的部门ID（可能是子部门ID）
-                        depFatherId: this.selectedAllCustomer, // 父部门ID始终是选中的客户ID
-                        disId: this.disUser.nxDiuDistributerId,
-                        userId: this.disUser.nxDistributerUserId || this.disUser.nxDiuDistributerId
-                    };
-
-                    const res = await api.recognizeOrderOCR(ocrData);
-
-                    if (res && res.data && res.data.code === 0) {
-                        // 检查后端是否已经保存了订单（pasteSearchGoods 已调用）
-                        // 如果 res.data.data 是数组，说明后台已经保存了订单
-                        if (Array.isArray(res.data.data) && res.data.data.length > 0) {
-                            console.log('后台已保存订单，直接使用已保存的数据，订单数量:', res.data.data.length);
-                            this.orderItems = res.data.data;
-                            // 保存到缓存（图片解析）
-                            this._saveToStorage(this.orderItems, 'image');
-                            // 重置搜索和匹配商品列表状态
-                            this.resetSearchAndMatchedGoodsState();
-                            alert('识别并保存完成！');
-                            // 发出事件通知父组件刷新客户列表
-                            this.$emit('order-saved');
-                            return;
-                        }
-
-                        // 检查后端是否返回了 DeepSeek 解析后的商品列表
-                        const items = res.data.items || (res.data.data && res.data.data.items);
-                        const ocrText = res.data.ocrText || (res.data.data && res.data.data.ocrText) || '';
-
-                        if (items && items.length > 0) {
-                            // 将后端返回的 items 转换为订单格式（参考微信小程序实现）
-                            const formattedOrders = items.map(item => ({
-                                nxDoGoodsName: item.name || '',
-                                nxDoGoodsNameOriginal: item.name || '', // 保存原始商品名称
-                                nxDoQuantity: item.qty || '',
-                                nxDoStandard: item.unit || '斤', // 默认单位
-                                nxDoRemark: item.remark || '',
-                                nxDoAddRemark: !!(item.remark && item.remark.trim()),
-                                nxDoStatus: -2, // 未匹配状态
-                                nxDoDepartmentId: targetDepId, // 使用确定的部门ID（可能是子部门ID）
-                                nxDoDepartmentFatherId: this.selectedAllCustomer,
-                                nxDoDisGoodsId: null,
-                                nxDoStandardWarn: 0,
-                                goodsNameWarn: 0,
-                                nxDoDistributerId: this.disUser.nxDiuDistributerId,
-                                nxDoPurchaseUserId: -1,
-                                nxDoOrderUserId: this.disUser.nxDistributerUserId || this.disUser.nxDiuDistributerId,
-                                nxDoIsAgent: -1,
-                            }));
-
-                            // 过滤掉无效订单（商品名为空）
-                            this.orderItems = formattedOrders.filter(order =>
-                                order.nxDoGoodsName && order.nxDoGoodsName.trim()
-                            );
-
-                            // 保存到缓存（图片解析）
-                            this._saveToStorage(this.orderItems, 'image');
-                            // 重置搜索和匹配商品列表状态
-                            this.resetSearchAndMatchedGoodsState();
-                            alert('识别完成！');
-                        } else {
-                            alert('识别失败：未返回有效数据');
-                        }
-                    } else {
-                        const errorMsg = res?.data?.msg || res?.data?.message || '识别失败';
-
-                        // 处理不同类型的错误
-                        if (errorMsg.includes('资源包耗尽') || errorMsg.includes('ResourcePackageRunOut')) {
-                            alert('OCR 资源包已耗尽，请联系管理员购买资源包');
-                        } else if (errorMsg.includes('服务未开通') || errorMsg.includes('UnOpenError')) {
-                            alert('OCR 服务未开通，请联系管理员开通服务');
-                        } else {
-                            alert('识别失败：' + errorMsg);
-                        }
-                    }
-                } catch (error) {
-
-                    // 处理404错误（接口未实现）
-                    if (error.response && error.response.status === 404) {
-                        alert('OCR 接口未实现，请联系后端开发人员实现接口：POST /api/ocr/recognizeOrder');
-                    } else {
-                        alert('图片识别失败，请重试：' + (error.message || '未知错误'));
-                    }
-                } finally {
-                    this.recognizingImage = false;
-                    this.$store.commit('SET_LOADING', false);
-                    // 不清空文件输入，保留以便重新识别
+                // 检查是否已有进行中的任务
+                if (taskQueue.hasActiveTask(targetDepId)) {
+                    console.log('⏸️ [recognizeImage] 该部门已有进行中的任务，跳过');
+                    // 不再弹窗提示，静默处理
+                    return;
                 }
-            },
 
+                // 将图片DataURL转换为Base64（去掉data:image/...;base64,前缀）
+                const imageBase64 = imageDataUrl.includes(',') ? imageDataUrl.split(',')[1] : imageDataUrl;
+
+                // 确保 uploadedImageFile 已设置（如果还没有设置）
+                if (!this.uploadedImageFile) {
+                    // 从 originalImageFile 或使用默认值
+                    const fileName = this.originalImageFile?.name || 'image.jpg';
+                    const fileSize = this.originalImageFile?.size || 0;
+                    const fileType = this.originalImageFile?.type || 'image/jpeg';
+                    this.uploadedImageFile = {
+                        name: fileName,
+                        size: fileSize,
+                        type: fileType,
+                        dataUrl: imageDataUrl
+                    };
+                } else {
+                    // 如果已有文件信息，更新 dataUrl
+                    this.uploadedImageFile.dataUrl = imageDataUrl;
+                }
+
+                // 确保 imagePreview 已设置
+                if (!this.imagePreview) {
+                    this.imagePreview = imageDataUrl;
+                }
+
+                // 创建任务
+                const taskInfo = {
+                    depId: targetDepId,
+                    depFatherId: this.selectedAllCustomer,
+                    depName: this.selectedCustomerName || '客户',
+                    type: taskQueue.TASK_TYPE.IMAGE,
+                    imageList: [{
+                        base64: imageBase64,
+                        dataUrl: imageDataUrl,
+                        name: this.uploadedImageFile.name,
+                        size: this.uploadedImageFile.size,
+                        type: this.uploadedImageFile.type
+                    }],
+                    disId: this.disUser?.nxDiuDistributerId,
+                    userId: this.disUser?.nxDistributerUserId || this.disUser?.nxDiuDistributerId
+                };
+
+                console.log('📝 [recognizeImage] 创建任务，任务信息:', taskInfo);
+
+                const taskId = taskQueue.addTask(taskInfo);
+
+                if (!taskId) {
+                    // 不再弹窗提示，静默处理
+                    return;
+                }
+
+                // 设置识别中状态
+                this.hasRunningTask = true;
+                this.recognizingImage = true;
+
+                console.log('✅ [recognizeImage] 任务创建成功，设置状态:', {
+                    taskId,
+                    hasRunningTask: this.hasRunningTask,
+                    recognizingImage: this.recognizingImage,
+                    uploadedImageFile: this.uploadedImageFile,
+                    imagePreview: !!this.imagePreview
+                });
+
+                // 确保任务执行器已启动
+                taskExecutor.checkAndStartExecutor();
+
+                // 不再弹窗提示，静默处理
+            },
 
             // 清除图片预览
             clearImagePreview() {
@@ -6766,6 +5864,234 @@
                 // 同时更新 pasteInputText 和 pasteInputContent，保持同步
                 this.pasteInputText = text;
                 this.pasteInputContent = text.trim() !== '' ? text : '';
+                // 用户编辑时清除校验不合格行高亮
+                if (this.pasteInvalidLineIndices.length > 0 || this.pasteInvalidSegments.length > 0) {
+                    this.pasteInvalidLineIndices = [];
+                    this.pasteInvalidSegments = [];
+                }
+            },
+
+            // PasteUpload 组件的事件适配器
+            handlePasteInput(e) {
+                this.onPasteInput(e);
+            },
+
+            // DraftOrderList 组件的事件适配器（Paste 模式草稿状态）
+            handleDraftOrderListGoodsNameInput({item, orderIndex, value}) {
+                // 更新 item.nxDoGoodsName
+                this.orderItems[orderIndex].nxDoGoodsName = value;
+                // 调用 handleGoodsNameInput 来设置 currentSourceType 和 orderArrIndex，并触发搜索
+                // this.handleGoodsNameInput(item, orderIndex, 'paste');
+            },
+            handleDraftOrderListQuantityInput({item, orderIndex, value}) {
+                this.orderItems[orderIndex].nxDoQuantity = value;
+            },
+            handleDraftOrderListStandardChange({item, orderIndex, value}) {
+                this.orderItems[orderIndex].nxDoStandard = value;
+            },
+            handleDraftOrderListDeleteOrder({item, orderIndex}) {
+                if (orderIndex >= 0 && orderIndex < this.orderItems.length) {
+                    this.orderItems.splice(orderIndex, 1);
+                }
+            },
+            handleDraftOrderListAddOrderBefore({orderIndex}) {
+                const empty = {nxDoGoodsName: '', nxDoQuantity: '', nxDoStandard: ''};
+                this.orderItems.splice(orderIndex, 0, empty);
+            },
+            handleDraftOrderListAddRemark({item, orderIndex}) {
+                const row = this.orderItems[orderIndex];
+                row.nxDoAddRemark = true;
+                if (row.nxDoRemark === undefined) row.nxDoRemark = '';
+            },
+            handleDraftOrderListClearRemark({item, orderIndex}) {
+                const row = this.orderItems[orderIndex];
+                row.nxDoAddRemark = false;
+                row.nxDoRemark = '';
+            },
+            handleDraftOrderListRemarkInput({item, orderIndex, value, field}) {
+                if (field) {
+                    this.orderItems[orderIndex][field] = value;
+                }
+            },
+
+            // ========== ExcelPasteUpload 组件事件适配器方法 ==========
+            handleExcelPasteCellClick({row, column, rowIndex, columnIndex}) {
+                this.handleCellClick({row, column, rowIndex, columnIndex});
+            },
+            handleExcelPasteEditClosed({row, column, rowIndex, columnIndex}) {
+                this.handleEditClosed({row, column, rowIndex, columnIndex});
+            },
+
+            // ========== DraftOrderList 组件事件适配器方法（Excel-Paste 模式草稿状态） ==========
+            handleExcelPasteDraftGoodsNameInput({item, orderIndex, value}) {
+                this.orderItems[orderIndex].nxDoGoodsName = value;
+            },
+            handleExcelPasteDraftQuantityInput({item, orderIndex, value}) {
+                this.orderItems[orderIndex].nxDoQuantity = value;
+            },
+            handleExcelPasteDraftStandardChange({item, orderIndex, value}) {
+                this.orderItems[orderIndex].nxDoStandard = value;
+            },
+            handleExcelPasteDraftDeleteOrder({item, orderIndex}) {
+                this.handleDeleteOrderFromExcel(item, orderIndex, 'excel-paste');
+            },
+            handleExcelPasteDraftAddOrderBefore({orderIndex}) {
+                const empty = {nxDoGoodsName: '', nxDoQuantity: '', nxDoStandard: ''};
+                this.orderItems.splice(orderIndex, 0, empty);
+            },
+            handleExcelPasteDraftAddRemark({item, orderIndex}) {
+                const row = this.orderItems[orderIndex];
+                row.nxDoAddRemark = true;
+                if (row.nxDoRemark === undefined) row.nxDoRemark = '';
+            },
+            handleExcelPasteDraftClearRemark({item, orderIndex}) {
+                const row = this.orderItems[orderIndex];
+                row.nxDoAddRemark = false;
+                row.nxDoRemark = '';
+            },
+            handleExcelPasteDraftRemarkInput({item, orderIndex, value, field}) {
+                if (field) {
+                    this.orderItems[orderIndex][field] = value;
+                }
+            },
+
+            // ========== OrderList 组件事件适配器方法（Excel-Paste 模式已保存状态） ==========
+            handleSaveBeforeOrderExcelPaste({item, orderIndex}) {
+                this.saveBeforeOrder(item, orderIndex, 'excel-paste');
+            },
+            handleOrderListGoodsNameInputExcelPaste({item, orderIndex, value}) {
+                item.nxDoGoodsName = value;
+                this.handleGoodsNameInput(item, orderIndex, 'excel-paste');
+            },
+            handleOrderListGoodsNameFocusExcelPaste({item, orderIndex}) {
+                this.handleGoodsNameFocus(item, orderIndex, 'excel-paste');
+            },
+            handleOrderListGoodsNameBlurExcelPaste({item, orderIndex}) {
+                this.handleGoodsNameBlur(item, orderIndex, 'excel-paste');
+            },
+            handleOrderListQuantityInputExcelPaste({item, orderIndex, value}) {
+                item.nxDoQuantity = value;
+            },
+            handleOrderListStandardChangeExcelPaste({item, orderIndex, value}) {
+                item.nxDoStandard = value;
+            },
+            handleOrderListUpdateOrderExcelPaste({item, orderIndex}) {
+                this.handleUpdateOrder(item, orderIndex, 'excel-paste');
+            },
+            handleOrderListSaveNewGoodsExcelPaste({item, orderIndex, goodsName}) {
+                this.handleSaveNewGoods(item, orderIndex, 'excel-paste', goodsName);
+            },
+            handleOrderListAddNewOrderBeforeExcelPaste({item, orderIndex}) {
+                this.handleAddNewOrderBefore(item, orderIndex, 'excel-paste');
+            },
+            handleOrderListDeleteOrderExcelPaste({item, orderIndex}) {
+                this.handleDeleteOrderFromExcel(item, orderIndex, 'excel-paste');
+            },
+            handleOrderListRemarkInputExcelPaste({item, orderIndex, value, field}) {
+                if (field) {
+                    item[field] = value;
+                    this.handleRemarkInput(item, orderIndex, 'excel-paste');
+                }
+            },
+            handleOrderListSelectMatchedGoodsExcelPaste({item, orderIndex, goodsIndex}) {
+                this.selectMatchedGoods(item, orderIndex, goodsIndex, 'excel-paste');
+            },
+            handleOrderListSelectSearchResultExcelPaste({goods, orderIndex}) {
+                this.selectSearchResult(goods, orderIndex, 'excel-paste');
+            },
+
+            // ========== AutoUpload 组件事件适配器方法 ==========
+            handleActiveProcessedFileTabChange(filePath) {
+                this.activeProcessedFileTab = filePath;
+            },
+            handleImageLoadAuto(event) {
+                this.handleImageLoad(event, 'auto');
+            },
+
+            // ========== OrderList 组件事件适配器方法（Auto 模式） ==========
+            handleSaveBeforeOrderAuto({item, orderIndex}) {
+                this.saveBeforeOrder(item, orderIndex, 'auto');
+            },
+            handleOrderListGoodsNameInputAuto({item, orderIndex, value}) {
+                item.nxDoGoodsName = value;
+                this.handleGoodsNameInput(item, orderIndex, 'auto');
+            },
+            handleOrderListGoodsNameFocusAuto({item, orderIndex}) {
+                this.handleGoodsNameFocus(item, orderIndex, 'auto');
+            },
+            handleOrderListGoodsNameBlurAuto({item, orderIndex}) {
+                this.handleGoodsNameBlur(item, orderIndex, 'auto');
+            },
+            handleOrderListQuantityInputAuto({item, orderIndex, value}) {
+                item.nxDoQuantity = value;
+            },
+            handleOrderListStandardChangeAuto({item, orderIndex, value}) {
+                item.nxDoStandard = value;
+            },
+            handleOrderListUpdateOrderAuto({item, orderIndex}) {
+                this.handleUpdateOrder(item, orderIndex, 'auto');
+            },
+            handleOrderListSaveNewGoodsAuto({item, orderIndex, goodsName}) {
+                this.handleSaveNewGoods(item, orderIndex, 'auto', goodsName);
+            },
+            handleOrderListAddNewOrderBeforeAuto({item, orderIndex}) {
+                this.handleAddNewOrderBefore(item, orderIndex, 'auto');
+            },
+            handleOrderListDeleteOrderAuto({item, orderIndex}) {
+                this.handleDeleteOrderFromExcel(item, orderIndex, 'auto');
+            },
+            handleOrderListRemarkInputAuto({item, orderIndex, value, field}) {
+                if (field) {
+                    item[field] = value;
+                    this.handleRemarkInput(item, orderIndex, 'auto');
+                }
+            },
+            handleOrderListSelectMatchedGoodsAuto({item, orderIndex, goodsIndex}) {
+                this.selectMatchedGoods(item, orderIndex, goodsIndex, 'auto');
+            },
+            handleOrderListSelectSearchResultAuto({goods, orderIndex}) {
+                this.selectSearchResult(goods, orderIndex, 'auto');
+            },
+
+
+            // 本地解析粘贴文本为订单（不调用 DeepSeek，参考 cankao/formatOrder.js）
+            handlePasteLocalParse() {
+                const content = this.pasteInputContent || this.pasteInputText;
+                if (!content || (typeof content === 'string' && content.trim() === '')) {
+                    console.warn('[handlePasteLocalParse] 内容为空，跳过解析');
+                    alert('内容为空');
+                    return;
+                }
+                this.resetSearchAndMatchedGoodsState();
+                const result = parseOrderFromText(content);
+                const orders = (result.orders || []).map(o => ({
+                    ...o,
+                    nxDoGoodsNameOriginal: o.nxDoGoodsOrignialName || o.nxDoGoodsName || ''
+                }));
+                const invalidLineIndices = result.invalidLineIndices || [];
+                const invalidSegments = result.invalidSegments || [];
+                console.log('[handlePasteLocalParse] 解析结果:', {
+                    ordersCount: orders.length,
+                    invalidLineIndices,
+                    invalidSegments,
+                    invalidCount: invalidSegments.length
+                });
+                if (orders.length === 0) {
+                    console.warn('[handlePasteLocalParse] 未解析到有效订单');
+                    alert('未解析到有效订单，请检查格式（如：苹果 5 斤）');
+                    return;
+                }
+                if (invalidSegments.length > 0) {
+                    console.warn('[handlePasteLocalParse] 存在校验不合格片段，不更新订单列表，仅高亮提示。不合格片段:', invalidSegments);
+                    this.pasteInvalidLineIndices = invalidLineIndices;
+                    this.pasteInvalidSegments = invalidSegments;
+                    alert(`有 ${invalidSegments.length} 个订单不符合要求（商品名必填、数量须为大于0的数字、规格须为1-2个汉字），已用红色标注，请修改后重新解析`);
+                    return;
+                }
+                this.orderItems = orders;
+                this.pasteInvalidLineIndices = [];
+                this.pasteInvalidSegments = [];
+                console.log('[handlePasteLocalParse] 解析通过，已更新订单列表');
             },
 
             // AI识别优化文本（参考小程序 aiRecogniseFirst）
@@ -6809,17 +6135,17 @@
                                 const qty = item.qty || '';
                                 const unit = item.unit || '斤';
                                 const remark = item.remark || '';
-                                
+
                                 // 格式：商品名称(备注) 数量 单位,
                                 let line = '';
-                                
+
                                 // 如果有备注，用括号括起来放在商品名称后面
                                 if (remark && remark.trim() !== '') {
                                     line = `${name}(${remark}) ${qty} ${unit},`;
                                 } else {
                                     line = `${name} ${qty} ${unit},`;
                                 }
-                                
+
                                 return line;
                             }).join('\n');
                         }
@@ -6841,10 +6167,8 @@
                         this.parseTextToOrders(optimizedText);
                     } else {
                         // 使用显示格式进行解析
-                    this.parsePasteText();
+                        this.parsePasteText();
                     }
-
-                    alert('AI识别完成');
                 } catch (error) {
                     console.error('第一次 AI 识别失败:', error);
                     alert('AI识别失败：' + (error.message || '未知错误'));
@@ -6858,29 +6182,48 @@
                 try {
                     console.log('开始调用 DeepSeek API，输入文本:', text, '温度:', temperature);
 
-                    // 动态导入 config（Vue 项目中使用 import）
-                    const configModule = await import('@/config/index');
-                    const config = configModule.default;
-                    const DEEPSEEK_API_KEY = config.deepSeek?.apiKey || '';
-                    const DEEPSEEK_API_URL = config.deepSeek?.apiUrl || 'https://api.deepseek.com/v1/chat/completions';
-                    const DEEPSEEK_MODEL = config.deepSeek?.model || 'deepseek-chat';
+                    // 从接口获取 prompt
+                    let systemPrompt = '';
+                    try {
+                        const promptRes = await api.getPromptByKey('OCR_PASTE');
+                        if (promptRes && promptRes.data && promptRes.data.code === 0) {
+                            // 尝试多种可能的数据结构
+                            const promptData = promptRes.data.prompt || promptRes.data.data;
 
-                    if (!DEEPSEEK_API_KEY) {
-                        throw new Error('DeepSeek API Key 未配置');
-                    }
+                            console.log('📥 [DeepSeek API] promptData:', promptData);
+                            console.log('📥 [DeepSeek API] promptData 类型:', typeof promptData);
 
-                    const response = await fetch(DEEPSEEK_API_URL, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-                        },
-                        body: JSON.stringify({
-                            model: DEEPSEEK_MODEL,
-                            messages: (() => {
-                                const messages = [{
-                                    role: "system",
-                                    content: `你是一个专业的餐饮行业订单解析助手。请将用户输入的语音识别文本转换为标准化的订单 JSON 数据。
+                            if (promptData) {
+                                // 如果 promptData 是一个对象，尝试获取其内容字段
+                                if (typeof promptData === 'object') {
+                                    systemPrompt = promptData?.promptContent ||
+                                        promptData?.content ||
+                                        promptData?.prompt ||
+                                        promptData?.text ||
+                                        promptData?.value ||
+                                        JSON.stringify(promptData);
+                                } else if (typeof promptData === 'string') {
+                                    // 如果 promptData 本身就是字符串
+                                    systemPrompt = promptData;
+                                }
+                            }
+
+                            if (systemPrompt) {
+                                console.log('✅ [DeepSeek API] 成功从接口获取 prompt，长度:', systemPrompt.length);
+                                console.log('✅ [DeepSeek API] 从接口获取的 prompt（前500字符）:', systemPrompt.substring(0, 500));
+                            } else {
+                                console.warn('⚠️ [DeepSeek API] 接口返回数据中未找到 prompt 内容');
+                                console.warn('⚠️ [DeepSeek API] 完整响应数据:', JSON.stringify(promptRes.data, null, 2));
+                                throw new Error('未找到 prompt 内容');
+                            }
+                        } else {
+                            console.warn('⚠️ [optimizeTextWithDeepSeek] 接口返回格式不正确，使用默认 prompt');
+                            throw new Error('接口返回格式不正确');
+                        }
+                    } catch (promptError) {
+                        console.error('❌ [optimizeTextWithDeepSeek] 获取 prompt 失败，使用默认 prompt:', promptError);
+                        // 如果接口获取失败，使用默认的 prompt（作为后备方案）
+                        systemPrompt = `你是一个专业的餐饮行业订单解析助手。请将用户输入的语音识别文本转换为标准化的订单 JSON 数据。
 
 重要规则：
 1. **输入来源**：内容来自腾讯语音识别，可能存在大量同音词错误，需要智能纠正为正确的商品名称。
@@ -6917,7 +6260,32 @@
 - 如果数量后没有单位，默认使用 "斤"
 - 如果没有备注，使用空字符串 ""
 
-请严格按照上述格式输出，只输出 JSON 数组，不要添加任何其他内容。`
+请严格按照上述格式输出，只输出 JSON 数组，不要添加任何其他内容。`;
+                    }
+
+                    // 动态导入 config（Vue 项目中使用 import）
+                    const configModule = await import('@/config/index');
+                    const config = configModule.default;
+                    const DEEPSEEK_API_KEY = config.deepSeek?.apiKey || '';
+                    const DEEPSEEK_API_URL = config.deepSeek?.apiUrl || 'https://api.deepseek.com/v1/chat/completions';
+                    const DEEPSEEK_MODEL = config.deepSeek?.model || 'deepseek-chat';
+
+                    if (!DEEPSEEK_API_KEY) {
+                        throw new Error('DeepSeek API Key 未配置');
+                    }
+
+                    const response = await fetch(DEEPSEEK_API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+                        },
+                        body: JSON.stringify({
+                            model: DEEPSEEK_MODEL,
+                            messages: (() => {
+                                const messages = [{
+                                    role: "system",
+                                    content: systemPrompt
                                 }];
 
                                 // 如果有品牌列表，添加品牌识别提示
@@ -6974,6 +6342,466 @@
                 }
             },
 
+            // ========== Excel 粘贴表格 AI 识别 ==========
+
+            // DeepSeek API 优化文本（用于 Excel 表格数据）
+            async optimizeTextWithDeepSeekForTable(userMessage, temperature = 0.2) {
+                try {
+                    console.log('========== [DeepSeek API] Excel 表格模式开始调用 ==========');
+                    console.log('📤 [DeepSeek API] 用户消息长度:', userMessage.length);
+
+                    // 从接口获取 prompt
+                    let systemPrompt = '';
+                    try {
+                        const promptRes = await api.getPromptByKey('OCR_PASTE');
+                        console.log('📥 [DeepSeek API] 接口响应:', promptRes);
+                        console.log('📥 [DeepSeek API] promptRes.data:', promptRes?.data);
+
+                        if (promptRes && promptRes.data && promptRes.data.code === 0) {
+                            // 尝试多种可能的数据结构
+                            const promptData = promptRes.data.prompt || promptRes.data.data;
+
+                            console.log('📥 [DeepSeek API] promptData:', promptData);
+                            console.log('📥 [DeepSeek API] promptData 类型:', typeof promptData);
+
+                            if (promptData) {
+                                // 如果 promptData 是一个对象，尝试获取其内容字段
+                                if (typeof promptData === 'object') {
+                                    systemPrompt = promptData?.promptContent ||
+                                        promptData?.content ||
+                                        promptData?.prompt ||
+                                        promptData?.text ||
+                                        promptData?.value ||
+                                        JSON.stringify(promptData);
+                                } else if (typeof promptData === 'string') {
+                                    // 如果 promptData 本身就是字符串
+                                    systemPrompt = promptData;
+                                }
+                            }
+
+                            if (systemPrompt) {
+                                console.log('✅ [DeepSeek API] 成功从接口获取 prompt，长度:', systemPrompt.length);
+                                console.log('✅ [DeepSeek API] 从接口获取的 prompt（前500字符）:', systemPrompt.substring(0, 500));
+                            } else {
+                                console.warn('⚠️ [DeepSeek API] 接口返回数据中未找到 prompt 内容');
+                                console.warn('⚠️ [DeepSeek API] 完整响应数据:', JSON.stringify(promptRes.data, null, 2));
+                                throw new Error('未找到 prompt 内容');
+                            }
+                        } else {
+                            console.warn('⚠️ [DeepSeek API] 接口返回格式不正确，使用默认 prompt');
+                            console.warn('⚠️ [DeepSeek API] 响应数据:', promptRes?.data);
+                            throw new Error('接口返回格式不正确');
+                        }
+                    } catch (promptError) {
+                        console.error('❌ [DeepSeek API] 获取 prompt 失败，使用默认 prompt:', promptError);
+                        // 如果接口获取失败，使用默认的 prompt（作为后备方案）
+                        systemPrompt = `你是一个【生鲜订单 Excel（CSV）解析引擎】。
+输入为 CSV 格式的 Excel 表格文本（第一行通常是表头）。你的输出将直接用于真实下单，请严格遵守以下规则。
+
+==============================
+【P0 级｜绝对禁止规则（最高优先级）】
+==============================
+
+1) 你【绝对不允许】因为不确定、列名混乱、内容不规范等原因，丢弃任何可能的订单行。
+2) Excel 数据被视为"人工输入/导出的结构化数据"，你【不需要 OCR 纠错】，也【不需要 rawName】。
+3) 你必须只输出 JSON，不得输出任何解释、分析、注释文字。
+
+==============================
+【P1 级｜输入与识别任务】
+==============================
+
+- 输入是 CSV 文本：用逗号分隔列；第一行通常是表头。
+- 你要做两件事：
+  A) 识别列映射 columnMapping：哪一列是商品名称、订货数量、订货单位/规格、备注（可能不存在）。
+  B) 将每一行转换为结构化订单条目 data[]。
+
+==============================
+【P1.1 级｜列映射规则】
+==============================
+
+你需要尽量识别以下字段对应的列（列字母从左到右 A、B、C、D...）：
+
+- 商品名称列（必选）：可能的表头关键词：
+  "商品", "商品名称", "品名", "名称", "物料", "货品", "货名"
+
+- 订货数量列（尽量识别）：可能关键词：
+  "数量", "订货数量", "下单数量", "订购数量", "要货", "件数", "数"
+
+- 订货单位/规格列（尽量识别）：可能关键词：
+  "单位", "规格", "订货规格", "订货单位", "计量单位", "规格单位"
+
+- 备注列（可选）：可能关键词：
+  "备注", "说明", "要求", "备注信息"
+
+注意：
+- 有些表会把"数量+单位"合在一列，例如 "15斤"、"6箱"。你必须能识别这种情况，并拆分 quantity/spec。
+- 有些表会把包装结构写在"商品名称列"或"规格列"里（例如：伊利优酸乳250ml/盒*36/箱），你必须解析。
+
+==============================
+【P1.2 级｜行有效性规则（不丢行）】
+==============================
+
+- 如果某一行商品名称为空，但其他列有内容：仍输出该行，name 置为空字符串，note 写明"商品名缺失"。
+- 如果某一行明显是表头重复/小计/合计/空行：
+  - 允许跳过"完全空行"
+  - 但若含商品相关文本则不得跳过（宁可输出并在 note 标注"疑似非订单行"）
+
+==============================
+【P1.5 级｜包装规格与大包装结构解析（必须执行）】
+==============================
+
+当"商品名称"或"规格/单位"字段中包含包装结构时，你必须识别并拆解以下字段：
+
+- standardWeight：规格重量（如 250ml、1.9L、5L、500g、10kg）
+- itemUnit：最小包装单位（如 盒、瓶、袋、听、包、杯）
+- itemsPerCarton：每个大包装中包含的小包装数量（如 36、24、12）
+- cartonUnit：大包装单位（如 箱、件、提、包）
+
+【典型结构模式（只允许按字形与结构匹配，原样提取，禁止猜测）】
+
+A) 重量/容量 + /小单位 + *数量 + /大单位
+   示例：伊利优酸乳250ml/盒*36/箱
+   -> standardWeight="250ml"
+   -> itemUnit="盒"
+   -> itemsPerCarton="36"
+   -> cartonUnit="箱"
+
+B) 重量/容量 + 小单位 + *数量 + 大单位（斜杠可能缺失）
+   示例：250ml盒*36箱
+
+C) 乘号的多种 OCR/文本形式必须识别为包装结构：
+   "*", "x", "X", "×", "乘"
+
+【名称清洗规则（必须执行）】
+- 输出 name 时，必须尽量为"纯商品名"，将包装结构从名称中剥离：
+  原：伊利优酸乳250ml/盒*36/箱
+  name：伊利优酸乳
+【与下单数量的关系（重要）】
+- quantity/spec 表示"本行订货数量与订货单位"，不得被包装结构覆盖。
+- 包装结构 ≠ 下单数量。
+- 若本行没有明确的订货数量（只有商品名+包装结构），仍输出条目，quantity/spec 允许为空，但包装字段必须提取。
+
+【无法识别时】
+- 若不满足上述结构模式，standardWeight/itemUnit/itemsPerCarton/cartonUnit 全部输出空字符串。
+- 严禁根据常识推测"36/箱"之类的值。
+
+==============================
+【P1.6 级｜商品名称清洗规则（数据库搜索专用｜必须执行）】
+==============================
+
+【一】括号内容处理规则（强制）
+
+1. name 字段中【绝对不允许】出现任何括号及括号内内容。
+   包括但不限于：() （） [] 【】。
+
+2. 业务约束（不可忽略）：
+   - name 字段将用于数据库商品精确搜索；
+   - 括号内容会导致搜索失败，必须清洗。
+
+示例：
+- name = "香蕉(进口)"
+  -> name = "香蕉"
+
+- name = "柠檬(进口) Lemon"
+  -> note = "进口"
+
+【二】英文内容去留判定规则（必须判断）
+
+当商品名称中包含英文或英文字母时，你必须判断其业务含义，仅允许以下两种情况之一：
+
+A) 英文仅为中文翻译 / 说明（必须删除）
+
+满足以下任一条件时：
+- 英文与中文语义一致，仅为翻译；
+- 英文是类别或说明性词汇（如 Vegetable / Fruit / Fungus / Lettuce 等）；
+- 删除英文不会影响商品在数据库中的唯一性。
+
+处理规则：
+- 英文必须从 name 中删除；
+- 不要求写入 note（除非英文本身有额外业务含义）。
+
+示例：
+- "黄瓜 Cucumber" -> name = "黄瓜"
+- "彩椒 Vegetable" -> name = "彩椒"
+- "杏鲍菇 Fungus" -> name = "杏鲍菇"
+- "罗马生菜 Lettuce" -> name = "罗马生菜"
+
+B) 英文 / 字母代表型号 / 等级 / 系列 / 业务区分（必须保留）
+
+满足以下任一条件时：
+- 英文用于区分型号、等级、系列、版本；
+- 删除英文会导致商品无法唯一识别；
+- 英文不是翻译，而是商品业务属性的一部分。
+
+处理规则：
+- 英文必须保留在 name 中。
+
+示例：
+- "V9酸奶" -> name = "V9酸奶"
+- "牛奶 UHT" -> name = "牛奶UHT"
+- "A果苹果" -> name = "A果苹果"
+- "AB级牛肉" -> name = "AB级牛肉"
+
+==============================
+【P2 级｜字段输出规范（与 OCR 输出对齐）】
+==============================
+
+data[] 中每条订单对象必须包含字段：
+
+- name：最终下单商品名（尽量为纯商品名）
+- quantity：订货数量（字符串）
+- spec：订货单位（斤/把/箱/件/袋/瓶...）
+- standardWeight：规格重量（字符串）
+- itemUnit：最小包装单位（字符串）
+- itemsPerCarton：每箱小包装数量（字符串）
+- cartonUnit：大包装单位（字符串）
+- note：备注（只放 Excel 原始备注或额外说明；不输出系统推理）
+
+补充规则：
+- 如果"数量列"里是 15斤 / 6箱 这种：拆分 quantity="15" spec="斤"
+- 如果 spec 列里出现 "桶(1.9L)" 这种：spec="桶"，standardWeight="1.9L"
+- 如果备注列不存在：note 输出空字符串
+
+==============================
+【P0 级｜JSON 返回格式要求（必须严格遵守）】
+==============================
+
+你必须返回标准 JSON 对象，格式如下（字段名必须一致）：
+
+{
+  "columnMapping": {
+    "商品名称": "A",
+    "订货数量": "B",
+    "订货规格": "C",
+    "备注": "D"
+  },
+  "data": [
+    {
+      "name": "",
+      "quantity": "",
+      "spec": "",
+      "standardWeight": "",
+      "itemUnit": "",
+      "itemsPerCarton": "",
+      "cartonUnit": "",
+      "note": ""
+    }
+  ]
+}
+
+要求：
+- columnMapping 必须给出列字母（A/B/C...），如果某字段找不到，对应值输出空字符串 ""。
+- data 数组必须包含所有有效订单行。
+- 只输出 JSON，不要输出任何其他文字。`;
+                    }
+
+                    // 动态导入 config
+                    const configModule = await import('@/config/index');
+                    const config = configModule.default;
+                    const DEEPSEEK_API_KEY = config.deepSeek?.apiKey || '';
+                    const DEEPSEEK_API_URL = config.deepSeek?.apiUrl || 'https://api.deepseek.com/v1/chat/completions';
+                    const DEEPSEEK_MODEL = config.deepSeek?.model || 'deepseek-chat';
+
+                    if (!DEEPSEEK_API_KEY) {
+                        throw new Error('DeepSeek API Key 未配置');
+                    }
+
+                    console.log('📋 [DeepSeek API] 系统 Prompt 长度:', systemPrompt.length);
+                    console.log('📋 [DeepSeek API] 系统 Prompt（完整内容）:', systemPrompt);
+                    console.log('📋 [DeepSeek API] 用户消息长度:', userMessage.length);
+                    console.log('📋 [DeepSeek API] 用户消息（完整内容）:', userMessage);
+                    console.log('📋 [DeepSeek API] Temperature:', temperature);
+                    console.log('📋 [DeepSeek API] 模型:', DEEPSEEK_MODEL);
+                    console.log('📋 [DeepSeek API] API URL:', DEEPSEEK_API_URL);
+
+                    const requestBody = {
+                        model: DEEPSEEK_MODEL,
+                        messages: [
+                            {
+                                role: "system",
+                                content: systemPrompt
+                            },
+                            {
+                                role: "user",
+                                content: userMessage
+                            }
+                        ],
+                        temperature: temperature
+                    };
+
+                    console.log('📤 [DeepSeek API] 完整请求体:', JSON.stringify(requestBody, null, 2));
+
+                    const response = await fetch(DEEPSEEK_API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`API 请求失败，状态码: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+
+                    // 检查 API 是否返回错误信息
+                    if (data.error) {
+                        throw new Error(data.error.message || 'API 返回错误');
+                    }
+
+                    if (!data.choices || !data.choices[0]) {
+                        throw new Error('API 响应格式不正确');
+                    }
+
+                    const optimizedText = data.choices[0].message.content;
+                    console.log('✅ [DeepSeek API] 返回内容长度:', optimizedText.length);
+                    console.log('✅ [DeepSeek API] 返回内容（前500字符）:', optimizedText.substring(0, 500));
+                    return optimizedText;
+                } catch (error) {
+                    throw error;
+                }
+            },
+
+            // 解析 Excel 粘贴表格的 AI 识别结果为订单
+            parseExcelPasteOrders(optimizedText) {
+                if (!optimizedText || !optimizedText.trim()) {
+                    return [];
+                }
+
+                // 确定要使用的部门ID
+                const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
+
+                // 解析 JSON 结果
+                let resultJson = null;
+                let ordersData = [];
+                try {
+                    let jsonStr = optimizedText.trim();
+                    // 移除可能的 markdown 代码块标记
+                    jsonStr = jsonStr.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+                    jsonStr = jsonStr.trim();
+
+                    // 尝试解析 JSON
+                    resultJson = JSON.parse(jsonStr);
+
+                    // 检查返回格式：可能是 {columnMapping, data} 或直接是数组
+                    if (resultJson && typeof resultJson === 'object') {
+                        if (resultJson.data && Array.isArray(resultJson.data)) {
+                            // 新格式：包含 columnMapping 和 data
+                            ordersData = resultJson.data;
+                            console.log('✅ [parseExcelPasteOrders] 解析到列映射:', resultJson.columnMapping);
+                        } else if (Array.isArray(resultJson)) {
+                            // 旧格式：直接是数组
+                            ordersData = resultJson;
+                        } else {
+                            throw new Error('返回的 JSON 格式不正确');
+                        }
+                    } else {
+                        throw new Error('返回的不是有效的 JSON 对象');
+                    }
+
+                    if (!ordersData || ordersData.length === 0) {
+                        throw new Error('返回的数据数组为空');
+                    }
+                } catch (jsonError) {
+                    console.error('❌ [parseExcelPasteOrders] JSON 解析失败:', jsonError);
+                    console.error('❌ [parseExcelPasteOrders] 返回的原始内容:', optimizedText);
+                    throw new Error('AI 返回的数据格式不正确：' + jsonError.message);
+                }
+
+                // 转换为系统需要的完整订单项格式
+                // 注意：兼容两种字段格式
+                // 1. Excel 格式：name, quantity, spec, standardWeight, itemUnit, itemsPerCarton, cartonUnit, note
+                // 2. OCR 粘贴格式：name, qty, unit, standardWeight, itemUnit, itemsPerCarton, cartonUnit, remark
+                const formattedOrders = ordersData.map(item => {
+                    // 兼容数量字段：quantity 或 qty
+                    const quantity = item.quantity || item.qty || '';
+                    // 兼容规格/单位字段：spec 或 unit
+                    const spec = item.spec || item.unit || '';
+                    // 兼容备注字段：note 或 remark
+                    const note = item.note || item.remark || '';
+
+                    return {
+                        nxDoGoodsName: item.name || '',
+                        nxDoGoodsNameOriginal: item.name || '',
+                        nxDoQuantity: quantity,
+                        nxDoStandard: spec,
+                        nxDoRemark: note,
+                        nxDoAddRemark: !!(note && note.trim()),
+                        // Excel 特有字段
+                        standardWeight: item.standardWeight || '',
+                        itemUnit: item.itemUnit || '',
+                        itemsPerCarton: item.itemsPerCarton || '',
+                        cartonUnit: item.cartonUnit || '',
+                        // 完整字段（参考 parseTextToOrders）
+                        nxDoStatus: -2, // 草稿状态（注意：这里是 -2，不是 -1）
+                        nxDoDepartmentId: targetDepId,
+                        nxDoDepartmentFatherId: this.selectedAllCustomer,
+                        nxDoDisGoodsId: null,
+                        nxDoStandardWarn: 0,
+                        goodsNameWarn: 0,
+                        nxDoDistributerId: this.disUser?.nxDiuDistributerId,
+                        nxDoPurchaseUserId: -1,
+                        nxDoOrderUserId: this.disUser?.nxDistributerUserId || this.disUser?.nxDiuDistributerId,
+                        nxDoIsAgent: -1,
+                    };
+                });
+
+                // 过滤掉无效订单
+                const validOrders = formattedOrders.filter(order =>
+                    order.nxDoGoodsName && order.nxDoGoodsName.trim()
+                );
+
+                console.log('✅ [parseExcelPasteOrders] 有效订单数量:', validOrders.length);
+                console.log('✅ [parseExcelPasteOrders] 转换后的订单项:', validOrders);
+
+                return validOrders;
+            },
+
+            // AI 识别 Excel 粘贴表格数据（统一处理方法）
+            async aiRecogniseExcelPasteTable(csvData, userPrompt = '') {
+                try {
+                    console.log('========== [AI识别 Excel粘贴] 开始执行 ==========');
+                    console.log('📋 [AI识别] CSV 数据长度:', csvData?.length);
+                    console.log('📋 [AI识别] CSV 数据（前500字符）:', csvData?.substring(0, 500));
+                    console.log('📝 [AI识别] 用户附加 Prompt:', userPrompt || '(无)');
+
+                    if (!csvData || !csvData.trim()) {
+                        throw new Error('CSV 数据为空');
+                    }
+
+                    // 构建用户消息：附加 prompt（如果有）+ CSV 数据
+                    let userMessage = '';
+                    if (userPrompt && userPrompt.trim()) {
+                        userMessage = userPrompt.trim() + '\n\n';
+                    }
+                    userMessage += '表格数据：\n' + csvData;
+
+                    console.log('📤 [AI识别] 构建的完整用户消息长度:', userMessage.length);
+                    console.log('📤 [AI识别] 构建的完整用户消息（前1000字符）:', userMessage.substring(0, 1000));
+                    if (userMessage.length > 1000) {
+                        console.log('📤 [AI识别] 构建的完整用户消息（后500字符）:', userMessage.substring(userMessage.length - 500));
+                    }
+
+                    // 调用 DeepSeek API
+                    const optimizedText = await this.optimizeTextWithDeepSeekForTable(userMessage);
+
+                    console.log('✅ [AI识别] AI 识别完成，返回内容长度:', optimizedText.length);
+                    console.log('✅ [AI识别] 返回内容（前500字符）:', optimizedText.substring(0, 500));
+
+                    // 解析结果为订单
+                    const orderItems = this.parseExcelPasteOrders(optimizedText);
+
+                    console.log('✅ [AI识别] 成功解析订单数量:', orderItems.length);
+
+                    return orderItems;
+                } catch (error) {
+                    console.error('❌ [AI识别 Excel粘贴] 识别失败:', error);
+                    throw error;
+                }
+            },
+
             // 从剪贴板粘贴
             async pasteFromClipboard() {
                 // 重置搜索和匹配商品列表状态
@@ -7025,44 +6853,11 @@
             // 重新粘贴（清空草稿订单和文本内容）
             againPaste() {
 
-                // 删除当前部门的缓存
-                const storageKey = `ocrOrderDepList_paste`;
-                try {
-                    let ocrOrderDepList = [];
-                    const ocrOrderDepListStr = localStorage.getItem(storageKey);
-                    if (ocrOrderDepListStr) {
-                        ocrOrderDepList = JSON.parse(ocrOrderDepListStr);
-                        if (Array.isArray(ocrOrderDepList)) {
-                            // 过滤掉当前部门的缓存
-                            const filteredList = ocrOrderDepList.filter(item => {
-                                const itemDepIdStr = String(item.depId);
-                                const selectedDepIdStr = String(this.selectedAllCustomer);
-                                return itemDepIdStr !== selectedDepIdStr;
-                            });
-
-                            // 如果过滤后没有数据了，删除整个缓存
-                            if (filteredList.length === 0) {
-                                localStorage.removeItem(storageKey);
-                            } else {
-                                // 保存更新后的缓存
-                                localStorage.setItem(storageKey, JSON.stringify(filteredList));
-                            }
-                        }
-                    }
-                } catch (error) {
-                }
 
                 // 重置相关状态（清空文本内容和订单）
-                this.pasteOrderItems = [];
-                this.pasteInputText = '';
-                this.pasteInputContent = '';
-                this.pasteOriginText = ''; // 也清空原始文本
-                this.pasteSaveCount = null;
-                this.pasteHasCache = false;
-                this.ocrOrderDepIndex = -1;
-
-                // 重置搜索和匹配商品列表状态
-                this.resetSearchAndMatchedGoodsState();
+                this.orderItems = [];
+                this.pasteInvalidLineIndices = [];
+                this.pasteInvalidSegments = [];
 
             },
 
@@ -7090,14 +6885,18 @@
 
                     if (Array.isArray(ordersJson) && ordersJson.length > 0) {
 
-                        // 转换为系统需要的格式
-                        const formattedOrders = ordersJson.map(item => ({
+                        // 转换为系统需要的格式（含 AI 返回的 standardWeight、itemUnit、itemsPerCarton、cartonUnit）
+                        this.orderItems = ordersJson.map(item => ({
                             nxDoGoodsName: item.name || '',
                             nxDoGoodsNameOriginal: item.name || '',
                             nxDoQuantity: item.qty || '',
                             nxDoStandard: item.unit || '斤',
                             nxDoRemark: item.remark || '',
                             nxDoAddRemark: !!(item.remark && item.remark.trim()),
+                            standardWeight: item.standardWeight ?? '',
+                            itemUnit: item.itemUnit ?? '',
+                            itemsPerCarton: item.itemsPerCarton ?? '',
+                            cartonUnit: item.cartonUnit ?? '',
                             nxDoStatus: -2,
                             nxDoDepartmentId: targetDepId, // 使用确定的部门ID
                             nxDoDepartmentFatherId: this.selectedAllCustomer,
@@ -7110,17 +6909,8 @@
                             nxDoIsAgent: -1,
                         }));
 
-                        // 过滤掉无效订单
-                        const validOrders = formattedOrders.filter(order =>
-                            order.nxDoGoodsName && order.nxDoGoodsName.trim()
-                        );
-
-                        console.log('[parseTextToOrders] 有效订单数量:', validOrders.length);
-
                         // 设置复制粘贴模式的订单列表
-                        this.pasteOrderItems = validOrders;
-                        // 注意：不设置 pasteHasCache，因为此时还没有保存缓存
-                        // pasteHasCache 只在从缓存加载或保存缓存后设置为 true
+                        // this.orderItems = formattedOrders;
                         this.pasteSaveCount = null; // 新解析的订单都是未保存的草稿，所以 saveCount 为 null
 
                         // 重置搜索和匹配商品列表状态
@@ -7141,7 +6931,7 @@
                 const orders = this._formatOrderContent(content, targetDepId);
 
                 // 设置复制粘贴模式的订单列表
-                this.pasteOrderItems = orders;
+                this.orderItems = orders;
                 // 注意：不设置 pasteHasCache，因为此时还没有保存缓存
                 // pasteHasCache 只在从缓存加载或保存缓存后设置为 true
                 this.pasteSaveCount = null; // 新解析的订单都是未保存的草稿，所以 saveCount 为 null
@@ -7329,7 +7119,6 @@
                     );
 
 
-
                     if (result.success) {
                         this.customerFolderPath = result.path;
                         // 如果有路径，自动扫描文件
@@ -7358,6 +7147,69 @@
                     }
                 } catch (error) {
                     console.error('加载文件夹路径失败:', error);
+                }
+            },
+
+            // 选择客户文件夹（自动上传订单保存路径）
+            async selectCustomerFolder() {
+                if (!window.electronAPI) {
+                    alert('Electron API 不可用，请确保在 Electron 环境中运行');
+                    return;
+                }
+                if (typeof window.electronAPI.selectFolder !== 'function') {
+                    alert('selectFolder API 不可用，请重启应用');
+                    return;
+                }
+                try {
+                    this.selectingFolder = true;
+                    const result = await window.electronAPI.selectFolder();
+                    if (result.success && result.path) {
+                        const hasSubDepartments = this.selectedCustomerEntity &&
+                            this.selectedCustomerEntity.nxDepartmentEntities &&
+                            Array.isArray(this.selectedCustomerEntity.nxDepartmentEntities) &&
+                            this.selectedCustomerEntity.nxDepartmentEntities.length > 0;
+                        const targetCustomerId = hasSubDepartments && this.selectedSubDepartment
+                            ? this.selectedSubDepartment
+                            : this.selectedAllCustomer;
+                        const saveResult = await window.electronAPI.saveCustomerFolderPath(targetCustomerId, result.path);
+                        if (saveResult.success) {
+                            this.customerFolderPath = result.path;
+                            alert('文件夹路径设置成功！');
+                            await this.loadCustomerFolderPath();
+                        } else {
+                            alert('保存文件夹路径失败：' + (saveResult.error || '未知错误'));
+                        }
+                    }
+                } catch (error) {
+                    console.error('选择文件夹失败:', error);
+                    alert('选择文件夹失败：' + (error && error.message ? error.message : '未知错误'));
+                } finally {
+                    this.selectingFolder = false;
+                }
+            },
+
+            // 清除客户文件夹路径
+            async clearCustomerFolder() {
+                if (!window.electronAPI || typeof window.electronAPI.saveCustomerFolderPath !== 'function') {
+                    return;
+                }
+                if (!confirm('确定要清除文件夹路径设置吗？')) return;
+                try {
+                    const hasSubDepartments = this.selectedCustomerEntity &&
+                        this.selectedCustomerEntity.nxDepartmentEntities &&
+                        Array.isArray(this.selectedCustomerEntity.nxDepartmentEntities) &&
+                        this.selectedCustomerEntity.nxDepartmentEntities.length > 0;
+                    const targetCustomerId = hasSubDepartments && this.selectedSubDepartment
+                        ? this.selectedSubDepartment
+                        : this.selectedAllCustomer;
+                    const result = await window.electronAPI.saveCustomerFolderPath(targetCustomerId, '');
+                    if (result.success) {
+                        this.customerFolderPath = null;
+                        alert('已清除文件夹路径');
+                        await this.loadCustomerFolderPath();
+                    }
+                } catch (error) {
+                    console.error('清除文件夹路径失败:', error);
                 }
             },
 
@@ -7529,9 +7381,6 @@
                         this.orderItems = allProcessedOrders;
                     }
 
-                    // 保存到缓存（转订单类型）
-                    this._saveToStorage(this.orderItems, 'auto');
-
                     // 重置搜索和匹配商品列表状态
                     this.resetSearchAndMatchedGoodsState();
 
@@ -7550,56 +7399,9 @@
                     // 延迟一下，确保文件移动操作已完成
                     setTimeout(async () => {
                         try {
-                            // 重新扫描文件夹（包括已处理文件夹）
-                            const includeProcessed = true; // 强制包含已处理文件夹
-                            const result = await window.electronAPI.scanFolderFiles(this.customerFolderPath, includeProcessed);
-
-                            if (result.success) {
-                                // 更新文件列表，标记已处理的文件
-                                this.autoProcessFiles = result.files.map(file => {
-                                    // 查找原文件列表中对应的文件，保留处理状态
-                                    const existingFile = this.autoProcessFiles.find(f => f.filePath === file.filePath || f.fileName === file.fileName);
-                                    if (existingFile && existingFile.status === 'success') {
-                                        return {
-                                            ...file,
-                                            status: 'processed', // 标记为已处理
-                                            progress: 100,
-                                            orderCount: existingFile.orderCount || 0,
-                                            error: null
-                                        };
-                                    }
-                                    // 如果是新扫描到的已处理文件
-                                    if (file.isProcessed) {
-                                        return {
-                                            ...file,
-                                            status: 'processed',
-                                            progress: 100,
-                                            orderCount: 0,
-                                            error: null
-                                        };
-                                    }
-                                    // 其他文件保持待处理状态
-                                    return {
-                                        ...file,
-                                        status: 'pending',
-                                        progress: 0,
-                                        orderCount: 0,
-                                        error: null
-                                    };
-                                });
-
-                                // 为已处理的图片文件加载完整图片预览
-                                this.loadProcessedImagePreviews();
-
-                                // 为已处理的Excel文件加载预览
-                                this.loadProcessedExcelPreviews();
-
-                                // 设置默认激活的标签（第一个已处理的文件）
-                                const processedFiles = this.autoProcessFiles.filter(f => f.status === 'processed');
-                                if (processedFiles.length > 0) {
-                                    this.activeProcessedFileTab = processedFiles[0].filePath;
-                                }
-                            }
+                            // 使用 scanFolderFiles 方法，确保状态正确更新
+                            await this.scanFolderFiles();
+                            // scanFolderFiles 方法已经更新了文件列表、预览和激活标签，无需额外处理
                         } catch (error) {
                             console.error('重新扫描已处理文件夹失败:', error);
                         }
@@ -7651,63 +7453,9 @@
 
                 if (res && res.data) {
                     if (res.data.code === 200 || res.data.code === 0) {
-                        // 检查是否返回了已保存的订单
-                        if (Array.isArray(res.data.data) && res.data.data.length > 0) {
-                            // 转换为订单格式（参考 handleExcelUpload）
-                            const orders = res.data.data.map(item => ({
-                                nxDoGoodsName: item.goodsName || item.nxDoGoodsName || '',
-                                nxDoGoodsNameOriginal: item.goodsName || item.nxDoGoodsName || '',
-                                nxDoQuantity: item.quantity || item.nxDoQuantity || '',
-                                nxDoStandard: item.standard || item.nxDoStandard || '斤',
-                                nxDoRemark: item.remark || item.nxDoRemark || '',
-                                nxDoAddRemark: !!(item.remark || item.nxDoRemark),
-                                nxDoStatus: item.status !== undefined ? item.status : (item.nxDoStatus !== undefined ? item.nxDoStatus : -2),
-                                nxDoDepartmentId: targetDepId,
-                                nxDoDepartmentFatherId: this.selectedAllCustomer,
-                                nxDoDisGoodsId: item.disGoodsId || item.nxDoDisGoodsId || null,
-                                nxDoStandardWarn: 0,
-                                goodsNameWarn: 0,
-                                nxDoDistributerId: this.disUser.nxDiuDistributerId,
-                                nxDoPurchaseUserId: -1,
-                                nxDoOrderUserId: this.disUser.nxDepartmentUserId || this.disUser.nxDistributerUserId || -1,
-                                nxDoIsAgent: -1,
-                                nxDepartmentOrdersId: item.orderId || item.nxDepartmentOrdersId || null,
-                                nxDistributerGoodsEntityList: item.matchedGoods || item.nxDistributerGoodsEntityList || [],
-                                nxGoodsEntities: item.matchedGoods || item.nxGoodsEntities || []
-                            }));
-
-                            return {
-                                orderCount: orders.length,
-                                orders: orders
-                            };
-                        } else if (Array.isArray(res.data.items) && res.data.items.length > 0) {
-                            // 转换为订单格式（仅解析，未保存）
-                            const orders = res.data.items.map(item => ({
-                                nxDoGoodsName: item.name || '',
-                                nxDoGoodsNameOriginal: item.name || '',
-                                nxDoQuantity: item.qty || '',
-                                nxDoStandard: item.unit || '斤',
-                                nxDoRemark: item.remark || '',
-                                nxDoAddRemark: !!(item.remark && item.remark.trim()),
-                                nxDoStatus: -2, // 未保存的草稿
-                                nxDoDepartmentId: targetDepId,
-                                nxDoDepartmentFatherId: this.selectedAllCustomer,
-                                nxDoDisGoodsId: null,
-                                nxDoStandardWarn: 0,
-                                goodsNameWarn: 0,
-                                nxDoDistributerId: this.disUser.nxDiuDistributerId,
-                                nxDoPurchaseUserId: -1,
-                                nxDoOrderUserId: this.disUser.nxDepartmentUserId || this.disUser.nxDistributerUserId || -1,
-                                nxDoIsAgent: -1
-                            }));
-
-                            return {
-                                orderCount: orders.length,
-                                orders: orders
-                            };
-                        } else {
-                            throw new Error('Excel文件中没有可读取的数据');
-                        }
+                        this.currentTaskId = res.data.taskId;
+                        this.currentTask = res.data.task;
+                        this.orderItems = res.data.items;
                     } else {
                         throw new Error(res.data.msg || 'Excel解析失败');
                     }
@@ -7744,47 +7492,12 @@
 
                 if (res && res.data && res.data.code === 0) {
                     // 检查是否返回了已保存的订单
-                    if (Array.isArray(res.data.data) && res.data.data.length > 0) {
-                        // 已保存的订单，直接返回
-                        return {
-                            orderCount: res.data.data.length,
-                            orders: res.data.data
-                        };
-                    } else {
-                        // 检查是否有解析的商品列表
-                        const items = res.data.items || (res.data.data && res.data.data.items);
-                        if (items && items.length > 0) {
-                            // 转换为订单格式（参考 handleImageUpload）
-                            const orders = items.map(item => ({
-                                nxDoGoodsName: item.name || '',
-                                nxDoGoodsNameOriginal: item.name || '',
-                                nxDoQuantity: item.qty || '',
-                                nxDoStandard: item.unit || '斤',
-                                nxDoRemark: item.remark || '',
-                                nxDoAddRemark: !!(item.remark && item.remark.trim()),
-                                nxDoStatus: -2, // 未匹配状态
-                                nxDoDepartmentId: targetDepId,
-                                nxDoDepartmentFatherId: this.selectedAllCustomer,
-                                nxDoDisGoodsId: null,
-                                nxDoStandardWarn: 0,
-                                goodsNameWarn: 0,
-                                nxDoDistributerId: this.disUser.nxDiuDistributerId,
-                                nxDoPurchaseUserId: -1,
-                                nxDoOrderUserId: this.disUser.nxDistributerUserId || this.disUser.nxDiuDistributerId,
-                                nxDoIsAgent: -1,
-                            })).filter(order => order.nxDoGoodsName && order.nxDoGoodsName.trim());
-
-                            return {
-                                orderCount: orders.length,
-                                orders: orders
-                            };
-                        } else {
-                            throw new Error('图片中未识别到订单信息');
-                        }
-                    }
-                } else {
-                    const errorMsg = res?.data?.msg || res?.data?.message || '识别失败';
-                    throw new Error(errorMsg);
+                    this.orderCount = res.data.data.length;
+                    console.log("Rrrrrrrccccc", res);
+                    this.currentTaskId = res.data.taskId;
+                    this.currentTask = res.data.task;
+                    this.orderItems = res.data.items;
+                    if (res.data.taskId != null) this.$emit('task-added');
                 }
             },
 
@@ -8093,7 +7806,6 @@
                     }
 
 
-
                     this.autoProcessImagePreview = imageBase64;
                     this.autoProcessImagePreviewFileName = file.fileName;
 
@@ -8103,50 +7815,193 @@
                     this.imageTranslateY = 0;
                     this.isDragging = false;
 
-
-
-                    // 等待下一帧，确保DOM更新
-                    // this.$nextTick(() => {
-                    //     console.log('🖼️ [previewAutoProcessImage] DOM更新后检查:', {
-                    //         previewElement: document.querySelector('.card-body[style*="min-height: 400px"]'),
-                    //         imageElement: document.querySelector('img[src*="' + imageBase64.substring(0, 30) + '"]')
-                    //     });
-                    // });
-                    //
-                    // // 图片加载完成后，记录图片尺寸信息
-                    // this.$nextTick(() => {
-                    //     const img = new Image();
-                    //     img.onload = () => {
-                    //         console.log('🖼️ [previewAutoProcessImage] 图片加载完成，尺寸信息:', {
-                    //             fileName: file.fileName,
-                    //             filePath: file.filePath,
-                    //             naturalWidth: img.naturalWidth,
-                    //             naturalHeight: img.naturalHeight,
-                    //             imageScale: this.imageScale,
-                    //             imageTranslateX: this.imageTranslateX,
-                    //             imageTranslateY: this.imageTranslateY,
-                    //             computedWidth: img.naturalWidth * this.imageScale,
-                    //             computedHeight: img.naturalHeight * this.imageScale
-                    //         });
-                    //
-                    //         // 检查容器尺寸
-                    //         this.$nextTick(() => {
-                    //             const imgElement = document.querySelector('img[src="' + imageBase64 + '"]');
-                    //             if (imgElement) {
-                    //                 const container = imgElement.closest('.card-body');
-                    //                 if (container) {
-                    //                     const containerRect = container.getBoundingClientRect();
-                    //                     const imgRect = imgElement.getBoundingClientRect();
-                    //                 }
-                    //             }
-                    //         });
-                    //     };
-                    //     img.src = imageBase64;
-                    // });
-
                 } catch (error) {
                     alert('预览图片失败：' + error.message);
                 }
+            },
+
+            // ========== OrderList 组件事件适配器方法（Excel模式） ==========
+            // 处理商品名称输入
+            handleOrderListGoodsNameInput({item, orderIndex, value}) {
+                // 更新 item.nxDoGoodsName
+                item.nxDoGoodsName = value;
+                // 使用辅助方法确定 sourceType
+                const sourceType = this.determineSourceTypeForOrderList(orderIndex, item);
+                this.handleGoodsNameInput(item, orderIndex, sourceType);
+            },
+
+            // 处理商品名称获得焦点
+            handleOrderListGoodsNameFocus({item, orderIndex}) {
+                const sourceType = this.determineSourceTypeForOrderList(orderIndex, item);
+                this.handleGoodsNameFocus(item, orderIndex, sourceType);
+            },
+
+            // 处理商品名称失去焦点
+            handleOrderListGoodsNameBlur({item, orderIndex}) {
+                const sourceType = this.determineSourceTypeForOrderList(orderIndex, item);
+                this.handleGoodsNameBlur(item, orderIndex, sourceType);
+            },
+
+            // 处理数量输入
+            handleOrderListQuantityInput({item, orderIndex, value}) {
+                item.nxDoQuantity = value;
+                const sourceType = this.determineSourceTypeForOrderList(orderIndex, item);
+            },
+
+            // 处理规格变更
+            handleOrderListStandardChange({item, orderIndex, value}) {
+                item.nxDoStandard = value;
+                const sourceType = this.determineSourceTypeForOrderList(orderIndex, item);
+            },
+
+            // 处理更新订单
+            handleOrderListUpdateOrder({item, orderIndex}) {
+                const sourceType = this.determineSourceTypeForOrderList(orderIndex, item);
+                this.handleUpdateOrder(item, orderIndex, sourceType);
+            },
+
+            // 处理保存新商品
+            handleOrderListSaveNewGoods({item, orderIndex, goodsName}) {
+                const sourceType = this.determineSourceTypeForOrderList(orderIndex, item);
+                this.handleSaveNewGoods(item, orderIndex, sourceType, goodsName);
+            },
+
+            // 处理之前添加订单
+            handleOrderListAddNewOrderBefore({item, orderIndex}) {
+                const sourceType = this.determineSourceTypeForOrderList(orderIndex, item);
+                this.handleAddNewOrderBefore(item, orderIndex, sourceType);
+            },
+
+            // 处理删除订单
+            handleOrderListDeleteOrder({item, orderIndex}) {
+                const sourceType = this.determineSourceTypeForOrderList(orderIndex, item);
+                this.handleDeleteOrderFromExcel(item, orderIndex, sourceType);
+            },
+
+            // 处理备注输入（包括规格单位、规格重量、大包装、备注等所有字段）
+            handleOrderListRemarkInput({item, orderIndex, value, field}) {
+                // 根据字段名更新对应的字段
+                if (field) {
+                    if (field === 'itemsPerCarton') {
+                        item[field] = value ? parseFloat(value) : null;
+                    } else {
+                        item[field] = value;
+                    }
+                }
+                // 调用 handleRemarkInput 更新缓存等
+                const sourceType = this.determineSourceTypeForOrderList(orderIndex, item);
+                this.handleRemarkInput(item, orderIndex, sourceType);
+            },
+
+            // 处理选择匹配商品
+            handleOrderListSelectMatchedGoods({item, orderIndex, goodsIndex}) {
+                // 使用辅助方法确定 sourceType
+                const sourceType = this.determineSourceTypeForOrderList(orderIndex, item);
+                this.selectMatchedGoods(item, orderIndex, goodsIndex, sourceType);
+            },
+
+            // 处理选择搜索结果
+            handleOrderListSelectSearchResult({goods, orderIndex}) {
+                // 使用辅助方法确定 sourceType（需要先获取对应的 item）
+                const item = this.orderItems?.[orderIndex] ||
+                    this.orderItems?.[orderIndex] ||
+                    this.orderItems?.[orderIndex];
+                const sourceType = this.determineSourceTypeForOrderList(orderIndex, item);
+                this.selectSearchResult(goods, orderIndex, sourceType);
+            },
+
+            // 处理之前添加订单的商品名称输入
+            handleBeforeOrderQuantityInput(value) {
+                this.beforeOrderForm.quantity = value;
+            },
+
+            // 处理之前添加订单的规格输入
+            handleBeforeOrderStandardInput(value) {
+                this.beforeOrderForm.standard = value;
+            },
+
+            // 处理之前添加订单的备注输入
+            handleBeforeOrderRemarkInput(value) {
+                this.beforeOrderForm.remark = value;
+            },
+
+            // 处理保存之前添加的订单
+            handleSaveBeforeOrder({item, orderIndex}) {
+                this.saveBeforeOrder(item, orderIndex, 'excel');
+            },
+
+            // ========== OrderList 组件事件适配器方法（Image模式） ==========
+            // 处理商品名称输入
+            handleOrderListGoodsNameInputImage({item, orderIndex, value}) {
+                item.nxDoGoodsName = value;
+                this.handleGoodsNameInput(item, orderIndex, 'image');
+            },
+
+            // 处理商品名称获得焦点
+            handleOrderListGoodsNameFocusImage({item, orderIndex}) {
+                this.handleGoodsNameFocus(item, orderIndex, 'image');
+            },
+
+            // 处理商品名称失去焦点
+            handleOrderListGoodsNameBlurImage({item, orderIndex}) {
+                this.handleGoodsNameBlur(item, orderIndex, 'image');
+            },
+
+            // 处理数量输入
+            handleOrderListQuantityInputImage({item, orderIndex, value}) {
+                item.nxDoQuantity = value;
+            },
+
+            // 处理规格变更
+            handleOrderListStandardChangeImage({item, orderIndex, value}) {
+                item.nxDoStandard = value;
+            },
+
+            // 处理更新订单
+            handleOrderListUpdateOrderImage({item, orderIndex}) {
+                this.handleUpdateOrder(item, orderIndex, 'image');
+            },
+
+            // 处理保存新商品
+            handleOrderListSaveNewGoodsImage({item, orderIndex, goodsName}) {
+                this.handleSaveNewGoods(item, orderIndex, 'image', goodsName);
+            },
+
+            // 处理之前添加订单
+            handleOrderListAddNewOrderBeforeImage({item, orderIndex}) {
+                this.handleAddNewOrderBefore(item, orderIndex, 'image');
+            },
+
+            // 处理删除订单
+            handleOrderListDeleteOrderImage({item, orderIndex}) {
+                this.handleDeleteOrderFromExcel(item, orderIndex, 'image');
+            },
+
+            // 处理备注输入
+            handleOrderListRemarkInputImage({item, orderIndex, value, field}) {
+                if (field) {
+                    if (field === 'itemsPerCarton') {
+                        item[field] = value ? parseFloat(value) : null;
+                    } else {
+                        item[field] = value;
+                    }
+                }
+                this.handleRemarkInput(item, orderIndex, 'image');
+            },
+
+            // 处理选择匹配商品
+            handleOrderListSelectMatchedGoodsImage({item, orderIndex, goodsIndex}) {
+                this.selectMatchedGoods(item, orderIndex, goodsIndex, 'image');
+            },
+
+            // 处理选择搜索结果
+            handleOrderListSelectSearchResultImage({goods, orderIndex}) {
+                this.selectSearchResult(goods, orderIndex, 'image');
+            },
+
+            // 处理保存之前添加的订单（Image模式）
+            handleSaveBeforeOrderImage({item, orderIndex}) {
+                this.saveBeforeOrder(item, orderIndex, 'image');
             }
         }
     }
@@ -8191,6 +8046,15 @@
     .popup-body {
         max-height: calc(90vh - 200px);
         overflow-y: auto;
+    }
+
+    /* 弹窗输入框边框：默认深灰色，编辑/聚焦时淡蓝色 */
+    .order-edit-popup .form-control {
+        border-color: #6c757d;
+    }
+    .order-edit-popup .form-control:focus {
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
     }
 
     .popup-footer {
@@ -8257,4 +8121,10 @@
         border: none !important;
         box-shadow: none !important;
     }
+
+    .form-control-add {
+        border: 1px solid gray;
+        border-radius: 2px;
+    }
+
 </style>
