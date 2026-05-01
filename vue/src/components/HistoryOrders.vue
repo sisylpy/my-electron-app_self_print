@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="history-order-tab">
     <!-- 有历史订单数据 -->
     <div v-if="accountBillData && accountBillData.length > 0">
@@ -63,6 +63,13 @@
                 <div v-else class="small text-success">已结账</div>
               </div>
 
+              <button
+                      class="btn btn-outline-primary btn-sm"
+                      @click.stop="handleDownloadExcel(item)"
+                      :disabled="downloadExcelLoading === item.nxDepartmentBillId"
+                      title="下载订单详情">
+                {{ downloadExcelLoading === item.nxDepartmentBillId ? '下载中...' : '下载Excel' }}
+              </button>
               <!-- 查看详情按钮 -->
               <button
                   class="btn btn-outline-primary btn-sm"
@@ -100,7 +107,8 @@ export default {
   data() {
     return {
       accountBillData: [], // 客户历史订单数据
-      activeMonthIndex: 0 // 当前激活的月份索引
+      activeMonthIndex: 0, // 当前激活的月份索引
+      downloadExcelLoading: null // 正在下载的账单ID
     };
   },
   computed: {
@@ -149,6 +157,81 @@ export default {
     handleOpenOrderDetail(item) {
       this.$emit('open-order-detail', item);
     },
+    async handleDownloadExcel(item) {
+      const billId = item?.nxDepartmentBillId;
+      console.log('[HistoryOrders] 下载Excel 开始:', { billId, tradeNo: item?.nxDbTradeNo });
+      if (!billId) {
+        console.warn('[HistoryOrders] 下载Excel 失败: 账单ID不存在');
+        return;
+      }
+      this.downloadExcelLoading = billId;
+      try {
+        console.log('[HistoryOrders] 下载Excel 请求:', billId);
+        const res = await api.downloadBillExcel(billId);
+        const blob = res?.data;
+        const contentDisposition = res?.headers?.['content-disposition'] || res?.headers?.['Content-Disposition'] || '';
+        const filename = (() => {
+          const match = contentDisposition.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i) || contentDisposition.match(/filename=["']?([^"';]+)["']?/i);
+          try {
+            return match ? decodeURIComponent(match[1].trim()) : null;
+          } catch {
+            return match ? match[1].trim() : null;
+          }
+        })();
+        console.log('[HistoryOrders] 下载Excel 响应:', {
+          status: res?.status,
+          blobSize: blob?.size,
+          blobType: blob?.type,
+          contentDisposition,
+          filename: filename || '(未返回)'
+        });
+        if (!filename) {
+          throw new Error('后端未返回文件名(Content-Disposition)');
+        }
+        if (!blob || !(blob instanceof Blob)) {
+          throw new Error('下载失败：返回数据格式异常');
+        }
+        // 检查是否为错误响应（如 404 返回的 JSON 被当作 blob）
+        if (blob.type?.includes('application/json')) {
+          const text = await blob.text();
+          const err = JSON.parse(text).message || text;
+          console.warn('[HistoryOrders] 下载Excel 接口返回错误:', text);
+          throw new Error(err || '接口未实现，请联系后端开发');
+        }
+        if (window.electronAPI?.showSaveDialog && window.electronAPI?.saveBufferToFile) {
+          const saveResult = await window.electronAPI.showSaveDialog({
+            title: '保存订单Excel',
+            defaultPath: filename,
+            filters: [{ name: 'Excel', extensions: ['xlsx', 'xls'] }]
+          });
+          if (!saveResult?.success || !saveResult?.filePath) {
+            console.log('[HistoryOrders] 用户取消保存');
+            return;
+          }
+          const arrayBuffer = await blob.arrayBuffer();
+          const writeResult = await window.electronAPI.saveBufferToFile(arrayBuffer, saveResult.filePath);
+          if (writeResult?.success) {
+            console.log('[HistoryOrders] 下载Excel 成功:', saveResult.filePath);
+          } else {
+            throw new Error(writeResult?.error || '保存失败');
+          }
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          console.log('[HistoryOrders] 下载Excel 成功:', filename);
+        }
+      } catch (e) {
+        console.error('[HistoryOrders] 下载Excel 失败:', { billId, status: e?.response?.status, message: e?.message, error: e });
+      } finally {
+        this.downloadExcelLoading = null;
+      }
+    },
     // 获取客户历史订单
     async fetchCustomerHistoryOrders(customerId) {
       try {
@@ -191,4 +274,5 @@ export default {
   transition: box-shadow 0.2s;
 }
 </style>
+
 

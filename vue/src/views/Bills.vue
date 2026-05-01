@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <div class="bills-container">
 
         <section class="row justify-content-center bill-body">
@@ -177,9 +177,10 @@
 
             <!-- 主内容区域 -->
             <div class="col-md-10 main-content-container">
-                <!-- 未打印订单客户视图 - 显示订单详情组件 -->
-                <keep-alive v-if="currentView === 'order' && depPrintName && depPrintName !== ''">
-                    <component :is="depPrintName" :nxDepFatherId="nxDepFatherId" :nxDepId="nxDepId" :depName="depName"
+                <!-- 未打印订单客户视图 - 显示订单详情组件（先加载组件再渲染，避免 [object Promise]） -->
+                <div v-if="currentView === 'order' && depPrintName && depPrintName !== '' && !loadedOrderPrintComponent" class="text-center p-5 text-muted">加载中...</div>
+                <keep-alive v-else-if="currentView === 'order' && loadedOrderPrintComponent">
+                    <component ref="orderPrintComponentRef" :is="loadedOrderPrintComponent" :nxDepFatherId="nxDepFatherId" :nxDepId="nxDepId" :depName="depName"
                                :depPrintName="depPrintName"
                                :updateTime="updateTime" :disId="disId" :disName="disName" :gbDepFatherId="gbDepFatherId"
                                :gbDepId="gbDepId"
@@ -250,7 +251,7 @@
                                         role="tab"
                                         @click="switchAllCustomerTab(0)">
                                     💾 今日订单
-                                    <span class="badge bg-primary ms-2" v-if="todayOrderTotal > 0">{{ todayOrderTotal }}</span>
+                                    <span class="badge bg-primary ms-2" v-if="todayOrderCount > 0">{{ todayOrderCount }}</span>
                                 </button>
                             </li>
                             <li class="nav-item d-flex align-items-center" role="presentation">
@@ -306,10 +307,14 @@
                                 <TodayOrders
                                         :todayOrderList="todayOrderList"
                                         :todayOrderDepArr="todayOrderDepArr"
+                                        :todayOrderTradeNo="todayOrderTradeNo"
                                         :hasSubDepartments="hasSubDepartments"
                                         :selectedSubDepartment="selectedSubDepartment"
                                         :todayOrderTotal="todayOrderTotal"
                                         :selectedAllCustomer="selectedAllCustomer"
+                                        :selectedCustomerName="selectedCustomerName"
+                                        :selectedCustomerEntity="selectedCustomerEntity"
+                                        :selectedCustomerDepPrintName="selectedCustomerDepPrintName"
                                         @order-updated="fetchTodayOrders"
                                         @order-deleted="fetchTodayOrders"
                                 />
@@ -348,11 +353,11 @@
                 <div class="modal-body">
                     <!-- 打印组件预览区域 -->
                     <div class="print-preview-section">
-                        <!-- 使用动态组件简化代码 -->
+                        <!-- 使用动态组件简化代码（先加载组件再渲染，避免 [object Promise]） -->
                         <component
-                                v-if="currentPrintComponent && billDetailData"
+                                v-if="loadedBillPrintComponent && billDetailData"
                                 :key="'history-print-' + selectedBillId"
-                                :is="currentPrintComponent"
+                                :is="loadedBillPrintComponent"
                                 :ref="currentPrintComponentRef"
                                 :nxDepFatherId="selectedBillDepFatherId"
                                 :nxDepId="selectedBillDepFatherId"
@@ -384,30 +389,32 @@
 </template>
 
 <script>
+    import { markRaw } from 'vue';
     import api from "../api/all";
-    import ApplyPanel from "../components/Applys/ApplyPanel.vue";
-    import ApplyFiftyPanel from '../components/Applys/ApplyFiftyPanel.vue'
-    import ApplyHalfPanel from '../components/Applys/ApplyHalfPanel.vue';
-
-
-    import ApplyHalfWholePanel from '../components/Applys/ApplyHalfWholePanel.vue';
-    import ApplyThirtyPanel from '../components/Applys/ApplyThirtyPanel.vue';
-    import ApplyThirtyWholePanel from '../components/Applys/ApplyThirtyWholePanel.vue';
     import TodayOrders from '@/components/TodayOrders.vue';
     import PlaceOrder from '@/components/PlaceOrder.vue';
     import TaskOrder from '@/components/TaskOrder.vue';
     import HistoryOrders from '@/components/HistoryOrders.vue';
 
+    const applyComponentMap = {
+        ApplyPanel: () => import('../components/Applys/ApplyPanel.vue'),
+        ApplyFiftyPanel: () => import('../components/Applys/ApplyFiftyPanel.vue'),
+        ApplyHalfPanel: () => import('../components/Applys/ApplyHalfPanel.vue'),
+        ApplyHalfWholePanel: () => import('../components/Applys/ApplyHalfWholePanel.vue'),
+        ApplyThirtyPanel: () => import('../components/Applys/ApplyThirtyPanel.vue'),
+        ApplyThirtyWholePanel: () => import('../components/Applys/ApplyThirtyWholePanel.vue')
+    };
+
     export default {
         name: "Bills",
 
         components: {
-            ApplyPanel,
-            ApplyFiftyPanel,
-            ApplyHalfPanel,
-            ApplyHalfWholePanel,
-            ApplyThirtyPanel,
-            ApplyThirtyWholePanel,
+            ApplyPanel: applyComponentMap.ApplyPanel,
+            ApplyFiftyPanel: applyComponentMap.ApplyFiftyPanel,
+            ApplyHalfPanel: applyComponentMap.ApplyHalfPanel,
+            ApplyHalfWholePanel: applyComponentMap.ApplyHalfWholePanel,
+            ApplyThirtyPanel: applyComponentMap.ApplyThirtyPanel,
+            ApplyThirtyWholePanel: applyComponentMap.ApplyThirtyWholePanel,
             TodayOrders,
             PlaceOrder,
             TaskOrder,
@@ -461,7 +468,9 @@
                 allCustomerTabIndex: 0, // 全部客户视图的标签页索引：0=今日订单, 1=下单, 2=历史订单
                 todayOrderList: [], // 今日已保存的订单列表（无子部门）
                 todayOrderDepArr: [], // 今日已保存的订单列表（有子部门）
-                todayOrderTotal: 0, // 今日订单个数
+                todayOrderTradeNo: '', // 今日订单单号（接口 tradeNo）
+                todayOrderTotal: 0, // 今日订单总金额（接口 total）
+                todayOrderCount: 0, // 今日订单个数（接口 totalCount）
 
                 // 客户文件夹路径相关
                 customerFolderPath: null, // 客户文件夹路径
@@ -483,6 +492,15 @@
                 taskListLoading: false,
                 selectedTask: null,
                 taskCount: 0,
+
+                /** 防止 MCP 路由消费 watch 重入 */
+                _mcpPrintRouteLock: false,
+                /** 防止 Vuex MCP 任务重复消费 */
+                _mcpStoreConsuming: false,
+
+                // 预加载的打印组件（避免 Vue 3 将 async 组件渲染为 [object Promise]）
+                loadedOrderPrintComponent: null,
+                loadedBillPrintComponent: null,
             }
         },
 
@@ -563,9 +581,69 @@
                 });
             },
 
+            /** 供 watch：Vue 3 下直接 watch $store.state 路径不可靠 */
+            mcpPrintQueueRef() {
+                return this.$store.state.mcpPrintQueue;
+            },
+
         },
 
         watch: {
+            depPrintName: {
+                async handler(name) {
+                    this.loadedOrderPrintComponent = null;
+                    if (!name) return;
+                    const validComponents = ['ApplyPanel', 'ApplyFiftyPanel', 'ApplyHalfPanel', 'ApplyHalfWholePanel', 'ApplyThirtyPanel', 'ApplyThirtyWholePanel'];
+                    const componentName = validComponents.includes(name) ? name : 'ApplyPanel';
+                    if (!applyComponentMap[componentName]) return;
+                    try {
+                        const mod = await applyComponentMap[componentName]();
+                        this.loadedOrderPrintComponent = markRaw(mod?.default || mod);
+                    } catch (e) {
+                        console.warn('加载打印组件失败:', componentName, e);
+                        if (componentName !== 'ApplyPanel' && applyComponentMap['ApplyPanel']) {
+                            try {
+                                const fallbackMod = await applyComponentMap['ApplyPanel']();
+                                this.loadedOrderPrintComponent = markRaw(fallbackMod?.default || fallbackMod);
+                                console.warn('已用 ApplyPanel 作为配送单预览回退');
+                            } catch (e2) {
+                                console.warn('ApplyPanel 回退加载也失败:', e2);
+                            }
+                        }
+                    }
+                },
+                immediate: true
+            },
+            selectedBillDepPrintName: {
+                async handler(name) {
+                    this.loadedBillPrintComponent = null;
+                    if (!name) return;
+                    // 若打印格式不在支持列表，回退到 ApplyPanel
+                    const validComponents = ['ApplyPanel', 'ApplyFiftyPanel', 'ApplyHalfPanel', 'ApplyHalfWholePanel', 'ApplyThirtyPanel', 'ApplyThirtyWholePanel'];
+                    const componentName = validComponents.includes(name) ? name : 'ApplyPanel';
+                    if (!applyComponentMap[componentName]) return;
+                    try {
+                        const mod = await applyComponentMap[componentName]();
+                        this.loadedBillPrintComponent = markRaw(mod?.default || mod);
+                        if (componentName !== name) {
+                            console.warn('打印格式 "' + name + '" 不在支持列表，已用 ApplyPanel 预览');
+                        }
+                    } catch (e) {
+                        console.warn('加载打印组件失败:', componentName, e);
+                        // 加载失败时回退到 ApplyPanel，避免显示「暂不支持该打印格式的预览」
+                        if (componentName !== 'ApplyPanel' && applyComponentMap['ApplyPanel']) {
+                            try {
+                                const fallbackMod = await applyComponentMap['ApplyPanel']();
+                                this.loadedBillPrintComponent = markRaw(fallbackMod?.default || fallbackMod);
+                                console.warn('已用 ApplyPanel 作为预览回退');
+                            } catch (e2) {
+                                console.warn('ApplyPanel 回退加载也失败:', e2);
+                            }
+                        }
+                    }
+                },
+                immediate: true
+            },
             disUser: {
                 handler(newVal, oldVal) {
                     console.log('disUser发生变化:', newVal);
@@ -577,6 +655,20 @@
                         }
                     }
                 },
+                immediate: true
+            },
+            '$route': {
+                handler() {
+                    this.tryConsumeMcpPrintRoute();
+                },
+                immediate: true
+            },
+            mcpPrintQueueRef: {
+                handler(q) {
+                    if (!q || !q.length) return;
+                    this.$nextTick(() => this.processMcpPrintQueue());
+                },
+                deep: true,
                 immediate: true
             }
         },
@@ -612,9 +704,18 @@
             // 检查disUser状态
             console.log('mounted时的disUser状态:', this.disUser);
 
-            // 只有在disUser存在时才调用fetchCustomerList
+            // 只有在disUser存在时才调用fetchCustomerList（MCP 带 mcpPrint 进页时由 tryConsumeMcpPrintRoute 拉列表，避免与 skipAutoSelect 逻辑打架）
             if (this.disUser && this.disUser.nxDiuDistributerId) {
-                this.fetchCustomerList();
+                if (this.$store.state.mcpPrintQueue.length > 0 || this.$route.query.mcpPrint === 'true') {
+                    console.log('[MCP] Bills mounted：跳过初次 fetchCustomerList，等待 MCP 流程拉列表');
+                    try {
+                        if (window.electronAPI && typeof window.electronAPI.rendererConsoleLog === 'function') {
+                            window.electronAPI.rendererConsoleLog('[MCP] Bills mounted：skip fetch（MCP pending 或 query）');
+                        }
+                    } catch (e) {}
+                } else {
+                    this.fetchCustomerList();
+                }
             } else {
                 console.warn('mounted时disUser未初始化，等待disUser设置后再获取客户列表');
             }
@@ -626,10 +727,64 @@
                     this.fetchCustomerList();
                 });
             }
+            
+            // MCP 打印仅由 App.vue 收 IPC 后通过路由 query 传入，在此用 $route 统一消费，避免与 App 重复监听导致双次执行
 
         },
 
         methods: {
+            /** MCP 调试：同时打到 DevTools 与主进程终端（renderer-console-log） */
+            mcpTeeLog(msg) {
+                const line = `[MCP][Bills] ${msg}`;
+                console.log(line);
+                try {
+                    if (window.electronAPI && typeof window.electronAPI.rendererConsoleLog === 'function') {
+                        window.electronAPI.rendererConsoleLog(line);
+                    }
+                } catch (e) {}
+            },
+
+            /**
+             * 从 Vuex FIFO 顺序消费 MCP 打印（与 App.vue ENQUEUE_MCP_PRINT_TASK 配对；支持多店排队）
+             */
+            async processMcpPrintQueue() {
+                if (this._mcpStoreConsuming) return;
+                const gapMs = 600;
+                this._mcpStoreConsuming = true;
+                try {
+                    while (this.$store.state.mcpPrintQueue.length > 0) {
+                        const task = this.$store.state.mcpPrintQueue[0];
+                        if (!task || task.type !== 'nx_delivery') {
+                            this.$store.commit('SHIFT_MCP_PRINT_QUEUE');
+                            continue;
+                        }
+                        const params = {
+                            departmentId: task.departmentId,
+                            subDepartmentId: task.subDepartmentId != null ? task.subDepartmentId : -1,
+                            printMode: task.printMode === 'sub' ? 'sub' : 'all'
+                        };
+                        const pos = this.$store.state.mcpPrintQueue.length;
+                        this.mcpTeeLog(
+                            `队列打印 [1/${pos}] taskId=${task.taskId} Vuex→runMcpDeliveryPrint ${JSON.stringify(params)}`
+                        );
+                        try {
+                            await this.runMcpDeliveryPrint(params);
+                        } catch (e) {
+                            this.mcpTeeLog(`队列任务异常(已跳过该条): ${e && e.message ? e.message : e}`);
+                        }
+                        this.$store.commit('SHIFT_MCP_PRINT_QUEUE');
+                        if (this.$store.state.mcpPrintQueue.length > 0) {
+                            await new Promise((r) => setTimeout(r, gapMs));
+                        }
+                    }
+                } finally {
+                    this._mcpStoreConsuming = false;
+                    if (this.$store.state.mcpPrintQueue.length > 0) {
+                        this.$nextTick(() => this.processMcpPrintQueue());
+                    }
+                }
+            },
+
             // 处理客户搜索
             handleCustomerSearch() {
                 // 当有搜索关键词时，自动展开所有客户类型以便查看结果
@@ -721,7 +876,7 @@
                 this.selectedTask = null;
                 const disId = this.disId || (this.disUser && this.disUser.nxDiuDistributerId);
                 if (!disId) {
-                    alert('请先登录或选择配送商');
+                    await this.$refs.alertDialog.alert('请先登录或选择配送商', 'warning');
                     return;
                 }
                 this.taskListLoading = true;
@@ -756,7 +911,7 @@
                     }
                 } catch (e) {
                     console.error('[Bills] getDisTaskFatherDepartmentList failed:', e);
-                    alert('获取今日任务客户列表失败：' + (e.message || '请稍后重试'));
+                    await this.$refs.alertDialog.alert('获取今日任务客户列表失败：' + (e.message || '请稍后重试'), 'error');
                 } finally {
                     this.taskListLoading = false;
                 }
@@ -867,6 +1022,17 @@
                     if (res && res.data && res.data.code === 0) {
                         const orderData = res.data.data;
 
+                        // phoneGetToFillDepOrders 返回的金额相关字段
+                        console.log('📦 [fetchTodayOrders] phoneGetToFillDepOrders 返回:', {
+                            finishCount: orderData.finishCount,
+                            hasPriceCount: orderData.hasPriceCount,
+                            hasWeightCount: orderData.hasWeightCount,
+                            subAmount: orderData.subAmount,
+                            total: orderData.total,
+                            totalCount: orderData.totalCount,
+                            totalHanzi: orderData.totalHanzi,
+                            tradeNo: orderData.tradeNo
+                        });
                         console.log('📦 [fetchTodayOrders] API返回的数据结构:', {
                             hasArr: !!orderData.arr,
                             arrLength: orderData.arr?.length || 0,
@@ -914,39 +1080,46 @@
                             console.log('📊 [fetchTodayOrders] 订单数量:', this.todayOrderList.length);
                         }
 
-                        // 今日订单个数（订单数，非金额）
-                        if (hasSubs) {
-                            this.todayOrderTotal = (this.todayOrderDepArr || []).reduce((sum, dep) => sum + (dep.depOrders?.length || 0), 0);
-                        } else {
-                            this.todayOrderTotal = (this.todayOrderList || []).length;
-                        }
+                        // 今日订单总金额（接口 total）、订单个数（接口 totalCount）、单号（接口 tradeNo）
+                        this.todayOrderTotal = parseFloat(orderData.total) || 0;
+                        this.todayOrderCount = parseInt(orderData.totalCount, 10) || 0;
+                        this.todayOrderTradeNo = orderData.tradeNo || '';
 
                         console.log('✅ [fetchTodayOrders] 成功获取今日订单数据:', {
                             hasSubs,
                             listLength: this.todayOrderList.length,
                             depArrLength: this.todayOrderDepArr.length,
-                            total: this.todayOrderTotal
+                            total: this.todayOrderTotal,
+                            totalCount: this.todayOrderCount,
+                            tradeNo: this.todayOrderTradeNo
                         });
                     } else {
                         console.error('获取今日订单失败:', res);
                         this.todayOrderList = [];
                         this.todayOrderDepArr = [];
+                        this.todayOrderTradeNo = '';
                         this.todayOrderTotal = 0;
+                        this.todayOrderCount = 0;
                     }
                 } catch (error) {
                     console.error('获取今日订单API请求失败:', error);
                     this.todayOrderList = [];
                     this.todayOrderDepArr = [];
+                    this.todayOrderTradeNo = '';
                     this.todayOrderTotal = 0;
+                    this.todayOrderCount = 0;
                 }
             },
 
 
 
-            // 处理任务添加成功事件（从 PlaceOrder 发出：图片识别、粘贴/Excel粘贴保存）
-            handleTaskAdded() {
-                this.refreshTaskCustomerList(); // getDisTaskFatherDepartmentList 今日任务
-                this.initAllCustomers({ skipAutoSelect: true }); // 仅刷新客户列表，不切换选中客户，避免任务数据被清空
+            // 处理任务添加成功事件（从 PlaceOrder/TaskOrder 发出：图片识别、粘贴/Excel粘贴保存、重新识别等）
+            // payload.type === 'revert' 时仅刷新任务列表，跳过 initAllCustomers，减少内存占用
+            handleTaskAdded(payload) {
+                this.refreshTaskCustomerList();
+                if (payload?.type !== 'revert') {
+                    this.initAllCustomers({ skipAutoSelect: true });
+                }
             },
 
             // 处理订单保存成功事件（从 PlaceOrder 组件发出）
@@ -964,6 +1137,266 @@
                 console.log('订单保存成功（配送单视图），刷新任务列表与客户列表');
                 this.refreshTaskCustomerList();
                 this.fetchCustomerList();
+            },
+
+            /**
+             * App.vue 收到 IPC 后 push Bills?mcpPrint=true&...，在此消费并清除 query，避免重复触发。
+             */
+            async tryConsumeMcpPrintRoute() {
+                if (this._mcpPrintRouteLock) return;
+                if (this.$route.name !== 'Bills' || this.$route.query.mcpPrint !== 'true') return;
+                this._mcpPrintRouteLock = true;
+                this.mcpTeeLog('tryConsumeMcpPrintRoute：从 URL query 消费 MCP');
+                try {
+                    const q = this.$route.query;
+                    const params = {
+                        departmentId: Number(q.departmentId),
+                        subDepartmentId: q.subDepartmentId != null && q.subDepartmentId !== ''
+                            ? Number(q.subDepartmentId)
+                            : -1,
+                        printMode: q.printMode === 'sub' ? 'sub' : 'all'
+                    };
+                    const clean = { ...q };
+                    delete clean.mcpPrint;
+                    delete clean.departmentId;
+                    delete clean.subDepartmentId;
+                    delete clean.printMode;
+                    await this.$router.replace({ name: 'Bills', query: clean }).catch(() => {});
+                    const task = {
+                        type: 'nx_delivery',
+                        taskId: Date.now(),
+                        departmentId: params.departmentId,
+                        subDepartmentId: params.subDepartmentId,
+                        printMode: params.printMode,
+                        departmentName: 'route',
+                        disId: '',
+                        tradeNo: '',
+                        total: 0,
+                        timestamp: new Date().toISOString()
+                    };
+                    this.$store.commit('ENQUEUE_MCP_PRINT_TASK', task);
+                    await this.$nextTick();
+                    await this.processMcpPrintQueue();
+                } finally {
+                    this._mcpPrintRouteLock = false;
+                }
+            },
+
+            /**
+             * 在 depList 中解析 MCP 的 departmentId：
+             * - 可能为一行的父部门 nxDepartmentId；
+             * - 也可能是子部门的 nxDepartmentId（接口往往在父行下挂 nxDepartmentEntities，父 id 与子 id 不同）。
+             */
+            resolveMcpDepListSelection(depList, departmentId, subDepartmentId, printMode) {
+                const depId = Number(departmentId);
+                const explicitSub = Number(subDepartmentId);
+                if (!depId || Number.isNaN(depId)) return null;
+
+                const wantSubBranch = printMode === 'sub' && explicitSub > 0;
+
+                for (let parentIndex = 0; parentIndex < depList.length; parentIndex++) {
+                    const parent = depList[parentIndex];
+                    const parentNxId = Number(parent.nxDepartmentId);
+                    const entities = parent.nxDepartmentEntities;
+
+                    if (parentNxId === depId) {
+                        if (wantSubBranch && Array.isArray(entities) && entities.length > 0) {
+                            const subIndex = entities.findIndex((s) => Number(s.nxDepartmentId) === explicitSub);
+                            if (subIndex < 0) {
+                                return {
+                                    error: 'sub-not-found',
+                                    parent,
+                                    parentIndex,
+                                    expectedSub: explicitSub,
+                                };
+                            }
+                            return {
+                                kind: 'sub',
+                                parentIndex,
+                                parent,
+                                subIndex,
+                                sub: entities[subIndex],
+                            };
+                        }
+                        return { kind: 'parent', parentIndex, parent };
+                    }
+
+                    if (Array.isArray(entities) && entities.length > 0) {
+                        const subIndex = entities.findIndex((s) => Number(s.nxDepartmentId) === depId);
+                        if (subIndex >= 0) {
+                            if (wantSubBranch && explicitSub !== depId) {
+                                const si2 = entities.findIndex((s) => Number(s.nxDepartmentId) === explicitSub);
+                                if (si2 >= 0) {
+                                    return {
+                                        kind: 'sub',
+                                        parentIndex,
+                                        parent,
+                                        subIndex: si2,
+                                        sub: entities[si2],
+                                    };
+                                }
+                                return {
+                                    error: 'sub-not-found',
+                                    parent,
+                                    parentIndex,
+                                    expectedSub: explicitSub,
+                                };
+                            }
+                            return {
+                                kind: 'sub',
+                                parentIndex,
+                                parent,
+                                subIndex,
+                                sub: entities[subIndex],
+                            };
+                        }
+                    }
+                }
+                return null;
+            },
+
+            /**
+             * MCP / CodeBuddy 配送单打印：刷新 depList → 模拟左侧选中 → 等待配送单 Apply 组件就绪后 printOnly。
+             */
+            async runMcpDeliveryPrint(params) {
+                this.mcpTeeLog(`runMcpDeliveryPrint 开始 ${JSON.stringify(params)}`);
+                const fatherId = Number(params.departmentId);
+                const subId = Number(params.subDepartmentId);
+                const printMode = params.printMode === 'sub' ? 'sub' : 'all';
+                if (!fatherId || Number.isNaN(fatherId)) {
+                    this.mcpTeeLog('departmentId 无效，中止');
+                    console.error('[MCP] departmentId 无效', params);
+                    return;
+                }
+
+                this.currentView = 'order';
+                this.mcpTeeLog('currentView=order，fetchCustomerList skipAutoSelect…');
+                await this.fetchCustomerList({ skipAutoSelect: true });
+                this.mcpTeeLog(`fetchCustomerList 完成 depList.length=${(this.depList || []).length}`);
+
+                const depList = this.depList || [];
+                if (depList.length > 0) {
+                    this.mcpTeeLog(`depList 前3 id: ${depList.slice(0, 3).map((d) => d.nxDepartmentId).join(',')}`);
+                }
+
+                const sel = this.resolveMcpDepListSelection(depList, fatherId, subId, printMode);
+                if (sel && sel.error === 'sub-not-found') {
+                    this.mcpTeeLog(
+                        `✗ 父部门下未找到 subDepartmentId=${sel.expectedSub}（父 nxDepartmentId=${sel.parent.nxDepartmentId}）`
+                    );
+                    console.warn('[MCP] 子部门不在列表中', sel.expectedSub, sel.parent);
+                    return;
+                }
+                if (!sel) {
+                    this.mcpTeeLog(
+                        `✗ depList 中无 departmentId=${fatherId}（未匹配父行或任一子部门 nxDepartmentEntities）`
+                    );
+                    console.warn(
+                        '[MCP] 今日配送单列表中未找到该部门，可能是父/子 id 与 webNxDisGetTodayOrderCustomer 不一致，或暂无待打单'
+                    );
+                    return;
+                }
+
+                const parent = sel.parent;
+                const parentNxId = Number(parent.nxDepartmentId);
+                console.log(
+                    '[MCP] 解析结果:',
+                    sel.kind === 'parent' ? '父级' : `子级(sub=${sel.sub.nxDepartmentId})`,
+                    '父:',
+                    parent.nxDepartmentName,
+                    'parentIndex:',
+                    sel.parentIndex
+                );
+
+                let expectNxDepFatherId = parentNxId;
+                let expectNxDepId = parentNxId;
+
+                if (sel.kind === 'sub') {
+                    const sub = sel.sub;
+                    const fakeEv = { stopPropagation() {} };
+                    console.log('[MCP] 调用 childClick，子部门:', sub.nxDepartmentName);
+                    this.childClick(
+                        sel.parentIndex,
+                        sel.subIndex,
+                        parentNxId,
+                        Number(sub.nxDepartmentId),
+                        parent.nxDepartmentAttrName,
+                        '-' + (sub.nxDepartmentAttrName || sub.nxDepartmentName || ''),
+                        sub.nxDepartmentPrintName,
+                        fakeEv,
+                        parent.nxDepartmentSubAmount
+                    );
+                    expectNxDepId = Number(sub.nxDepartmentId);
+                } else {
+                    console.log('[MCP] 调用 onclick，父部门:', parent.nxDepartmentName);
+                    this.onclick(
+                        sel.parentIndex,
+                        parentNxId,
+                        parentNxId,
+                        parent.nxDepartmentAttrName || parent.nxDepartmentName || '',
+                        '',
+                        parent.nxDepartmentPrintName || 'ApplyPanel',
+                        parent.nxDepartmentSubAmount
+                    );
+                }
+
+                console.log('[MCP] onclick 执行完成，开始等待打印组件...');
+                await this.waitAndTriggerOrderViewPrint({
+                    nxDepFatherId: expectNxDepFatherId,
+                    nxDepId: expectNxDepId
+                });
+            },
+
+            /** 配送单视图下动态 Apply 组件异步拉单后再打印 */
+            async waitAndTriggerOrderViewPrint(expected) {
+                this.mcpTeeLog('waitAndTriggerOrderViewPrint：开始等待 Apply 与 printPagesData（最多约 20s）');
+                // onclick 立刻进循环时，子组件可能尚未收到新 props，watch 也未清空上一户的 applyArrPrint；先等 DOM/子更新刷掉陈旧数据
+                await this.$nextTick();
+                await this.$nextTick();
+                const maxWait = 20000;
+                const step = 120;
+                let waited = 0;
+                let lastTee = -2000;
+                while (waited < maxWait) {
+                    const comp = this.$refs.orderPrintComponentRef;
+                    if (comp && typeof comp.printOnly === 'function') {
+                        const pages = comp.printPagesData;
+                        const depMatch =
+                            Number(comp.nxDepFatherId) === Number(expected.nxDepFatherId) &&
+                            Number(comp.nxDepId) === Number(expected.nxDepId);
+                        const ordersReady =
+                            Array.isArray(comp.applyArrPrint) && comp.applyArrPrint.length > 0;
+                        if (
+                            depMatch &&
+                            ordersReady &&
+                            pages &&
+                            Array.isArray(pages) &&
+                            pages.length > 0
+                        ) {
+                            this.mcpTeeLog(`★ 就绪，调用 printOnly（${pages.length} 页） dep=${expected.nxDepId}`);
+                            await comp.printOnly();
+                            this.mcpTeeLog('★ printOnly 已完成');
+                            return;
+                        }
+                    }
+                    if (waited - lastTee >= 2000) {
+                        lastTee = waited;
+                        const pLen = comp && comp.printPagesData && Array.isArray(comp.printPagesData)
+                            ? comp.printPagesData.length
+                            : 'n/a';
+                        const depMatch = comp
+                            ? Number(comp.nxDepFatherId) === Number(expected.nxDepFatherId) &&
+                              Number(comp.nxDepId) === Number(expected.nxDepId)
+                            : false;
+                        const ordLen = comp && Array.isArray(comp.applyArrPrint) ? comp.applyArrPrint.length : 'n/a';
+                        this.mcpTeeLog(`等待中 ${waited}ms ref=${comp ? 'y' : 'n'} depMatch=${depMatch} orders=${ordLen} printPages=${pLen}`);
+                    }
+                    await new Promise((r) => setTimeout(r, step));
+                    waited += step;
+                }
+                this.mcpTeeLog('✗ 超时：未等到 printPagesData 或未挂载 orderPrintComponentRef');
+                console.warn('[MCP] ✗ 配送单打印超时：未等到打印数据（printPagesData）或组件未挂载');
+                console.warn('[MCP] 超时时组件状态: ref=', this.$refs.orderPrintComponentRef);
             },
 
             // 处理子部门选择改变
@@ -1260,106 +1693,116 @@
             },
 
 
-            fetchCustomerList() {
-                // 检查disUser是否存在，如果不存在则尝试从 localStorage 恢复
-                console.log("fetchCustomerListfetchCustomerList")
-                if (!this.disUser || !this.disUser.nxDiuDistributerId) {
-                    console.warn('fetchCustomerList: disUser或nxDiuDistributerId不存在，尝试从 localStorage 恢复:', this.disUser);
-                    
-                    // 尝试从 localStorage 恢复
-                    try {
-                        const disUserStr = localStorage.getItem('disUser');
-                        if (disUserStr) {
-                            const restoredDisUser = JSON.parse(disUserStr);
-                            if (restoredDisUser && restoredDisUser.nxDiuDistributerId) {
-                                console.log('从 localStorage 恢复 disUser 成功');
-                                this.$store.commit('SET_DISUSER', restoredDisUser);
-                                // 恢复后继续执行
+            /**
+             * 拉取左侧「配送单」客户列表（webNxDisGetTodayOrderCustomer），并填充 depList。
+             * @param {{ skipAutoSelect?: boolean }} options skipAutoSelect=true 时不自动选中第一项（供 MCP 按指定客户打印）
+             * @returns {Promise<void>}
+             */
+            fetchCustomerList(options = {}) {
+                const skipAutoSelect = options.skipAutoSelect === true;
+                return new Promise((resolve) => {
+                    const finish = () => resolve();
+
+                    if (!this.disUser || !this.disUser.nxDiuDistributerId) {
+                        console.warn('fetchCustomerList: disUser或nxDiuDistributerId不存在，尝试从 localStorage 恢复:', this.disUser);
+                        try {
+                            const disUserStr = localStorage.getItem('disUser');
+                            if (disUserStr) {
+                                const restoredDisUser = JSON.parse(disUserStr);
+                                if (restoredDisUser && restoredDisUser.nxDiuDistributerId) {
+                                    this.$store.commit('SET_DISUSER', restoredDisUser);
+                                } else {
+                                    console.error('从 localStorage 恢复的 disUser 无效');
+                                    return finish();
+                                }
                             } else {
-                                console.error('从 localStorage 恢复的 disUser 无效');
-                                return;
+                                console.error('localStorage 中也没有 disUser');
+                                return finish();
                             }
-                        } else {
-                            console.error('localStorage 中也没有 disUser');
-                            return;
+                        } catch (error) {
+                            console.error('恢复 disUser 失败:', error);
+                            return finish();
                         }
-                    } catch (error) {
-                        console.error('恢复 disUser 失败:', error);
-                        return;
                     }
-                }
 
-                // 请求配送单客户列表
-                const _disId = this.disUser.nxDiuDistributerId;
-                api.webNxDisGetTodayOrderCustomer(_disId).then((res) => {
-                    if (res && res.data) {
-                        console.log("收到的数据:", res.data);
-                        this.isactive = 0;
-                        this.issubactive = -1;
-                        this.depList = res.data.data.nxArr || [];
-                        this.gbBatchArr = res.data.data.gbBatchArr || [];
-                        this.taskCount = res.data.taskCount;
+                    const _disId = this.disUser.nxDiuDistributerId;
+                    api.webNxDisGetTodayOrderCustomer(_disId).then((res) => {
+                        if (res && res.data) {
+                            this.isactive = 0;
+                            this.issubactive = -1;
+                            this.depList = res.data.data.nxArr || [];
+                            console.log('[MCP] fetchCustomerList API 返回: nxArr 长度=', (res.data.data.nxArr || []).length);
+                            console.log('[MCP] fetchCustomerList 赋值后: this.depList 长度=', this.depList.length);
+                            if (this.depList.length > 0) {
+                                console.log('[MCP] depList 前3个ID:', this.depList.slice(0, 3).map(d => d.nxDepartmentId));
+                            }
+                            this.gbBatchArr = res.data.data.gbBatchArr || [];
+                            this.taskCount = res.data.taskCount;
 
-                        if ((res.data.data.nxArr || []).length > 0) {
-                            const firstCustomer = res.data.data.nxArr[0];
-                            this.onclick(0, firstCustomer.nxDepartmentId, firstCustomer.nxDepartmentId,
+                            if ((res.data.data.nxArr || []).length > 0) {
+                                if (!skipAutoSelect) {
+                                    const firstCustomer = res.data.data.nxArr[0];
+                                    this.onclick(0, firstCustomer.nxDepartmentId, firstCustomer.nxDepartmentId,
                                         firstCustomer.nxDepartmentAttrName || firstCustomer.nxDepartmentName,
                                         '',
                                         firstCustomer.nxDepartmentPrintName || 'ApplyPanel',
                                         0);
-                        } else {
-                            this.nxDepFatherId = -1;
-                            this.nxDepId = -1;
-                            this.depName = "";
-                            this.depPrintName = "";
-
-                            const gbArr = res.data.data.gbArr || [];
-                            const gbBatchArr = res.data.data.gbBatchArr || [];
-                            if (gbArr.length > 0) {
-                                this.gbDepFatherId = gbArr[0].gbDepartmentId;
-                                this.gbDepId = gbArr[0].gbDepartmentId;
-                                this.gbDisId = gbArr[0].gbDepartmentDisId;
-                                this.depName = gbArr[0].gbDepartmentName;
-                                this.depPrintName = gbArr[0].gbDepartmentPrintName;
-                                this.updateTime = new Date().getMilliseconds();
-                                this.nxDepFatherId = -1;
-                                this.nxDepId = -1;
-                                this.isactivepb = -1;
-                            } else if (gbBatchArr.length > 0) {
-                                this.nxDepFatherId = -1;
-                                this.nxDepId = -1;
-                                this.gbDepFatherId = -1;
-                                this.gbDepId = -1;
-                                this.gbDisId = -1;
-                                this.isactive = -1;
-                                this.isactivepb = 0;
-                                this.gbBatchId = gbBatchArr[0].gbDistributerPurchaseBatchId;
-                                this.depName = gbBatchArr[0].gbDistributerEntity.gbDistributerName;
-                                this.depPrintName = gbBatchArr[0].gbDistributerEntity.gbDistributerPrintName;
-                                this.updateTime = new Date().getMilliseconds();
+                                }
                             } else {
                                 this.nxDepFatherId = -1;
                                 this.nxDepId = -1;
-                                this.gbDepFatherId = -1;
-                                this.gbDepId = -1;
-                                this.gbDisId = -1;
-                                this.isactive = -1;
-                                this.isactivepb = -1;
-                                this.gbBatchId = -1;
-                                this.depName = "";
-                                this.depPrintName = "";
-                                console.log("所有客户数据都为空，但不退出应用");
+                                this.depName = '';
+                                this.depPrintName = '';
+
+                                const gbArr = res.data.data.gbArr || [];
+                                const gbBatchArr = res.data.data.gbBatchArr || [];
+                                if (gbArr.length > 0) {
+                                    this.gbDepFatherId = gbArr[0].gbDepartmentId;
+                                    this.gbDepId = gbArr[0].gbDepartmentId;
+                                    this.gbDisId = gbArr[0].gbDepartmentDisId;
+                                    this.depName = gbArr[0].gbDepartmentName;
+                                    this.depPrintName = gbArr[0].gbDepartmentPrintName;
+                                    this.updateTime = new Date().getMilliseconds();
+                                    this.nxDepFatherId = -1;
+                                    this.nxDepId = -1;
+                                    this.isactivepb = -1;
+                                } else if (gbBatchArr.length > 0) {
+                                    this.nxDepFatherId = -1;
+                                    this.nxDepId = -1;
+                                    this.gbDepFatherId = -1;
+                                    this.gbDepId = -1;
+                                    this.gbDisId = -1;
+                                    this.isactive = -1;
+                                    this.isactivepb = 0;
+                                    this.gbBatchId = gbBatchArr[0].gbDistributerPurchaseBatchId;
+                                    this.depName = gbBatchArr[0].gbDistributerEntity.gbDistributerName;
+                                    this.depPrintName = gbBatchArr[0].gbDistributerEntity.gbDistributerPrintName;
+                                    this.updateTime = new Date().getMilliseconds();
+                                } else {
+                                    this.nxDepFatherId = -1;
+                                    this.nxDepId = -1;
+                                    this.gbDepFatherId = -1;
+                                    this.gbDepId = -1;
+                                    this.gbDisId = -1;
+                                    this.isactive = -1;
+                                    this.isactivepb = -1;
+                                    this.gbBatchId = -1;
+                                    this.depName = '';
+                                    this.depPrintName = '';
+                                }
                             }
+                        } else {
+                            console.error('API 返回的数据格式不正确:', res);
                         }
-                    } else {
-                        console.error("API 返回的数据格式不正确:", res);
-                    }
-                }).catch((err) => {
-                    console.error("fetchCustomerList 请求失败:", err);
-                    this.depList = this.depList || [];
-                    this.gbBatchArr = this.gbBatchArr || [];
-                    this.isactive = 0;
-                    this.issubactive = -1;
+                        finish();
+                    }).catch((err) => {
+                        console.error('fetchCustomerList 请求失败:', err);
+                        this.depList = this.depList || [];
+                        this.gbBatchArr = this.gbBatchArr || [];
+                        this.isactive = 0;
+                        this.issubactive = -1;
+                        finish();
+                    });
                 });
             },
 
@@ -1434,17 +1877,24 @@
                 // 阻止事件冒泡，防止触发父部门的点击事件
                 event.stopPropagation();
 
+                // 检查打印组件是否存在，如果不存在则使用默认组件（与 onclick 一致）
+                const validComponents = ['ApplyPanel', 'ApplyFiftyPanel', 'ApplyHalfPanel', 'ApplyHalfWholePanel',
+                    'ApplyThirtyPanel', 'ApplyThirtyWholePanel'];
+                const finalDepPrintName = depPrintName && validComponents.includes(depPrintName)
+                    ? depPrintName
+                    : 'ApplyPanel';
+
                 // 更新子部门的选中状态
                 this.isactive = index;
                 this.issubactive = subIndex;
                 this.isactivepb = -1;
                 this.gbBatchId = -1;
                 this.gbDepFatherId = -1;
-                this.gbDepId = -1,
-                    this.nxDepFatherId = nxDepFatherId;
-                this.nxDepId = nxDeId,
-                    this.depName = depName + subDepName;
-                this.depPrintName = depPrintName;
+                this.gbDepId = -1;
+                this.nxDepFatherId = nxDepFatherId;
+                this.nxDepId = nxDeId;
+                this.depName = depName + subDepName;
+                this.depPrintName = finalDepPrintName;
                 this.subAmount = subAmount;
                 this.updateTime = new Date().getMilliseconds();
                 console.log("点击了子部门:", subDepName);
@@ -1455,12 +1905,12 @@
             // 选择客户文件夹
             async selectCustomerFolder() {
                 if (!window.electronAPI) {
-                    alert('Electron API 不可用，请确保在 Electron 环境中运行');
+                    await this.$refs.alertDialog.alert('Electron API 不可用', 'warning');
                     return;
                 }
 
                 if (typeof window.electronAPI.selectFolder !== 'function') {
-                    alert('selectFolder API 不可用，请重启应用');
+                    await this.$refs.alertDialog.alert('选择文件夹功能不可用', 'warning');
                     console.error('window.electronAPI:', window.electronAPI);
                     return;
                 }
@@ -1483,18 +1933,18 @@
 
                         if (saveResult.success) {
                             this.customerFolderPath = result.path;
-                            alert('文件夹路径设置成功！');
+                            await this.$refs.alertDialog.alert('客户文件夹保存成功', 'success');
                             // 刷新 PlaceOrder 组件的文件夹路径状态（刷新"转订单"标签页下的按钮状态）
                             if (this.$refs.placeOrderRef && typeof this.$refs.placeOrderRef.loadCustomerFolderPath === 'function') {
                                 this.$refs.placeOrderRef.loadCustomerFolderPath();
                             }
                         } else {
-                            alert('保存文件夹路径失败：' + (saveResult.error || '未知错误'));
+                            await this.$refs.alertDialog.alert('保存文件夹路径失败：' + (saveResult.error || '未知错误'), 'error');
                         }
                     }
                 } catch (error) {
                     console.error('选择文件夹失败:', error);
-                    alert('选择文件夹失败：' + error.message);
+                    await this.$refs.alertDialog.alert('选择文件夹失败：' + error.message, 'error');
                 } finally {
                     this.selectingFolder = false;
                 }
@@ -1507,11 +1957,11 @@
                 }
 
                 if (typeof window.electronAPI.saveCustomerFolderPath !== 'function') {
-                    alert('saveCustomerFolderPath API 不可用，请重启应用');
+                    await this.$refs.alertDialog.alert('保存客户文件夹功能不可用', 'warning');
                     return;
                 }
 
-                if (confirm('确定要清除文件夹路径设置吗？')) {
+                if (await this.$refs.alertDialog.confirm('确定要清除客户文件夹吗？')) {
                     try {
                         // 确定要清除的客户ID（如果有子部门，使用子部门ID；否则使用主客户ID）
                         const targetCustomerId = this.hasSubDepartments && this.selectedSubDepartment
@@ -1525,7 +1975,7 @@
 
                         if (result.success) {
                             this.customerFolderPath = null;
-                            alert('已清除文件夹路径');
+                            await this.$refs.alertDialog.alert('客户文件夹已清除', 'success');
                             // 刷新 PlaceOrder 组件的文件夹路径状态（刷新"转订单"标签页下的按钮状态）
                             if (this.$refs.placeOrderRef && typeof this.$refs.placeOrderRef.loadCustomerFolderPath === 'function') {
                                 this.$refs.placeOrderRef.loadCustomerFolderPath();
@@ -1578,6 +2028,24 @@
         font-weight: 500;
         transition: all 0.3s ease;
         margin: 0 2px;
+    }
+
+    /* 确保btn-primary使用蓝色，而不是紫色（覆盖AdminLTE默认主题色） */
+    :deep(.btn-group .btn.btn-primary) {
+        background-color: #0d6efd !important;
+        border-color: #0d6efd !important;
+        color: #fff !important;
+    }
+
+    :deep(.btn-group .btn.btn-primary:hover) {
+        background-color: #0b5ed7 !important;
+        border-color: #0a58ca !important;
+    }
+
+    :deep(.btn-group .btn.btn-primary:focus) {
+        background-color: #0b5ed7 !important;
+        border-color: #0a58ca !important;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.5) !important;
     }
 
     .btn-group .btn:hover {
@@ -1935,13 +2403,13 @@
     }
 
     .nav-pills .active {
-        background-color: #590381;
+        background-color: #0d6efd;
         color: #fff;
         font-weight: bold;
     }
 
     .nav-pills .tab-item.active {
-        background-color: #590381; /* 父类选中的背景色 */
+        background-color: #0d6efd; /* 父类选中的背景色 */
         color: white;
     }
 
@@ -2067,3 +2535,20 @@
     }
 
 </style>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

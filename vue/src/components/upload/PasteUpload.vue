@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <div class="upload-section" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
         <div class="row g-3" style="flex: 1; min-height: 0; overflow: hidden; margin: 0; align-items: stretch;">
             <!-- 左侧：粘贴输入框 -->
@@ -58,7 +58,7 @@
                         <transition name="paste-textarea-fade">
                             <div v-show="!(source === 'taskOrder' && selectTaskLoading)"
                                  style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
-                                <div class="paste-textarea-wrap" style="position: relative; flex: 1; min-height: 0; display: flex;">
+                                <div class="paste-textarea-wrap" style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;">
                                     <textarea
                                             ref="pasteTextareaRef"
                                             :value="pasteInputText"
@@ -69,19 +69,23 @@
                                             :class="{
                                                 'bg-light': pasteHasCache,
                                                 'paste-textarea--just-updated': contentJustUpdated,
-                                                'paste-textarea--overlay-visible': (pasteInvalidSegments.length > 0 || pasteInvalidLineIndices.length > 0) && pasteInputText
+                                                'paste-textarea--has-invalid': (pasteInvalidSegments.length > 0 || pasteInvalidLineIndices.length > 0) && pasteInputText
                                             }"
-                                            placeholder="请将订单文本粘贴到这里，例如：&#10;苹果 5 斤&#10;香蕉 3 斤&#10;橙子 2 斤"
-                                            style="font-size: 14px; min-height: 0; flex: 1;"
+                                            style="font-size: 18px; min-height: 0; flex: 1;"
                                     ></textarea>
-                                    <!-- 校验不合格片段红色高亮遮罩（解析后若有不合格项则显示） -->
-                                    <div v-if="(pasteInvalidSegments.length > 0 || pasteInvalidLineIndices.length > 0) && pasteInputText"
-                                         ref="pasteInvalidOverlayRef"
-                                         class="paste-invalid-overlay"
-                                         :style="pasteInvalidOverlayStyle">
-                                        <div class="paste-invalid-overlay-content"
-                                             v-html="pasteInvalidOverlayHtml"
-                                             style="white-space: pre-wrap; word-wrap: break-word;"></div>
+                                    <!-- 校验不合格错误提示（显示在 textarea 下方） -->
+                                    <div v-if="pasteNoValidOrder && pasteInputText"
+                                         class="paste-invalid-alert mt-2">
+                                        <div class="alert alert-warning mb-0" style="padding: 8px 12px; font-size: 14px;">
+                                            <strong>⚠️ 未解析到有效订单，请检查格式（如：苹果 5 斤）</strong>
+                                        </div>
+                                    </div>
+                                    <div v-if="(pasteInvalidSegments.length > 0 || pasteInvalidLineIndices.length > 0) && pasteInputText && !pasteNoValidOrder"
+                                         class="paste-invalid-alert mt-2">
+                                        <div class="alert alert-danger mb-0" style="padding: 8px 12px; font-size: 14px;">
+                                            <strong>⚠️ 发现校验不合格内容：</strong>
+                                            <div v-html="pasteInvalidOverlayHtml" style="white-space: pre-wrap; word-wrap: break-word; margin-top: 4px;"></div>
+                                        </div>
                                     </div>
                                 </div>
                                 <!-- 保存订单后隐藏这三个按钮 -->
@@ -103,6 +107,7 @@
                                             解析订单
                                         </button>
                                     </div>
+
 
                                 </div>
                             </div>
@@ -148,17 +153,17 @@
                                         @click="$emit('re-upload')">
                                     删除
                                 </button>
-                                <button
+                                <!-- <button
                                         class="btn btn-outline-info btn-sm"
                                         @click="$emit('show-fix-items')">
                                     Ai协助调整
-                                </button>
-                                <button
+                                </button> -->
+                                <!-- <button
                                         v-if="currentTask && currentTask.nxOcrTaskStatus == 2"
                                         class="btn btn-success btn-sm"
                                         @click="$emit('finish-task')">
                                     完成
-                                </button>
+                                </button> -->
 
                                 <div ref="ttsPlayerContainer">
 
@@ -254,6 +259,10 @@
                 type: Array,
                 default: () => [] // { lineIndex, segmentText }
             },
+            pasteNoValidOrder: {
+                type: Boolean,
+                default: false
+            },
             pasteHasCache: {
                 type: Boolean,
                 default: false
@@ -317,7 +326,7 @@
             };
         },
         computed: {
-            /** 校验不合格片段高亮 HTML（仅包装不合格片段为红色 span，优先用 invalidSegments；无则回退到整行） */
+            /** 校验不合格片段高亮 HTML（只显示不合格的行） */
             pasteInvalidOverlayHtml() {
                 const text = this.pasteInputText || '';
                 const lines = text.split('\n');
@@ -331,34 +340,35 @@
                     .replace(/>/g, '&gt;')
                     .replace(/"/g, '&quot;');
 
-                return lines.map((line, lineIdx) => {
-                    const lineSegments = hasSegments ? segments.filter(s => s.lineIndex === lineIdx).map(s => s.segmentText) : [];
-                    if (lineSegments.length > 0) {
-                        let remaining = line;
-                        const sortedSegments = lineSegments
-                            .map(st => ({ text: st, pos: remaining.indexOf(st) }))
-                            .filter(s => s.pos >= 0)
-                            .sort((a, b) => a.pos - b.pos);
-                        if (sortedSegments.length > 0) {
-                            let result = '';
-                            let lastEnd = 0;
-                            for (const { text: seg, pos } of sortedSegments) {
-                                if (pos < lastEnd) continue;
-                                result += escapeHtml(remaining.substring(lastEnd, pos));
-                                result += `<span class="paste-invalid-line">${escapeHtml(seg)}</span>`;
-                                lastEnd = pos + seg.length;
+                // 只保留不合格的行
+                return lines
+                    .map((line, lineIdx) => {
+                        const lineSegments = hasSegments ? segments.filter(s => s.lineIndex === lineIdx).map(s => s.segmentText) : [];
+                        if (lineSegments.length > 0) {
+                            let remaining = line;
+                            const sortedSegments = lineSegments
+                                .map(st => ({ text: st, pos: remaining.indexOf(st) }))
+                                .filter(s => s.pos >= 0)
+                                .sort((a, b) => a.pos - b.pos);
+                            if (sortedSegments.length > 0) {
+                                let result = '';
+                                let lastEnd = 0;
+                                for (const { text: seg, pos } of sortedSegments) {
+                                    if (pos < lastEnd) continue;
+                                    result += escapeHtml(remaining.substring(lastEnd, pos));
+                                    result += `<span class="paste-invalid-line">${escapeHtml(seg)}</span>`;
+                                    lastEnd = pos + seg.length;
+                                }
+                                result += escapeHtml(remaining.substring(lastEnd));
+                                return result;
                             }
-                            result += escapeHtml(remaining.substring(lastEnd));
-                            return result;
+                            return `<span class="paste-invalid-line">${escapeHtml(line)}</span>`;
                         }
-                        return `<span class="paste-invalid-line">${escapeHtml(line)}</span>`;
-                    }
-                    const escaped = escapeHtml(line);
-                    return invalidLineSet.has(lineIdx) ? `<span class="paste-invalid-line">${escaped}</span>` : escaped;
-                }).join('\n');
-            },
-            pasteInvalidOverlayStyle() {
-                return { pointerEvents: 'none' };
+                        const escaped = escapeHtml(line);
+                        return invalidLineSet.has(lineIdx) ? `<span class="paste-invalid-line">${escaped}</span>` : null;
+                    })
+                    .filter(line => line !== null)  // 过滤掉 null（即合格的行）
+                    .join('\n');
             }
         },
         watch: {
@@ -500,6 +510,7 @@
                 this.$emit('paste-input', ev);
             },
             syncInvalidOverlayScroll() {
+                // 遮罩层已移除，此方法保留但不执行任何操作
                 const ta = this.$refs.pasteTextareaRef;
                 const overlay = this.$refs.pasteInvalidOverlayRef;
                 if (ta && overlay && overlay.scrollTop !== ta.scrollTop) {
@@ -572,29 +583,19 @@
         position: relative;
     }
 
-    .paste-invalid-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        overflow: auto;
-        padding: 0.375rem 0.75rem;
-        font-size: 14px;
-        font-family: inherit;
-        line-height: 1.5;
-        color: #212529;
-        background: transparent;
-        border-radius: 0.25rem;
-        pointer-events: none; /* 点击穿透到 textarea，便于右键粘贴等操作 */
+    .paste-textarea--has-invalid {
+        border-color: #dc3545;
+        border-width: 2px;
     }
 
-    .paste-invalid-overlay-content {
-        min-height: 100%;
+    .paste-invalid-alert {
+        max-height: 150px;
+        overflow-y: auto;
+        flex-shrink: 0;
     }
 
     /* v-html 动态插入的内容需用 :deep 才能命中 scoped 样式 */
-    .paste-invalid-overlay :deep(.paste-invalid-line) {
+    .paste-invalid-alert :deep(.paste-invalid-line) {
         color: #dc3545 !important;
         font-weight: 500;
     }
@@ -650,4 +651,5 @@
         opacity: 0;
     }
 </style>
+
 

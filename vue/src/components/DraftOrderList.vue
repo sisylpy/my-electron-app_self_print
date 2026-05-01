@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <div class="order-list-container flex-grow-1 d-flex flex-column"
          style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0;">
         <div v-if="orderItems.length === 0"
@@ -46,8 +46,9 @@
                             class="form-control form-control-sm"
                             :value="item.nxDoGoodsName"
                             @input="$emit('goods-name-input', { item, orderIndex, value: $event.target.value })"
-                            placeholder="请输入商品名称"
-                            style="font-size: 14px; background-color: transparent; width: 100%;"
+                            @keydown.enter="handleGoodsNameEnter(orderIndex)"
+                            :ref="`draft-goods-name-${orderIndex}`"
+                            style="font-size: 16px; background-color: transparent; width: 100%;"
                         />
                     </div>
                     <!-- 数量 -->
@@ -57,8 +58,9 @@
                             class="form-control form-control-sm text-center"
                             :value="item.nxDoQuantity"
                             @input="$emit('quantity-input', { item, orderIndex, value: $event.target.value })"
-                            placeholder="数量"
-                            style="background-color: transparent;"
+                            @keydown.enter="handleQuantityEnter(orderIndex)"
+                            :ref="`draft-quantity-${orderIndex}`"
+                            style="background-color: transparent; font-size: 16px;"
                         />
                     </div>
                     <!-- 规格 -->
@@ -68,8 +70,9 @@
                             class="form-control form-control-sm text-center"
                             :value="item.nxDoStandard"
                             @input="$emit('standard-change', { item, orderIndex, value: $event.target.value })"
-                            placeholder="规格"
-                            style="background-color: transparent;"
+                            @keydown.enter="handleStandardEnter($event)"
+                            :ref="`draft-standard-${orderIndex}`"
+                            style="background-color: transparent; font-size: 16px;"
                         />
                     </div>
                     <!-- 操作按钮 -->
@@ -79,12 +82,12 @@
                             <span class="draft-btn-icon">×</span> 删除
                         </button>
                         <button type="button" class="draft-btn draft-btn-add"
-                                @click="$emit('add-order-before', { orderIndex })">
+                                @click="handleAddOrderBefore(orderIndex)">
                             <span class="draft-btn-icon">+</span> 新订单
                         </button>
                         <button type="button" class="draft-btn draft-btn-remark"
                                 :class="{ 'draft-btn-remark-active': item.nxDoAddRemark }"
-                                @click="item.nxDoAddRemark ? $emit('clear-remark', { item, orderIndex }) : $emit('add-remark', { item, orderIndex })">
+                                @click="handleRemarkClick(orderIndex)">
                             <span class="draft-btn-icon">※</span> 备注
                         </button>
                     </div>
@@ -105,7 +108,6 @@
                                       :value="item.standardWeight"
                                       @input="$emit('remark-input', { item, orderIndex, value: $event.target.value, field: 'standardWeight' })"
                                       :disabled="item.nxDoStatus === 0"
-                                      placeholder="规格重量"
                                       style="width: 90px;"
                               />
                               <span class="text-muted small mx-1">/</span>
@@ -115,7 +117,6 @@
                                       :value="item.itemUnit"
                                       @input="$emit('remark-input', { item, orderIndex, value: $event.target.value, field: 'itemUnit' })"
                                       :disabled="item.nxDoStatus === 0"
-                                      placeholder="商品单位"
                                       style="width: 70px;"
                               />
                           </div>
@@ -128,7 +129,6 @@
                                       :value="item.itemsPerCarton"
                                       @input="$emit('remark-input', { item, orderIndex, value: $event.target.value, field: 'itemsPerCarton' })"
                                       :disabled="item.nxDoStatus === 0"
-                                      placeholder="数量"
                                       min="0"
                                       step="1"
                                       style="width: 60px;"
@@ -141,7 +141,6 @@
                                       :value="item.cartonUnit"
                                       @input="$emit('remark-input', { item, orderIndex, value: $event.target.value, field: 'cartonUnit' })"
                                       :disabled="item.nxDoStatus === 0"
-                                      placeholder="大包装"
                                       style="width: 60px;"
                               />
                           </div>
@@ -156,7 +155,7 @@
                               class="form-control form-control-sm"
                               :value="item.nxDoRemark"
                               @input="$emit('remark-input', { item, orderIndex, value: $event.target.value, field: 'nxDoRemark' })"
-                              placeholder="备注"
+                              :ref="`draft-remark-${orderIndex}`"
                               maxlength="15"
                               style="margin-left:30px;font-size: 12px; background-color: transparent; width: 300px; flex-shrink: 0;"
                       />
@@ -242,6 +241,88 @@ export default {
             const node = el && el.$el ? el.$el : el;
             if (node && typeof node.scrollIntoView === 'function') {
                 node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        },
+        handleGoodsNameEnter(orderIndex) {
+            console.log('🟢 [DraftOrderList] 商品名称回车, orderIndex:', orderIndex);
+            this.$nextTick(() => {
+                const refKey = `draft-quantity-${orderIndex}`;
+                console.log('🟢 [DraftOrderList] refKey:', refKey);
+                const quantityRef = this.$refs[refKey];
+                console.log('🟢 [DraftOrderList] quantityRef:', quantityRef);
+                console.log('🟢 [DraftOrderList] quantityRef isArray:', Array.isArray(quantityRef));
+                const targetRef = Array.isArray(quantityRef) ? quantityRef[0] : quantityRef;
+                if (targetRef && typeof targetRef.focus === 'function') {
+                    targetRef.focus();
+                    console.log('🟢 [DraftOrderList] 已聚焦到数量输入框');
+                } else {
+                    console.warn('🔴 [DraftOrderList] targetRef 不存在或没有 focus 方法');
+                }
+            });
+        },
+        handleQuantityEnter(orderIndex) {
+            console.log('🟢 [DraftOrderList] 数量回车, orderIndex:', orderIndex);
+            this.$nextTick(() => {
+                const refKey = `draft-standard-${orderIndex}`;
+                console.log('🟢 [DraftOrderList] refKey:', refKey);
+                const standardRef = this.$refs[refKey];
+                console.log('🟢 [DraftOrderList] standardRef:', standardRef);
+                console.log('🟢 [DraftOrderList] standardRef isArray:', Array.isArray(standardRef));
+                const targetRef = Array.isArray(standardRef) ? standardRef[0] : standardRef;
+                if (targetRef && typeof targetRef.focus === 'function') {
+                    targetRef.focus();
+                    console.log('🟢 [DraftOrderList] 已聚焦到规格输入框');
+                } else {
+                    console.warn('🔴 [DraftOrderList] targetRef 不存在或没有 focus 方法');
+                }
+            });
+        },
+        handleStandardEnter(event) {
+            console.log('🟢 [DraftOrderList] 规格回车，失去焦点');
+            event.target.blur();
+        },
+        handleAddOrderBefore(orderIndex) {
+            console.log('🟢 [DraftOrderList] 点击新订单, orderIndex:', orderIndex);
+            this.$emit('add-order-before', { orderIndex });
+            this.$nextTick(() => {
+                const refKey = `draft-goods-name-${orderIndex}`;
+                console.log('🟢 [DraftOrderList] refKey:', refKey);
+                const goodsNameRef = this.$refs[refKey];
+                console.log('🟢 [DraftOrderList] goodsNameRef:', goodsNameRef);
+                console.log('🟢 [DraftOrderList] goodsNameRef isArray:', Array.isArray(goodsNameRef));
+                const targetRef = Array.isArray(goodsNameRef) ? goodsNameRef[0] : goodsNameRef;
+                if (targetRef && typeof targetRef.focus === 'function') {
+                    targetRef.focus();
+                    console.log('🟢 [DraftOrderList] 已聚焦到商品名称输入框');
+                } else {
+                    console.warn('🔴 [DraftOrderList] targetRef 不存在或没有 focus 方法');
+                }
+            });
+        },
+        handleRemarkClick(orderIndex) {
+            const item = this.orderItems[orderIndex];
+            console.log('🟢 [DraftOrderList] 点击备注按钮, orderIndex:', orderIndex, 'nxDoAddRemark:', item.nxDoAddRemark);
+
+            if (item.nxDoAddRemark) {
+                // 如果已有备注，清除备注
+                this.$emit('clear-remark', { item, orderIndex });
+            } else {
+                // 如果没有备注，添加备注并聚焦到输入框
+                this.$emit('add-remark', { item, orderIndex });
+                this.$nextTick(() => {
+                    const refKey = `draft-remark-${orderIndex}`;
+                    console.log('🟢 [DraftOrderList] refKey:', refKey);
+                    const remarkRef = this.$refs[refKey];
+                    console.log('🟢 [DraftOrderList] remarkRef:', remarkRef);
+                    console.log('🟢 [DraftOrderList] remarkRef isArray:', Array.isArray(remarkRef));
+                    const targetRef = Array.isArray(remarkRef) ? remarkRef[0] : remarkRef;
+                    if (targetRef && typeof targetRef.focus === 'function') {
+                        targetRef.focus();
+                        console.log('🟢 [DraftOrderList] 已聚焦到备注输入框');
+                    } else {
+                        console.warn('🔴 [DraftOrderList] targetRef 不存在或没有 focus 方法');
+                    }
+                });
             }
         }
     }
@@ -370,4 +451,5 @@ export default {
         background: #e7f1ff;
     }
 </style>
+
 

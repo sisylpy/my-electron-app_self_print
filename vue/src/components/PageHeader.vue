@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <section class="content-header">
 
         <h1>{{navTitle}}
@@ -57,3 +57,4 @@
 }
 
 </style>
+

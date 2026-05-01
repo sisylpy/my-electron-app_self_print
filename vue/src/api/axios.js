@@ -1,12 +1,12 @@
-// src/api/axios.js
+﻿// src/api/axios.js
 import axios from 'axios';
 import store from '../store'; // 引入 Vuex Store
 import config from '../config'; // 引入配置文件
 
 // 获取环境变量中的 API 地址
-// 开发环境使用本地地址，生产环境使用远程地址
-const apiUrl = process.env.NODE_ENV === 'development' 
-  ? 'http://192.168.0.102:8080/nongxinle_master_war_exploded/api/'
+// 开发环境使用 Vite 代理（相对路径），生产环境使用远程地址
+const apiUrl = process.env.NODE_ENV === 'development'
+  ? '/api/'
   : (config.baseURL || 'https://grainservice.club:8443/nongxinle/api/');
 
 // 创建 Axios 实例
@@ -14,6 +14,7 @@ const axiosInstance = axios.create({
   baseURL: apiUrl, // 使用环境变量作为 baseURL
   // 其他配置（如超时、请求头等）
   timeout: 10000, // 设置请求超时为10秒
+  withCredentials: true, // 允许发送跨域 cookies
   headers: {
     'Content-Type': 'application/json',
     // 其他头部配置
@@ -118,3 +119,4 @@ axiosInstance.interceptors.response.use(
 
 
 export default axiosInstance;
+

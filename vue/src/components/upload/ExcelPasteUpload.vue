@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <div class="upload-section" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
        
         <!-- 任务栏：添加新表格 + 任务列表（仅 placeOrder 且 depId 有值时显示，保存订单后 loadTaskList 会刷新） -->
@@ -53,7 +53,7 @@
                                     class="form-control"
                                     rows="5"
                                     v-model="excelPastePromptText"
-                                    placeholder="可输入额外的说明或要求，例如：请特别注意某些字段的处理方式..."></textarea>
+></textarea>
                             <small class="text-muted">系统已内置完整的解析规则，此处可输入额外的补充说明</small>
                         </div>
                     </div>
@@ -316,13 +316,28 @@
             </div>
         </div>
     </div>
+
+    <!-- Toast 提示组件 -->
+    <Toast
+            v-model:visible="toastVisible"
+            :message="toastMessage"
+            :type="toastType"
+            :duration="toastDuration"
+    />
+    <AlertDialog ref="alertDialog" />
 </template>
 
 <script>
 import api from "../../api/all";
+import Toast from '../Toast.vue';
+import AlertDialog from '../AlertDialog.vue';
 
 export default {
     name: 'ExcelPasteUpload',
+    components: {
+        Toast,
+        AlertDialog
+    },
     props: {
         tableData: {
             type: Array,
@@ -425,7 +440,13 @@ export default {
             excelPasteCsvData: '', // Excel 粘贴的 CSV 数据（用于预览）
             isUnmounted: false, // 组件是否已卸载标志
             failedRowIndex: -1, // 校验失败的行索引（0-based），用于高亮并滚动到该行
-            tableScrollState: { scrollLeft: 0, scrollWidth: 0, clientWidth: 0 } // 表格横向滚动状态，用于左右滚动按钮
+            tableScrollState: { scrollLeft: 0, scrollWidth: 0, clientWidth: 0 }, // 表格横向滚动状态，用于左右滚动按钮
+
+            // Toast 提示相关
+            toastVisible: false,
+            toastMessage: '',
+            toastType: 'info',
+            toastDuration: 3000
         }
     },
     computed: {
@@ -496,6 +517,14 @@ export default {
         }
     },
     methods: {
+        // 显示 Toast 提示
+        showToast(message, type = 'info', duration = 3000) {
+            this.toastMessage = message;
+            this.toastType = type;
+            this.toastDuration = duration;
+            this.toastVisible = true;
+        },
+
         /** 获取 vxe-table 横向滚动容器 */
         getTableScrollEl() {
             const table = this.$refs.excelPasteTableRef;
@@ -698,7 +727,7 @@ export default {
             return classes.join(' ') || '';
         },
 
-        handleTablePaste(event) {
+        async handleTablePaste(event) {
             // 检查组件是否已卸载
             if (this.isUnmounted) {
                 console.warn('⚠️ [表格粘贴] 组件已卸载，取消操作');
@@ -709,7 +738,7 @@ export default {
             if (this.excelPasteOrderItems && this.excelPasteOrderItems.length > 0) {
                 console.warn('⚠️ [表格粘贴] 右侧已有订单，禁止继续粘贴，请先清空订单');
                 event.preventDefault();
-                alert('右侧已有订单，如需继续编辑表格，请先清空订单');
+                this.showToast('右侧已有订单，如需继续编辑表格，请先清空订单', 'warning');
                 return;
             }
 
@@ -755,7 +784,7 @@ export default {
             if (exceededRows > 0) {
                 const message = `表格最多支持 ${maxRows} 行数据。您粘贴了 ${rows.length} 行数据，起始于第 ${startRowIndex + 1} 行。将有 ${exceededRows} 行数据被丢弃（第 ${startRowIndex + validRows + 1} 行到第 ${lastRowIndex + 1} 行）。`;
                 console.warn(`⚠️ [表格粘贴] ${message}`);
-                alert(message);
+                this.showToast(message, 'warning');
             }
 
             // 将数据填充到表格中（通过 emit 通知父组件更新 tableData）
@@ -821,7 +850,7 @@ export default {
                 // 如果已经到了表格末尾，提示用户
                 console.log('⚠️ [表格粘贴] 已到达表格末尾，无法继续向下移动');
                 if (nextRowIndex >= maxRows) {
-                    alert(`表格最多支持 ${maxRows} 行数据，已达到上限。`);
+                    await this.$refs.alertDialog.alert(`表格最多支持 ${maxRows} 行数据，已达到上限。`, 'warning');
                 }
             }
 
@@ -977,7 +1006,7 @@ export default {
         directConvertTableToOrders() {
             this.failedRowIndex = -1;
             if (!this.hasTableData) {
-                alert('请先粘贴或输入表格数据');
+                this.showToast('请先粘贴或输入表格数据', 'warning');
                 return;
             }
             const tableData = this.tableData || [];
@@ -995,7 +1024,7 @@ export default {
                 // 有内容则商品名称必填
                 if (!name) {
                     this.failedRowIndex = i;
-                    alert(`第 ${i + 1} 行：商品名称不能为空`);
+                    this.showToast(`第 ${i + 1} 行：商品名称不能为空`, 'error');
                     this.scrollToTableRow(i);
                     return;
                 }
@@ -1003,33 +1032,33 @@ export default {
                 // 校验数量与规格
                 if (qtyStr === '') {
                     this.failedRowIndex = i;
-                    alert(`第 ${i + 1} 行：数量不能为空`);
+                    this.showToast(`第 ${i + 1} 行：数量不能为空`, 'error');
                     this.scrollToTableRow(i);
                     return;
                 }
                 const qtyNum = Number(row.quantity);
                 if (Number.isNaN(qtyNum) || qtyNum <= 0) {
                     this.failedRowIndex = i;
-                    alert(`第 ${i + 1} 行：数量必须是大于 0 的数字`);
+                    this.showToast(`第 ${i + 1} 行：数量必须是大于 0 的数字`, 'error');
                     this.scrollToTableRow(i);
                     return;
                 }
 
                 if (!specStr) {
                     this.failedRowIndex = i;
-                    alert(`第 ${i + 1} 行：规格不能为空`);
+                    this.showToast(`第 ${i + 1} 行：规格不能为空`, 'error');
                     this.scrollToTableRow(i);
                     return;
                 }
                 if (!chineseOnly.test(specStr)) {
                     this.failedRowIndex = i;
-                    alert(`第 ${i + 1} 行：规格必须为汉字`);
+                    this.showToast(`第 ${i + 1} 行：规格必须为汉字`, 'error');
                     this.scrollToTableRow(i);
                     return;
                 }
                 if (specStr.length > 2) {
                     this.failedRowIndex = i;
-                    alert(`第 ${i + 1} 行：规格不能超过 2 个汉字，当前为 ${specStr.length} 个`);
+                    this.showToast(`第 ${i + 1} 行：规格不能超过 2 个汉字，当前为 ${specStr.length} 个`, 'error');
                     this.scrollToTableRow(i);
                     return;
                 }
@@ -1037,7 +1066,7 @@ export default {
 
             const rows = tableData.filter(row => row.goodsName && String(row.goodsName).trim() !== '');
             if (rows.length === 0) {
-                alert('表格中没有有效数据（商品名称不能为空）');
+                this.showToast('表格中没有有效数据（商品名称不能为空）', 'warning');
                 return;
             }
             const list = rows.map(row => ({
@@ -1070,14 +1099,14 @@ export default {
         showExcelPastePromptDialog() {
             // 检查是否有数据
             if (!this.hasTableData) {
-                alert('表格中没有数据，请先粘贴数据');
+                this.showToast('表格中没有数据，请先粘贴数据', 'warning');
                 return;
             }
 
             // 转换为 CSV
             const csvData = this.convertTableDataToCsv();
             if (!csvData) {
-                alert('无法生成 CSV 数据');
+                this.showToast('无法生成 CSV 数据', 'error');
                 return;
             }
 
@@ -1096,7 +1125,7 @@ export default {
             }
 
             if (!this.excelPasteCsvData || !this.excelPasteCsvData.trim()) {
-                alert('CSV 数据为空');
+                this.showToast('CSV 数据为空', 'error');
                 return;
             }
 
@@ -1321,4 +1350,7 @@ export default {
         }
     }
 </style>
+
+
+
 

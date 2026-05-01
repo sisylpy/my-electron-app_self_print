@@ -1,4 +1,4 @@
-import axios from 'axios'
+﻿import axios from 'axios'
 import config from '../config/index' // 路径配置
 
 // 创建axios 实例
@@ -69,3 +69,4 @@ service.interceptors.response.use(
 
 
 export default service
+

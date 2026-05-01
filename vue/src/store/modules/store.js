@@ -1,4 +1,4 @@
-
+﻿
 const store = {
     namespaced: true,
     types: {
@@ -60,3 +60,4 @@ const store = {
 }
 
 export default store
+

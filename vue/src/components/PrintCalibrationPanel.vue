@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <div v-if="visible" style="background: #f5f5f5; border: 1px solid #ddd; margin: 10px; padding: 15px; border-radius: 5px; max-height: 80vh; overflow-y: auto;">
         <h3 style="margin: 0 0 15px 0; color: #333;">🔧 打印校准设置</h3>
         
@@ -217,19 +217,27 @@
 <!--            5. 调整满意后点击"保存配置"，系统会记住当前打印机的设置-->
 <!--        </div>-->
     </div>
+
+    <!-- AlertDialog 自定义弹窗组件 -->
+    <AlertDialog ref="alertDialog" />
+
 </template>
 
 <script>
-import { 
-    savePrinterProfile, 
+import {
+    savePrinterProfile,
     getCurrentPrinterName,
     applyPrinterProfile,
     loadPrinterProfile,
     DEFAULT_PROFILE
 } from '@/utils/printerProfile';
+import AlertDialog from './AlertDialog.vue';
 
 export default {
     name: 'PrintCalibrationPanel',
+    components: {
+        AlertDialog
+    },
     props: {
         visible: {
             type: Boolean,
@@ -902,45 +910,45 @@ export default {
                 }
             } catch (error) {
                 console.error('打印校准页面失败:', error);
-                alert('打印校准页面失败: ' + error.message);
+                await this.$refs.alertDialog.alert('打印校准页面失败: ' + error.message, 'error');
             }
         },
-        
+
         // 设为系统默认分辨率（仅 macOS，用 lpoptions 写入）
         async handleSetResolution(hDpi, vDpi) {
             if (!window.electronAPI?.setPrinterResolution) {
-                alert('当前环境不支持');
+                await this.$refs.alertDialog.alert('当前环境不支持', 'warning');
                 return;
             }
             try {
                 const result = await window.electronAPI.setPrinterResolution(hDpi, vDpi);
                 if (result.success) {
-                    alert(`已设置分辨率为 ${hDpi}×${vDpi}，可点击「一键同步」验证`);
+                    await this.$refs.alertDialog.alert(`已设置分辨率为 ${hDpi}×${vDpi}，可点击「一键同步」验证`, 'success');
                 } else {
-                    alert('设置失败: ' + (result.error || '未知错误'));
+                    await this.$refs.alertDialog.alert('设置失败: ' + (result.error || '未知错误'), 'error');
                 }
             } catch (e) {
-                alert('设置失败: ' + e.message);
+                await this.$refs.alertDialog.alert('设置失败: ' + e.message, 'error');
             }
         },
         // 一键同步系统配置
         async handleSyncSystemConfig() {
             try {
                 if (!window.electronAPI || !window.electronAPI.getPrinterSystemConfig) {
-                    alert('系统配置获取功能不可用');
+                    await this.$refs.alertDialog.alert('系统配置获取功能不可用', 'warning');
                     return;
                 }
-                
+
                 const result = await window.electronAPI.getPrinterSystemConfig();
                 if (result.success && result.config) {
                     this.systemConfig = result.config;
-                    alert(`系统配置同步成功！\n打印机: ${result.config.name}\nDPI: ${result.config.hDpi} x ${result.config.vDpi}\n纸张尺寸: ${result.config.widthMm}mm x ${result.config.heightMm}mm`);
+                    await this.$refs.alertDialog.alert(`系统配置同步成功！\n打印机: ${result.config.name}\nDPI: ${result.config.hDpi} x ${result.config.vDpi}\n纸张尺寸: ${result.config.widthMm}mm x ${result.config.heightMm}mm`, 'success');
                 } else {
-                    alert('获取系统配置失败: ' + (result.error || '未知错误') + '\n\n提示：某些打印机可能无法获取完整配置信息，这是正常的。');
+                    await this.$refs.alertDialog.alert('获取系统配置失败: ' + (result.error || '未知错误') + '\n\n提示：某些打印机可能无法获取完整配置信息，这是正常的。', 'warning');
                 }
             } catch (error) {
                 console.error('同步系统配置失败:', error);
-                alert('同步系统配置失败: ' + error.message);
+                await this.$refs.alertDialog.alert('同步系统配置失败: ' + error.message, 'error');
             }
         },
         
@@ -964,11 +972,11 @@ export default {
         },
         
         // 增加缩放系数（每次 +0.005，自动调整右边距）
-        increaseZoomFactor() {
+        async increaseZoomFactor() {
             const oldValue = this.zoomFactor;
             const newValue = Number((this.zoomFactor + 0.005).toFixed(3));
             if (newValue > 1.5) {
-                alert('缩放系数不能超过 1.5');
+                await this.$refs.alertDialog.alert('缩放系数不能超过 1.5', 'warning');
                 return;
             }
             this.zoomFactor = newValue;
@@ -1002,11 +1010,11 @@ export default {
         },
         
         // 减少缩放系数（每次 -0.005，自动调整右边距）
-        decreaseZoomFactor() {
+        async decreaseZoomFactor() {
             const oldValue = this.zoomFactor;
             const newValue = Number((this.zoomFactor - 0.005).toFixed(3));
             if (newValue < 0.5) {
-                alert('缩放系数不能小于 0.5');
+                await this.$refs.alertDialog.alert('缩放系数不能小于 0.5', 'warning');
                 return;
             }
             this.zoomFactor = newValue;
@@ -1027,12 +1035,12 @@ export default {
         },
         
         // 验证缩放系数范围（自动调整右边距）
-        validateZoomFactor() {
+        async validateZoomFactor() {
             if (this.zoomFactor < 0.5) {
-                alert('缩放系数不能小于 0.5，已自动调整为 0.5');
+                await this.$refs.alertDialog.alert('缩放系数不能小于 0.5，已自动调整为 0.5', 'warning');
                 this.zoomFactor = 0.5;
             } else if (this.zoomFactor > 1.5) {
-                alert('缩放系数不能超过 1.5，已自动调整为 1.5');
+                await this.$refs.alertDialog.alert('缩放系数不能超过 1.5，已自动调整为 1.5', 'warning');
                 this.zoomFactor = 1.5;
             }
             // 保留3位小数（与步长0.005一致）
@@ -1058,26 +1066,26 @@ export default {
         },
         
         // 计算并应用缩放系数（已屏蔽，保留作为备用）
-        handleCalculateZoom() {
+        async handleCalculateZoom() {
             const theoretical = 100.0; // 理论长度是 100mm
-            
+
             if (!this.measuredWidth || this.measuredWidth <= 0) {
-                alert('请输入有效的测量值');
+                await this.$refs.alertDialog.alert('请输入有效的测量值', 'warning');
                 return;
             }
-            
+
             // 计算缩放比例：理论 / 实际
             const newZoom = theoretical / this.measuredWidth;
-            
+
             // 限制合理范围（0.5 ~ 1.5）
             if (newZoom < 0.5 || newZoom > 1.5) {
-                alert('测量数值可能不准确，缩放系数超出合理范围（0.5 ~ 1.5），请重新测量');
+                await this.$refs.alertDialog.alert('测量数值可能不准确，缩放系数超出合理范围（0.5 ~ 1.5），请重新测量', 'warning');
                 return;
             }
             
             this.zoomFactor = Number(newZoom.toFixed(3)); // 保留3位小数
-            
-            alert(`校准成功！\n当前缩放补偿系数：${this.zoomFactor.toFixed(4)}\n缩放比例：${(this.zoomFactor * 100).toFixed(2)}%\n\n请点击"保存配置"以保存此设置。`);
+
+            await this.$refs.alertDialog.alert(`校准成功！\n当前缩放补偿系数：${this.zoomFactor.toFixed(4)}\n缩放比例：${(this.zoomFactor * 100).toFixed(2)}%\n\n请点击"保存配置"以保存此设置。`, 'success');
         },
 
         // 恢复默认配置
@@ -1133,7 +1141,7 @@ export default {
                 const printerName = await getCurrentPrinterName();
                 
                 if (!printerName) {
-                    alert('❌ 错误：未配置打印机！\n\n请先在 Screen.vue 中设置并保存打印机，然后再保存打印配置。');
+                    await this.$refs.alertDialog.alert('❌ 错误：未配置打印机！\n\n请先在 Screen.vue 中设置并保存打印机，然后再保存打印配置。', 'error');
                     console.error('❌ [handleSave] 未配置打印机，无法保存配置');
                     return;
                 }
@@ -1211,13 +1219,13 @@ export default {
                 }
                 
                 const warningText = warnings.length > 0 ? `\n\n⚠️ 警告：\n${warnings.join('\n')}` : '';
-                
-                alert(`已保存 ${printerName} 的打印配置！\n\n保存的内容：\n• 左边距：${currentProfile.safeLeftMm}mm\n• 右边距：${currentProfile.safeRightMm}mm\n• 最大可打印宽度：${currentProfile.maxPrintableWidth}mm\n• 配送商字体：${currentProfile.distributorNameFontSize}px\n• 表头字体：${currentProfile.headerFontSize}px\n• 订单字体：${currentProfile.orderContentFontSize}px\n• 行间距：${currentProfile.lineHeight}px\n• 缩放系数：${savedZoomFactor.toFixed(3)}${warningText}`);
-                
+
+                await this.$refs.alertDialog.alert(`已保存 ${printerName} 的打印配置！\n\n保存的内容：\n• 左边距：${currentProfile.safeLeftMm}mm\n• 右边距：${currentProfile.safeRightMm}mm\n• 最大可打印宽度：${currentProfile.maxPrintableWidth}mm\n• 配送商字体：${currentProfile.distributorNameFontSize}px\n• 表头字体：${currentProfile.headerFontSize}px\n• 订单字体：${currentProfile.orderContentFontSize}px\n• 行间距：${currentProfile.lineHeight}px\n• 缩放系数：${savedZoomFactor.toFixed(3)}${warningText}`, 'success');
+
                 this.$emit('saved', currentProfile);
             } catch (error) {
                 console.error('❌ [handleSave] 保存配置失败:', error);
-                alert('保存配置失败，请重试');
+                await this.$refs.alertDialog.alert('保存配置失败，请重试', 'error');
             }
         },
 
@@ -1228,3 +1236,6 @@ export default {
     }
 };
 </script>
+
+
+

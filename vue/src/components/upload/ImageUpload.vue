@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <div class="upload-section" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
         <div class="row g-3" style="flex: 1; min-height: 0; overflow: hidden; margin: 0; align-items: stretch;">
             <!-- 左侧：图片上传和预览 -->
@@ -45,22 +45,30 @@
                                  @dragenter.prevent="handleDragEnter"
                                  @dragleave.prevent="handleDragLeave"
                                  @drop.prevent="handleDrop"
+                                 @paste.prevent="handlePaste"
+                                 @click="$refs.imageFileInput && $refs.imageFileInput.click()"
+                                 tabindex="0"
                                  style="cursor: pointer; transition: all 0.3s; background-color: #f8f9fa;">
                                 <input
                                         type="file"
                                         ref="imageFileInput"
                                         accept="image/*"
                                         @change="$emit('image-upload', $event)"
+                                        @click.stop
                                         class="form-control mb-2"
                                 />
                                 <small class="text-muted d-block">支持JPG、PNG等图片格式，系统将自动识别图片中的订单信息</small>
-                                <small class="text-primary d-block mt-1">💡 也可以直接从微信等程序拖放图片到这里</small>
+                                <small class="text-primary d-block mt-1">💡 可从微信拖放图片，或复制图片后 Ctrl+V 粘贴</small>
                             </div>
                         </div>
 
 
-                        <!-- 识别中蒙版（不依赖 imagePreview，只要有任务就显示） -->
+                        <!-- 识别中蒙版（不依赖 imagePreview，只要有任务就显示）；支持拖放穿透，方便从微信等拖入图片 -->
                         <div v-if="hasRunningTask && !hasCache && !uploadedImageFile" class="recognizing-overlay"
+                             @dragover.prevent="handleDragOver"
+                             @dragenter.prevent="handleDragEnter"
+                             @dragleave.prevent="handleDragLeave"
+                             @drop.prevent="handleDrop"
                              style="position: absolute !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; z-index: 10;">
                             <div class="recognizing-content">
                                 <div class="spinner-border text-primary mb-3" role="status">
@@ -69,9 +77,13 @@
                                 <div class="text-white fw-bold">该客户正在识别中，请稍候...</div>
                             </div>
                         </div>
-                        <!-- 解析中 / 加载任务中 / 后台异步处理中 蒙版（taskOrder 下用占位动画，不占满屏） -->
+                        <!-- 解析中 / 加载任务中 / 后台异步处理中 蒙版；支持拖放穿透，方便从微信等拖入图片 -->
                         <div v-if="showDeepSeekLoading || (selectTaskLoading && source !== 'taskOrder') || (currentTask && currentTask.nxOcrTaskStatus === 0)"
-                             class="parsing-overlay">
+                             class="parsing-overlay"
+                             @dragover.prevent="handleDragOver"
+                             @dragenter.prevent="handleDragEnter"
+                             @dragleave.prevent="handleDragLeave"
+                             @drop.prevent="handleDrop">
                             <div class="parsing-content">
                                 <div class="spinner-border text-primary" role="status"
                                      style="width: 3rem; height: 3rem;">
@@ -296,13 +308,25 @@
 
         </div>
     </div>
+
+    <!-- Toast 提示组件 -->
+    <Toast
+            v-model:visible="toastVisible"
+            :message="toastMessage"
+            :type="toastType"
+            :duration="toastDuration"
+    />
 </template>
 
 <script>
     import api from '../../api/all';
+    import Toast from '../Toast.vue';
 
     export default {
         name: 'ImageUpload',
+        components: {
+            Toast
+        },
         props: {
             /** 区分来源：'placeOrder' 下单页 | 'taskOrder' 任务页，用于按来源显示不同 UI（如任务栏仅在 placeOrder 显示） */
             source: {
@@ -422,8 +446,21 @@
                 activeTaskId: null, // 当前选中的任务 ID（nxOcrTaskId）
                 loadingTaskList: false,
                 headerFlash: false, // 任务栏点击高亮动画
-                headerFlashTimer: null
+                headerFlashTimer: null,
+
+                // Toast 提示相关
+                toastVisible: false,
+                toastMessage: '',
+                toastType: 'info',
+                toastDuration: 3000
             };
+        },
+        mounted() {
+            this._pasteHandler = (e) => this.handlePaste(e);
+            document.addEventListener('paste', this._pasteHandler);
+        },
+        beforeUnmount() {
+            document.removeEventListener('paste', this._pasteHandler);
         },
         watch: {
             depId: {
@@ -438,6 +475,14 @@
             }
         },
         methods: {
+            // 显示 Toast 提示
+            showToast(message, type = 'info', duration = 3000) {
+                this.toastMessage = message;
+                this.toastType = type;
+                this.toastDuration = duration;
+                this.toastVisible = true;
+            },
+
             async loadTaskList(selectTaskId, opts) {
                 this.loadingTaskList = true;
                 try {
@@ -516,6 +561,16 @@
                     this.headerFlash = false;
                     this.headerFlashTimer = null;
                 }, 600);
+            },
+            /** 将 base64 转为 File 对象 */
+            base64ToFile(base64, fileName) {
+                const mime = (fileName.match(/\.(jpe?g|png|gif|webp|bmp)$/i) || [])[1];
+                const mimeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' };
+                const type = mime ? (mimeMap[mime.toLowerCase()] || 'image/png') : 'image/png';
+                const bin = atob(base64);
+                const arr = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                return new File([arr], fileName, { type });
             },
             formatFileSize(bytes) {
                 if (!bytes) return '0 B';
@@ -687,6 +742,25 @@
                 this.isDragOver = true;
             },
 
+            // 处理粘贴（从微信复制图片后 Ctrl+V，比拖拽更可靠）
+            handlePaste(event) {
+                // 在输入框内粘贴时不拦截，让默认行为生效
+                if (event.target && (event.target.closest?.('input, textarea, [contenteditable="true"]'))) return;
+                const clipboardData = event.clipboardData || (event.originalEvent && event.originalEvent.clipboardData);
+                if (!clipboardData || !clipboardData.items) return;
+                for (let i = 0; i < clipboardData.items.length; i++) {
+                    const item = clipboardData.items[i];
+                    if (item.kind === 'file' && item.type && item.type.startsWith('image/')) {
+                        const file = item.getAsFile();
+                        if (file) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            this.$emit('image-upload', { target: { files: [file] } });
+                            return;
+                        }
+                    }
+                }
+            },
             // 处理拖放进入
             handleDragEnter(event) {
                 event.preventDefault();
@@ -702,23 +776,65 @@
                 }
             },
 
-            // 处理拖放放置
-            handleDrop(event) {
+            // 处理拖放放置（支持从微信等外部应用拖入，dataTransfer.files 可能为空，需尝试 items）
+            async handleDrop(event) {
                 event.preventDefault();
                 this.isDragOver = false;
 
-                // 获取拖放的文件
-                const files = event.dataTransfer.files;
-                if (!files || files.length === 0) {
+                const dt = event.dataTransfer;
+                const files = dt?.files ?? [];
+                const items = dt?.items ?? [];
+
+                let file = null;
+
+                // 优先从 files 获取（常规拖放）
+                if (files && files.length > 0) {
+                    file = files[0];
+                }
+
+                // 从微信等外部应用拖入时 files 可能为空，尝试从 items 获取
+                if (!file && items.length > 0) {
+                    for (let i = 0; i < items.length; i++) {
+                        const item = items[i];
+                        if (item.kind === 'file' && item.type && item.type.startsWith('image/')) {
+                            file = item.getAsFile();
+                            break;
+                        }
+                    }
+                }
+
+                // 尝试 getData('text/uri-list')：部分应用（如微信）可能只提供文件路径
+                if (!file && typeof window !== 'undefined' && window.electronAPI?.readFile) {
+                    try {
+                        const uriList = dt.getData('text/uri-list') || dt.getData('text/plain') || '';
+                        const filePaths = uriList.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+                        for (const uri of filePaths) {
+                            let path = uri;
+                            if (path.startsWith('file://')) {
+                                path = path.replace(/^file:\/\/\/?/, '/').replace(/%20/g, ' ');
+                            }
+                            if (path && /\.(jpe?g|png|gif|webp|bmp)$/i.test(path)) {
+                                const res = await window.electronAPI.readFile(path);
+                                if (res?.success && res?.data) {
+                                    file = this.base64ToFile(res.data, res.fileName || 'image.png');
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // getData/readFile 失败时静默，继续走后续逻辑
+                    }
+                }
+
+                if (!file) {
+                    // 从微信等外部应用拖入时 dataTransfer 为空，Chromium 无法获取数据
+                    this.showToast('从微信拖入暂不支持，请尝试：在微信中右键图片→复制，然后在此处按 Ctrl+V 粘贴', 'warning');
                     return;
                 }
 
-                // 只处理第一个文件
-                const file = files[0];
-
                 // 验证文件类型
-                if (!file.type.startsWith('image/')) {
-                    alert('请拖放有效的图片文件');
+                if (!file.type || !file.type.startsWith('image/')) {
+                    this.showToast('请拖放有效的图片文件', 'error');
                     return;
                 }
 
@@ -869,4 +985,5 @@
         opacity: 0;
     }
 </style>
+
 

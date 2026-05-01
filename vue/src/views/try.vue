@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <div class="container-fluid">
       <div class="top-gradient"></div> <!-- 顶部渐变背景 -->
       

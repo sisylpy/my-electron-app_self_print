@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router';
+﻿import { createRouter, createWebHistory } from 'vue-router';
 
 // 直接引入页面组件
 import Home from '@/views/Home.vue';
@@ -46,3 +46,4 @@ router.push = function push(location) {
 };
 
 export default router;
+

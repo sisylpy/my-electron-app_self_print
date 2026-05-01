@@ -1,6 +1,6 @@
-<template>
+﻿<template>
   <div class="saved-orders-tab"
-       style="height: calc(100vh - 300px); overflow: hidden; display: flex; flex-direction: column;">
+       style="height: 100%; overflow: hidden; display: flex; flex-direction: column;">
     <!-- 订单列表显示区域 -->
     <div class="order-list-container" style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
       <!-- 无子部门的情况 -->
@@ -25,7 +25,7 @@
             class="order-item border-bottom p-2"
             :class="{
               'bg-white': order.nxDoPurchaseStatus == 4,
-              'liziBack': order.nxDoPurchaseStatus != 4 && order.nxDoStatus == 0 ,
+              'liziBack': order.nxDoPurchaseStatus != 4 && order.nxDoStatus > -1 ,
               'liziDelivery': order.nxDoPurchaseStatus == 5,
               'liziClock': order.nxDoPurchaseStatus == 3
             }">
@@ -50,6 +50,14 @@
                <span class="">
                   {{ order.nxDoWeight }}
                 </span>
+                <span 
+                 v-if="order.nxDoStatus > -2"
+                 class="ms-1 text-primary" 
+                 style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
+                 @click.stop="handleOpenEditWeightModal(order, index, 'list')"
+                 title="修改出库数量">
+                 ✏️
+               </span>
             </div>
 
             <div style="width: 100px; flex-shrink: 0;" class="text-center  table-cell">
@@ -57,12 +65,10 @@
                   {{ order.nxDoPrintStandard}}
                </span>
                <span 
-                 v-if="order.nxDoStatus > -2 && order.nxDoPrintStandard"
+                 v-if="order.nxDoStatus > -2"
                  class="ms-1 text-primary" 
                  style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                  @click.stop="handleOpenEditPrintStandardModal(order, index, 'list')"
-                 @mouseenter="$event.target.style.opacity = '1'"
-                 @mouseleave="$event.target.style.opacity = '0.7'"
                  title="修改打印规格">
                  ✏️
                </span>
@@ -93,8 +99,6 @@
                 class="ms-1 text-primary" 
                 style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                 @click.stop="handleOpenEditPriceModal(order, index, 'list')"
-                @mouseenter="$event.target.style.opacity = '1'"
-                @mouseleave="$event.target.style.opacity = '0.7'"
                 title="修改单价">
                 ✏️
               </span>
@@ -108,8 +112,6 @@
                 class="ms-1 text-primary" 
                 style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                 @click.stop="handleOpenEditPriceModal(order, index, 'list')"
-                @mouseenter="$event.target.style.opacity = '1'"
-                @mouseleave="$event.target.style.opacity = '0.7'"
                 title="修改单价">
                 ✏️
               </span>
@@ -127,7 +129,7 @@
                 删除
               </button>
               <button
-                    v-else-if="order.nxDoStatus !== 2"
+                    v-else-if="order.nxDoStatus !== -2"
                     class="btn btn-sm btn-secondary"
                     @click="handleOpenEditOrderModalDirect(order, index, 'list')"
                     title="修改">
@@ -166,18 +168,19 @@
         </div>
       </div>
 
-      <!-- 有子部门的情况 -->
+      <!-- 有子部门的情况（列表抬头与列操作与单部门一致） -->
       <div v-else class="order-table-wrapper" style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
-          <!-- 固定表头 -->
         <div class="table-header-fixed bg-light border-bottom p-2 d-flex align-items-center fw-bold small" style="flex-shrink: 0;">
-            <div style="width: 50px; flex-shrink: 0;" class="text-center table-cell">序号</div>
-            <div style="width: 300px; flex-shrink: 0;" class="table-cell">商品名称</div>
-            <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">订货</div>
-            <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">出货</div>
-            <div style="width: 120px; flex-shrink: 0;" class="text-center table-cell">单价</div>
-            <div style="width: 120px; flex-shrink: 0;" class="text-end table-cell">小计</div>
-            <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">操作</div>
-          </div>
+          <div style="width: 50px; flex-shrink: 0;" class="text-center table-cell">序号</div>
+          <div style="width: 200px; flex-shrink: 0;" class="table-cell">商品名称</div>
+          <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">订货</div>
+          <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">出货数量</div>
+          <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">出货规格</div>
+          <div style="width: 150px; flex-shrink: 0;" class="text-center table-cell">规格</div>
+          <div style="width: 120px; flex-shrink: 0;" class="text-center table-cell">单价</div>
+          <div style="width: 120px; flex-shrink: 0;" class="text-end table-cell">小计</div>
+          <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">操作</div>
+        </div>
 
         <!-- 可滚动内容区域（包含所有部门） -->
         <div class="order-list-scroll" style="flex: 1; min-height: 0; overflow-y: auto;">
@@ -187,138 +190,172 @@
               <span class="text-primary fw-bold">#{{ dep.depName }}</span>
               <span class="text-muted">¥:{{ dep.depSubtotal }}元</span>
             </div>
-          <div
-              v-for="(order, index) in (dep.depOrders || [])"
-              :key="order.nxDepartmentOrdersId || order._tmpKey"
-              class="order-item border-bottom p-2"
-              :class="{
-                'bg-white': order.nxDoPurchaseStatus == 4,
-                'liziBack': order.nxDoPurchaseStatus != 4 && order.nxDoPurchaseStatus != 5 && order.nxDoPurchaseStatus != 3,
-                'liziDelivery': order.nxDoPurchaseStatus == 5,
-                'liziClock': order.nxDoPurchaseStatus == 3
-              }">
-            <div v-if="order.nxDoStatus > -2" class="d-flex align-items-center">
-              <div style="width: 50px; flex-shrink: 0;" class="text-center fw-bold table-cell">{{ index + 1 }}</div>
-              <div style="width: 200px; flex-shrink: 0;" class="table-cell">
-                <div class="d-flex align-items-center flex-wrap" style="max-width: 200px;">
-                  <span v-if="order.nxDistributerGoodsEntity && order.nxDistributerGoodsEntity.nxDgGoodsBrand && order.nxDistributerGoodsEntity.nxDgGoodsBrand !== 'null'"
-                        class="text-muted small me-1">
-                    {{ order.nxDistributerGoodsEntity.nxDgGoodsBrand }}
-                  </span>
-                  <span class="fw-bold me-1">{{ order.nxDistributerGoodsEntity?.nxDgGoodsName || order.nxDoGoodsName }}</span>
+            <div
+                v-for="(order, index) in (dep.depOrders || [])"
+                :key="order.nxDepartmentOrdersId || order._tmpKey"
+                class="order-item border-bottom p-2"
+                :class="{
+                  'bg-white': order.nxDoPurchaseStatus == 4,
+                  'liziBack': order.nxDoPurchaseStatus != 4 && order.nxDoStatus > -1,
+                  'liziDelivery': order.nxDoPurchaseStatus == 5,
+                  'liziClock': order.nxDoPurchaseStatus == 3
+                }">
+              <div v-if="order.nxDoStatus > -2" class="d-flex align-items-center">
+                <div style="width: 50px; flex-shrink: 0;" class="text-center fw-bold table-cell">{{ index + 1 }}</div>
+                <div style="width: 200px; flex-shrink: 0;" class="table-cell">
+                  <div class="d-flex align-items-center flex-wrap" style="max-width: 300px;">
+                    <span v-if="order.nxDistributerGoodsEntity && order.nxDistributerGoodsEntity.nxDgGoodsBrand && order.nxDistributerGoodsEntity.nxDgGoodsBrand !== 'null'"
+                          class="text-muted small me-1">
+                      {{ order.nxDistributerGoodsEntity.nxDgGoodsBrand }}
+                    </span>
+                    <span class="fw-bold me-1">{{ order.nxDistributerGoodsEntity?.nxDgGoodsName || order.nxDoGoodsName }}</span>
+                    <span v-if="order.nxDoRemark" class="text-danger small">({{ order.nxDoRemark }})</span>
+                  </div>
+                </div>
 
-                  <span v-if="order.nxDistributerGoodsEntity?.nxDgGoodsStandardWeight && order.nxDistributerGoodsEntity.nxDgGoodsStandardWeight !== 'null'"
-                        class="text-muted small me-1">
-                    ({{ order.nxDistributerGoodsEntity.nxDgGoodsStandardname }}/{{ order.nxDistributerGoodsEntity.nxDgGoodsStandardWeight }})
+                <div style="width: 100px; flex-shrink: 0;" class="text-center  table-cell">
+                  {{ order.nxDoQuantity }}{{ order.nxDoStandard }}
+                </div>
+
+                <div style="width: 100px; flex-shrink: 0;" class="text-center  table-cell">
+                  <span class="">
+                    {{ order.nxDoWeight }}
                   </span>
-                  <span v-if="order.nxDistributerGoodsEntity?.nxDgGoodsStandardname !== order.nxDoPrintStandard"
-                        class="text-muted small me-1">
-                    ({{ order.nxDoPrintStandard }})
+                  <span
+                    v-if="order.nxDoStatus > -2"
+                    class="ms-1 text-primary"
+                    style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
+                    @click.stop="handleOpenEditWeightModal(order, index, 'dep', depIndex)"
+                    title="修改出库数量">
+                    ✏️
                   </span>
-                  <span 
-                    v-if="order.nxDoStatus > -2 && order.nxDoPrintStandard"
-                    class="ms-1 text-primary" 
-                    style="cursor: pointer; font-size: 11px; opacity: 0.7; transition: opacity 0.2s;"
+                </div>
+
+                <div style="width: 100px; flex-shrink: 0;" class="text-center  table-cell">
+                  <span class="">
+                    {{ order.nxDoPrintStandard }}
+                  </span>
+                  <span
+                    v-if="order.nxDoStatus > -2"
+                    class="ms-1 text-primary"
+                    style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                     @click.stop="handleOpenEditPrintStandardModal(order, index, 'dep', depIndex)"
-                    @mouseenter="$event.target.style.opacity = '1'"
-                    @mouseleave="$event.target.style.opacity = '0.7'"
                     title="修改打印规格">
                     ✏️
                   </span>
-                  <span v-if="order.nxDoRemark" class="text-danger small">({{ order.nxDoRemark }})</span>
+                </div>
+
+                <div style="width: 150px; flex-shrink: 0;" class="text-center  table-cell"
+                     v-if="order.nxDistributerGoodsEntity.nxDgGoodsStandardWeight !== null && order.nxDistributerGoodsEntity.nxDgGoodsStandardWeight !== ''">
+                  <span class="text-muted small me-1" v-if="order.nxDistributerGoodsEntity.nxDgItemsPerCarton !== null">
+                    {{ order.nxDistributerGoodsEntity.nxDgGoodsStandardWeight }} *{{ order.nxDistributerGoodsEntity.nxDgItemsPerCarton }}{{ order.nxDistributerGoodsEntity.nxDgCartonUnit }}
+                  </span>
+                  <span class="text-muted small me-1" v-else>
+                    {{ order.nxDistributerGoodsEntity.nxDgGoodsStandardWeight }}/{{ order.nxDistributerGoodsEntity.nxDgGoodsStandardname }}
+                  </span>
+                </div>
+
+                <div style="width: 150px; flex-shrink: 0;" class="text-center  table-cell" v-else>
+                  <span class="text-muted">
+                    {{ order.nxDistributerGoodsEntity.nxDgGoodsStandardname }}
+                  </span>
+                </div>
+
+                <div style="width: 120px; flex-shrink: 0;" class="text-center  table-cell" v-if="order.nxDoPrice > 0.1">
+                  <span class="">{{ order.nxDoPrice }}</span>
+                  <span
+                    v-if="order.nxDoStatus > -2"
+                    class="ms-1 text-primary"
+                    style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
+                    @click.stop="handleOpenEditPriceModal(order, index, 'dep', depIndex)"
+                    title="修改单价">
+                    ✏️
+                  </span>
+                </div>
+                <div style="width: 120px; flex-shrink: 0;" class="text-center small table-cell text-danger" v-else>
+                  <span class="">
+                    -
+                  </span>
+                  <span
+                    v-if="order.nxDoStatus > -2"
+                    class="ms-1 text-primary"
+                    style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
+                    @click.stop="handleOpenEditPriceModal(order, index, 'dep', depIndex)"
+                    title="修改单价">
+                    ✏️
+                  </span>
+                </div>
+                <div style="width: 120px; flex-shrink: 0;" class="text-end  table-cell">
+                  <span class="">{{ order.nxDoSubtotal }}</span>
+                </div>
+
+                <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">
+                  <button
+                      v-if="order.nxDoStatus === -2"
+                      class="btn btn-sm btn-danger"
+                      @click="handleDeleteOrderDirect(order, index, 'dep', depIndex)"
+                      title="删除">
+                    删除
+                  </button>
+                  <button
+                      v-else-if="order.nxDoStatus !== -2"
+                      class="btn btn-sm btn-secondary"
+                      @click="handleOpenEditOrderModalDirect(order, index, 'dep', depIndex)"
+                      title="修改">
+                    修改
+                  </button>
                 </div>
               </div>
-              <div style="width: 100px; flex-shrink: 0;" class="text-center small table-cell">{{ order.nxDoQuantity }}{{ order.nxDoStandard }}</div>
-              <div style="width: 150px; flex-shrink: 0;" class="text-center  table-cell"
-                   v-if="order.nxDistributerGoodsEntity.nxDgGoodsStandardWeight !== null && order.nxDistributerGoodsEntity.nxDgGoodsStandardWeight !== ''">
-               <span class="text-muted small me-1">
-                  {{ order.nxDistributerGoodsEntity.nxDgGoodsStandardWeight }}
-                </span>
-                <span class="text-muted small me-1" v-if="order.nxDistributerGoodsEntity.nxDgItemsPerCarton !== null">
-                  *{{ order.nxDistributerGoodsEntity.nxDgItemsPerCarton }}{{ order.nxDistributerGoodsEntity.nxDgGoodsStandardname }}/{{ order.nxDistributerGoodsEntity.nxDgCartonUnit }}
-                </span>
-              </div>
-              <div style="width: 150px; flex-shrink: 0;" class="text-center  table-cell" v-else>
-               <span class="text-muted">
-                  {{ order.nxDistributerGoodsEntity.nxDgGoodsStandardname}}
-                </span>
-
-              </div>
-
-              <div style="width: 100px; flex-shrink: 0;" class="text-center small table-cell">
-                <span v-if="order.nxDoWeight !== null"
-                      :class="{ 'text-danger': order.nxDoWeight == '' }">
-                  {{ order.nxDoWeight == '' ? '-' : order.nxDoWeight }}{{ order.nxDoPrintStandard }}
-                </span>
-                <span v-else class="text-muted">-</span>
-              </div>
-              <div style="width: 120px; flex-shrink: 0;" class="text-center small table-cell">
-                <span :class="{ 'text-danger': order.nxDoPrice == '0.1' || order.nxDoPrice == '' }">
-                  {{ order.nxDoPrice == 0.1 || order.nxDoPrice == '' ? '-' : order.nxDoPrice }}
-                </span>
-                <span class="text-muted">/{{ order.nxDoPrintStandard }}</span>
-                <span 
-                  v-if="order.nxDoStatus > -2"
-                  class="ms-1 text-primary" 
-                  style="cursor: pointer; font-size: 11px; opacity: 0.7; transition: opacity 0.2s;"
-                  @click.stop="handleOpenEditPriceModal(order, index, 'dep', depIndex)"
-                  @mouseenter="$event.target.style.opacity = '1'"
-                  @mouseleave="$event.target.style.opacity = '0.7'"
-                  title="修改单价">
-                  ✏️
-                </span>
-              </div>
-              <div style="width: 120px; flex-shrink: 0;" class="text-end small table-cell">
-                <span v-if="order.nxDoSubtotal !== null || order.nxDoSubtotal == ''">
-                  <span :class="{ 'text-danger': order.nxDoPrice == '0.1' || order.nxDoPrice == '' }">
-                    {{ order.nxDoPrice == 0.1 || order.nxDoPrice == '' ? '-' : order.nxDoSubtotal }}
-                  </span>
-                  <span class="text-muted">元</span>
-                </span>
-                <span v-else class="text-muted">-</span>
-              </div>
-              <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">
-                <button
-                    v-if="order.nxDoStatus === -2"
-                    class="btn btn-sm btn-danger"
-                    @click="handleDeleteOrderDirect(order, index, 'dep', depIndex)"
-                    title="删除">
-                  删除
-                </button>
-                <button
-                    v-else-if="order.nxDoStatus !== 2"
-                    class="btn btn-sm btn-secondary"
-                    @click="handleOpenEditOrderModalDirect(order, index, 'dep', depIndex)"
-                    title="修改">
-                  修改
-                </button>
+              <div v-else class="d-flex align-items-center">
+                <div style="width: 50px; flex-shrink: 0;" class="text-center fw-bold table-cell">{{ index + 1 }}</div>
+                <div style="width: 200px; flex-shrink: 0;" class="table-cell">
+                  <span class="text-danger small me-2">(未完成)</span>
+                  <span class="me-2">{{ order.nxDoGoodsName }}</span>
+                  <span v-if="order.nxDoRemark" class="text-danger small">({{ order.nxDoRemark }})</span>
+                </div>
+                <div style="width: 100px; flex-shrink: 0;" class="text-center small table-cell">
+                  {{ order.nxDoQuantity }}{{ order.nxDoStandard }}
+                </div>
+                <div style="width: 100px; flex-shrink: 0;" class="text-center small text-muted table-cell"></div>
+                <div style="width: 100px; flex-shrink: 0;" class="text-center small text-muted table-cell"></div>
+                <div style="width: 150px; flex-shrink: 0;" class="text-center small text-muted table-cell"></div>
+                <div style="width: 120px; flex-shrink: 0;" class="text-center small text-muted table-cell"></div>
+                <div style="width: 120px; flex-shrink: 0;" class="text-end small text-muted table-cell"></div>
+                <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">
+                  <button
+                      class="btn btn-sm btn-danger"
+                      @click="handleDeleteOrderDirect(order, index, 'dep', depIndex)"
+                      title="删除">
+                    删除
+                  </button>
+                </div>
               </div>
             </div>
-            <div v-else class="d-flex align-items-center">
-              <div style="width: 50px; flex-shrink: 0;" class="text-center fw-bold table-cell">{{ index + 1 }}</div>
-              <div style="width: 300px; flex-shrink: 0;" class="table-cell">
-                <span class="text-danger small me-2">(未完成)</span>
-                <span class="me-2">{{ order.nxDoGoodsName }}</span>
-                <span v-if="order.nxDoRemark" class="text-danger small">({{ order.nxDoRemark }})</span>
-              </div>
-              <div style="width: 100px; flex-shrink: 0;" class="text-center small table-cell">{{ order.nxDoQuantity }}{{ order.nxDoStandard }}</div>
-              <div style="width: 100px; flex-shrink: 0;" class="text-center small text-muted table-cell">-a</div>
-              <div style="width: 120px; flex-shrink: 0;" class="text-center small text-muted table-cell">-</div>
-              <div style="width: 120px; flex-shrink: 0;" class="text-end small text-muted table-cell">-</div>
-              <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">
-                <button
-                    class="btn btn-sm btn-danger"
-                    @click="handleDeleteOrderDirect(order, index, 'dep', depIndex)"
-                    title="删除">
-                  删除
-                </button>
-              </div>
-            </div>
+          </div>
+          <div v-if="filteredTodayOrderDepArr.length === 0" class="text-center p-5 text-muted">
+            暂无已保存的订单
           </div>
         </div>
-        <div v-if="filteredTodayOrderDepArr.length === 0" class="text-center p-5 text-muted">
-          暂无已保存的订单
-          </div>
+      </div>
+    </div>
+
+    <!-- 打印前校验弹窗：出货数量、单价、小计需大于 0 -->
+    <div v-if="showPrintValidationModal" class="order-edit-overlay" @click.self="showPrintValidationModal = false">
+      <div class="order-edit-popup" style="max-width: 500px;">
+        <div class="popup-header text-center p-3 bg-warning border-bottom">
+          <h5 class="mb-0 text-dark">打印前校验未通过</h5>
+        </div>
+        <div class="popup-body p-3">
+          <p class="text-muted small mb-3">以下订单的出货数量、单价或小计为空或为 0，请先完善后再打印：</p>
+          <ul class="list-group list-group-flush">
+            <li v-for="(item, idx) in invalidPrintOrders" :key="idx" class="list-group-item d-flex justify-content-between align-items-start px-0">
+              <span class="fw-bold">{{ item.goodsName }}</span>
+              <span class="badge bg-danger">{{ item.missed.join('、') }}</span>
+            </li>
+          </ul>
+        </div>
+        <div class="popup-footer d-flex justify-content-end p-3 border-top bg-light">
+          <button type="button" class="btn btn-primary" @click="showPrintValidationModal = false">知道了</button>
         </div>
       </div>
     </div>
@@ -332,35 +369,44 @@
         </div>
 
         <!-- 输入内容 -->
-        <div class="popup-body p-3">
+        <div class="popup-body p-3" style="font-size: 18px;">
           <!-- 商品名称（只读） -->
-          <div class="mb-3">
-            <label class="form-label fw-bold">商品名称：</label>
-            <div class="text-muted">
-              {{ currentEditPriceOrder?.nxDistributerGoodsEntity?.nxDgGoodsName || currentEditPriceOrder?.nxDoGoodsName || '未知商品' }}
-            </div>
+          <div class="d-flex align-items-center mb-3">
+            <span class="text-muted me-2" style="min-width: 70px;">商品名称：</span>
+            <span>{{ currentEditPriceOrder?.nxDistributerGoodsEntity?.nxDgGoodsName || currentEditPriceOrder?.nxDoGoodsName || '未知商品' }}</span>
+            <span class="text-muted ms-1"
+                  v-if="currentEditPriceOrder?.nxDistributerGoodsEntity?.nxDgItemsPerCarton && currentEditPriceOrder?.nxDistributerGoodsEntity?.nxDgItemsPerCarton !== 'null'">
+                                                    ({{ (currentEditPriceOrder?.nxDistributerGoodsEntity?.nxDgGoodsStandardWeight || '') + '/' + (currentEditPriceOrder?.nxDistributerGoodsEntity?.nxDgGoodsStandardname || '') + '*' + currentEditPriceOrder?.nxDistributerGoodsEntity?.nxDgItemsPerCarton + '/' + (currentEditPriceOrder?.nxDistributerGoodsEntity?.nxDgCartonUnit || '') }})
+                                                </span>
+            <span v-else class="text-muted ms-1">
+                                                    <span v-if="currentEditPriceOrder?.nxDistributerGoodsEntity?.nxDgGoodsStandardWeight && currentEditPriceOrder?.nxDistributerGoodsEntity?.nxDgGoodsStandardWeight !== 'null'">
+                                                        ({{ currentEditPriceOrder?.nxDistributerGoodsEntity?.nxDgGoodsStandardWeight }}/{{ currentEditPriceOrder?.nxDistributerGoodsEntity?.nxDgGoodsStandardname || '' }})
+                                                    </span>
+                                                    <span v-else>({{ currentEditPriceOrder?.nxDistributerGoodsEntity?.nxDgGoodsStandardname || '' }})</span>
+                                                </span>
           </div>
 
           <!-- 当前单价 -->
-          <div class="mb-3">
-            <label class="form-label fw-bold">当前单价：</label>
-            <div class="text-muted">
-              {{ currentEditPriceOrder?.nxDoPrice && currentEditPriceOrder.nxDoPrice > 0.1 ? currentEditPriceOrder.nxDoPrice : '-' }}
-            </div>
+          <div class="d-flex align-items-center mb-3">
+            <span class="text-muted me-2" style="min-width: 70px;">当前单价：</span>
+            <span>{{ currentEditPriceOrder?.nxDoPrice && currentEditPriceOrder.nxDoPrice > 0.1 ? currentEditPriceOrder.nxDoPrice : '-' }}</span>
+            <span>元/</span><span>{{ currentEditPriceOrder?.nxDoPrintStandard || '' }}</span>
+
           </div>
 
           <!-- 新单价输入 -->
-          <div class="mb-3">
-            <label class="form-label fw-bold">新单价：</label>
+          <div class="d-flex align-items-center mb-0">
+            <span class="text-muted me-2" style="min-width: 70px;">新单价：</span>
             <input
                 ref="editPriceInput"
-                type="number"
-                step="0.01"
+                type="text"
+                inputmode="decimal"
                 class="form-control"
+                style="max-width: 120px; font-size: 18px;"
                 v-model="editPriceForm.price"
-                placeholder="请输入新的单价"
                 @keyup.enter="handleSavePrice"
             />
+            <span>元/</span><span>{{ currentEditPriceOrder?.nxDoPrintStandard || '' }}</span>
           </div>
         </div>
 
@@ -416,7 +462,6 @@
                 type="text"
                 class="form-control"
                 v-model="editPrintStandardForm.printName"
-                placeholder="请输入新的打印规格"
                 @keyup.enter="handleSavePrintStandard"
             />
           </div>
@@ -436,6 +481,39 @@
               style="flex: 1;">
             保存
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 修改出库数量弹窗 -->
+    <div v-if="showEditWeightModal" class="order-edit-overlay" @click.self="closeEditWeightModal">
+      <div class="order-edit-popup" style="max-width: 400px;">
+        <div class="popup-header text-center p-3 bg-light border-bottom">
+          <h5 class="mb-0">修改出库数量</h5>
+        </div>
+        <div class="popup-body p-3">
+          <div class="mb-3">
+            <label class="form-label fw-bold">商品名称：</label>
+            <div class="text-muted">
+              {{ currentEditWeightOrder?.nxDistributerGoodsEntity?.nxDgGoodsName || currentEditWeightOrder?.nxDoGoodsName || '未知商品' }}
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">出库数量：</label>
+            <input
+                ref="editWeightInput"
+                type="number"
+                step="any"
+                class="form-control"
+                v-model="editWeightForm.weight"
+                placeholder="请输入出库数量"
+                @keyup.enter="handleSaveWeight"
+            />
+          </div>
+        </div>
+        <div class="popup-footer d-flex gap-2 p-3 border-top bg-light">
+          <button class="btn btn-sm btn-secondary" @click="closeEditWeightModal" style="flex: 1;">取消</button>
+          <button class="btn btn-sm btn-primary" @click="handleSaveWeight" style="flex: 1;">保存</button>
         </div>
       </div>
     </div>
@@ -475,7 +553,6 @@
                 class="form-control form-control-sm"
                 v-model="editOrderForm.quantity"
                 style="width: 200px;"
-                placeholder="请输入数量"
             />
           </div>
 
@@ -623,24 +700,58 @@
           </div>
         </div>
         <div class="d-flex align-items-center gap-3">
-          <button
+          <!-- <button
             class="btn btn-primary btn-sm"
             @click="handleDownloadExcel"
             :disabled="!canDownloadExcel">
             下载 Excel
+          </button> -->
+          <button
+            class="btn btn-primary btn-sm"
+            @click="handlePrintDeliveryOrder"
+            :disabled="!canDownloadExcel">
+            打印配送单
           </button>
         </div>
       </div>
     </div>
+
+    <!-- 打印配送单：先加载组件再渲染，确保 ref 指向实际组件实例（非 async 包装器） -->
+    <div v-if="isPrintingDeliveryOrder && loadedPrintComponent" style="position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;">
+      <component
+        :is="loadedPrintComponent"
+        ref="printComponentRef"
+        v-bind="printComponentProps"
+        @order-saved="() => {}"
+      />
+    </div>
   </div>
+
+  <!-- Alert 弹窗组件 -->
+  <AlertDialog ref="alertDialog" />
 </template>
 
 <script>
 import api from '../api/all';
-import * as XLSX from 'xlsx';
+import AlertDialog from './AlertDialog.vue';
+
+const VALID_DEP_PRINT_NAMES = ['ApplyPanel', 'ApplyFiftyPanel', 'ApplyHalfPanel', 'ApplyHalfWholePanel', 'ApplyThirtyPanel', 'ApplyThirtyWholePanel'];
+
+// Apply 打印组件按需加载，减少首屏内存（仅在实际打印时加载对应模板）
+const applyComponentMap = {
+  ApplyPanel: () => import('./Applys/ApplyPanel.vue'),
+  ApplyFiftyPanel: () => import('./Applys/ApplyFiftyPanel.vue'),
+  ApplyHalfPanel: () => import('./Applys/ApplyHalfPanel.vue'),
+  ApplyHalfWholePanel: () => import('./Applys/ApplyHalfWholePanel.vue'),
+  ApplyThirtyPanel: () => import('./Applys/ApplyThirtyPanel.vue'),
+  ApplyThirtyWholePanel: () => import('./Applys/ApplyThirtyWholePanel.vue')
+};
 
 export default {
   name: 'TodayOrders',
+  components: {
+    AlertDialog
+  },
   props: {
     todayOrderList: {
       type: Array,
@@ -649,6 +760,10 @@ export default {
     todayOrderDepArr: {
       type: Array,
       default: () => []
+    },
+    todayOrderTradeNo: {
+      type: String,
+      default: ''
     },
     hasSubDepartments: {
       type: Boolean,
@@ -665,6 +780,18 @@ export default {
     selectedAllCustomer: {
       type: [String, Number],
       default: null
+    },
+    selectedCustomerName: {
+      type: String,
+      default: ''
+    },
+    selectedCustomerEntity: {
+      type: Object,
+      default: null
+    },
+    selectedCustomerDepPrintName: {
+      type: String,
+      default: 'ApplyPanel'
     }
   },
   emits: ['order-updated', 'order-deleted'],
@@ -705,15 +832,34 @@ export default {
       editPriceForm: {
         price: ''
       },
+      // 修改出库数量相关
+      showEditWeightModal: false,
+      currentEditWeightOrder: null,
+      currentEditWeightIndex: -1,
+      currentEditWeightType: '',
+      currentEditWeightDepIndex: -1,
+      editWeightForm: {
+        weight: ''
+      },
       // 保存训练数据相关
       clickCount: 0, // 点击次数
       clickTimer: null, // 点击计时器
       showSaveTrainingDataButton: false, // 是否显示保存训练数据按钮
       showDatePicker: false, // 是否显示日期选择器
-      selectedDate: '' // 选择的日期
+      selectedDate: '', // 选择的日期
+      isPrintingDeliveryOrder: false, // 是否正在打印配送单（挂载 Apply 组件）
+      loadedPrintComponent: null, // 已加载的打印组件（实际组件，非 async 包装器）
+      printComponentProps: null, // 传给 Apply 组件的 props
+      showPrintValidationModal: false, // 打印前校验弹窗
+      invalidPrintOrders: [] // 校验不通过的订单列表 { goodsName, missed: ['出货数量','单价','小计'] }
     }
   },
   computed: {
+    // 有效的打印组件名（必须是已注册的 6 种之一）
+    effectiveDepPrintName() {
+      const name = this.selectedCustomerDepPrintName || 'ApplyPanel';
+      return VALID_DEP_PRINT_NAMES.includes(name) ? name : 'ApplyPanel';
+    },
     // 日期选择器的最大日期（今天）
     maxDate() {
       const today = new Date();
@@ -915,6 +1061,22 @@ export default {
     }
   },
   },
+  mounted() {
+    this._preloadPrintComponent();
+    // 监听主进程打印保存完成后的刷新消息（与配送单打印一致，主进程 savePrintBill 成功后发送）
+    this._todayOrdersMounted = true;
+    if (window.electronAPI?.onRefreshCustomerList) {
+      this._onRefreshCustomerList = () => {
+        if (this._todayOrdersMounted) {
+          this.$emit('order-updated');
+        }
+      };
+      window.electronAPI.onRefreshCustomerList(this._onRefreshCustomerList);
+    }
+  },
+  beforeUnmount() {
+    this._todayOrdersMounted = false;
+  },
   watch: {
     todayOrderList: {
       immediate: true,
@@ -935,12 +1097,21 @@ export default {
     showEditPriceModal(newVal) {
       if (newVal) {
         this.$nextTick(() => {
-          setTimeout(() => {
-            if (this.$refs.editPriceInput) {
-              this.$refs.editPriceInput.focus();
-            }
-          }, 100);
+          this.$nextTick(() => {
+            setTimeout(() => {
+              const el = this.$refs.editPriceInput;
+              if (el) {
+                el.focus();
+                el.select?.();
+              }
+            }, 150);
+          });
         });
+      }
+    },
+    effectiveDepPrintName: {
+      handler(name) {
+        if (name) this._preloadPrintComponent();
       }
     },
     // 监听修改打印规格弹窗显示状态，自动聚焦输入框（备用方案）
@@ -957,6 +1128,12 @@ export default {
     }
   },
   methods: {
+    _preloadPrintComponent() {
+      const name = this.effectiveDepPrintName;
+      if (name && applyComponentMap[name]) {
+        applyComponentMap[name]().catch(() => {});
+      }
+    },
     // 确保临时订单有稳定的 _tmpKey
     ensureTmpKeys(list) {
       if (!Array.isArray(list)) return;
@@ -1030,19 +1207,23 @@ export default {
 
       // 如果 nxDoStatus = -2，弹出提示窗口
       if (order.nxDoStatus === -2) {
-        if (!confirm(`确定要删除未完成的订单 "${order.nxDoGoodsName || '该订单'}" 吗？\n\n注意：此订单尚未完成，删除后将无法恢复。`)) {
-          return;
-        }
+        this.$refs.alertDialog.confirm(`确定要删除未完成的订单 "${order.nxDoGoodsName || '该订单'}" 吗？\n\n注意：此订单尚未完成，删除后将无法恢复。`).then(confirmed => {
+          if (confirmed) {
+            this.handleDeleteOrder();
+          }
+        });
+        return;
       }
 
       this.handleDeleteOrder();
     },
-    handleDeleteOrderFromEditModal() {
+    async handleDeleteOrderFromEditModal() {
       if (!this.currentEditOrderItem) {
         return;
       }
 
-      if (!confirm(`确定要删除订单 "${this.currentEditOrderItem.nxDistributerGoodsEntity?.nxDgGoodsName || this.currentEditOrderItem.nxDoGoodsName}" 吗？`)) {
+      const confirmed = await this.$refs.alertDialog.confirm(`确定要删除订单 "${this.currentEditOrderItem.nxDistributerGoodsEntity?.nxDgGoodsName || this.currentEditOrderItem.nxDoGoodsName}" 吗？`);
+      if (!confirmed) {
         return;
       }
 
@@ -1079,12 +1260,12 @@ export default {
     // 确认添加规格
     async confirmAddStandard() {
       if (!this.itemDis || !this.itemDis.nxDistributerGoodsId) {
-        alert('商品信息错误');
+        await this.$refs.alertDialog.alert('商品信息错误', 'error');
         return;
       }
 
       if (!this.newStandardName || !this.newStandardName.trim()) {
-        alert('请输入规格名称');
+        await this.$refs.alertDialog.alert('请输入规格名称', 'warning');
         return;
       }
 
@@ -1116,13 +1297,13 @@ export default {
           this.showAddStandard = false;
           this.newStandardName = '';
 
-          alert('添加规格成功');
+          await this.$refs.alertDialog.alert('添加规格成功', 'success');
         } else {
-          alert(res?.data?.msg || '添加规格失败');
+          await this.$refs.alertDialog.alert(res?.data?.msg || '添加规格失败', 'error');
         }
       } catch (error) {
         console.error('添加规格失败:', error);
-        alert('添加规格失败，请检查网络');
+        await this.$refs.alertDialog.alert('添加规格失败，请检查网络', 'error');
       } finally {
         this.$store.commit('SET_LOADING', false);
       }
@@ -1167,7 +1348,8 @@ export default {
         return;
       }
 
-      if (!confirm(`确定要删除规格 "${standard.nxDsStandardName}" 吗？`)) {
+      const confirmed = await this.$refs.alertDialog.confirm(`确定要删除规格 "${standard.nxDsStandardName}" 吗？`);
+      if (!confirmed) {
         return;
       }
 
@@ -1184,13 +1366,13 @@ export default {
             this.editOrderForm.standard = '';
           }
 
-          // alert('删除成功');
+          // await this.$refs.alertDialog.alert('', 'warning');
         } else {
-          alert(res?.data?.msg || '删除失败');
+          await this.$refs.alertDialog.alert(res?.data?.msg || '删除失败', 'error');
         }
       } catch (error) {
         console.error('删除规格失败:', error);
-        alert('删除失败，请检查网络');
+        await this.$refs.alertDialog.alert('删除失败，请检查网络', 'error');
       } finally {
         this.$store.commit('SET_LOADING', false);
       }
@@ -1198,22 +1380,22 @@ export default {
     // 保存编辑订单
     async handleSaveEditOrder() {
       if (!this.currentEditOrderItem || !this.currentEditOrderItem.nxDepartmentOrdersId) {
-        alert('订单信息错误');
+        await this.$refs.alertDialog.alert('订单信息错误', 'error');
         return;
       }
 
       if (!this.editOrderForm.quantity || parseFloat(this.editOrderForm.quantity) <= 0) {
-        alert('请输入有效的订货数量');
+        await this.$refs.alertDialog.alert('请输入有效的订货数量', 'warning');
         return;
       }
 
       if (!this.editOrderForm.standard) {
-        alert('请选择单位');
+        await this.$refs.alertDialog.alert('请选择单位', 'warning');
         return;
       }
 
       if (this.editOrderForm.remark && this.editOrderForm.remark.length > 15) {
-        alert('备注最多15个字符');
+        await this.$refs.alertDialog.alert('备注最多15个字符', 'warning');
         return;
       }
 
@@ -1244,16 +1426,16 @@ export default {
           };
           this.updateOrderInCache(orderId, updatedOrderData);
 
-          // alert('修改成功');
+          // await this.$refs.alertDialog.alert('', 'warning');
           this.closeEditOrderModal();
           // 通知父组件刷新数据
           this.$emit('order-updated');
         } else {
-          alert(res?.data?.msg || '修改失败');
+          await this.$refs.alertDialog.alert(res?.data?.msg || '修改失败', 'error');
         }
       } catch (error) {
         console.error('修改订单失败:', error);
-        alert('修改失败，请检查网络');
+        await this.$refs.alertDialog.alert('修改失败，请检查网络', 'error');
       } finally {
         this.$store.commit('SET_LOADING', false);
       }
@@ -1487,7 +1669,7 @@ export default {
       }
 
       if (!this.currentEditOrderItem.nxDepartmentOrdersId) {
-        alert('订单信息错误，无法删除');
+        await this.$refs.alertDialog.alert('订单信息错误，无法删除', 'error');
         this.closeEditOrderModal();
         return;
       }
@@ -1503,16 +1685,16 @@ export default {
           // 从缓存中删除订单
           this.deleteOrderFromCache(orderId);
 
-          // alert('删除成功');
+          // await this.$refs.alertDialog.alert('', 'warning');
           this.closeEditOrderModal();
           // 通知父组件刷新数据
           this.$emit('order-deleted');
         } else {
-          alert(res?.data?.msg || '删除失败');
+          await this.$refs.alertDialog.alert(res?.data?.msg || '删除失败', 'error');
         }
       } catch (error) {
         console.error('删除订单失败:', error);
-        alert('删除失败，请检查网络');
+        await this.$refs.alertDialog.alert('删除失败，请检查网络', 'error');
       } finally {
         this.$store.commit('SET_LOADING', false);
       }
@@ -1521,25 +1703,22 @@ export default {
     
     // 打开修改单价弹窗
     handleOpenEditPriceModal(order, index, type, depIndex = -1) {
-      console.log('打开修改单价弹窗', { order, index, type, depIndex });
+      this.closeEditPrintStandardModal();
+      this.closeEditWeightModal();
+      console.log('[TodayOrders] 打开弹窗: 修改单价', {
+        orderId: order?.nxDepartmentOrdersId,
+        nxDoPrice: order?.nxDoPrice,
+        nxDoPrintStandard: order?.nxDoPrintStandard,
+        index,
+        type,
+        depIndex
+      });
       this.currentEditPriceOrder = order;
       this.currentEditPriceIndex = index;
       this.currentEditPriceType = type;
       this.currentEditPriceDepIndex = depIndex;
       this.editPriceForm.price = order.nxDoPrice && order.nxDoPrice > 0.1 ? order.nxDoPrice : '';
       this.showEditPriceModal = true;
-      console.log('showEditPriceModal:', this.showEditPriceModal);
-      // 延迟聚焦输入框，确保弹窗完全渲染
-      this.$nextTick(() => {
-        setTimeout(() => {
-          if (this.$refs.editPriceInput) {
-            this.$refs.editPriceInput.focus();
-            console.log('单价输入框已聚焦');
-          } else {
-            console.warn('单价输入框 ref 未找到');
-          }
-        }, 100);
-      });
     },
     // 关闭修改单价弹窗
     closeEditPriceModal() {
@@ -1553,18 +1732,18 @@ export default {
     // 保存单价
     async handleSavePrice() {
       if (!this.currentEditPriceOrder || !this.currentEditPriceOrder.nxDepartmentOrdersId) {
-        alert('订单信息错误');
+        await this.$refs.alertDialog.alert('订单信息错误', 'error');
         return;
       }
 
       if (!this.editPriceForm.price || this.editPriceForm.price === '') {
-        alert('请输入单价');
+        await this.$refs.alertDialog.alert('请输入单价', 'warning');
         return;
       }
 
       const price = parseFloat(this.editPriceForm.price);
       if (isNaN(price) || price < 0) {
-        alert('请输入有效的单价');
+        await this.$refs.alertDialog.alert('请输入有效的单价', 'warning');
         return;
       }
 
@@ -1615,11 +1794,11 @@ export default {
           // 通知父组件刷新数据
           this.$emit('order-updated');
         } else {
-          alert(res?.data?.msg || '修改失败');
+          await this.$refs.alertDialog.alert(res?.data?.msg || '修改失败', 'error');
         }
       } catch (error) {
         console.error('修改单价失败:', error);
-        alert('修改失败，请检查网络');
+        await this.$refs.alertDialog.alert('修改失败，请检查网络', 'error');
       } finally {
         this.$store.commit('SET_LOADING', false);
       }
@@ -1627,6 +1806,15 @@ export default {
     
     // 打开修改打印规格弹窗
     handleOpenEditPrintStandardModal(order, index, type, depIndex = -1) {
+      this.closeEditPriceModal();
+      this.closeEditWeightModal();
+      console.log('[TodayOrders] 打开弹窗: 修改打印规格', {
+        orderId: order?.nxDepartmentOrdersId,
+        nxDoPrintStandard: order?.nxDoPrintStandard,
+        index,
+        type,
+        depIndex
+      });
       this.currentEditPrintStandardOrder = order;
       this.currentEditPrintStandardIndex = index;
       this.currentEditPrintStandardType = type;
@@ -1638,9 +1826,9 @@ export default {
         setTimeout(() => {
           if (this.$refs.editPrintStandardInput) {
             this.$refs.editPrintStandardInput.focus();
-            console.log('打印规格输入框已聚焦');
+            console.log('[TodayOrders] 修改打印规格: 输入框已聚焦');
           } else {
-            console.warn('打印规格输入框 ref 未找到');
+            console.warn('[TodayOrders] 修改打印规格: 输入框 ref 未找到');
           }
         }, 100);
       });
@@ -1657,12 +1845,12 @@ export default {
     // 保存打印规格
     async handleSavePrintStandard() {
       if (!this.currentEditPrintStandardOrder || !this.currentEditPrintStandardOrder.nxDepartmentOrdersId) {
-        alert('订单信息错误');
+        await this.$refs.alertDialog.alert('订单信息错误', 'error');
         return;
       }
 
       if (!this.editPrintStandardForm.printName || !this.editPrintStandardForm.printName.trim()) {
-        alert('请输入打印规格');
+        await this.$refs.alertDialog.alert('请输入打印规格', 'warning');
         return;
       }
 
@@ -1713,24 +1901,279 @@ export default {
           // 通知父组件刷新数据
           this.$emit('order-updated');
         } else {
-          alert(res?.data?.msg || '修改失败');
+          await this.$refs.alertDialog.alert(res?.data?.msg || '修改失败', 'error');
         }
       } catch (error) {
         console.error('修改打印规格失败:', error);
-        alert('修改失败，请检查网络');
+        await this.$refs.alertDialog.alert('修改失败，请检查网络', 'error');
       } finally {
         this.$store.commit('SET_LOADING', false);
       }
     },
+
+    // 打开修改出库数量弹窗
+    handleOpenEditWeightModal(order, index, type, depIndex = -1) {
+      this.closeEditPriceModal();
+      this.closeEditPrintStandardModal();
+      console.log('[TodayOrders] 打开弹窗: 修改出库数量', {
+        orderId: order?.nxDepartmentOrdersId,
+        nxDoWeight: order?.nxDoWeight,
+        index,
+        type,
+        depIndex
+      });
+      this.currentEditWeightOrder = order;
+      this.currentEditWeightIndex = index;
+      this.currentEditWeightType = type;
+      this.currentEditWeightDepIndex = depIndex;
+      this.editWeightForm.weight = order.nxDoWeight != null && order.nxDoWeight !== '' ? String(order.nxDoWeight) : '';
+      this.showEditWeightModal = true;
+      this.$nextTick(() => {
+        setTimeout(() => {
+          if (this.$refs.editWeightInput) this.$refs.editWeightInput.focus();
+        }, 100);
+      });
+    },
+    closeEditWeightModal() {
+      this.showEditWeightModal = false;
+      this.currentEditWeightOrder = null;
+      this.currentEditWeightIndex = -1;
+      this.currentEditWeightType = '';
+      this.currentEditWeightDepIndex = -1;
+      this.editWeightForm.weight = '';
+    },
+    // 保存出库数量（订单数组提交）
+    async handleSaveWeight() {
+      if (!this.currentEditWeightOrder || !this.currentEditWeightOrder.nxDepartmentOrdersId) {
+        await this.$refs.alertDialog.alert('订单信息错误', 'error');
+        return;
+      }
+      const weightVal = parseFloat(this.editWeightForm.weight);
+      if (isNaN(weightVal) || weightVal <= 0) {
+        await this.$refs.alertDialog.alert('请输入有效的出库数量（大于0）', 'warning');
+        return;
+      }
+      try {
+        this.$store.commit('SET_LOADING', true);
+        const orderCopy = { ...this.currentEditWeightOrder, nxDoWeight: weightVal, hasChoice: true };
+        const arr = [orderCopy];
+        const disUser = this.$store.state.disUser;
+        const businessTypeId = disUser?.nxDistributerEntity?.nxDistributerBusinessTypeId ?? disUser?.nxDistributerBusinessTypeId ?? 0;
+        const apiMethod = businessTypeId > 1 ? api.giveOrderWeightListForStockShelfGoods : api.giveOrderWeightListForStockAndFinish;
+        const res = await apiMethod(arr);
+        if (res && res.data && res.data.code === 0) {
+          const orderId = this.currentEditWeightOrder.nxDepartmentOrdersId;
+          const updatedOrderData = { nxDoWeight: weightVal };
+          if (this.currentEditWeightType === 'list') {
+            const orderIndex = this.todayOrderList.findIndex(o => o.nxDepartmentOrdersId === orderId);
+            if (orderIndex >= 0) {
+              this.todayOrderList[orderIndex] = { ...this.todayOrderList[orderIndex], ...updatedOrderData };
+            }
+          } else if (this.currentEditWeightType === 'dep' && this.currentEditWeightDepIndex >= 0 &&
+              this.todayOrderDepArr[this.currentEditWeightDepIndex]?.depOrders) {
+            const orderIndex = this.todayOrderDepArr[this.currentEditWeightDepIndex].depOrders
+              .findIndex(o => o.nxDepartmentOrdersId === orderId);
+            if (orderIndex >= 0) {
+              this.todayOrderDepArr[this.currentEditWeightDepIndex].depOrders[orderIndex] = {
+                ...this.todayOrderDepArr[this.currentEditWeightDepIndex].depOrders[orderIndex],
+                ...updatedOrderData
+              };
+            }
+          }
+          this.closeEditWeightModal();
+          this.$emit('order-updated');
+        } else {
+          await this.$refs.alertDialog.alert(res?.data?.msg || res?.data?.message || '修改出库数量失败', 'error');
+        }
+      } catch (error) {
+        console.error('修改出库数量失败:', error);
+        await this.$refs.alertDialog.alert('修改失败，请检查网络', 'error');
+      } finally {
+        this.$store.commit('SET_LOADING', false);
+      }
+    },
+
+    // 校验打印订单：出货数量、单价、小计必须大于 0，返回不通过的订单列表
+    validatePrintOrders() {
+      const isDownloadableStatus = (status) => status === 0 || status === 2;
+      const isEmptyOrZero = (v) => v == null || v === '' || parseFloat(v) <= 0 || (typeof v === 'string' && v.trim() === '');
+      const checkOrder = (order) => {
+        if (!isDownloadableStatus(order?.nxDoStatus)) return null;
+        const goodsName = order.nxDistributerGoodsEntity?.nxDgGoodsName || order.nxDoGoodsName || '未知商品';
+        const missed = [];
+        if (isEmptyOrZero(order.nxDoWeight)) missed.push('出货数量');
+        if (order.nxDoPrice == null || order.nxDoPrice === '' || parseFloat(order.nxDoPrice) <= 0.1) missed.push('单价');
+        if (isEmptyOrZero(order.nxDoSubtotal)) missed.push('小计');
+        if (missed.length === 0) return null;
+        return { goodsName, missed };
+      };
+      const result = [];
+      if (this.hasSubDepartments && this.todayOrderDepArr?.length > 0) {
+        this.todayOrderDepArr.forEach(dep => {
+          (dep.depOrders || []).forEach(order => {
+            const item = checkOrder(order);
+            if (item) result.push(item);
+          });
+        });
+      } else if (this.todayOrderList?.length > 0) {
+        this.todayOrderList.forEach(order => {
+          const item = checkOrder(order);
+          if (item) result.push(item);
+        });
+      }
+      return result;
+    },
+
+    // 打印配送单：根据客户打印模板（6 种 Apply 组件）动态挂载并调用其 printOnly
+    async handlePrintDeliveryOrder() {
+      if (!this.canDownloadExcel) {
+        this.$message?.warning?.('只有所有订单状态都是已保存（状态为0或2）时才能打印配送单') || (await this.$refs.alertDialog.alert('只有所有订单状态都是已保存（状态为0或2）时才能打印配送单', 'warning'));
+        return;
+      }
+      // 打印前校验：出货数量、单价、小计必须大于 0
+      const invalidOrders = this.validatePrintOrders();
+      if (invalidOrders.length > 0) {
+        this.invalidPrintOrders = invalidOrders;
+        this.showPrintValidationModal = true;
+        return;
+      }
+      if (!this.selectedAllCustomer) {
+        this.$message?.warning?.('请先选择客户') || (await this.$refs.alertDialog.alert('请先选择客户', 'warning'));
+        return;
+      }
+      // 今日订单打印必须有数据，否则会超时
+      const hasList = Array.isArray(this.todayOrderList) && this.todayOrderList.length > 0;
+      const hasDepArr = this.hasSubDepartments && Array.isArray(this.todayOrderDepArr) && this.todayOrderDepArr.length > 0;
+      const hasOrders = hasDepArr
+        ? this.todayOrderDepArr.some(d => d.depOrders && d.depOrders.length > 0)
+        : hasList;
+      if (!hasOrders) {
+        this.$message?.warning?.('暂无订单数据可打印，请先刷新今日订单') || (await this.$refs.alertDialog.alert('暂无订单数据可打印，请先刷新今日订单', 'warning'));
+        return;
+      }
+      const disUser = this.$store?.state?.disUser;
+      if (!disUser?.nxDistributerUserId || !disUser?.nxDiuDistributerId) {
+        this.$message?.warning?.('未登录或配送商信息不完整') || (await this.$refs.alertDialog.alert('未登录或配送商信息不完整', 'warning'));
+        return;
+      }
+      if (typeof window.electronAPI === 'undefined' || !window.electronAPI.sendPrintRequestWithCallback) {
+        this.$message?.warning?.('当前环境不支持打印') || (await this.$refs.alertDialog.alert('当前环境不支持打印', 'warning'));
+        return;
+      }
+
+      const toIntOrMinusOne = (v) => {
+        if (v == null || v === '') return -1;
+        const n = parseInt(v);
+        return isNaN(n) ? -1 : n;
+      };
+
+      const depFatherId = toIntOrMinusOne(this.selectedAllCustomer);
+      const depId = this.hasSubDepartments && this.selectedSubDepartment
+        ? toIntOrMinusOne(this.selectedSubDepartment)
+        : depFatherId;
+      const disId = toIntOrMinusOne(disUser.nxDiuDistributerId);
+      const gbDepFatherId = this.selectedCustomerEntity?.gbDepFatherId != null ? toIntOrMinusOne(this.selectedCustomerEntity.gbDepFatherId) : -1;
+      const gbDepId = this.selectedCustomerEntity?.gbDepId != null ? toIntOrMinusOne(this.selectedCustomerEntity.gbDepId) : -1;
+      const resFatherId = this.selectedCustomerEntity?.resFatherId != null ? toIntOrMinusOne(this.selectedCustomerEntity.resFatherId) : -1;
+
+      // 今日订单打印：必须传入已有数据，避免 Apply 组件再次请求 API 导致空数据或超时
+      const list = Array.isArray(this.todayOrderList) ? [...this.todayOrderList] : [];
+      const depArr = Array.isArray(this.todayOrderDepArr) ? this.todayOrderDepArr.map(d => ({ ...d, depOrders: d.depOrders || [] })) : [];
+      console.log('🖨️ [handlePrintDeliveryOrder] 传入打印组件的数据:', {
+        todayOrderListLength: list.length,
+        todayOrderDepArrLength: depArr.length,
+        hasSubDepartments: this.hasSubDepartments,
+        depOrdersCount: depArr.reduce((sum, d) => sum + (d.depOrders?.length || 0), 0)
+      });
+
+      this.printComponentProps = {
+        nxDepFatherId: depFatherId,
+        nxDepId: depId,
+        depName: this.selectedCustomerName || '客户',
+        depPrintName: this.effectiveDepPrintName,
+        updateTime: Date.now(),
+        disId: disId,
+        disName: disUser.nxDistributerEntity?.nxDistributerName || '',
+        gbDepFatherId: gbDepFatherId,
+        gbDepId: gbDepId,
+        gbDepName: '',
+        gbDisId: '',
+        gbBatchId: -1,
+        printAllOrders: true, // 今日订单打印：不按 nxDoSubtotal 过滤，打印全部订单
+        todayOrderList: list,
+        todayOrderDepArr: depArr,
+        todayOrderTradeNo: this.todayOrderTradeNo || '',
+        hasSubDepartments: this.hasSubDepartments
+      };
+
+      // 先加载打印组件（获取实际组件，非 async 包装器），再渲染
+      const compName = this.effectiveDepPrintName;
+      let PrintComp = null;
+      if (applyComponentMap[compName]) {
+        const mod = await applyComponentMap[compName]();
+        PrintComp = mod?.default || mod;
+      }
+      if (!PrintComp) {
+        throw new Error('打印组件加载失败');
+      }
+
+      this.loadedPrintComponent = PrintComp;
+      this.isPrintingDeliveryOrder = true;
+
+      try {
+        await this.$nextTick();
+        let comp = this.$refs.printComponentRef;
+        const loadMaxWait = 8000;
+        const loadPollInterval = 100;
+        let loadWaited = 0;
+        while ((!comp || typeof comp.printOnly !== 'function') && loadWaited < loadMaxWait) {
+          await new Promise(r => setTimeout(r, loadPollInterval));
+          loadWaited += loadPollInterval;
+          comp = this.$refs.printComponentRef;
+        }
+        if (!comp || typeof comp.printOnly !== 'function') {
+          throw new Error('打印组件加载失败');
+        }
+
+        // 等待组件内部 fetchOrderData 完成（applyArrPrint / printPagesData 有数据）
+        const maxWait = 15000;
+        const pollInterval = 300;
+        let waited = 0;
+        while (waited < maxWait) {
+          const pages = comp.printPagesData;
+          if (pages && Array.isArray(pages) && pages.length > 0) {
+            break;
+          }
+          await new Promise(r => setTimeout(r, pollInterval));
+          waited += pollInterval;
+        }
+        if (waited >= maxWait) {
+          throw new Error('获取打印数据超时，请重试');
+        }
+
+        const orderCount = comp._filteredRows ? comp._filteredRows.filter(r => !r.isDepartmentHeader).length : comp.printPagesData?.reduce((sum, p) => sum + (p.dualRows?.filter(r => !r.isDepartmentHeader)?.length || 0), 0) ?? 0;
+        console.log('🖨️ [打印配送单] 准备打印，订单条数:', orderCount, '总页数:', comp.printPagesData?.length);
+
+        await comp.printOnly();
+        this.$emit('order-updated'); // 打印完成后刷新今日订单
+      } catch (err) {
+        console.error('打印配送单失败:', err);
+        this.$message?.error?.(err?.message || '打印失败') || (await this.$refs.alertDialog.alert(err?.message || '打印失败', 'error'));
+      } finally {
+        this.isPrintingDeliveryOrder = false;
+        this.loadedPrintComponent = null;
+        this.printComponentProps = null;
+      }
+    },
     
     // 下载 Excel
-    handleDownloadExcel() {
+    async handleDownloadExcel() {
 
 
       // 检查是否可以下载
       if (!this.canDownloadExcel) {
         console.warn('⚠️ [handleDownloadExcel] 下载条件不满足，所有订单状态必须为0或2');
-        alert('只有所有订单状态都是已保存（状态为0或2）时才能下载 Excel');
+        await this.$refs.alertDialog.alert('只有所有订单状态都是已保存（状态为0或2）时才能下载 Excel', 'warning');
         return;
       }
 
@@ -1748,13 +2191,17 @@ export default {
         const hasOrders = this.todayOrderDepArr.some(dep => dep.depOrders && dep.depOrders.length > 0);
         if (!hasOrders) {
           console.warn('⚠️ [handleDownloadExcel] 没有找到有订单的部门');
-          alert('没有数据可导出');
+          await this.$refs.alertDialog.alert('没有数据可导出', 'warning');
           return;
         }
       }
 
       try {
         console.log('=== [handleDownloadExcel] 开始导出 Excel ===');
+
+        // 按需加载 XLSX，减少首屏内存
+        const XLSXMod = await import('xlsx');
+        const XLSX = XLSXMod.default || XLSXMod;
 
         // 创建工作簿
         const wb = XLSX.utils.book_new();
@@ -1933,7 +2380,7 @@ export default {
           stack: error.stack,
           name: error.name
         });
-        alert('导出失败，请重试');
+        await this.$refs.alertDialog.alert('导出失败，请重试', 'error');
       }
       
     },
@@ -1976,41 +2423,41 @@ export default {
     // 保存训练数据
     async handleSaveTrainingData() {
       if (!this.selectedDate) {
-        alert('请选择日期');
+        await this.$refs.alertDialog.alert('请选择日期', 'warning');
         return;
       }
-      
+
       if (!this.selectedAllCustomer) {
-        alert('缺少部门ID');
+        await this.$refs.alertDialog.alert('缺少部门ID', 'warning');
         return;
       }
-      
+
       try {
         this.$store.commit('SET_LOADING', true);
-        
+
         // 调用API保存数据
         const response = await api.saveDepartmentOrdersToHistory({
           depFatherId: this.selectedAllCustomer,
           date: this.selectedDate
         });
-        
+
         if (response && response.data && response.data.code === 0) {
-          alert('保存成功');
+          await this.$refs.alertDialog.alert('保存成功', 'success');
           this.showDatePicker = false;
           this.showSaveTrainingDataButton = false; // 保存后隐藏按钮
           this.selectedDate = '';
-          
+
           // 保存成功后，删除该部门的缓存（excel、粘贴、图片）
           this.clearDepartmentCacheByDepFatherId();
-          
+
           // 触发刷新今日订单事件
           this.$emit('order-updated');
         } else {
-          alert('保存失败：' + (response?.data?.msg || '未知错误'));
+          await this.$refs.alertDialog.alert('保存失败：' + (response?.data?.msg || '未知错误'), 'error');
         }
       } catch (error) {
         console.error('保存训练数据失败:', error);
-        alert('保存失败：' + (error.message || '网络错误'));
+        await this.$refs.alertDialog.alert('保存失败：' + (error.message || '网络错误'), 'error');
       } finally {
         this.$store.commit('SET_LOADING', false);
       }
@@ -2109,7 +2556,7 @@ export default {
 }
 
 .liziBack {
-  background-color: #f1fbfd;
+  background-color: #e5f8f6;
 }
 
 .liziDelivery {
@@ -2196,4 +2643,7 @@ export default {
   color: white;
 }
 </style>
+
+
+
 

@@ -1,10 +1,20 @@
-<template>
+﻿<template>
     <div class="save-order-tab"
          style="height: 100%; overflow: hidden; display: flex; flex-direction: column;">
         <!-- 上传方式选择 -->
         <div class="mb-1" style="flex-shrink: 0;">
             <div class="form-group d-flex gap-3 align-items-center flex-wrap">
 
+                <label class="mb-0" style="cursor: pointer;">
+                    <input
+                            type="radio"
+                            name="uploadType"
+                            :checked="uploadType === 'manual'"
+                            value="manual"
+                            class="me-2"
+                            @change="handleUploadTypeChange('manual')">
+                    录入订单
+                </label>
                 <label class="mb-0" style="cursor: pointer;">
                     <input
                             type="radio"
@@ -80,6 +90,40 @@
         <!-- 内容区域（min-height:0 配合子级让表格区域正确收缩，防止底部滚动条被遮挡） -->
         <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
 
+            <!-- 手动录入模式 -->
+            <ManualEntryUpload
+                    v-if="uploadType === 'manual'"
+                    ref="manualEntryRef"
+                    :ref-text="manualRefText"
+                    :ref-image-data-url="manualRefImageDataUrl"
+                    :order-items="orderItems"
+                    :dep-id="selectedSubDepartment || selectedAllCustomer"
+                    :dis-user="disUser"
+                    :saving-order="savingOrder"
+                    :adding-order-before-index="addingOrderBeforeIndex"
+                    :before-order-form="beforeOrderForm"
+                    @ref-text-input="manualRefText = $event"
+                    @clear-ref-text="manualRefText = ''"
+                    @ref-image-upload="manualRefImageDataUrl = $event"
+                    @clear-ref-image="manualRefImageDataUrl = null"
+                    @manual-save-order="handleManualSaveOrder"
+                    @save-new-goods="handleSaveNewGoodsFromManual"
+                    @update-order="handleManualUpdateOrder"
+                    @add-order-before="handleManualAddOrderBefore"
+                    @cancel-add-order-before="cancelAddOrderBefore"
+                    @before-order-goods-name-input="handleBeforeOrderGoodsNameInput"
+                    @select-before-order-goods="selectBeforeOrderGoods"
+                    @close-before-order-search-results="closeBeforeOrderSearchResults"
+                    @before-order-quantity-input="handleBeforeOrderQuantityInput"
+                    @before-order-standard-input="handleBeforeOrderStandardInput"
+                    @before-order-remark-input="handleBeforeOrderRemarkInput"
+                    @save-before-order="handleSaveBeforeOrderManual"
+                    @save-new-goods-from-before-order="handleSaveNewGoodsFromBeforeOrder"
+                    @download-goods-nx="handleManualDownloadGoodsNx"
+                    @before-order-goods-name-enter="handleBeforeOrderGoodsNameEnter"
+                    @before-order-goods-name-keydown="handleBeforeOrderGoodsNameKeydown"
+            />
+
             <!-- 复制粘贴模式 -->
             <PasteUpload
                     ref="pasteUploadRef"
@@ -91,6 +135,7 @@
                     :paste-input-text="pasteInputText"
                     :paste-invalid-line-indices="pasteInvalidLineIndices"
                     :paste-invalid-segments="pasteInvalidSegments"
+                    :paste-no-valid-order="pasteNoValidOrder"
                     :paste-has-cache="hasDataForPaste"
                     :paste-save-count="pasteSaveCount"
                     :paste-order-items="orderItems"
@@ -163,6 +208,7 @@
                             :is-valid-order-quantity-and-standard="isValidOrderQuantityAndStandard"
                             @cancel-add-order-before="cancelAddOrderBefore"
                             @before-order-goods-name-input="handleBeforeOrderGoodsNameInput"
+                            @before-order-goods-name-enter="handleBeforeOrderGoodsNameEnter"
                             @select-before-order-goods="selectBeforeOrderGoods"
                             @close-before-order-search-results="closeBeforeOrderSearchResults"
                             @download-goods-nx="downLoadGoodsNx"
@@ -170,6 +216,7 @@
                             @before-order-standard-input="handleBeforeOrderStandardInput"
                             @before-order-remark-input="handleBeforeOrderRemarkInput"
                             @save-before-order="handleSaveBeforeOrder"
+                            @save-new-goods-from-before-order="handleSaveNewGoodsFromBeforeOrder"
                             @goods-name-input="handleOrderListGoodsNameInput"
                             @goods-name-focus="handleOrderListGoodsNameFocus"
                             @goods-name-blur="handleOrderListGoodsNameBlur"
@@ -255,6 +302,7 @@
                             :is-valid-order-quantity-and-standard="isValidOrderQuantityAndStandard"
                             @cancel-add-order-before="cancelAddOrderBefore"
                             @before-order-goods-name-input="handleBeforeOrderGoodsNameInput"
+                            @before-order-goods-name-enter="handleBeforeOrderGoodsNameEnter"
                             @select-before-order-goods="selectBeforeOrderGoods"
                             @close-before-order-search-results="closeBeforeOrderSearchResults"
                             @download-goods-nx="downLoadGoodsNx"
@@ -363,6 +411,7 @@
                             :is-valid-order-quantity-and-standard="isValidOrderQuantityAndStandard"
                             @cancel-add-order-before="cancelAddOrderBefore"
                             @before-order-goods-name-input="handleBeforeOrderGoodsNameInput"
+                            @before-order-goods-name-enter="handleBeforeOrderGoodsNameEnter"
                             @select-before-order-goods="selectBeforeOrderGoods"
                             @close-before-order-search-results="closeBeforeOrderSearchResults"
                             @download-goods-nx="downLoadGoodsNx"
@@ -370,6 +419,7 @@
                             @before-order-standard-input="handleBeforeOrderStandardInput"
                             @before-order-remark-input="handleBeforeOrderRemarkInput"
                             @save-before-order="handleSaveBeforeOrderExcelPaste"
+                            @save-new-goods-from-before-order="handleSaveNewGoodsFromBeforeOrder"
                             @goods-name-input="handleOrderListGoodsNameInputExcelPaste"
                             @goods-name-focus="handleOrderListGoodsNameFocusExcelPaste"
                             @goods-name-blur="handleOrderListGoodsNameBlurExcelPaste"
@@ -427,6 +477,7 @@
                             :is-valid-order-quantity-and-standard="isValidOrderQuantityAndStandard"
                             @cancel-add-order-before="cancelAddOrderBefore"
                             @before-order-goods-name-input="handleBeforeOrderGoodsNameInput"
+                            @before-order-goods-name-enter="handleBeforeOrderGoodsNameEnter"
                             @select-before-order-goods="selectBeforeOrderGoods"
                             @close-before-order-search-results="closeBeforeOrderSearchResults"
                             @download-goods-nx="downLoadGoodsNx"
@@ -502,6 +553,7 @@
                             :is-valid-order-quantity-and-standard="isValidOrderQuantityAndStandard"
                             @cancel-add-order-before="cancelAddOrderBefore"
                             @before-order-goods-name-input="handleBeforeOrderGoodsNameInput"
+                            @before-order-goods-name-enter="handleBeforeOrderGoodsNameEnter"
                             @select-before-order-goods="selectBeforeOrderGoods"
                             @close-before-order-search-results="closeBeforeOrderSearchResults"
                             @download-goods-nx="downLoadGoodsNx"
@@ -509,6 +561,7 @@
                             @before-order-standard-input="handleBeforeOrderStandardInput"
                             @before-order-remark-input="handleBeforeOrderRemarkInput"
                             @save-before-order="handleSaveBeforeOrderAuto"
+                            @save-new-goods-from-before-order="handleSaveNewGoodsFromBeforeOrder"
                             @goods-name-input="handleOrderListGoodsNameInputAuto"
                             @goods-name-focus="handleOrderListGoodsNameFocusAuto"
                             @goods-name-blur="handleOrderListGoodsNameBlurAuto"
@@ -642,14 +695,17 @@
                             style="flex: 0 0 auto; width: 80px;">
                         删除
                     </button>
-                    <div style="width: 48px; flex-shrink: 0;"></div>
-                    <button
-                            class="btn btn-sm btn-warning"
-                            @click="handleRevertOrderFromEditModal"
-                            style="flex: 0 0 auto; width: 90px;">
-                        重新识别
-                    </button>
-                    <div style="width: 48px; flex-shrink: 0;"></div>
+                    <template v-if="currentEditOrderItem?.nxDoTrainingDataId">
+                        <div style="width: 48px; flex-shrink: 0;"></div>
+                        <button
+                                class="btn btn-sm btn-warning"
+                                @click="handleRevertOrderFromEditModal"
+                                style="flex: 0 0 auto; width: 90px;">
+                            重新识别
+                        </button>
+                        <div style="width: 48px; flex-shrink: 0;"></div>
+                    </template>
+                    <div v-else style="width: 186px; flex-shrink: 0;"></div>
                     <button
                             class="btn btn-sm btn-secondary"
                             @click="closeEditOrderModal"
@@ -738,8 +794,8 @@
         </div>
     </div>
 
-    <!-- 任务全部完成提示弹窗 -->
-    <div v-if="showTaskCompleteModal" class="order-edit-overlay" @click.self="closeTaskCompleteModal">
+    <!-- 任务全部完成提示弹窗（已屏蔽：不再监控任务状态弹窗） -->
+    <div v-if="false && showTaskCompleteModal" class="order-edit-overlay" @click.self="closeTaskCompleteModal">
         <div class="order-edit-popup" style="max-width: 420px;" ref="taskCompleteModalRef" tabindex="-1">
             <div class="popup-header text-center p-3 bg-light border-bottom">
                 <h5 class="mb-0">提示</h5>
@@ -771,7 +827,7 @@
             <div class="popup-body p-3">
                 <!-- 商品名称 -->
                 <div class="mb-3 d-flex gap-3">
-                    <label class="form-label fw-bold mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">商品名称：</label>
+                    <label class="form-label text-muted mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">商品名称：</label>
                     <div class="d-flex flex-column flex-grow-1">
                         <input
                                 type="text"
@@ -784,20 +840,19 @@
 
                 <!-- 商品规格名称 -->
                 <div class="mb-3 d-flex gap-3">
-                    <label class="form-label fw-bold mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">商品规格名称：</label>
+                    <label class="form-label text-muted mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">商品规格名称：</label>
                     <div class="d-flex flex-column flex-grow-1">
                         <input
                                 type="text"
                                 class="form-control-add"
                                 v-model="saveNewGoodsForm.standardName"
-                                placeholder="请输入商品规格名称（如：盒、箱、斤等）"
                         />
                     </div>
                 </div>
 
                 <!-- 商品规格重量 -->
                 <div class="mb-3 d-flex gap-3">
-                    <label class="form-label fw-bold mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">商品规格重量：</label>
+                    <label class="form-label text-muted mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">商品规格重量：</label>
                     <div class="d-flex flex-column flex-grow-1">
                         <input
                                 type="text"
@@ -812,7 +867,7 @@
 
                 <!-- 箱单位 -->
                 <div class="mb-3 d-flex gap-3">
-                    <label class="form-label fw-bold mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">大包装单位：</label>
+                    <label class="form-label text-muted mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">大包装单位：</label>
                     <div class="d-flex flex-column flex-grow-1">
                         <input
                                 type="text"
@@ -826,7 +881,7 @@
 
                 <!-- 每箱数量 -->
                 <div class="mb-3 d-flex gap-3">
-                    <label class="form-label fw-bold mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">大包装数量：</label>
+                    <label class="form-label text-muted mb-0" style="min-width: 120px; flex-shrink: 0; padding-top: 8px;">大包装数量：</label>
                     <div class="d-flex flex-column flex-grow-1">
                         <input
                                 type="number"
@@ -853,7 +908,7 @@
                 <button
                         class="btn btn-sm btn-primary"
                         @click="confirmSaveNewGoods"
-                        :disabled="!saveNewGoodsForm.standardName || !saveNewGoodsForm.standardName.trim()"
+                        :disabled="!saveNewGoodsForm.goodsName || !saveNewGoodsForm.goodsName.trim() || !saveNewGoodsForm.standardName || !saveNewGoodsForm.standardName.trim()"
                         style="flex: 0 0 auto; width: 100px;">
                     保存
                 </button>
@@ -872,6 +927,17 @@
             @confirm="handleCropConfirm"
     />
 
+    <!-- Toast 提示组件 -->
+    <Toast
+            v-model:visible="toastVisible"
+            :message="toastMessage"
+            :type="toastType"
+            :duration="toastDuration"
+    />
+
+    <!-- Alert 弹窗组件 -->
+    <AlertDialog ref="alertDialog" />
+
 </template>
 
 <script>
@@ -882,11 +948,14 @@
     import ImageCropperModal from './ImageCropperModal.vue';
     import ExcelUpload from './upload/ExcelUpload.vue';
     import ImageUpload from './upload/ImageUpload.vue';
+    import ManualEntryUpload from './upload/ManualEntryUpload.vue';
     import PasteUpload from './upload/PasteUpload.vue';
     import ExcelPasteUpload from './upload/ExcelPasteUpload.vue';
     import AutoUpload from './upload/AutoUpload.vue';
     import OrderList from './OrderList.vue';
     import DraftOrderList from './DraftOrderList.vue';
+    import Toast from './Toast.vue';
+    import AlertDialog from './AlertDialog.vue';
 
     export default {
         name: 'PlaceOrder',
@@ -894,11 +963,14 @@
             ImageCropperModal,
             ExcelUpload,
             ImageUpload,
+            ManualEntryUpload,
             PasteUpload,
             ExcelPasteUpload,
             AutoUpload,
             OrderList,
-            DraftOrderList
+            DraftOrderList,
+            Toast,
+            AlertDialog
         },
         emits: ['order-saved', 'upload-type-change', 'switch-to-today-orders', 'task-added'],
         props: {
@@ -923,7 +995,7 @@
         data() {
             return {
                 // 上传类型
-                uploadType: 'paste', // 'excel'、'image'、'paste' 或 'auto'（默认 excel，以便自动加载 excel 缓存）
+                uploadType: 'manual', // 'manual'、'paste'、'image'、'excel-paste'、'excel'、'auto'
                 excelPasteEverShown: false, // Excel 粘贴是否曾被打开过（用于保持挂载，避免每次切换都重建 vxe-table）
 
                 // 订单相关
@@ -966,6 +1038,10 @@
                 showImagePreviewModal: false, // 是否显示图片预览/裁剪弹窗
                 previewImageDataUrl: null, // 弹窗中预览的图片DataURL
 
+                // 手动录入参考区
+                manualRefText: '',
+                manualRefImageDataUrl: null,
+
                 // 复制粘贴相关
                 pasteInputText: '', // 粘贴的文本内容
                 pasteSaveCount: null, // 复制粘贴已保存订单数量（null=草稿状态，数字=已保存状态）
@@ -974,6 +1050,7 @@
                 pasteInputContent: '', // 输入框内容（与 pasteInputText 同步）
                 pasteInvalidLineIndices: [], // 解析后校验不合格的行索引（兼容）
                 pasteInvalidSegments: [], // 解析后校验不合格的片段 { lineIndex, segmentText }，用于片段级红色高亮
+                pasteNoValidOrder: false, // 未解析到有效订单标记
                 showDeepSeekLoading: false, // DeepSeek API 加载状态
 
                 // Excel 粘贴相关
@@ -1042,6 +1119,9 @@
 
                 // 之前添加新订单相关
                 addingOrderBeforeIndex: -1, // 当前正在"之前添加新订单"的订单索引（-1表示未激活）
+                _beforeOrderStandardHasAutoFilledCarton: false, // 规格首次清空时已自动填入大包装，第二次清空不再自动填入
+                _beforeOrderGoodsSearchDebounce: null, // 之前添加订单-商品名搜索防抖
+                _goodsNameSearchDebounce: null, // OrderList 商品名搜索防抖
                 beforeOrderForm: { // 之前添加新订单的表单数据
                     goodsName: '',
                     quantity: '',
@@ -1051,7 +1131,8 @@
                     searchResults: [], // 搜索结果（已废弃，保留兼容性）
                     disArr: [], // 配送商商品搜索结果
                     nxArr: [], // 系统商品搜索结果
-                    showSearchResults: false // 是否显示搜索结果
+                    showSearchResults: false, // 是否显示搜索结果
+                    selectedSearchIndex: 0 // 下拉选中项索引（用于 ↑↓ 快捷键）
                 },
 
                 // 调整订单内容弹窗相关
@@ -1071,6 +1152,8 @@
                 currentSaveGoodsOrderIndex: -1, // 当前要保存的商品订单索引
                 currentSaveGoodsSourceType: null, // 当前要保存的商品来源类型
                 isSaveNewGoodsFromBeforeOrder: false, // 标记是否从"在之前添加新订单"表单中保存新商品
+                currentSaveGoodsManualRow: null, // 手动录入保存新商品时的行数据
+                currentSaveGoodsManualRowIndex: -1,
                 saveNewGoodsForm: { // 保存新商品表单数据
                     goodsName: '',
                     standardName: '', // 商品规格名称
@@ -1078,7 +1161,13 @@
                     itemUnit: '', // 商品单位
                     cartonUnit: '', // 箱单位
                     itemsPerCarton: '' // 每箱数量
-                }
+                },
+
+                // Toast 提示相关
+                toastVisible: false,
+                toastMessage: '',
+                toastType: 'info',
+                toastDuration: 3000
             }
         },
         computed: {
@@ -1203,13 +1292,15 @@
         },
         watch: {
             showTaskCompleteModal(val) {
-                if (val) {
-                    // 达到弹窗条件时立即停止朗读，避免影响回车键等操作
-                    this.stopAllReading();
-                    this.$nextTick(() => {
-                        this.$refs.taskCompleteModalCompleteBtn?.focus();
-                    });
-                }
+                // 屏蔽：不再监控任务状态弹窗
+                return;
+                // if (val) {
+                //     // 达到弹窗条件时立即停止朗读，避免影响回车键等操作
+                //     this.stopAllReading();
+                //     this.$nextTick(() => {
+                //         this.$refs.taskCompleteModalCompleteBtn?.focus();
+                //     });
+                // }
             },
             // 监听客户切换，自动加载缓存
             selectedAllCustomer: {
@@ -1345,9 +1436,18 @@
         },
         beforeUnmount() {
             this.clearTaskStatusPollTimer();
+            if (this._beforeOrderGoodsSearchDebounce) clearTimeout(this._beforeOrderGoodsSearchDebounce);
+            if (this._goodsNameSearchDebounce) clearTimeout(this._goodsNameSearchDebounce);
         },
 
         methods: {
+            // 显示 Toast 提示
+            showToast(message, type = 'info', duration = 3000) {
+                this.toastMessage = message;
+                this.toastType = type;
+                this.toastDuration = duration;
+                this.toastVisible = true;
+            },
 
             // 处理上传方式切换
             handleUploadTypeChange(type) {
@@ -1358,6 +1458,8 @@
                 this.currentTaskId = null;
                 this.currentTask = null;
                 this.pasteSaveCount = null;
+                this.manualRefText = '';
+                this.manualRefImageDataUrl = null;
                 this.pasteInputText = '';
                 this.pasteInputContent = '';
                 this.pasteOriginText = '';
@@ -1571,11 +1673,12 @@
                 return this.excelPasteTableData.some(row => row.goodsName && row.goodsName.trim() !== '');
             },
             // 清空表格数据
-            clearExcelPasteTableData() {
+            async clearExcelPasteTableData() {
                 if (!this.hasExcelPasteTableData()) {
                     return;
                 }
-                if (confirm('确定要清空表格中的所有数据吗？')) {
+                const confirmed = await this.$refs.alertDialog.confirm('确定要清空所有粘贴数据吗？');
+                if (confirmed) {
                     // 重置所有行为空数据
                     this.excelPasteTableData = Array.from({length: 50}, () => ({
                         goodsName: '',
@@ -1592,11 +1695,12 @@
                 }
             },
             // 清空订单列表数据
-            clearExcelPasteOrderItems() {
+            async clearExcelPasteOrderItems() {
                 if (this.orderItems.length === 0) {
                     return;
                 }
-                if (confirm('确定要清空订单列表中的所有数据吗？')) {
+                const confirmed = await this.$refs.alertDialog.confirm('确定要清空所有订单商品吗？');
+                if (confirmed) {
                     this.orderItems = [];
                     // 重置搜索和匹配商品列表状态
                     this.resetSearchAndMatchedGoodsState();
@@ -1625,10 +1729,10 @@
                     // 重置加载状态
                     this.showDeepSeekLoading = false;
 
-                    alert(`成功解析 ${orderItems.length} 条订单数据`);
+                    await this.$refs.alertDialog.alert(`成功解析 ${orderItems.length} 条订单数据`, 'success');
                 } catch (error) {
                     console.error('❌ [handleExcelPasteAiRecogniseComplete] AI 识别失败:', error);
-                    alert('AI识别失败：' + (error.message || '未知错误'));
+                    await this.$refs.alertDialog.alert('AI识别失败：' + (error.message || '未知错误'), 'error');
                     this.showDeepSeekLoading = false;
                 }
             },
@@ -1664,7 +1768,7 @@
             },
 
             // 检查是否选择了子部门（如果有子部门的话）
-            checkSubDepartmentSelected() {
+            async checkSubDepartmentSelected() {
                 if (!this.selectedCustomerEntity) {
                     return true; // 如果没有选中客户，不检查子部门
                 }
@@ -1675,7 +1779,7 @@
 
                 if (hasSubDepartments) {
                     if (!this.selectedSubDepartment) {
-                        alert('请先选择子部门');
+                        await this.$refs.alertDialog.alert('请先选择子部门', 'warning');
                         return false;
                     }
                     return true;
@@ -1694,23 +1798,23 @@
                 const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     'application/vnd.ms-excel'];
                 if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls)$/i)) {
-                    alert('请选择有效的Excel文件（.xlsx 或 .xls）');
+                    await this.$refs.alertDialog.alert('请选择有效的Excel文件（.xlsx 或 .xls）', 'warning');
                     return;
                 }
 
                 // 验证文件大小（最大10MB）
                 if (file.size > 10 * 1024 * 1024) {
-                    alert('文件大小超过限制，最大支持 10MB');
+                    await this.$refs.alertDialog.alert('文件大小超过限制，最大支持 10MB', 'warning');
                     return;
                 }
 
                 if (!this.selectedAllCustomer) {
-                    alert('请先选择客户');
+                    await this.$refs.alertDialog.alert('请先选择客户', 'warning');
                     return;
                 }
 
                 // 检查是否选择了子部门（如果有子部门的话）
-                if (!this.checkSubDepartmentSelected()) {
+                if (!(await this.checkSubDepartmentSelected())) {
                     // 清空文件输入
                     if (this.$refs.excelFileInput) {
                         this.$refs.excelFileInput.value = '';
@@ -1984,34 +2088,27 @@
                 return sourceType;
             },
 
-            // 处理商品名称输入（触发搜索）
+            // 处理商品名称输入（触发搜索，500ms 防抖）
             handleGoodsNameInput(item, orderIndex, sourceType) {
-                // 使用 v-model 时，item.nxDoGoodsName 已经被 Vue 自动更新
-                // 使用 :value 时，需要从事件对象获取值
                 const value = item.nxDoGoodsName || '';
-
-                // 如果新值和上一次搜索的值相同，不重复请求接口
-                if (value === this.lastSearchValue) {
-                    this.orderArrIndex = orderIndex;
-                    this.currentSourceType = sourceType;
-                    return;
-                }
-
                 this.orderArrIndex = orderIndex;
-                this.currentSourceType = sourceType; // 保存当前来源类型
-
-                if (value.length > 0) {
-                    // 调用搜索
-                    this.lastSearchValue = value; // 保存当前搜索值
-                    this.getSearchString(value, sourceType);
-                } else {
+                this.currentSourceType = sourceType;
+                if (value.length === 0) {
+                    if (this._goodsNameSearchDebounce) clearTimeout(this._goodsNameSearchDebounce);
+                    this._goodsNameSearchDebounce = null;
                     this.strArr = [];
                     this.nxArr = [];
                     this.orderArrIndex = -1;
-                    this.lastSearchValue = ''; // 清空搜索值
+                    this.lastSearchValue = '';
+                    return;
                 }
-
-
+                if (value === this.lastSearchValue) return;
+                if (this._goodsNameSearchDebounce) clearTimeout(this._goodsNameSearchDebounce);
+                this._goodsNameSearchDebounce = setTimeout(() => {
+                    this._goodsNameSearchDebounce = null;
+                    this.lastSearchValue = value;
+                    this.getSearchString(value, sourceType);
+                }, 500);
             },
 
             // 处理商品名称获得焦点
@@ -2070,14 +2167,14 @@
                 // 对于图片识别模式，允许没有 nxDepartmentOrdersId（未保存的订单）
                 if (!item) {
                     console.error('[PlaceOrder] 订单项为空，无法修改');
-                    alert('订单信息错误，无法修改');
+                    await this.$refs.alertDialog.alert('订单信息错误，无法修改', 'error');
                     return;
                 }
 
                 // 只有已保存的订单才需要 nxDepartmentOrdersId
                 if (sourceType !== 'image' && !item.nxDepartmentOrdersId) {
                     console.error('[PlaceOrder] 订单信息错误，缺少 nxDepartmentOrdersId:', item);
-                    alert('订单信息错误，无法修改');
+                    await this.$refs.alertDialog.alert('订单信息错误，无法修改', 'error');
                     return;
                 }
 
@@ -2128,22 +2225,22 @@
             // 确认修改订单（参考 TodayOrders.vue 的 handleSaveEditOrder）
             async confirmUpdateOrder() {
                 if (!this.currentEditOrderItem || !this.currentEditOrderItem.nxDepartmentOrdersId) {
-                    alert('订单信息错误');
+                    await this.$refs.alertDialog.alert('订单信息错误', 'error');
                     return;
                 }
 
                 if (!this.editOrderForm.quantity || parseFloat(this.editOrderForm.quantity) <= 0) {
-                    alert('请输入有效的订货数量');
+                    await this.$refs.alertDialog.alert('请输入有效的订货数量', 'warning');
                     return;
                 }
 
                 if (!this.editOrderForm.standard) {
-                    alert('请选择单位');
+                    await this.$refs.alertDialog.alert('请选择单位', 'warning');
                     return;
                 }
 
                 if (this.editOrderForm.remark && this.editOrderForm.remark.length > 15) {
-                    alert('备注最多15个字符');
+                    await this.$refs.alertDialog.alert('备注最多15个字符', 'warning');
                     return;
                 }
 
@@ -2206,11 +2303,11 @@
                             }
                         }
                     } else {
-                        alert(res?.data?.msg || '修改失败');
+                        await this.$refs.alertDialog.alert(res?.data?.msg || '修改失败', 'error');
                     }
                 } catch (error) {
                     console.error('修改订单失败:', error);
-                    alert('修改失败，请检查网络');
+                    await this.$refs.alertDialog.alert('修改失败，请检查网络', 'error');
                 } finally {
                     this.$store.commit('SET_LOADING', false);
                 }
@@ -2234,13 +2331,13 @@
             },
 
             // 显示调整订单内容弹窗
-            showFixItems() {
+            async showFixItems() {
                 // 根据 uploadType 获取正确的订单列表
                 const uploadType = this.uploadType;
                 const currentOrderItems = this.getCurrentOrderItems();
 
                 if (!currentOrderItems || currentOrderItems.length === 0) {
-                    alert('当前没有订单，无法调整');
+                    await this.$refs.alertDialog.alert('当前没有订单，无法调整', 'warning');
                     return;
                 }
 
@@ -2305,7 +2402,7 @@
 
                 try {
                     if (!this.fixItemsRequirement || !this.fixItemsRequirement.trim()) {
-                        alert('请输入修改要求');
+                        await this.$refs.alertDialog.alert('请输入修改要求', 'warning');
                         this.isProcessingFixItems = false;
                         return;
                     }
@@ -2315,7 +2412,7 @@
                     const currentOrderItems = this.getCurrentOrderItems();
 
                     if (!currentOrderItems || currentOrderItems.length === 0) {
-                        alert('当前没有订单');
+                        await this.$refs.alertDialog.alert('当前没有订单', 'warning');
                         this.isProcessingFixItems = false;
                         return;
                     }
@@ -2482,7 +2579,7 @@
                     }
                 } catch (error) {
                     console.error('❌ [confirmFixItems] 调整订单失败:', error);
-                    alert('调整订单失败：' + (error.message || '未知错误'));
+                    await this.$refs.alertDialog.alert('调整订单失败：' + (error.message || '未知错误'), 'error');
                 } finally {
                     console.log('✅ [confirmFixItems] 处理完成，重置 isProcessingFixItems = false');
                     this.isProcessingFixItems = false;
@@ -2493,12 +2590,12 @@
             // 确认添加规格（参考 TodayOrders.vue 的 confirmAddStandard）
             async confirmAddStandard() {
                 if (!this.itemDis || !this.itemDis.nxDistributerGoodsId) {
-                    alert('商品信息错误');
+                    await this.$refs.alertDialog.alert('商品信息错误', 'error');
                     return;
                 }
 
                 if (!this.newStandardName || !this.newStandardName.trim()) {
-                    alert('请输入规格名称');
+                    await this.$refs.alertDialog.alert('请输入规格名称', 'warning');
                     return;
                 }
 
@@ -2523,13 +2620,13 @@
                         this.showAddStandard = false;
                         this.newStandardName = '';
 
-                        alert('添加规格成功');
+                        await this.$refs.alertDialog.alert('添加规格成功', 'success');
                     } else {
-                        alert(res?.data?.msg || '添加规格失败');
+                        await this.$refs.alertDialog.alert(res?.data?.msg || '添加规格失败', 'error');
                     }
                 } catch (error) {
                     console.error('添加规格失败:', error);
-                    alert('添加规格失败，请检查网络');
+                    await this.$refs.alertDialog.alert('添加规格失败，请检查网络', 'error');
                 } finally {
                     this.$store.commit('SET_LOADING', false);
                 }
@@ -2548,7 +2645,7 @@
              */
             async handleRevertOrderFromEditModal() {
                 if (!this.currentEditOrderItem || !this.currentEditOrderItem.nxDepartmentOrdersId) {
-                    alert('订单未保存，无法重新识别');
+                    await this.$refs.alertDialog.alert('订单未保存，无法重新识别', 'warning');
                     return;
                 }
                 const orderId = this.currentEditOrderItem.nxDepartmentOrdersId;
@@ -2563,12 +2660,20 @@
                     if (res && res.data && res.data.code === 0) {
                         const updatedOrder = res.data.data;
                         if (!updatedOrder) {
-                            alert('接口返回数据异常');
+                            await this.$refs.alertDialog.alert('接口返回数据异常', 'error');
                             return;
                         }
 
-                        // 合并更新到订单项
-                        const newItem = { ...orderItem, ...updatedOrder };
+                        // 选择性合并：只合并 revert 后需要的字段，避免将接口返回的大对象转为 Vue 深度响应式，减少内存占用
+                        const mergeFields = ['nxDoStatus', 'nxDoGoodsName', 'nxDoGoodsNameOriginal', 'nxDistributerGoodsEntity', 'nxDepartmentOrdersId', 'nxDoQuantity', 'nxDoStandard', 'nxDoRemark', 'nxDoPrintStandard', 'nxDoWeight', 'nxDoPrice', 'nxDoSubtotal'];
+                        const newItem = { ...orderItem };
+                        mergeFields.forEach(f => {
+                            if (Object.prototype.hasOwnProperty.call(updatedOrder, f)) {
+                                newItem[f] = updatedOrder[f];
+                            }
+                        });
+                        newItem.nxGoodsEntities = [];
+                        newItem.nxDistributerGoodsEntityList = [];
 
                         // 更新订单列表
                         if (orderIndex >= 0 && orderIndex < this.orderItems.length) {
@@ -2601,13 +2706,12 @@
                         this.resetSearchAndMatchedGoodsState();
                         this.closeEditOrderModal();
                         this.$emit('task-added');
-                        alert('已恢复为待识别，请重新选择商品');
                     } else {
-                        alert(res?.data?.msg || '重新识别失败');
+                        await this.$refs.alertDialog.alert(res?.data?.msg || '重新识别失败', 'error');
                     }
                 } catch (error) {
                     console.error('重新识别失败:', error);
-                    alert('请检查网络');
+                    await this.$refs.alertDialog.alert('请检查网络', 'error');
                 } finally {
                     this.$store.commit('SET_LOADING', false);
                 }
@@ -2624,7 +2728,7 @@
 
                 if (!this.currentEditOrderItem.nxDepartmentOrdersId) {
                     console.warn('⚠️ [handleDeleteOrder] 订单信息错误，无法删除');
-                    alert('订单信息错误，无法删除');
+                    await this.$refs.alertDialog.alert('订单信息错误，无法删除', 'error');
                     this.closeEditOrderModal();
                     return;
                 }
@@ -2759,11 +2863,11 @@
                         console.log('✅ [handleDeleteOrder] 删除订单完成');
                     } else {
                         console.error('❌ [handleDeleteOrder] 删除失败:', res?.data?.msg);
-                        alert(res?.data?.msg || '删除失败');
+                        await this.$refs.alertDialog.alert(res?.data?.msg || '删除失败');
                     }
                 } catch (error) {
                     console.error('❌ [handleDeleteOrder] 删除订单异常:', error);
-                    alert('删除失败，请检查网络');
+                    await this.$refs.alertDialog.alert('', 'warning');
                 } finally {
                     this.$store.commit('SET_LOADING', false);
                 }
@@ -2788,7 +2892,7 @@
             },
 
             // 保存新商品（参考小程序 disAddGoodsLinshi 实现）
-            handleSaveNewGoods(item, orderIndex, sourceType, goodsNameOverride) {
+            async handleSaveNewGoods(item, orderIndex, sourceType, goodsNameOverride) {
                 // 重置搜索和匹配商品列表状态
                 this.resetSearchAndMatchedGoodsState();
 
@@ -2798,14 +2902,14 @@
                 const itemUnit = item.itemUnit || '';
 
                 if (!goodsName || !goodsName.trim()) {
-                    alert('请填写商品名称');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
                 // 如果没有商品单位，则使用订货单位；只有当两者都为空时才提示
                 const finalUnit = itemUnit.trim() || standard.trim();
                 if (!finalUnit) {
-                    alert('请填写商品单位或订货单位');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
@@ -2835,14 +2939,14 @@
                 const task = this.currentTask;
                 const sourceType = this.uploadType || 'paste';
                 if (taskId == null) {
-                    alert('当前没有可完成的任务');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
                 try {
                     await api.finishTask(taskId);
                 } catch (e) {
                     console.error('finishTask failed:', e);
-                    alert(e?.message || '完成任务失败');
+                    await this.$refs.alertDialog.alert(e?.message || '完成任务失败');
                     return;
                 }
                 this.$emit('task-added');
@@ -2893,7 +2997,7 @@
                     await api.finishTask(taskId);
                 } catch (e) {
                     console.error('finishTask failed:', e);
-                    alert(e?.message || '完成任务失败');
+                    await this.$refs.alertDialog.alert(e?.message || '完成任务失败');
                     return;
                 }
                 this.$emit('task-added');
@@ -2925,6 +3029,8 @@
                 this.currentSaveGoodsOrderIndex = -1;
                 this.currentSaveGoodsSourceType = null;
                 this.isSaveNewGoodsFromBeforeOrder = false; // 重置标记
+                this.currentSaveGoodsManualRow = null;
+                this.currentSaveGoodsManualRowIndex = -1;
                 this.saveNewGoodsForm = {
                     goodsName: '',
                     standardName: '',
@@ -2937,15 +3043,18 @@
 
             // 确认保存新商品
             async confirmSaveNewGoods() {
-                if (!this.saveNewGoodsForm.standardName || !this.saveNewGoodsForm.standardName.trim()) {
-                    alert('请填写商品规格名称');
+                if (!this.saveNewGoodsForm.goodsName || !this.saveNewGoodsForm.goodsName.trim()) {
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
-
+                if (!this.saveNewGoodsForm.standardName || !this.saveNewGoodsForm.standardName.trim()) {
+                    await this.$refs.alertDialog.alert('', 'warning');
+                    return;
+                }
                 // 获取配送商ID
                 const disId = this.disUser?.nxDiuDistributerId;
                 if (!disId) {
-                    alert('无法获取配送商信息');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
@@ -2966,9 +3075,9 @@
                     nxDgBuyingPriceUpdate: arriveDate,
                     nxDgDistributerId: disId,
                     nxDgGoodsName: this.saveNewGoodsForm.goodsName.trim(),
-                    nxDgGoodsStandardname: this.saveNewGoodsForm.standardName.trim(),
+                    nxDgGoodsStandardname: (this.saveNewGoodsForm.standardName || '').trim() || '斤',
                     nxDgGoodsStandardWeight: this.saveNewGoodsForm.standardWeight.trim() || "-1",
-                    nxDgItemUnit: this.saveNewGoodsForm.itemUnit.trim() || "",
+                    nxDgItemUnit: (this.saveNewGoodsForm.itemUnit || '').trim() || (this.saveNewGoodsForm.standardName || '').trim() || '斤',
                     nxDgGoodsBrand: "-1",
                     nxDgGoodsPlace: "-1",
                     nxDgGoodsInventoryType: 1,
@@ -2995,10 +3104,82 @@
 
                         // 如果是从"在之前添加新订单"表单中保存的，需要特殊处理
                         if (this.isSaveNewGoodsFromBeforeOrder) {
+                            console.log('🔍 [confirmSaveNewGoods] 开始处理 beforeOrder 保存逻辑');
+                            console.log('📦 [confirmSaveNewGoods] goodsId:', goodsId);
+                            console.log('📦 [confirmSaveNewGoods] savedGoodsName:', savedGoodsName);
+                            console.log('📦 [confirmSaveNewGoods] currentSaveGoodsOrderIndex:', this.currentSaveGoodsOrderIndex);
+                            console.log('📦 [confirmSaveNewGoods] beforeOrderForm.goodsName:', this.beforeOrderForm.goodsName);
+
                             // 自动触发商品搜索，这样新商品会出现在搜索结果中
-                            await this.handleBeforeOrderGoodsNameInput(this.beforeOrderForm.goodsName);
+                            await this.handleBeforeOrderGoodsNameEnter({ type: 'search', searchStr: this.beforeOrderForm.goodsName });
+                            console.log('📤 [confirmSaveNewGoods] 搜索已触发');
+
+                            // 等待搜索结果更新（需要多等待一下API返回）
+                            await this.$nextTick();
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                            
+                            console.log('📦 [confirmSaveNewGoods] beforeOrderForm.disArr:', this.beforeOrderForm.disArr);
+                            console.log('📦 [confirmSaveNewGoods] beforeOrderForm.nxArr:', this.beforeOrderForm.nxArr);
+
+                            // 检查搜索结果是否包含新商品
+                            if (this.beforeOrderForm.disArr && this.beforeOrderForm.disArr.length > 0) {
+                                console.log('🔍 [confirmSaveNewGoods] disArr 长度:', this.beforeOrderForm.disArr.length);
+                                // 找到新商品（应该是第一个结果）
+                                const newGoods = this.beforeOrderForm.disArr[0];
+                                console.log('🎯 [confirmSaveNewGoods] 找到的商品:', newGoods);
+                                console.log('🎯 [confirmSaveNewGoods] 商品ID:', newGoods?.nxDistributerGoodsId);
+
+                                if (newGoods && newGoods.nxDistributerGoodsId === goodsId) {
+                                    console.log('✅ [confirmSaveNewGoods] 匹配到新商品，准备选择');
+
+                                    // 自动选择新商品
+                                    this.selectBeforeOrderGoods(newGoods);
+                                    console.log('✅ [confirmSaveNewGoods] 已调用 selectBeforeOrderGoods');
+
+                                    // 获取标准规格名称
+                                    const standardName = (this.saveNewGoodsForm.standardName || '').trim() || '斤';
+                                    console.log('📏 [confirmSaveNewGoods] standardName:', standardName);
+
+                                    // 将规格赋值给当前订单的 nxDoStandard
+                                    const orderIndex = this.currentSaveGoodsOrderIndex;
+                                    console.log('📍 [confirmSaveNewGoods] orderIndex:', orderIndex);
+
+                                    if (orderIndex !== null && orderIndex >= 0) {
+                                        const currentOrderItems = this.getCurrentOrderItems();
+                                        console.log('📋 [confirmSaveNewGoods] currentOrderItems:', currentOrderItems);
+                                        
+                                        if (currentOrderItems && currentOrderItems[orderIndex]) {
+                                            const oldStandard = currentOrderItems[orderIndex].nxDoStandard;
+                                            currentOrderItems[orderIndex].nxDoStandard = standardName;
+                                            console.log('🔄 [confirmSaveNewGoods] 已更新订单规格:', {
+                                                orderIndex,
+                                                oldStandard,
+                                                newStandard: standardName
+                                            });
+                                        } else {
+                                            console.log('⚠️ [confirmSaveNewGoods] 订单不存在:', { orderIndex, itemsLength: currentOrderItems?.length });
+                                        }
+                                    } else {
+                                        console.log('⚠️ [confirmSaveNewGoods] orderIndex 无效:', orderIndex);
+                                    }
+                                } else {
+                                    console.log('❌ [confirmSaveNewGoods] 商品ID不匹配:', {
+                                        expected: goodsId,
+                                        actual: newGoods?.nxDistributerGoodsId
+                                    });
+                                }
+                            } else {
+                                console.log('⚠️ [confirmSaveNewGoods] 搜索结果为空或没有配送商商品');
+                            }
 
                             // 关闭弹窗
+                            this.closeSaveNewGoodsModal();
+                        } else if (this.currentSaveGoodsSourceType === 'manual') {
+                            // 手动录入保存新商品：仅等于选择了商品，数量和规格需用户继续填写
+                            const rowIndex = this.currentSaveGoodsManualRowIndex;
+                            const standardName = (this.saveNewGoodsForm.standardName || '').trim() || '斤';
+                            this.$refs.manualEntryRef?.setRowSelectedGoodsAfterSave(rowIndex, savedGoods, standardName);
+                            this.$nextTick(() => this.$refs.manualEntryRef?.focusInput(rowIndex, 'quantity'));
                             this.closeSaveNewGoodsModal();
                         } else {
                             // 原有的处理逻辑：设置当前编辑的订单索引和来源类型
@@ -3029,12 +3210,12 @@
                     } else {
                         // 保存失败
                         const errorMsg = res?.data?.message || '保存失败，可能存在相同商品';
-                        alert(errorMsg);
+                        await this.$refs.alertDialog.alert(errorMsg);
                         console.error('❌ [confirmSaveNewGoods] 保存新商品失败:', res);
                     }
                 } catch (error) {
                     console.error('❌ [confirmSaveNewGoods] 保存新商品异常:', error);
-                    alert('保存新商品失败，请检查网络连接');
+                    await this.$refs.alertDialog.alert('', 'warning');
                 } finally {
                     this.$store.commit('SET_LOADING', false);
                 }
@@ -3065,8 +3246,12 @@
                     remark: '',
                     selectedGoods: null,
                     searchResults: [],
-                    showSearchResults: false
+                    disArr: [],
+                    nxArr: [],
+                    showSearchResults: false,
+                    selectedSearchIndex: 0
                 };
+                this._beforeOrderStandardHasAutoFilledCarton = false;
 
             },
 
@@ -3082,23 +3267,41 @@
                     searchResults: [],
                     disArr: [],
                     nxArr: [],
-                    showSearchResults: false
+                    showSearchResults: false,
+                    selectedSearchIndex: 0
                 };
             },
 
-            // 处理从"在之前添加新订单"表单中保存新商品
-            handleSaveNewGoodsFromBeforeOrder({item, orderIndex}) {
-                // 检查必填字段
-                const goodsName = this.beforeOrderForm.goodsName || '';
-                const standard = this.beforeOrderForm.standard || '';
-
-                if (!goodsName || !goodsName.trim()) {
-                    alert('请填写商品名称');
+            // 处理从手动录入保存新商品（弹窗填写后保存并添加订单）
+            async handleSaveNewGoodsFromManual({ rowIndex, row }) {
+                const goodsName = (row.goodsName || '').trim();
+                if (!goodsName) {
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
+                this.currentSaveGoodsItem = { nxDoGoodsName: goodsName };
+                this.currentSaveGoodsOrderIndex = -1;
+                this.currentSaveGoodsSourceType = 'manual';
+                this.currentSaveGoodsManualRow = row;
+                this.currentSaveGoodsManualRowIndex = rowIndex;
+                this.saveNewGoodsForm = {
+                    goodsName,
+                    standardName: (row.standard || '').trim(),
+                    standardWeight: '',
+                    itemUnit: (row.standard || '').trim(),
+                    cartonUnit: '',
+                    itemsPerCarton: ''
+                };
+                this.showSaveNewGoodsModal = true;
+            },
 
-                if (!standard || !standard.toString().trim()) {
-                    alert('请填写商品规格');
+            // 处理从"在之前添加新订单"表单中保存新商品
+            async handleSaveNewGoodsFromBeforeOrder({item, orderIndex}) {
+                const goodsName = this.beforeOrderForm.goodsName || '';
+                const standard = (this.beforeOrderForm.standard || '').trim();
+
+                if (!goodsName || !goodsName.trim()) {
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
@@ -3108,8 +3311,8 @@
                 // 构建一个临时的商品对象，用于调用现有的保存新商品逻辑
                 const tempItem = {
                     nxDoGoodsName: goodsName.trim(),
-                    nxDoStandard: standard.trim(),
-                    itemUnit: standard.trim(), // 使用规格作为商品单位
+                    nxDoStandard: standard,
+                    itemUnit: standard,
                     standardWeight: '',
                     cartonUnit: '',
                     itemsPerCarton: ''
@@ -3123,9 +3326,9 @@
                 // 初始化表单数据
                 this.saveNewGoodsForm = {
                     goodsName: goodsName.trim(),
-                    standardName: standard.trim(),
+                    standardName: standard,
                     standardWeight: '',
-                    itemUnit: standard.trim(),
+                    itemUnit: standard,
                     cartonUnit: '',
                     itemsPerCarton: ''
                 };
@@ -3134,80 +3337,103 @@
                 this.showSaveNewGoodsModal = true;
             },
 
-            // 处理之前添加订单的商品名称输入（搜索商品）
-            async handleBeforeOrderGoodsNameInput(value) {
-                console.log('🔍 [handleBeforeOrderGoodsNameInput] 函数被调用');
-                console.log('📥 [handleBeforeOrderGoodsNameInput] 接收到的输入值:', value);
-                console.log('📥 [handleBeforeOrderGoodsNameInput] 值类型:', typeof value);
-
-                // 先更新表单中的值
-                this.beforeOrderForm.goodsName = value || '';
-                console.log('📦 [handleBeforeOrderGoodsNameInput] beforeOrderForm:', this.beforeOrderForm);
-                console.log('📝 [handleBeforeOrderGoodsNameInput] 更新后的输入值:', this.beforeOrderForm.goodsName);
-
+            // 处理之前添加订单的商品名称输入（仅更新值，回车时再搜索，与正常录入一致）
+            handleBeforeOrderGoodsNameInput(value) {
+                const form = this.beforeOrderForm;
+                const prevName = (form.selectedGoods?.nxDgGoodsName || form.selectedGoods?.nxGoodsName || '').trim();
+                form.goodsName = value || '';
                 const searchStr = (value || '').trim();
-                console.log('✂️ [handleBeforeOrderGoodsNameInput] 修剪后的搜索字符串:', searchStr);
-
                 if (!searchStr || searchStr.length < 1) {
-                    console.log('⚠️ [handleBeforeOrderGoodsNameInput] 搜索字符串为空，清空结果并返回');
-                    this.beforeOrderForm.showSearchResults = false;
-                    this.beforeOrderForm.searchResults = [];
+                    if (this._beforeOrderGoodsSearchDebounce) clearTimeout(this._beforeOrderGoodsSearchDebounce);
+                    this._beforeOrderGoodsSearchDebounce = null;
+                    form.showSearchResults = false;
+                    form.searchResults = [];
+                    form.disArr = [];
+                    form.nxArr = [];
+                    if (form.selectedGoods && searchStr !== prevName) form.selectedGoods = null;
                     return;
                 }
-
-                try {
-                    // 获取部门ID
-                    const depId = this.selectedSubDepartment || this.selectedAllCustomer;
-                    console.log('🏢 [handleBeforeOrderGoodsNameInput] 部门ID:', depId);
-                    console.log('🏢 [handleBeforeOrderGoodsNameInput] selectedSubDepartment:', this.selectedSubDepartment);
-                    console.log('🏢 [handleBeforeOrderGoodsNameInput] selectedAllCustomer:', this.selectedAllCustomer);
-                    if (!depId) {
-                        console.log('❌ [handleBeforeOrderGoodsNameInput] 部门ID为空，返回');
+                // 用户修改输入时清除已选商品和下拉
+                if (form.selectedGoods && searchStr !== prevName) form.selectedGoods = null;
+                form.showSearchResults = false;
+                form.disArr = [];
+                form.nxArr = [];
+            },
+            // 处理之前添加订单的商品名回车（ManualEntryUpload 专用：搜索或选中）
+            handleBeforeOrderGoodsNameEnter(payload) {
+                if (payload.type === 'select') {
+                    const form = this.beforeOrderForm;
+                    const idx = form.selectedSearchIndex ?? 0;
+                    const disLen = form.disArr?.length || 0;
+                    if (idx < disLen) {
+                        this.selectBeforeOrderGoods(form.disArr[idx]);
                         return;
                     }
-
-                    // 调用搜索API（参考 resGoodsList.js _againSearchString）
+                    if (idx < disLen + (form.nxArr?.length || 0)) {
+                        this.handleManualDownloadGoodsNx({ goods: form.nxArr[idx - disLen], orderIndex: payload.orderIndex });
+                        return;
+                    }
+                }
+                if (payload.type === 'search' && payload.searchStr) {
+                    // 页面刚打开没有订单时,按回车不应该触发搜索请求
+                    if (!this.orderItems || this.orderItems.length === 0) {
+                        console.log('⚠️ [handleBeforeOrderGoodsNameEnter] 没有订单数据,不触发搜索');
+                        return;
+                    }
+                    this._doBeforeOrderGoodsSearch(payload.searchStr);
+                }
+            },
+            // 处理之前添加订单的商品名 ↑↓（ManualEntryUpload 专用）
+            handleBeforeOrderGoodsNameKeydown(payload) {
+                const form = this.beforeOrderForm;
+                const total = payload.total || 0;
+                if (payload.key === 'ArrowDown') {
+                    form.selectedSearchIndex = (form.selectedSearchIndex + 1) % total;
+                } else if (payload.key === 'ArrowUp') {
+                    form.selectedSearchIndex = form.selectedSearchIndex <= 0 ? total - 1 : form.selectedSearchIndex - 1;
+                }
+            },
+            async _doBeforeOrderGoodsSearch(searchStr) {
+                console.log('🔍 [_doBeforeOrderGoodsSearch] 开始搜索:', searchStr);
+                const depId = this.selectedSubDepartment || this.selectedAllCustomer;
+                console.log('📍 [_doBeforeOrderGoodsSearch] depId:', depId);
+                if (!depId || !this.disUser) return;
+                try {
                     const data = {
-                        disId: this.disUser?.nxDiuDistributerId,
-                        searchStr: searchStr,
-                        depId: depId
+                        disId: this.disUser.nxDiuDistributerId,
+                        searchStr,
+                        depId
                     };
-                    console.log('📤 [handleBeforeOrderGoodsNameInput] 准备调用API，请求参数:', data);
-                    console.log('👤 [handleBeforeOrderGoodsNameInput] disUser:', this.disUser);
-
+                    console.log('📤 [_doBeforeOrderGoodsSearch] 请求参数:', data);
                     const res = await api.queryDisGoodsByQuickSearchWithDepId(data);
-                    console.log('📥 [handleBeforeOrderGoodsNameInput] API响应:', res);
-
+                    console.log('📥 [_doBeforeOrderGoodsSearch] 搜索结果:', res);
                     if (res && res.data && res.data.code === 0) {
-                        // 返回数据结构：res.data.data.disArr 和 res.data.data.nxArr
                         const disArr = res.data.data.disArr || [];
                         const nxArr = res.data.data.nxArr || [];
-                        console.log('✅ [handleBeforeOrderGoodsNameInput] API调用成功');
-                        console.log('📦 [handleBeforeOrderGoodsNameInput] 配送商商品数量:', disArr.length);
-                        console.log('📦 [handleBeforeOrderGoodsNameInput] 系统商品数量:', nxArr.length);
-
-                        // 分开存储配送商商品和系统商品
+                        console.log('✅ [_doBeforeOrderGoodsSearch] 搜索成功:', { disArrCount: disArr.length, nxArrCount: nxArr.length });
                         this.beforeOrderForm.disArr = disArr;
                         this.beforeOrderForm.nxArr = nxArr;
-                        // 保留 searchResults 用于兼容性（只包含配送商商品，用于选择）
                         this.beforeOrderForm.searchResults = disArr;
                         this.beforeOrderForm.showSearchResults = disArr.length > 0 || nxArr.length > 0;
-                        console.log('💾 [handleBeforeOrderGoodsNameInput] 已更新搜索结果，显示状态:', this.beforeOrderForm.showSearchResults);
+                        this.beforeOrderForm.selectedSearchIndex = 0;
+                        // 保存本次搜索的值,用于判断是否需要重新搜索
+                        this.beforeOrderForm.lastSearchStr = searchStr;
+                        console.log('💾 [_doBeforeOrderGoodsSearch] 保存搜索值:', searchStr);
                     } else {
-                        // 搜索失败，清空结果
-                        console.log('❌ [handleBeforeOrderGoodsNameInput] API返回失败，响应码:', res?.data?.code);
+                        console.log('❌ [_doBeforeOrderGoodsSearch] 搜索失败:', res?.data);
                         this.beforeOrderForm.showSearchResults = false;
                         this.beforeOrderForm.searchResults = [];
                         this.beforeOrderForm.disArr = [];
                         this.beforeOrderForm.nxArr = [];
+                        this.beforeOrderForm.lastSearchStr = null;
                     }
                 } catch (error) {
-                    console.error('❌ [handleBeforeOrderGoodsNameInput] 搜索商品失败:', error);
-                    console.error('❌ [handleBeforeOrderGoodsNameInput] 错误堆栈:', error.stack);
+                    console.error('❌ [_doBeforeOrderGoodsSearch] 搜索异常:', error);
                     this.beforeOrderForm.showSearchResults = false;
                     this.beforeOrderForm.searchResults = [];
                     this.beforeOrderForm.disArr = [];
                     this.beforeOrderForm.nxArr = [];
+                    this.beforeOrderForm.lastSearchStr = null;
                 }
             },
 
@@ -3218,9 +3444,12 @@
 
             // 选择之前添加订单的商品
             async selectBeforeOrderGoods(goods) {
+                console.log('🎯 [selectBeforeOrderGoods] 开始选择商品:', goods);
+                this._beforeOrderStandardHasAutoFilledCarton = false;
                 this.beforeOrderForm.selectedGoods = goods;
                 this.beforeOrderForm.goodsName = goods.nxDgGoodsName || '';
                 this.beforeOrderForm.showSearchResults = false;
+                console.log('✅ [selectBeforeOrderGoods] 已设置 selectedGoods');
 
                 // 如果有商品ID，获取完整的商品信息（包含价格、规格等）
                 if (goods.nxDistributerGoodsId) {
@@ -3237,9 +3466,10 @@
                             } else {
                                 this.beforeOrderForm.standard = '';
                             }
+                            console.log('✅ [selectBeforeOrderGoods] 已获取商品详情,规格:', this.beforeOrderForm.standard);
                         }
                     } catch (error) {
-                        console.error('获取商品详细信息失败:', error);
+                        console.error('❌ [selectBeforeOrderGoods] 获取商品详细信息失败:', error);
                         // 失败时使用搜索结果中的基本信息
                         if (goods.nxDgGoodsStandardname) {
                             this.beforeOrderForm.standard = goods.nxDgGoodsStandardname;
@@ -3255,38 +3485,52 @@
                         this.beforeOrderForm.standard = '';
                     }
                 }
+
+                // 选择商品后，如果数量和规格都有内容，则自动保存订单
+                const form = this.beforeOrderForm;
+                if (form.selectedGoods && form.quantity && form.quantity.toString().trim() && form.standard && form.standard.toString().trim()) {
+                    console.log('🎯 [selectBeforeOrderGoods] 数量和规格都有内容，自动保存订单');
+                    // 获取当前正在插入订单的索引
+                    const orderIndex = this.addingOrderBeforeIndex;
+                    if (orderIndex !== null && orderIndex >= 0 && this.orderItems[orderIndex]) {
+                        await this.saveBeforeOrder(this.orderItems[orderIndex], orderIndex, 'excel');
+                    }
+                }
             },
 
             // 保存之前添加的订单（调用 saveOrderBefore API）
             async saveBeforeOrder(item, orderIndex, sourceType) {
                 if (!this.beforeOrderForm.selectedGoods) {
-                    alert('请选择商品');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
                 if (!this.beforeOrderForm.quantity || !this.beforeOrderForm.quantity.toString().trim()) {
-                    alert('请输入数量');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
                 if (!this.beforeOrderForm.standard || !this.beforeOrderForm.standard.toString().trim()) {
-                    alert('请输入规格');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
                 // 获取部门ID
                 const depId = this.selectedSubDepartment || this.selectedAllCustomer;
                 if (!depId) {
-                    alert('无法获取部门信息');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
-                // 获取 beforeId（当前订单的ID，如果已保存，参考 orderPage.js:581）
-                // beforeId 是选择订单的 nxDepartmentOrdersId，用于在之前插入新订单
+                // 获取 beforeId（当前订单的ID，用于在之前插入新订单）
+                // saveBefore 接口：nxDoPurchaseUserId 传 beforeId（前面 order 的 id），后端用此查询 beforOrder
                 const beforeId = item.nxDepartmentOrdersId || -1;
-
-                // 如果 beforeId 是 -1（订单未保存），nxDoPurchaseUserId 应该使用 disUser 的 nxDistributerUserId
-                const nxDoPurchaseUserId = beforeId !== -1 ? beforeId : (this.disUser?.nxDistributerUserId || -1);
+                if (beforeId === -1 || beforeId == null) {
+                    await this.$refs.alertDialog.alert('', 'warning');
+                    return;
+                }
+                // saveBefore 接口：nxDoPurchaseUserId 传 beforeId（前面 order 的 id）
+                const nxDoPurchaseUserId = beforeId;
 
                 try {
                     this.$store.commit('SET_LOADING', true);
@@ -3392,8 +3636,10 @@
                     };
                     console.log("abccccurrentTaskIdcurrentTaskIdppppp", this.currentTaskId)
 
-                    // 调用 saveOrderBefore API（参考 resGoodsList.js）
-                    const res = await api.saveOrderBefore(orderData);
+                    // 手动录入用 saveBefore（nxDoPurchaseUserId=beforeId）；其他模式用 saveOrderBeforeTask
+                    const res = sourceType === 'manual'
+                        ? await api.manualOrderBefore(orderData)
+                        : await api.saveOrderBefore(orderData);
 
                     // Vue 中 axios 返回 res.data，后端返回 { code: 0, data: {...} }
                     // 所以访问 res.data.code 和 res.data.data
@@ -3433,6 +3679,19 @@
                             ...(sourceFile && {sourceFile: sourceFile}) // 如果是转订单模式，添加 sourceFile
                         };
 
+                        // 调试：之前插入订单的序号和显示顺序
+                        const seq = (o) => o?.getNxDoTodayOrder ?? o?.nxDoTodayOrder ?? 0;
+                        console.log('[saveBeforeOrder] 接口返回 data 全部字段:', res.data.data);
+                        console.log('[saveBeforeOrder] sourceType:', sourceType, 'orderIndex:', orderIndex);
+                        console.log('[saveBeforeOrder] 新订单 nxDoTodayOrder/getNxDoTodayOrder:', {
+                            getNxDoTodayOrder: res.data.data?.getNxDoTodayOrder,
+                            nxDoTodayOrder: res.data.data?.nxDoTodayOrder,
+                            seq: seq(newOrder)
+                        });
+                        console.log('[saveBeforeOrder] 插入前 orderItems 各订单序号:', orderItems.map((o, i) => ({
+                            i, name: o.nxDoGoodsName, seq: seq(o), id: o.nxDepartmentOrdersId
+                        })));
+
                         // 计算实际插入位置
                         // 如果是转订单模式，orderIndex 是 filteredOrderItems 的索引，需要转换为 orderItems 的实际索引
                         let actualIndex = orderIndex;
@@ -3451,17 +3710,29 @@
 
                         // 插入新订单到正确位置
                         orderItems.splice(actualIndex, 0, newOrder);
+                        console.log('[saveBeforeOrder] 插入后(排序前) orderItems:', orderItems.map((o, i) => ({
+                            i, name: o.nxDoGoodsName, seq: seq(o), isNew: o === newOrder
+                        })));
+
+                        // 按订单序号排序：saveBefore 返回的新订单 nxDoTodayOrder 比 before 大，升序后 [before, new]，reverse 后 new 显示在上面
+                        const sorted = [...orderItems].sort((a, b) => seq(a) - seq(b));
+                        orderItems.splice(0, orderItems.length, ...sorted);
+                        console.log('[saveBeforeOrder] 排序后 orderItems (ManualEntry 用 reverse 显示，最后一项显示在最上面):', orderItems.map((o, i) => ({
+                            i, name: o.nxDoGoodsName, seq: seq(o), isNew: o === newOrder,
+                            displayPos: orderItems.length - 1 - i
+                        })));
 
                         // 重置状态
                         this.cancelAddOrderBefore();
 
                     } else {
                         const errorMsg = res?.data?.msg || res?.data?.message || '保存失败';
-                        alert(errorMsg);
+                        await this.$refs.alertDialog.alert(errorMsg);
                     }
                 } catch (error) {
                     console.error('保存订单失败:', error);
-                    alert('保存订单失败，请检查网络连接');
+                    const errorMsg = error?.message || error?.response?.data?.msg || '网络请求失败,请检查网络连接';
+                    await this.$refs.alertDialog.alert(errorMsg, 'warning');
                 } finally {
                     this.$store.commit('SET_LOADING', false);
                 }
@@ -3590,11 +3861,11 @@
                             console.log('✅ [handleDeleteOrderFromExcel] 删除订单完成');
                         } else {
                             console.error('❌ [handleDeleteOrderFromExcel] 接口删除失败:', res?.data?.msg || res?.data?.message);
-                            alert(res?.data?.msg || res?.data?.message || '删除失败');
+                            await this.$refs.alertDialog.alert(res?.data?.msg || res?.data?.message || '删除失败');
                         }
                     } catch (error) {
                         console.error('❌ [handleDeleteOrderFromExcel] 删除订单接口调用失败:', error);
-                        alert('删除失败，请检查网络连接');
+                        await this.$refs.alertDialog.alert('', 'warning');
                     } finally {
                         this.$store.commit('SET_LOADING', false);
                     }
@@ -3819,7 +4090,7 @@
                     console.error("❌ [downLoadGoodsNx] goods:", goods);
                     console.error("❌ [downLoadGoodsNx] goods.nxGoodsId:", goods?.nxGoodsId);
                     console.error("❌ [downLoadGoodsNx] 原始 eventData:", eventData);
-                    alert('商品数据错误');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
@@ -3827,7 +4098,7 @@
                     console.error("❌ [downLoadGoodsNx] orderIndex 为 undefined 或 null");
                     console.error("❌ [downLoadGoodsNx] orderIndex:", orderIndex);
                     console.error("❌ [downLoadGoodsNx] 原始 eventData:", eventData);
-                    alert('订单索引错误');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
@@ -3913,6 +4184,13 @@
                             }
 
                             console.log("✅ [downLoadGoodsNx] 商品已成功设置到之前插入订单表单");
+
+                            // 下载商品后，如果数量和规格都有内容，则自动保存订单
+                            const form = this.beforeOrderForm;
+                            if (form.selectedGoods && form.quantity && form.quantity.toString().trim() && form.standard && form.standard.toString().trim()) {
+                                console.log("🎯 [downLoadGoodsNx] 数量和规格都有内容，自动保存订单");
+                                await this.saveBeforeOrder(this.orderItems[orderIndex], orderIndex, 'excel');
+                            }
                         } else {
                             // 普通订单场景：使用原来的逻辑
                             await this._applyGoodsToOrder(
@@ -3994,7 +4272,7 @@
                             // 其他错误，直接显示错误信息
                             console.error("❌ [downLoadGoodsNx] 下载失败:", errorMsg);
                             console.error("❌ [downLoadGoodsNx] 完整响应:", res);
-                            alert(errorMsg);
+                            await this.$refs.alertDialog.alert(errorMsg);
                         }
                     }
                 } catch (error) {
@@ -4002,7 +4280,7 @@
                     console.error("❌ [downLoadGoodsNx] 错误对象:", error);
                     console.error("❌ [downLoadGoodsNx] 错误消息:", error.message);
                     console.error("❌ [downLoadGoodsNx] 错误堆栈:", error.stack);
-                    alert('下载商品失败: ' + (error.message || '未知错误'));
+                    await this.$refs.alertDialog.alert('下载商品失败: ' + (error.message || '未知错误'));
                 } finally {
                     this.$store.commit('SET_LOADING', false);
                     console.log("🏁 [downLoadGoodsNx] ========== 执行完成 ==========");
@@ -4025,7 +4303,7 @@
                     const data = {
                         disId: this.disUser.nxDiuDistributerId,
                         searchStr: searchValue,
-                        depId: this.selectedAllCustomer,
+                        depId: this.selectedSubDepartment || this.selectedAllCustomer,
                     };
 
                     const res = await api.queryDisGoodsByQuickSearchWithDepId(data);
@@ -4075,16 +4353,13 @@
                         this.strArr = [];
                         this.nxArr = [];
 
-                        // 如果是"搜索结果过多"的错误，不弹出提示
                         const errorMsg = res?.data?.msg || '';
-                        const isTooManyResults = res?.data?.code === 500 && (
-                            errorMsg.includes('标准商品库搜索结果过多') ||
-                            errorMsg.includes('配送商商品搜索结果过多') ||
-                            errorMsg.includes('搜索结果过多')
-                        );
-
-                        if (!isTooManyResults) {
-                            alert(errorMsg || '搜索失败');
+                        if (errorMsg) {
+                            if (errorMsg.includes('请继续输入')) {
+                                this.showToast('搜索结果太多，请继续输入内容，缩小查询范围', 'warning');
+                            } else {
+                                this.showToast(errorMsg || '搜索失败', 'error');
+                            }
                         }
                     }
                 } catch (error) {
@@ -4187,11 +4462,11 @@
                         // 重置搜索和匹配商品列表状态（选择商品后关闭所有列表）
                         this.resetSearchAndMatchedGoodsState();
                     } else {
-                        alert(res?.data?.msg || '保存失败');
+                        await this.$refs.alertDialog.alert(res?.data?.msg || '保存失败');
                     }
                 } catch (error) {
                     console.error('保存订单失败:', error);
-                    alert('保存订单失败');
+                    await this.$refs.alertDialog.alert('', 'warning');
                 } finally {
                     this.$store.commit('SET_LOADING', false);
                 }
@@ -4243,11 +4518,11 @@
 
             // 检查订单内容：商品名称必有、数量必为有效数字、规格必为汉字且汉字数量不大于 2 个
             // 通过时返回 true，失败时返回失败条目的 0-based 索引（便于父组件滚动并高亮该条）
-            checkOrderContent(orderArr = null) {
+            async checkOrderContent(orderArr = null) {
                 const orders = orderArr || this.orderItems;
 
                 if (!orders || orders.length === 0) {
-                    alert('没有可保存的订单');
+                    await this.$refs.alertDialog.alert('没有可保存的订单', 'warning');
                     return -1;
                 }
 
@@ -4257,29 +4532,29 @@
 
                     // 商品名称必须有
                     if (!order.nxDoGoodsName || order.nxDoGoodsName.trim() === '') {
-                        alert(`第${rowNum}条订单商品名称为空`);
+                        await this.$refs.alertDialog.alert(`第${rowNum}条订单商品名称为空`, 'warning');
                         return i;
                     }
 
                     // 数量必须有且必须是有效数字且大于 0
                     const qty = order.nxDoQuantity;
                     if (qty === undefined || qty === null || String(qty).trim() === '') {
-                        alert(`第${rowNum}条订单数量为空`);
+                        await this.$refs.alertDialog.alert(`第${rowNum}条订单数量为空`, 'warning');
                         return i;
                     }
                     const qtyNum = Number(qty);
                     if (Number.isNaN(qtyNum)) {
-                        alert(`第${rowNum}条订单数量必须是数字`);
+                        await this.$refs.alertDialog.alert(`第${rowNum}条订单数量必须是数字`, 'warning');
                         return i;
                     }
                     if (qtyNum <= 0) {
-                        alert(`第${rowNum}条订单数量必须大于 0`);
+                        await this.$refs.alertDialog.alert(`第${rowNum}条订单数量必须大于 0`, 'warning');
                         return i;
                     }
 
                     // 规格必须有
                     if (!order.nxDoStandard || order.nxDoStandard.trim() === '') {
-                        alert(`第${rowNum}条订单规格为空`);
+                        await this.$refs.alertDialog.alert(`第${rowNum}条订单规格为空`, 'warning');
                         return i;
                     }
 
@@ -4287,14 +4562,15 @@
                     // 规格必须是汉字（仅允许中文字符）
                     const chineseOnly = /^[\u4e00-\u9fff]+$/;
                     if (!chineseOnly.test(spec)) {
-                        alert(`第${rowNum}条订单规格必须为汉字`);
+                        await this.$refs.alertDialog.alert(`第${rowNum}条订单规格必须为汉字`, 'warning');
                         return i;
                     }
                     // 规格汉字数量不大于 2 个
                     if (spec.length > 2) {
-                        alert(`第${rowNum}条订单规格汉字数量不能大于 2 个，当前为 ${spec.length} 个`);
+                        await this.$refs.alertDialog.alert(`第${rowNum}条订单规格汉字数量不能大于 2 个，当前为 ${spec.length} 个`, 'warning');
                         return i;
                     }
+
                 }
 
                 return true;
@@ -4303,7 +4579,7 @@
             // 保存复制粘贴的订单（独立方法）
             async pastSavePasteOrders() {
                 if (this.savingOrder) return;
-                const checkResult = this.checkOrderContent(this.orderItems);
+                const checkResult = await this.checkOrderContent(this.orderItems);
                 if (checkResult !== true) {
                     this.draftSelectedOrderIndex = checkResult >= 0 ? checkResult : -1;
                     return;
@@ -4316,7 +4592,7 @@
                     // 确定要使用的部门ID（优先使用子部门ID）
                     const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
 
-                    // 准备订单数据（格式与内容已由 checkOrderContent 校验：商品名称、数量为数字、规格为汉字且不超过 2 个字）
+                    // 准备订单数据（格式与内容已由 checkOrderContent方法 校验：商品名称、数量为数字、规格为汉字且不超过 2 个字）
                     const originalOrderArr = [...this.orderItems];
                     const orderData = this.orderItems.map(item => ({
                         ...item,
@@ -4363,11 +4639,11 @@
                         this.$emit('task-added');
                     } else {
                         const errorMsg = res?.data?.msg || '保存失败';
-                        alert(errorMsg);
+                        await this.$refs.alertDialog.alert(errorMsg, 'error');
                     }
                 } catch (error) {
                     console.error('保存订单失败:', error);
-                    alert('保存订单失败，请重试：' + (error.message || '未知错误'));
+                    await this.$refs.alertDialog.alert('保存订单失败，请重试：' + (error.message || '未知错误'), 'error');
                 } finally {
                     this.savingOrder = false;
                     this.$store.commit('SET_LOADING', false);
@@ -4512,11 +4788,11 @@
                         this.$emit('task-added');
                     } else {
                         const errorMsg = res?.data?.msg || '保存失败';
-                        alert(errorMsg);
+                        await this.$refs.alertDialog.alert(errorMsg, 'error');
                     }
                 } catch (error) {
                     console.error('保存订单失败:', error);
-                    alert('保存订单失败，请重试：' + (error.message || '未知错误'));
+                    await this.$refs.alertDialog.alert('保存订单失败，请重试：' + (error.message || '未知错误'), 'error');
                 } finally {
                     this.savingOrder = false;
                     this.$store.commit('SET_LOADING', false);
@@ -4527,7 +4803,8 @@
             async clearPasteSave() {
 
 
-                if (!confirm('确定要清除所有草稿订单吗？')) {
+                const confirmed = await this.$refs.alertDialog.confirm('确定要清除所有草稿吗？');
+                if (!confirmed) {
                     console.log('❌ [clearPasteSave] 用户取消清除操作');
                     return;
                 }
@@ -4554,6 +4831,7 @@
                 this.pasteSaveCount = null;
                 this.pasteInvalidLineIndices = [];
                 this.pasteInvalidSegments = [];
+                this.pasteNoValidOrder = false;
 
                 // 重置搜索和匹配商品列表状态
                 this.resetSearchAndMatchedGoodsState();
@@ -4571,6 +4849,7 @@
                     this.pasteSaveCount = null;
                     this.pasteInvalidLineIndices = [];
                     this.pasteInvalidSegments = [];
+                    this.pasteNoValidOrder = false;
                 } else if (st === 'excel-paste') {
                     this.orderItems = [];
                     this.excelPasteSaveCount = null;
@@ -4624,23 +4903,24 @@
             // 重新上传：删除任务并清空本地（所有模式统一使用 deleteTaskData）
             async reUpload() {
                 if (!this.selectedAllCustomer) {
-                    alert('请先选择客户');
+                    await this.$refs.alertDialog.alert('请先选择客户', 'warning');
                     return;
                 }
                 const sourceType = this.uploadType || 'image';
-                const uploadTypeName = sourceType === 'paste' ? '复制粘贴' : sourceType === 'excel-paste' ? 'Excel粘贴' :
+                const uploadTypeName = sourceType === 'manual' ? '手动录入' : sourceType === 'paste' ? '复制粘贴' : sourceType === 'excel-paste' ? 'Excel粘贴' :
                     sourceType === 'excel' ? 'Excel上传' : sourceType === 'auto' ? '转订单' : '图片上传';
                 const confirmMsg = this.currentTaskId != null
                     ? `确定要删除该任务并重新${uploadTypeName}吗？`
                     : `确定要清空当前显示并重新${uploadTypeName}吗？`;
-                if (!confirm(confirmMsg)) return;
+                const confirmed = await this.$refs.alertDialog.confirm(confirmMsg);
+                if (!confirmed) return;
 
                 try {
                     this.$store.commit('SET_LOADING', true);
                     if (this.currentTaskId != null) {
                         const res = await api.deleteTaskData(this.currentTaskId);
                         if (!res || !res.data || res.data.code !== 0) {
-                            alert(res?.data?.msg || res?.data?.message || '删除失败');
+                            await this.$refs.alertDialog.alert(res?.data?.msg || res?.data?.message || '删除失败', 'error');
                             return;
                         }
                     }
@@ -4667,7 +4947,7 @@
                     this.$emit('order-updated');
                 } catch (e) {
                     console.error('[reUpload] 失败:', e);
-                    alert('删除失败：' + (e.message || '请检查网络'));
+                    await this.$refs.alertDialog.alert('删除失败：' + (e.message || '请检查网络'), 'error');
                 } finally {
                     this.$store.commit('SET_LOADING', false);
                 }
@@ -4769,7 +5049,7 @@
             // // 处理AI再次解析（从订单中获取taskId或使用图片模式）
             // async handleAiParseAgain() {
             //     if (!this.selectedAllCustomer) {
-            //         alert('请先选择客户');
+            //         await this.$refs.alertDialog.alert('', 'warning');
             //         return;
             //     }
             //
@@ -4818,7 +5098,7 @@
             //         } else {
             //             // 模式2：使用图片（需要图片base64）
             //             if (!this.imagePreview) {
-            //                 alert('无法获取图片数据，请重新上传图片');
+            //                 await this.$refs.alertDialog.alert('', 'warning');
             //                 return;
             //             }
             //
@@ -4853,10 +5133,10 @@
             //             }
             //         } else {
             //             const errorMsg = res?.data?.msg || res?.data?.message || 'AI识别失败';
-            //             alert(errorMsg);
+            //             await this.$refs.alertDialog.alert(errorMsg);
             //         }
             //     } catch (error) {
-            //         alert('AI识别失败：' + (error.message || '未知错误'));
+            //         await this.$refs.alertDialog.alert('AI识别失败：' + (error.message || '未知错误'));
             //     } finally {
             //         // 清除识别中状态
             //         this.hasRunningTask = false;
@@ -4865,28 +5145,29 @@
             // },
 
             async handleImageUpload(event) {
-                const file = event.target.files[0];
+                const file = event.target?.files?.[0];
                 if (!file) return;
 
                 // 验证文件类型
                 if (!file.type.startsWith('image/')) {
-                    alert('请选择有效的图片文件');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
                 // 验证文件大小（限制10MB）
                 if (file.size > 10 * 1024 * 1024) {
-                    alert('图片文件过大，请选择小于10MB的图片');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
                 if (!this.selectedAllCustomer) {
-                    alert('请先选择客户');
+                    console.warn('[PlaceOrder] handleImageUpload 未选择客户，已拦截');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
                 // 检查是否选择了子部门（如果有子部门的话）
-                if (!this.checkSubDepartmentSelected()) {
+                if (!(await this.checkSubDepartmentSelected())) {
                     // 清空文件输入
                     if (this.$refs.imageFileInput) {
                         this.$refs.imageFileInput.value = '';
@@ -4967,7 +5248,7 @@
                 this.closeImagePreviewModal();
                 const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
                 if (!targetDepId || !this.disUser) {
-                    alert('请先选择客户');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
                 this.imagePreview = imageDataUrl;
@@ -5004,10 +5285,10 @@
                         }
                     } else {
                         const msg = res?.data?.msg || res?.data?.message || '识别失败';
-                        alert(msg);
+                        await this.$refs.alertDialog.alert(msg);
                     }
                 } catch (err) {
-                    alert(err?.message || '单列识别失败，请重试');
+                    await this.$refs.alertDialog.alert(err?.message || '单列识别失败，请重试');
                 }
             },
 
@@ -5128,7 +5409,7 @@
             // Excel 粘贴模式：选中任务后拉取该任务订单
             async handleSelectExcelPasteTask({taskId, task}) {
                 if (taskId == null) {
-                    alert('任务ID不存在');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
                 this.taskLoading = true;
@@ -5193,7 +5474,7 @@
                     }
                 } catch (e) {
                     console.error('[PlaceOrder] handleSelectExcelPasteTask failed:', e);
-                    alert('加载任务订单失败：' + (e.message || '请稍后重试'));
+                    await this.$refs.alertDialog.alert('加载任务订单失败：' + (e.message || '请稍后重试'));
                 } finally {
                     this.taskLoading = false;
                 }
@@ -5202,7 +5483,7 @@
             // 粘贴模式：选中任务后拉取该任务订单（先第一页+蒙板，多页静默加载）
             async handleSelectPasteTask({taskId, task}) {
                 if (taskId == null) {
-                    alert('任务ID不存在');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
                 this.taskLoading = true;
@@ -5271,7 +5552,7 @@
                     });
                 } catch (e) {
                     console.error('[PlaceOrder] handleSelectPasteTask failed:', e);
-                    alert('加载任务订单失败：' + (e.message || '请稍后重试'));
+                    await this.$refs.alertDialog.alert('加载任务订单失败：' + (e.message || '请稍后重试'));
                 } finally {
                     this.taskLoading = false;
                 }
@@ -5280,7 +5561,7 @@
             // 在任务列表中选中某个任务：先拉第一页展示，多页时后台静默加载剩余页（参考小程序 _initTaskOrder）
             async handleSelectImageTask({taskId, task}) {
                 if (taskId == null) {
-                    alert('任务ID不存在');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
                 this.clearTaskStatusPollTimer();
@@ -5365,7 +5646,7 @@
                     });
                 } catch (e) {
                     console.error('[PlaceOrder] handleSelectImageTask failed:', e);
-                    alert('加载任务订单失败：' + (e.message || '请稍后重试'));
+                    await this.$refs.alertDialog.alert('加载任务订单失败：' + (e.message || '请稍后重试'));
                 } finally {
                     this.taskLoading = false;
                 }
@@ -5379,7 +5660,7 @@
                 }
             },
 
-            /** 切换部门时由 Bills 调用，立即清除任务状态和轮询，避免「后台处理中」蒙版残留 */
+            /** 切换部门时由 Bills 调用，立即清除任务状态和轮询，避免「后台处理中」蒙版残留；同时清空手动录入区 */
             clearTaskStatusOnCustomerChange() {
                 this.clearTaskStatusPollTimer();
                 this._taskStatusPollProcessed = null;
@@ -5390,6 +5671,21 @@
                 this.uploadedImageFile = null;
                 this.imagePreview = null;
                 this.taskLoading = false;
+                // 清空 ManualEntryUpload：参考文字、参考图片、添加订单表单
+                this.manualRefText = '';
+                this.manualRefImageDataUrl = null;
+                this.addingOrderBeforeIndex = -1;
+                this.beforeOrderForm = {
+                    goodsName: '',
+                    quantity: '',
+                    standard: '',
+                    remark: '',
+                    selectedGoods: null,
+                    searchResults: [],
+                    disArr: [],
+                    nxArr: [],
+                    showSearchResults: false
+                };
             },
 
             /** nxOcrTaskStatus===0 时轮询 getTaskOrders，直到状态变为 1 或 2 */
@@ -5457,7 +5753,7 @@
             // 处理AI识别（带DeepSeek，不裁剪）
             async handleDirectRecognizeAi(imageDataUrl) {
                 if (!this.selectedAllCustomer) {
-                    alert('请先选择客户');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
@@ -5517,10 +5813,10 @@
                         }
                     } else {
                         const errorMsg = res?.data?.msg || res?.data?.message || 'AI识别失败';
-                        alert(errorMsg);
+                        await this.$refs.alertDialog.alert(errorMsg);
                     }
                 } catch (error) {
-                    alert('AI识别失败：' + (error.message || '未知错误'));
+                    await this.$refs.alertDialog.alert('AI识别失败：' + (error.message || '未知错误'));
                 } finally {
                     // 清除识别中状态
                     this.hasRunningTask = false;
@@ -5552,7 +5848,7 @@
             // 执行OCR识别（使用当前预览的图片或裁剪后的图片）
             async recognizeImage(imageDataUrl) {
                 if (!this.selectedAllCustomer) {
-                    alert('请先选择客户');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
@@ -5864,10 +6160,11 @@
                 // 同时更新 pasteInputText 和 pasteInputContent，保持同步
                 this.pasteInputText = text;
                 this.pasteInputContent = text.trim() !== '' ? text : '';
-                // 用户编辑时清除校验不合格行高亮
-                if (this.pasteInvalidLineIndices.length > 0 || this.pasteInvalidSegments.length > 0) {
+                // 用户编辑时清除校验不合格行高亮和未解析有效订单标记
+                if (this.pasteInvalidLineIndices.length > 0 || this.pasteInvalidSegments.length > 0 || this.pasteNoValidOrder) {
                     this.pasteInvalidLineIndices = [];
                     this.pasteInvalidSegments = [];
+                    this.pasteNoValidOrder = false;
                 }
             },
 
@@ -6055,11 +6352,11 @@
 
 
             // 本地解析粘贴文本为订单（不调用 DeepSeek，参考 cankao/formatOrder.js）
-            handlePasteLocalParse() {
+            async handlePasteLocalParse() {
                 const content = this.pasteInputContent || this.pasteInputText;
                 if (!content || (typeof content === 'string' && content.trim() === '')) {
                     console.warn('[handlePasteLocalParse] 内容为空，跳过解析');
-                    alert('内容为空');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
                 this.resetSearchAndMatchedGoodsState();
@@ -6078,19 +6375,21 @@
                 });
                 if (orders.length === 0) {
                     console.warn('[handlePasteLocalParse] 未解析到有效订单');
-                    alert('未解析到有效订单，请检查格式（如：苹果 5 斤）');
+                    this.pasteNoValidOrder = true;
+                    this.pasteInvalidLineIndices = invalidLineIndices;
+                    this.pasteInvalidSegments = invalidSegments;
                     return;
                 }
                 if (invalidSegments.length > 0) {
                     console.warn('[handlePasteLocalParse] 存在校验不合格片段，不更新订单列表，仅高亮提示。不合格片段:', invalidSegments);
                     this.pasteInvalidLineIndices = invalidLineIndices;
                     this.pasteInvalidSegments = invalidSegments;
-                    alert(`有 ${invalidSegments.length} 个订单不符合要求（商品名必填、数量须为大于0的数字、规格须为1-2个汉字），已用红色标注，请修改后重新解析`);
                     return;
                 }
                 this.orderItems = orders;
                 this.pasteInvalidLineIndices = [];
                 this.pasteInvalidSegments = [];
+                this.pasteNoValidOrder = false;
                 console.log('[handlePasteLocalParse] 解析通过，已更新订单列表');
             },
 
@@ -6104,7 +6403,7 @@
                 const content = this.pasteInputContent || this.pasteInputText;
 
                 if (!content || content.trim() === '') {
-                    alert('内容为空');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
@@ -6171,7 +6470,7 @@
                     }
                 } catch (error) {
                     console.error('第一次 AI 识别失败:', error);
-                    alert('AI识别失败：' + (error.message || '未知错误'));
+                    await this.$refs.alertDialog.alert('AI识别失败：' + (error.message || '未知错误'));
                 } finally {
                     this.showDeepSeekLoading = false;
                 }
@@ -6812,27 +7111,27 @@ data[] 中每条订单对象必须包含字段：
                     this.pasteInputText = text;
                     this.pasteInputContent = text;
                 } catch (error) {
-                    alert('无法读取剪贴板，请手动粘贴');
+                    await this.$refs.alertDialog.alert('', 'warning');
                 }
             },
 
             // 解析粘贴文本为订单
-            parsePasteText() {
+            async parsePasteText() {
                 // 重置搜索和匹配商品列表状态
                 this.resetSearchAndMatchedGoodsState();
 
                 if (!this.pasteInputText || !this.pasteInputText.trim()) {
-                    alert('请输入或粘贴订单文本');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
                 if (!this.selectedAllCustomer) {
-                    alert('请先选择客户');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
                 // 检查是否选择了子部门（如果有子部门的话）
-                if (!this.checkSubDepartmentSelected()) {
+                if (!(await this.checkSubDepartmentSelected())) {
                     return;
                 }
 
@@ -6858,13 +7157,14 @@ data[] 中每条订单对象必须包含字段：
                 this.orderItems = [];
                 this.pasteInvalidLineIndices = [];
                 this.pasteInvalidSegments = [];
+                this.pasteNoValidOrder = false;
 
             },
 
             // ========== 文本解析为订单（复制粘贴模式专用）==========
 
             // 解析文本为订单（复制粘贴模式专用）
-            parseTextToOrders(text, depId = null) {
+            async parseTextToOrders(text, depId = null) {
                 if (!text || !text.trim()) {
                     return;
                 }
@@ -6919,7 +7219,7 @@ data[] 中每条订单对象必须包含字段：
                         return;
                     }
                 } catch (jsonError) {
-                    alert("订单格式不正确！")
+                    await this.$refs.alertDialog.alert("订单格式不正确！")
                     console.log('[parseTextToOrders] JSON 解析失败，使用正则解析:', jsonError.message);
                 }
 
@@ -7153,11 +7453,11 @@ data[] 中每条订单对象必须包含字段：
             // 选择客户文件夹（自动上传订单保存路径）
             async selectCustomerFolder() {
                 if (!window.electronAPI) {
-                    alert('Electron API 不可用，请确保在 Electron 环境中运行');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
                 if (typeof window.electronAPI.selectFolder !== 'function') {
-                    alert('selectFolder API 不可用，请重启应用');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
                 try {
@@ -7174,15 +7474,15 @@ data[] 中每条订单对象必须包含字段：
                         const saveResult = await window.electronAPI.saveCustomerFolderPath(targetCustomerId, result.path);
                         if (saveResult.success) {
                             this.customerFolderPath = result.path;
-                            alert('文件夹路径设置成功！');
+                            await this.$refs.alertDialog.alert('', 'warning');
                             await this.loadCustomerFolderPath();
                         } else {
-                            alert('保存文件夹路径失败：' + (saveResult.error || '未知错误'));
+                            await this.$refs.alertDialog.alert('保存文件夹路径失败：' + (saveResult.error || '未知错误'));
                         }
                     }
                 } catch (error) {
                     console.error('选择文件夹失败:', error);
-                    alert('选择文件夹失败：' + (error && error.message ? error.message : '未知错误'));
+                    await this.$refs.alertDialog.alert('选择文件夹失败：' + (error && error.message ? error.message : '未知错误'));
                 } finally {
                     this.selectingFolder = false;
                 }
@@ -7193,7 +7493,7 @@ data[] 中每条订单对象必须包含字段：
                 if (!window.electronAPI || typeof window.electronAPI.saveCustomerFolderPath !== 'function') {
                     return;
                 }
-                if (!confirm('确定要清除文件夹路径设置吗？')) return;
+                if (!await this.$refs.alertDialog.confirm('')) return;
                 try {
                     const hasSubDepartments = this.selectedCustomerEntity &&
                         this.selectedCustomerEntity.nxDepartmentEntities &&
@@ -7205,7 +7505,7 @@ data[] 中每条订单对象必须包含字段：
                     const result = await window.electronAPI.saveCustomerFolderPath(targetCustomerId, '');
                     if (result.success) {
                         this.customerFolderPath = null;
-                        alert('已清除文件夹路径');
+                        await this.$refs.alertDialog.alert('', 'warning');
                         await this.loadCustomerFolderPath();
                     }
                 } catch (error) {
@@ -7250,11 +7550,11 @@ data[] 中每条订单对象必须包含字段：
                         }
 
                     } else {
-                        alert('扫描文件夹失败：' + (result.error || '未知错误'));
+                        await this.$refs.alertDialog.alert('扫描文件夹失败：' + (result.error || '未知错误'));
                     }
                 } catch (error) {
                     console.error('扫描文件夹失败:', error);
-                    alert('扫描文件夹失败：' + error.message);
+                    await this.$refs.alertDialog.alert('扫描文件夹失败：' + error.message);
                 } finally {
                     this.scanningFiles = false;
                 }
@@ -7267,7 +7567,7 @@ data[] 中每条订单对象必须包含字段：
                 }
 
                 // 检查是否选择了子部门
-                if (!this.checkSubDepartmentSelected()) {
+                if (!(await this.checkSubDepartmentSelected())) {
                     return;
                 }
 
@@ -7392,7 +7692,7 @@ data[] 中每条订单对象必须包含字段：
                 const successCount = this.autoProcessResults.filter(r => r.success).length;
                 const failCount = this.autoProcessResults.length - successCount;
                 const orderCount = allProcessedOrders.length;
-                alert(`处理完成！成功：${successCount}，失败：${failCount}${orderCount > 0 ? `，共 ${orderCount} 条订单已显示在右侧` : ''}`);
+                await this.$refs.alertDialog.alert(`处理完成！成功：${successCount}，失败：${failCount}${orderCount > 0 ? `，共 ${orderCount} 条订单已显示在右侧` : ''}`);
 
                 // 处理完成后，重新扫描文件夹（包括已处理文件夹），以便显示已处理的文件
                 if (this.customerFolderPath) {
@@ -7708,23 +8008,23 @@ data[] 中每条订单对象必须包含字段：
             // 打开文件（用默认程序打开，如果文件在"已处理"文件夹，则从"已处理"文件夹打开）
             async openFile(filePath) {
                 if (!window.electronAPI) {
-                    alert('Electron API 不可用');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
                 if (typeof window.electronAPI.openFile !== 'function') {
-                    alert('openFile API 不可用，请重启应用');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
                 try {
                     const result = await window.electronAPI.openFile(filePath, this.customerFolderPath);
                     if (!result.success) {
-                        alert('打开文件失败：' + (result.error || '未知错误'));
+                        await this.$refs.alertDialog.alert('打开文件失败：' + (result.error || '未知错误'));
                     }
                 } catch (error) {
                     console.error('打开文件失败:', error);
-                    alert('打开文件失败：' + error.message);
+                    await this.$refs.alertDialog.alert('打开文件失败：' + error.message);
                 }
             },
 
@@ -7737,12 +8037,12 @@ data[] 中每条订单对象必须包含字段：
                 });
 
                 if (!window.electronAPI) {
-                    alert('Electron API 不可用');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
                 if (typeof window.electronAPI.readFile !== 'function') {
-                    alert('readFile API 不可用，请重启应用');
+                    await this.$refs.alertDialog.alert('', 'warning');
                     return;
                 }
 
@@ -7784,7 +8084,7 @@ data[] 中每条订单对象必须包含字段：
                     }
 
                     if (!imageBase64) {
-                        alert('无法读取图片文件，文件可能已被移动或删除');
+                        await this.$refs.alertDialog.alert('', 'warning');
                         return;
                     }
 
@@ -7816,7 +8116,7 @@ data[] 中每条订单对象必须包含字段：
                     this.isDragging = false;
 
                 } catch (error) {
-                    alert('预览图片失败：' + error.message);
+                    await this.$refs.alertDialog.alert('预览图片失败：' + error.message);
                 }
             },
 
@@ -7915,9 +8215,25 @@ data[] 中每条订单对象必须包含字段：
                 this.beforeOrderForm.quantity = value;
             },
 
-            // 处理之前添加订单的规格输入
+            // 处理之前添加订单的规格输入：首次清空时自动填入大包装规格，第二次清空不再自动填入
             handleBeforeOrderStandardInput(value) {
-                this.beforeOrderForm.standard = value;
+                const trimmed = (value || '').trim();
+                if (trimmed !== '') {
+                    this.beforeOrderForm.standard = value;
+                    return;
+                }
+                if (this._beforeOrderStandardHasAutoFilledCarton) {
+                    this.beforeOrderForm.standard = '';
+                    return;
+                }
+                const g = this.beforeOrderForm.selectedGoods;
+                const carton = g?.nxDgCartonUnit ?? g?.nxGoodsCartonUnit;
+                if (carton && String(carton).trim()) {
+                    this.beforeOrderForm.standard = carton;
+                    this._beforeOrderStandardHasAutoFilledCarton = true;
+                } else {
+                    this.beforeOrderForm.standard = '';
+                }
             },
 
             // 处理之前添加订单的备注输入
@@ -8002,6 +8318,207 @@ data[] 中每条订单对象必须包含字段：
             // 处理保存之前添加的订单（Image模式）
             handleSaveBeforeOrderImage({item, orderIndex}) {
                 this.saveBeforeOrder(item, orderIndex, 'image');
+            },
+
+            // 手动录入：修改订单
+            handleManualUpdateOrder({ item, orderIndex }) {
+                this.handleUpdateOrder(item, orderIndex, 'manual');
+            },
+            // 手动录入：向上插入订单
+            handleManualAddOrderBefore({ item, orderIndex }) {
+                this.handleAddNewOrderBefore(item, orderIndex, 'manual');
+            },
+            handleSaveBeforeOrderManual({ item, orderIndex }) {
+                this.saveBeforeOrder(item, orderIndex, 'manual');
+            },
+            handleManualDownloadGoodsNx(eventData) {
+                this.downLoadGoodsNx(eventData);
+            },
+            // 手动录入：保存订单（使用 saveManulOrder 接口）
+            async handleManualSaveOrder({ rowIndex, row }) {
+                const goodsName = (row.goodsName || '').trim();
+                if (!goodsName) {
+                    await this.$refs.alertDialog.alert('', 'warning');
+                    return;
+                }
+                // 保存新商品：只要商品名，数量默认1、规格默认斤
+                if (row.selectedGoods && (!row.quantity || !row.quantity.toString().trim())) {
+                    await this.$refs.alertDialog.alert('', 'warning');
+                    return;
+                }
+                if (row.selectedGoods && (!row.standard || !row.standard.toString().trim())) {
+                    await this.$refs.alertDialog.alert('', 'warning');
+                    return;
+                }
+                const depId = this.selectedSubDepartment || this.selectedAllCustomer;
+                if (!depId) {
+                    await this.$refs.alertDialog.alert('', 'warning');
+                    return;
+                }
+                let itemDis = row.selectedGoods;
+                // 无搜索结果时添加为新商品：先调用 saveNxDisLinshiGoods 创建商品
+                if (!itemDis) {
+                    this.$store.commit('SET_LOADING', true);
+                    const disId = this.disUser?.nxDiuDistributerId;
+                    if (!disId) {
+                        await this.$refs.alertDialog.alert('', 'warning');
+                        return;
+                    }
+                    const arriveDate = this._getTodayDate();
+                    const goodsData = {
+                        nxDgGoodsId: '-1',
+                        nxDgPullOff: 0,
+                        nxDgGoodsStatus: 0,
+                        nxDgBuyingPriceIsGrade: 0,
+                        nxDgBuyingPrice: '1',
+                        nxDgBuyingPriceUpdate: arriveDate,
+                        nxDgDistributerId: disId,
+                        nxDgGoodsName: goodsName,
+                        nxDgGoodsStandardname: (row.standard || '').trim() || '斤',
+                        nxDgGoodsStandardWeight: '-1',
+                        nxDgItemUnit: (row.standard || '').trim() || '',
+                        nxDgGoodsBrand: '-1',
+                        nxDgGoodsPlace: '-1',
+                        nxDgGoodsInventoryType: 1,
+                        nxDgNxGoodsFatherColor: '#20afb8',
+                        nxDgGoodsFile: 'goodsImage/logo.jpg',
+                        nxDistributerStandardEntities: [],
+                        nxDgCartonUnit: '',
+                        nxDgItemsPerCarton: ''
+                    };
+                    try {
+                        const goodsRes = await api.saveNxDisLinshiGoods(goodsData);
+                        if (goodsRes?.data?.code === 0 && goodsRes.data.data) {
+                            itemDis = goodsRes.data.data;
+                        } else {
+                            const msg = goodsRes?.data?.message || '保存新商品失败，可能存在相同商品';
+                            await this.$refs.alertDialog.alert(msg);
+                            return;
+                        }
+                    } catch (e) {
+                        console.error('保存新商品失败:', e);
+                        await this.$refs.alertDialog.alert('', 'warning');
+                        return;
+                    } finally {
+                        this.$store.commit('SET_LOADING', false);
+                    }
+                }
+                try {
+                    this.$store.commit('SET_LOADING', true);
+                    const quantity = row.selectedGoods ? (parseFloat(row.quantity) || 0) : (parseFloat(row.quantity) || 1);
+                    const standard = (row.standard || '').trim() || '斤';
+                    const level = '1';
+                    let depDisGoodsId = -1;
+                    let price = null;
+                    let weight = null;
+                    let subtotal = null;
+                    let printStandard = null;
+                    let costSubtotal = null;
+                    let profitSubtotal = 0;
+                    let profitScale = 0;
+                    let costPrice = 0;
+                    let costPriceUpdate = null;
+                    if (level == '1') {
+                        costPrice = itemDis.nxDgBuyingPriceOne || 0;
+                        costPriceUpdate = itemDis.nxDgBuyingPriceOneUpdate || this._getTodayDate();
+                        price = itemDis.nxDgWillPriceOne || 0;
+                        printStandard = standard || itemDis.nxDgGoodsStandardname;  // 优先用户输入的规格
+                        if (standard == itemDis.nxDgGoodsStandardname) {
+                            weight = quantity;
+                            subtotal = (Number(price) * Number(quantity)).toFixed(1);
+                            costSubtotal = (Number(costPrice) * Number(quantity)).toFixed(1);
+                            profitSubtotal = (Number(subtotal) - Number(costSubtotal)).toFixed(1);
+                            profitScale = Number((Number(price) - Number(costPrice)) / Number(price) * 100).toFixed(2);
+                        }
+                    } else if (level == '2') {
+                        printStandard = standard || itemDis.nxDgWillPriceTwoStandard;  // 优先用户输入的规格
+                        weight = quantity;
+                        costPriceUpdate = itemDis.nxDgBuyingPriceTwoUpdate || this._getTodayDate();
+                        costPrice = itemDis.nxDgBuyingPriceTwo || 0;
+                        price = itemDis.nxDgWillPriceTwo || 0;
+                        subtotal = (Number(price) * Number(quantity)).toFixed(1);
+                        costSubtotal = (Number(costPrice) * Number(quantity)).toFixed(1);
+                        profitSubtotal = (Number(subtotal) - Number(costSubtotal)).toFixed(1);
+                        profitScale = Number((Number(price) - Number(costPrice)) / Number(price) * 100).toFixed(2);
+                    }
+                    if (itemDis.departmentDisGoodsEntity != null && itemDis.departmentDisGoodsEntity !== undefined) {
+                        depDisGoodsId = itemDis.departmentDisGoodsEntity.nxDepartmentDisGoodsId || -1;
+                        if (standard == itemDis.departmentDisGoodsEntity.nxDdgOrderStandard) {
+                            price = itemDis.departmentDisGoodsEntity.nxDdgOrderPrice || price;
+                            weight = quantity;
+                            subtotal = (Number(price) * Number(quantity)).toFixed(1);
+                            costSubtotal = (Number(costPrice) * Number(weight)).toFixed(1);
+                            profitSubtotal = (Number(subtotal) - Number(costSubtotal)).toFixed(1);
+                            profitScale = Number((Number(price) - Number(costPrice)) / Number(price) * 100).toFixed(2);
+                        }
+                    }
+                    const arriveDate = this._getTodayDate();
+                    const arriveOnlyDate = this._getTodayDate().split('-')[2];
+                    const orderData = {
+                        nxDoOrderUserId: this.disUser?.nxDepartmentUserId || this.disUser?.nxDistributerUserId || -1,
+                        nxDoDepDisGoodsId: depDisGoodsId,
+                        nxDoDisGoodsFatherId: itemDis.nxDgDfgGoodsFatherId || -1,
+                        nxDoDisGoodsGrandId: itemDis.nxDgDfgGoodsGrandId || -1,
+                        nxDoDisGoodsId: itemDis.nxDistributerGoodsId,
+                        nxDoDepartmentId: depId,
+                        nxDoDistributerId: this.disUser?.nxDiuDistributerId,
+                        nxDoDepartmentFatherId: this.selectedAllCustomer,
+                        nxDoQuantity: quantity,
+                        nxDoPrice: price || 0,
+                        nxDoWeight: weight || null,
+                        nxDoSubtotal: subtotal || null,
+                        nxDoStandard: standard,
+                        nxDoRemark: row.remark || '',
+                        nxDoIsAgent: -1,
+                        nxDoArriveDate: arriveDate,
+                        nxDoArriveWeeksYear: '',
+                        nxDoArriveOnlyDate: arriveOnlyDate,
+                        nxDoArriveWhatDay: '',
+                        nxDoCostPriceUpdate: costPriceUpdate || arriveDate,
+                        nxDoCostPrice: costPrice || 0,
+                        nxDoPurchaseGoodsId: -1,
+                        nxDoCostSubtotal: costSubtotal || null,
+                        nxDoProfitSubtotal: profitSubtotal || 0,
+                        nxDoProfitScale: profitScale || 0,
+                        nxDoNxGoodsId: itemDis.nxDgNxGoodsId || -1,
+                        nxDoNxGoodsFatherId: itemDis.nxDgNxFatherId || -1,
+                        nxDoGoodsType: itemDis.nxDgPurchaseAuto || 0,
+                        nxDoPurchaseUserId: this.disUser?.nxDistributerUserId || -1,
+                        nxDoPrintStandard: printStandard || standard,
+                        nxDoCostPriceLevel: level,
+                        nxDoGoodsName: itemDis.nxDgGoodsName || '',
+                        nxDoOcrTaskId: this.currentTaskId,
+                    };
+                    const res = await api.saveManulOrder(orderData);
+                    if (res && res.data && res.data.code === 0 && res.data.data) {
+                        const newOrder = {
+                            ...res.data.data,
+                            nxDoGoodsNameOriginal: res.data.data.nxDoGoodsName || '',
+                            nxDoStandardWarn: 0,
+                            goodsNameWarn: 0,
+                            nxDistributerGoodsEntityList: [],
+                            nxGoodsEntities: [],
+                        };
+                        // 普通添加（非向上插入）：新订单显示在底部，赋予最小序号
+                        const seq = (o) => o?.getNxDoTodayOrder ?? o?.nxDoTodayOrder ?? 0;
+                        const existingSeqs = this.orderItems.map(o => seq(o));
+                        const minSeq = existingSeqs.length ? Math.min(...existingSeqs) : 0;
+                        newOrder.nxDoTodayOrder = minSeq - 1;
+                        newOrder.getNxDoTodayOrder = minSeq - 1;
+                        this.orderItems.push(newOrder);
+                        // 按订单序号 getNxDoTodayOrder 排序
+                        this.orderItems.sort((a, b) => seq(a) - seq(b));
+                        this.$refs.manualEntryRef?.clearRowAfterSave(rowIndex);
+                    } else {
+                        const errorMsg = res?.data?.msg || res?.data?.message || '保存失败';
+                        await this.$refs.alertDialog.alert(errorMsg);
+                    }
+                } catch (error) {
+                    console.error('保存订单失败:', error);
+                    await this.$refs.alertDialog.alert('', 'warning');
+                } finally {
+                    this.$store.commit('SET_LOADING', false);
+                }
             }
         }
     }
@@ -8125,6 +8642,9 @@ data[] 中每条订单对象必须包含字段：
     .form-control-add {
         border: 1px solid gray;
         border-radius: 2px;
+        padding: 4px 6px;
     }
 
 </style>
+
+

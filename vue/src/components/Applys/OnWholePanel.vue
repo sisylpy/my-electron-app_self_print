@@ -1,4 +1,4 @@
-<template>
+﻿<template>
 
     <div class="applyBodyPage " style="position: relative;">
         <!-- 打印蒙版 -->
@@ -147,9 +147,9 @@
                 <button class="btn btn-lg btn-primary" @click="printOnly">
                     <i class="fas fa-print"></i> 打印订货单
                 </button>
-                <button class="btn btn-lg btn-warning" @click="printTestPage" style="margin-left: 20px;">
+                <!-- <button class="btn btn-lg btn-warning" @click="printTestPage" style="margin-left: 20px;">
                     <i class="fas fa-flask"></i> 测试打印系数
-                </button>
+                </button> -->
             </div>
 
             <div v-else>
@@ -169,9 +169,9 @@
                     <button class="btn btn-lg btn-success" v-if="nxDepFatherId !== nxDepId" @click="printOnly" style="margin-left: 40px;">
                         <i class="fas fa-print"></i> 分部门打印
                     </button>
-                    <button class="btn btn-lg btn-warning" @click="printTestPage" style="margin-left: 20px;">
+                    <!-- <button class="btn btn-lg btn-warning" @click="printTestPage" style="margin-left: 20px;">
                         <i class="fas fa-flask"></i> 测试打印系数
-                    </button>
+                    </button> -->
 
                 </div>
                 <div v-if="gbDepFatherId !== -1">
@@ -312,6 +312,9 @@
         </div> -->
 
 
+        <AlertDialog ref="alertDialog" />
+
+
     </div>
 
 </template>
@@ -320,15 +323,16 @@
 <script>
     import api from '@/api/all'
     import {mapState} from 'vuex';
-    import * as XLSX from 'xlsx';
     import QRCode from 'qrcode'
     import PrintCalibrationPanel from '@/components/PrintCalibrationPanel.vue'
+    import AlertDialog from '@/components/AlertDialog.vue'
     import { initPrinterProfile, getCurrentPrinterName, loadPrinterProfile, DEFAULT_PROFILE } from '@/utils/printerProfile'
 
     export default {
         name: "ApplyThirtyWholePanel",
         components: {
-            PrintCalibrationPanel
+            PrintCalibrationPanel,
+            AlertDialog
         },
         props: ['nxDepFatherId', 'nxDepId', 'depName', 'depPrintName',
             'updateTime', 'gbDepFatherId', 'gbDepId', 'gbDisId', 'gbBatchId', 'orderData'],
@@ -2255,13 +2259,15 @@
             },
 
             // 导出Excel方法
-            downLoadOnly() {
+            async downLoadOnly() {
                 console.log("=== downLoadOnly 开始导出Excel ===");
-                
+                const XLSXMod = await import('xlsx');
+                const XLSX = XLSXMod.default || XLSXMod;
+
                 const rows = this._filteredRows;
                 if (!rows || rows.length === 0) {
                     console.error("❌ [downLoadOnly] 数据为空，无法导出");
-                    alert('没有数据可导出');
+                    await this.$refs.alertDialog.alert('没有数据可导出', 'warning');
                     return;
                 }
 
@@ -2833,3 +2839,5 @@
 }
 
 </style>
+
+

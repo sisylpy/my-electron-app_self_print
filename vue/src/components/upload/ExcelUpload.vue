@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <div class="upload-section" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
         <div class="row g-3" style="flex: 1; min-height: 0; overflow: hidden; margin: 0; align-items: stretch;">
             <!-- 左侧：Excel文件上传和预览 -->
@@ -356,4 +356,5 @@ export default {
         background: #555;
     }
 </style>
+
 

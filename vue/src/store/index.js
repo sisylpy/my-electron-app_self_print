@@ -1,4 +1,4 @@
-// src/store/index.js
+﻿// src/store/index.js
 import { createStore } from 'vuex'; // 使用 Vuex 4.x 的创建方法
 import pageHeader from './modules/pageHeader';
 import axiosInstance from '@/api/axios'; // 使用配置好的 Axios 实例
@@ -21,6 +21,8 @@ const state = {
   user: '',
   pasteArr: '',
   loading: false, // 全局加载状态
+  /** MCP 配送单打印任务 FIFO 队列（多店/多任务排队，避免覆盖丢失） */
+  mcpPrintQueue: [],
 };
 
 export default createStore({  // 使用 createStore 替代 Vuex.Store
@@ -45,6 +47,20 @@ export default createStore({  // 使用 createStore 替代 Vuex.Store
       state.pasteArr = value;
       localStorage.setItem('pasteArr', JSON.stringify(value));
     },
+    /** @param {Record<string, unknown>} task */
+    ENQUEUE_MCP_PRINT_TASK(state, task) {
+      if (!task || typeof task !== 'object') return;
+      const copy = { ...task };
+      const id = copy.taskId;
+      if (id != null && state.mcpPrintQueue.some((t) => t.taskId === id)) return;
+      state.mcpPrintQueue.push(copy);
+    },
+    SHIFT_MCP_PRINT_QUEUE(state) {
+      state.mcpPrintQueue.shift();
+    },
+    CLEAR_MCP_PRINT_QUEUE(state) {
+      state.mcpPrintQueue = [];
+    },
   },
   actions: {
     setLoading({ commit }, payload) {
@@ -64,3 +80,4 @@ export default createStore({  // 使用 createStore 替代 Vuex.Store
     // 其他 actions...
   },
 });
+

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="login-container">
     <div class="login-box">
       <div class="login-logo">
@@ -114,7 +114,7 @@ mounted() {
     if (currentTime - this.pollStartTime >= 60000) {
       // 超过 1 分钟，停止轮询并返回上一页
       clearInterval(this.pollInterval);
-      // alert('登录超时，返回上一页');
+      // await this.$refs.alertDialog.alert('', 'warning');
       this.$router.back();
       return;
     }
@@ -435,3 +435,5 @@ mounted() {
   }
 }
 </style>
+
+

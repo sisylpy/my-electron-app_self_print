@@ -1,19 +1,71 @@
-<template>
+﻿<template>
   <div class="screen" @click="handleScreenClick">
-    <!-- 轮播图 -->
-    <div class="carousel-container">
-      <img :src="currentAd" alt="广告" class="carousel-image" />
+    <!-- 主内容区：打印机弹窗只盖这里，不盖底部栏（否则 fixed 全屏遮罩会点不到「记住用户」「打印配送单」） -->
+    <div class="screen-main">
+      <div class="carousel-container">
+        <img :src="currentAd" alt="广告" class="carousel-image" />
+      </div>
+
+      <!-- 打印机设置弹窗（仅覆盖 screen-main） -->
+      <div v-if="showPrinterModal" class="modal-overlay modal-overlay--main" @click="closePrinterModal">
+        <div class="modal-content" @click.stop>
+          <div class="printer-settings">
+            <h3>🖨️ 设置系统打印机</h3>
+            
+            <div v-if="loadingPrinters" class="loading-message">
+              正在加载打印机列表...
+            </div>
+            
+            <div v-if="!loadingPrinters && printerList.length > 0" class="printer-list">
+              <div 
+                v-for="printer in printerList" 
+                :key="printer.name"
+                :class="['printer-item', { 'selected': selectedPrinterName === printer.name }]"
+                @click="selectPrinter(printer)"
+              >
+                <div class="printer-name">
+                  {{ printer.displayName }}
+                  <span v-if="printer.isDefault" class="default-badge">默认</span>
+                </div>
+                <div class="printer-info">
+                  <span>{{ printer.description || '无描述' }}</span>
+                  <span :class="['printer-status', getPrinterStatusClass(printer.status)]">
+                    {{ getPrinterStatusText(printer.status) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div v-if="!loadingPrinters && printerList.length === 0" class="no-printers">
+              未找到可用打印机
+            </div>
+            
+            <div v-if="currentPrinter" class="current-printer-info">
+              <p><strong>当前选择的打印机：</strong>{{ currentPrinter.displayName }}</p>
+              <p v-if="currentPrinter.isDefault" class="default-info">（系统默认打印机）</p>
+            </div>
+            
+            <div v-if="!currentPrinter && printerList.length > 0" class="hint-info">
+              <p>💡 请从上方列表中选择一台打印机</p>
+            </div>
+            
+            <div class="button-group">
+              <button 
+                @click="savePrinter" 
+                :disabled="!selectedPrinterName || savingPrinter"
+                class="confirm-btn"
+              >
+                {{ savingPrinter ? '保存中...' : '确认保存' }}
+              </button>
+              <button @click="closePrinterModal" class="cancel-btn">取消</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-      <!-- 点击计数器显示 -->
-      <!-- <div class="click-counter" style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 5px; font-size: 12px; z-index: 100;">
-        <div>🖱️ 点击测试</div>
-        <div>当前点击: {{ clickCount }}/4</div>
-        <div>事件类型: {{ lastEventType || '无' }}</div>
-      </div> -->
-
-      <!-- 底部部分 -->
-      <div class="footer">
+      <!-- 底部部分：显式 stopPropagation，避免点「记住用户/打印」时触发全屏连点计数（勿用裸 @click.stop，部分环境下可能影响子元素） -->
+      <div class="footer" @click="onFooterClickStopBubble">
         <!-- 左侧标题 -->
         <div class="left-title" @click="openPrinterSettings" style="cursor: pointer;" title="点击设置系统打印机">
           <h1>京采接单工具</h1>
@@ -21,74 +73,25 @@
         </div>
   
         <!-- 右侧按钮 -->
-        <div class="right-btn d-flex gap-3">
+        <div class="right-btn d-flex gap-3 align-items-center flex-wrap">
 <!--          <button @click="printWidthTest" class="settings-btn" style="background-color: #17a2b8;">宽度测试</button>-->
 <!--          <button @click="openDeviceSettings" class="settings-btn">设备管理</button>-->
+          <label class="remember-user-label">
+            <input
+              v-model="rememberUser"
+              type="checkbox"
+              class="remember-user-checkbox"
+              @change="persistRememberUser"
+            />
+            <span>记住用户</span>
+          </label>
           <button @click="goHome" class="print-btn">打印配送单</button>
         </div>
       </div>
     </div>
 
-    <!-- 打印机设置弹窗 -->
-    <div v-if="showPrinterModal" class="modal-overlay" @click="closePrinterModal">
-      <div class="modal-content" @click.stop>
-        <div class="printer-settings">
-          <h3>🖨️ 设置系统打印机</h3>
-          
-          <div v-if="loadingPrinters" class="loading-message">
-            正在加载打印机列表...
-          </div>
-          
-          <div v-if="!loadingPrinters && printerList.length > 0" class="printer-list">
-            <div 
-              v-for="printer in printerList" 
-              :key="printer.name"
-              :class="['printer-item', { 'selected': selectedPrinterName === printer.name }]"
-              @click="selectPrinter(printer)"
-            >
-              <div class="printer-name">
-                {{ printer.displayName }}
-                <span v-if="printer.isDefault" class="default-badge">默认</span>
-              </div>
-              <div class="printer-info">
-                <span>{{ printer.description || '无描述' }}</span>
-                <span :class="['printer-status', getPrinterStatusClass(printer.status)]">
-                  {{ getPrinterStatusText(printer.status) }}
-                </span>
-              </div>
-            </div>
-          </div>
-          
-          <div v-if="!loadingPrinters && printerList.length === 0" class="no-printers">
-            未找到可用打印机
-          </div>
-          
-          <div v-if="currentPrinter" class="current-printer-info">
-            <p><strong>当前选择的打印机：</strong>{{ currentPrinter.displayName }}</p>
-            <p v-if="currentPrinter.isDefault" class="default-info">（系统默认打印机）</p>
-          </div>
-          
-          <div v-if="!currentPrinter && printerList.length > 0" class="hint-info">
-            <p>💡 请从上方列表中选择一台打印机</p>
-          </div>
-          
-          <div class="button-group">
-            <button 
-              @click="savePrinter" 
-              :disabled="!selectedPrinterName || savingPrinter"
-              class="confirm-btn"
-            >
-              {{ savingPrinter ? '保存中...' : '确认保存' }}
-            </button>
-            <button @click="closePrinterModal" class="cancel-btn">取消</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-
     <!-- 设备管理员登录弹窗 -->
-    <div v-if="showDeviceAdminModal" class="modal-overlay" @click="closeDeviceAdminModal">
+    <div v-if="showDeviceAdminModal" class="modal-overlay modal-overlay--fullscreen" @click="closeDeviceAdminModal">
       <div class="modal-content" @click.stop>
         <!-- 登录界面 -->
         <div v-if="deviceAdminStep === 'login'" class="device-admin-login">
@@ -179,14 +182,14 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router'; // 导入 useRouter
 import deviceAdminApi from '../api/deviceAdmin.js';
-
+import { REMEMBER_PRINTER_USER_KEY } from '../utils/rememberPrinterUser';
   // 使用 import 来引入图片
   import ad1 from '../assets/ad/ad1.png'
   import ad2 from '@/assets/ad/ad2.png';
   import ad3 from '@/assets/ad/ad3.png';
   import ad4 from '@/assets/ad/ad4.png';
   import ad5 from '@/assets/ad/ad5.png';
-  
+
   export default {
     name: 'Screen',
     setup() {
@@ -194,6 +197,30 @@ import deviceAdminApi from '../api/deviceAdmin.js';
       
       // 获取路由对象
       const router = useRouter();
+
+      const readRememberInitial = () => localStorage.getItem(REMEMBER_PRINTER_USER_KEY) === '1';
+
+      const rememberUser = ref(readRememberInitial());
+
+      /** 仅写 localStorage（同步）+ 异步同步 userData，不用 sendSync，避免界面卡顿、勾选延迟 */
+      const persistRememberUser = () => {
+        const on = !!rememberUser.value;
+        if (on) {
+          localStorage.setItem(REMEMBER_PRINTER_USER_KEY, '1');
+        } else {
+          localStorage.removeItem(REMEMBER_PRINTER_USER_KEY);
+        }
+        try {
+          window.electronAPI?.rememberPrinterUserSetAsync?.(on);
+        } catch (e) {
+          console.warn('[记住用户] 异步写入 userData 失败:', e);
+        }
+      };
+
+      /** 主菜单「文件 → 取消自动登录」通过 executeJavaScript 派发该事件，同步取消勾选（不再次 persist，避免重复写日志） */
+      const onMenuClearAutoLogin = () => {
+        rememberUser.value = false;
+      };
 
       // 广告图片数组
       const ads = [ad1, ad2, ad3, ad4, ad5];
@@ -233,13 +260,23 @@ import deviceAdminApi from '../api/deviceAdmin.js';
         clearInterval(adInterval);
       };
   
+      const onFooterClickStopBubble = (e) => {
+        e.stopPropagation();
+      };
+
        // 点击按钮跳转到 Home 页面
     const goHome = () => {
-      router.push({ name: 'Home' }); // 使用 router.push() 跳转
+      persistRememberUser();
+      router.push({ name: 'Home' });
     };
     
     // 处理屏幕点击事件
     const handleScreenClick = (event) => {
+      // 底部栏（记住用户、打印等）不触发连点计数；与 footer 上 @click.stop 双保险
+      if (event.target?.closest?.('.footer')) {
+        return;
+      }
+
       // 防止事件重复触发
       if (isProcessingClick.value) {
         return;
@@ -348,12 +385,12 @@ import deviceAdminApi from '../api/deviceAdmin.js';
           
         } else {
           console.error('❌ 登录失败:', response.data?.msg || '未知错误');
-          alert(response.data?.msg || '登录失败，请重试');
+          await this.$refs.alertDialog.alert(response.data?.msg || '登录失败，请重试', 'error');
         }
         
       } catch (error) {
         console.error('❌ 登录异常:', error);
-        alert('网络错误，请检查网络连接后重试');
+        await this.$refs.alertDialog.alert('网络错误，请检查网络连接后重试', 'error');
       } finally {
         loginLoading.value = false;
       }
@@ -463,6 +500,12 @@ import deviceAdminApi from '../api/deviceAdmin.js';
   
       // 生命周期钩子
       onMounted(async () => {
+        window.addEventListener('grain-clear-remember-printer-user', onMenuClearAutoLogin);
+
+        if (rememberUser.value) {
+          persistRememberUser();
+        }
+
         startAdRotation();
         
         // 获取市场名称
@@ -518,6 +561,7 @@ import deviceAdminApi from '../api/deviceAdmin.js';
       });
   
       onBeforeUnmount(() => {
+        window.removeEventListener('grain-clear-remember-printer-user', onMenuClearAutoLogin);
         stopAdRotation();
         // 清理点击计时器
         if (clickTimer.value) {
@@ -603,15 +647,15 @@ import deviceAdminApi from '../api/deviceAdmin.js';
               }
             } else {
               console.error('❌ 获取打印机列表失败:', result.error);
-              alert('获取打印机列表失败: ' + result.error);
+              await this.$refs.alertDialog.alert('获取打印机列表失败: ' + result.error, 'error');
             }
           } else {
             console.error('❌ electronAPI.getSystemPrinters 不存在');
-            alert('打印机API不可用');
+            await this.$refs.alertDialog.alert('打印机API不可用', 'error');
           }
         } catch (error) {
           console.error('❌ 打开打印机设置失败:', error);
-          alert('打开打印机设置失败: ' + error.message);
+          await this.$refs.alertDialog.alert('打开打印机设置失败: ' + error.message, 'error');
         } finally {
           loadingPrinters.value = false;
         }
@@ -627,7 +671,7 @@ import deviceAdminApi from '../api/deviceAdmin.js';
       // 保存打印机设置（保存到统一配置文件）
       const savePrinter = async () => {
         if (!selectedPrinterName.value) {
-          alert('请先选择一台打印机');
+          await this.$refs.alertDialog.alert('请先选择打印机', 'warning');
           return;
         }
         
@@ -650,33 +694,33 @@ import deviceAdminApi from '../api/deviceAdmin.js';
                   const configResult = await window.electronAPI.getPrinterSystemConfig();
                   if (configResult.success && configResult.config) {
                     console.log('✅ 系统配置同步成功:', configResult.config);
-                    alert(`打印机设置已保存并同步系统配置！\n\n默认打印机：${printerDisplayName}\n\n系统配置信息：\n• DPI: ${configResult.config.hDpi} x ${configResult.config.vDpi}\n• 纸张尺寸: ${configResult.config.widthMm}mm x ${configResult.config.heightMm}mm`);
+                    await this.$refs.alertDialog.alert(`打印机设置已保存并同步系统配置！\n\n默认打印机：${printerDisplayName}\n\n系统配置信息：\n• DPI: ${configResult.config.hDpi} x ${configResult.config.vDpi}\n• 纸张尺寸: ${configResult.config.widthMm}mm x ${configResult.config.heightMm}mm`, 'success');
                   } else {
                     console.warn('⚠️ 系统配置同步失败，但打印机已保存:', configResult.error);
-                    alert(`打印机设置已保存！\n默认打印机：${printerDisplayName}\n\n⚠️ 系统配置同步失败: ${configResult.error || '未知错误'}\n提示：某些打印机可能无法获取完整配置信息，这是正常的。`);
+                    await this.$refs.alertDialog.alert(`打印机设置已保存！\n默认打印机：${printerDisplayName}\n\n⚠️ 系统配置同步失败: ${configResult.error || '未知错误'}\n提示：某些打印机可能无法获取完整配置信息，这是正常的。`, 'warning');
                   }
                 } else {
                   console.warn('⚠️ 系统配置API不可用，仅保存打印机设置');
-                  alert(`打印机设置已保存！\n默认打印机：${printerDisplayName}`);
+                  await this.$refs.alertDialog.alert(`打印机设置已保存！\n默认打印机：${printerDisplayName}`, 'success');
                 }
               } catch (configError) {
                 console.error('❌ 同步系统配置时出错:', configError);
                 // 即使同步失败，也提示保存成功
-                alert(`打印机设置已保存！\n默认打印机：${printerDisplayName}\n\n⚠️ 系统配置同步失败: ${configError.message}`);
+                await this.$refs.alertDialog.alert(`打印机设置已保存！\n默认打印机：${printerDisplayName}\n\n⚠️ 系统配置同步失败: ${configError.message}`, 'warning');
               }
               
               closePrinterModal();
             } else {
               console.error('❌ 保存默认打印机失败:', result.error);
-              alert('保存失败: ' + result.error);
+              await this.$refs.alertDialog.alert('保存失败: ' + result.error, 'error');
             }
           } else {
             console.error('❌ electronAPI.saveDefaultPrinter 不存在');
-            alert('打印机API不可用');
+            await this.$refs.alertDialog.alert('打印机API不可用', 'error');
           }
         } catch (error) {
           console.error('❌ 保存打印机设置失败:', error);
-          alert('保存失败: ' + error.message);
+          await this.$refs.alertDialog.alert('保存失败: ' + error.message, 'error');
         } finally {
           savingPrinter.value = false;
         }
@@ -863,20 +907,23 @@ import deviceAdminApi from '../api/deviceAdmin.js';
               console.log('✅ 打印测试已发送');
             } else {
               console.error('❌ 打印失败:', result.error);
-              alert('打印失败: ' + result.error);
+              await this.$refs.alertDialog.alert('打印失败: ' + result.error, 'error');
             }
           } else {
-            alert('打印API不可用');
+            await this.$refs.alertDialog.alert('electronAPI 不可用', 'error');
           }
         } catch (error) {
           console.error('❌ 打印测试失败:', error);
-          alert('打印测试失败: ' + error.message);
+          await this.$refs.alertDialog.alert('打印测试失败: ' + error.message, 'error');
         }
       };
       
       return {
         currentAd,
         goHome,
+        rememberUser,
+        persistRememberUser,
+        onFooterClickStopBubble,
         marketName, // 市场名称
         // 点击检测相关
         handleScreenClick,
@@ -928,9 +975,19 @@ import deviceAdminApi from '../api/deviceAdmin.js';
     flex-direction: column;
     overflow: hidden; /* 防止出现滚动条 */
   }
+
+  /* 轮播 + 打印机遮罩仅在此区域内；底部 footer 在 screen 下与 screen-main 并列，不被打印机弹窗挡住 */
+  .screen-main {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
   
   .carousel-container {
-    flex-grow: 1; /* 使轮播图占据屏幕的剩余空间 */
+    flex-grow: 1; /* 使轮播图占据 screen-main 的剩余空间 */
+    min-height: 0;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -951,7 +1008,8 @@ import deviceAdminApi from '../api/deviceAdmin.js';
     color: white;
     padding: 20px 40px;
     width: 100%;
-    position: relative; /* 让它紧贴底部 */
+    flex-shrink: 0;
+    position: relative;
   }
   
   .left-title h1 {
@@ -972,6 +1030,24 @@ import deviceAdminApi from '../api/deviceAdmin.js';
   .right-btn {
     display: flex;
     align-items: center;
+  }
+
+  .remember-user-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .remember-user-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
   }
   
   .settings-btn {
@@ -1009,16 +1085,27 @@ import deviceAdminApi from '../api/deviceAdmin.js';
 
   /* ==================== 设备管理员弹窗样式 ==================== */
   .modal-overlay {
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* 设备管理员等需盖住全窗口 */
+  .modal-overlay--fullscreen {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    display: flex;
-    justify-content: center;
-    align-items: center;
     z-index: 1000;
+  }
+
+  /* 打印机设置：只盖住 screen-main（轮播区），底部操作条始终可点 */
+  .modal-overlay--main {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
   }
 
   .modal-content {
@@ -1430,3 +1517,15 @@ import deviceAdminApi from '../api/deviceAdmin.js';
   }
   </style>
   
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 打印机配置管理工具
  * 统一从文件系统读取配置，不使用缓存
  * 配置文件统一存储在 printer-config.json 中
@@ -257,3 +257,4 @@ export async function initPrinterProfile(componentInstance, defaultProfile = nul
  * 导出默认配置（供各模板自定义使用）
  */
 export { DEFAULT_PROFILE };
+

@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+﻿import request from '@/utils/request'
 
 export default {
 
@@ -118,3 +118,4 @@ export default {
 
 
 }
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 校验单条订单（与 PlaceOrder.checkOrderContent 规则一致）
  * @returns {string|null} 错误信息，通过返回 null
  */
@@ -84,8 +84,15 @@ export function parseOrderFromText(content) {
   }
   
   // ============ B. 从尾部解析「名称 + 括号备注 + 数量+单位」 ============
+  const validUnits = ['斤', '个', '包', '根', '棵', '条', '盒', '捆', '袋', '跟', '块', '瓶', '罐', '桶', '箱', '件'];
+
   function parseSegmentEndOfLine(segment) {
     segment = segment.trim().replace(/[,，、。.]+$/g, '');
+  
+    // 「加」字前缀：加2箱满特起酥油 → 2箱满特起酥油（便于按数量单位前置格式解析）
+    if (/^加\s*[\d\.一二两三四五六七八九十百千万半]/.test(segment)) {
+      segment = segment.replace(/^加\s*/, '').trim();
+    }
   
     // 先移除说明文字，避免被当作备注
     segment = segment.replace(/（说明.+?）/g, '');
@@ -100,11 +107,37 @@ export function parseOrderFromText(content) {
   
     const hasArabic = /[0-9]/.test(segment);
     let name = segment, qtyVal = '', qtyUnit = '', regex;
-  
+
+    // 优先：数量+单位 前置格式，如 "2箱满特起酥油"
     if (hasArabic) {
-      regex = /^(.*?)([\d\.]+)(\S*)$/;
+      const unitPattern = validUnits.join('|');
+      const fromLeftRegex = new RegExp(`^([\\d\\.]+)(${unitPattern})(.+)$`);
+      const mLeft = segment.match(fromLeftRegex);
+      if (mLeft) {
+        const leftQty = mLeft[1].trim();
+        const leftUnit = mLeft[2];
+        const leftName = mLeft[3].trim().replace(/\s+/g, '');
+        if (leftName && /[\u4e00-\u9fa5]/.test(leftName)) {
+          name = leftName;
+          qtyVal = leftQty;
+          qtyUnit = leftUnit;
+          console.log('[parseSegmentEndOfLine] 数量单位前置解析成功:', { name, qtyVal, qtyUnit });
+          return {
+            nxDoGoodsName: name,
+            nxDoGoodsOrignialName: name,
+            nxDoQuantity: qtyVal,
+            nxDoStandard: qtyUnit,
+            nxDoRemark: remarkText,
+          };
+        }
+      }
+    }
+  
+    // 支持数量与单位之间的空格，如「黄贡椒 1 件」
+    if (hasArabic) {
+      regex = /^(.*?)([\d\.]+)\s*(\S*)$/;
     } else {
-      regex = /^(.*?)([一二两三四五六七八九十百千万半]+)(\S*)$/;
+      regex = /^(.*?)([一二两三四五六七八九十百千万半]+)\s*(\S*)$/;
     }
     const m = segment.match(regex);
     if (m) {
@@ -128,7 +161,6 @@ export function parseOrderFromText(content) {
       }
   
       // 单位列表
-      const validUnits = ['斤','个','包','根','棵','条','盒','捆','袋','跟','块','瓶','罐','桶','箱','件'];
       let foundUnit = '';
       for (let u of validUnits) {
         if (potentialUnit.startsWith(u)) {
@@ -141,6 +173,26 @@ export function parseOrderFromText(content) {
         if (extra) remarkText = remarkText ? (remarkText + ' ' + extra) : extra;
       } else {
         qtyUnit = potentialUnit;
+      }
+      
+      // 兜底：当商品名为空或规格无效（非1-2汉字）时，尝试从右往左解析
+      // 场景：商品名含数字如 "1.6蒸鱼3箱"、"1.5丘比培煎芝麻沙拉汁1箱"、"800美级1箱"
+      const specValid = qtyUnit && /^[\u4e00-\u9fff]+$/.test(qtyUnit) && qtyUnit.length <= 2;
+      if ((!name || !specValid) && hasArabic) {
+        const unitPattern = validUnits.join('|');
+        const fromRightRegex = new RegExp(`^(.+?)([\\d\\.]+)(${unitPattern})$`);
+        const m2 = segment.match(fromRightRegex);
+        if (m2) {
+          const rightName = m2[1].trim().replace(/\s+/g, '');
+          const rightQty = m2[2].trim();
+          const rightUnit = m2[3];
+          if (rightName && /[\u4e00-\u9fa5]/.test(rightName)) {
+            name = rightName;
+            qtyVal = rightQty;
+            qtyUnit = rightUnit;
+            console.log('[parseSegmentEndOfLine] 从右往左兜底成功:', { name, qtyVal, qtyUnit });
+          }
+        }
       }
       
       console.log('[parseSegmentEndOfLine] 最终结果:', {
@@ -1011,10 +1063,32 @@ export function parseOrderFromText(content) {
   // ============ G. 校验订单并收集不合格片段（用于片段级高亮，避免整行标红） ============
   const invalidSegments = []; // { lineIndex, segmentText }
   const invalidLineIndices = []; // 兼容：不合格行索引
-  for (const o of orders) {
-    const err = validateOrder(o);
+  for (let i = 0; i < orders.length; i++) {
+    let o = orders[i];
+    let err = validateOrder(o);
     if (err != null && o._sourceLineIndex != null) {
-      // 优先用解析时保存的原始片段文本（与输入框内容完全一致，可精确匹配高亮），否则回退为拼接
+      // 补救：对校验失败的订单，用原始文本尝试 parseSegmentEndOfLine 再解析（如「黄贡椒：1 件」空格拆分导致规格丢失）
+      const segmentToRetry = (o._sourceSegmentText != null && String(o._sourceSegmentText).trim() !== '')
+        ? o._sourceSegmentText
+        : (() => {
+            const rawLine = allLines[o._sourceLineIndex] || '';
+            return rawLine.replace(/^(.+?)[:：](.+)$/, '$1 $2');
+          })();
+      const retried = parseSegmentEndOfLine(segmentToRetry);
+      if (retried && retried.nxDoQuantity && validateOrder(retried) == null) {
+        orders[i] = {
+          ...o,
+          nxDoGoodsName: retried.nxDoGoodsName,
+          nxDoGoodsOrignialName: retried.nxDoGoodsOrignialName || retried.nxDoGoodsName,
+          nxDoQuantity: retried.nxDoQuantity,
+          nxDoStandard: retried.nxDoStandard,
+          nxDoRemark: retried.nxDoRemark,
+          nxDoAddRemark: !!retried.nxDoRemark,
+        };
+        console.log('[parseOrderFromText] 补救解析成功:', segmentToRetry, '→', retried);
+        continue;
+      }
+      // 补救失败，加入不合格列表
       const segmentText = (o._sourceSegmentText != null && String(o._sourceSegmentText).trim() !== '')
         ? o._sourceSegmentText
         : `${o.nxDoGoodsName} ${o.nxDoQuantity} ${o.nxDoStandard}`.trim();
@@ -1044,3 +1118,4 @@ export function parseOrderFromText(content) {
   console.log('[parseOrderFromText] 解析完成:', { ordersCount: orders.length, invalidLineIndices, invalidSegments });
   return { orders, formatted, invalidLineIndices, invalidSegments };
 }
+

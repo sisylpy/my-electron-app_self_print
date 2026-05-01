@@ -13,6 +13,7 @@
     "dist:win": "npm run build:vue && electron-builder --win"
   },
   "build": {
+    "publish": null,
     "appId": "club.grainservice.www",
     "productName": "GrainPrint",
     "directories": {
@@ -22,11 +23,18 @@
       "dist/**/*",
       "src/**/*",
       "package.json",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "config/**/*"
     ],
     "asar": false,
     "win": {
       "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerLanguages": ["zh_CN", "en_US"],
+      "language": "2052"
     },
     "mac": {
       "category": "public.app-category.productivity",

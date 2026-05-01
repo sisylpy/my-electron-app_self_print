@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <teleport to="body">
         <div v-if="isOpen" class="icm-backdrop" @click.self="onCancel">
             <div class="icm-modal" role="dialog" aria-modal="true">
@@ -708,7 +708,7 @@
                         .catch((e) => {
                             this.directRecognizePending = false;
                             console.error(e);
-                            alert("裁剪失败，请重试");
+                            console.error("裁剪失败，请重试");
                         });
                 } else {
                     this.$emit("direct-recognize", this.displaySrc || this.src);
@@ -727,7 +727,7 @@
                         .catch((e) => {
                             this.directRecognizePending = false;
                             console.error(e);
-                            alert("裁剪失败，请重试");
+                            console.error("裁剪失败，请重试");
                         });
                 } else {
                     this.$emit("direct-recognize-ai", this.displaySrc || this.src);
@@ -751,7 +751,7 @@
                 } catch (e) {
                     // 你可以替换为 toast
                     console.error(e);
-                    alert("裁剪失败，请重试");
+                    console.error("裁剪失败，请重试");
                 }
             },
 
@@ -1008,3 +1008,4 @@
         margin-left: 4px;
     }
 </style>
+

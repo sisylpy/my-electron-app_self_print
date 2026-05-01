@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "grain-print": {
+      "command": "node",
+      "args": ["/Users/lpy/Documents/wxPro/ai/my-electron-app_self_print/src/mcp-server-cli.js"]
+    }
+  }
+}

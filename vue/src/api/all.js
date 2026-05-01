@@ -1,4 +1,4 @@
-// src/api/index.js
+﻿// src/api/index.js
 import axiosInstance from './axios'; // 使用配置了拦截器的 Axios 实例
 
 const api = '/api';
@@ -79,6 +79,14 @@ const apiMethods = {
   giveOrderWeight(data) {
     return axiosInstance.post('nxdepartmentorders/giveOrderWeight', data);
   },
+  // 出库数量完成（订单数组）
+  giveOrderWeightListForStockAndFinish(data) {
+    return axiosInstance.post('nxdepartmentorders/giveOrderWeightListForStockAndFinish', data);
+  },
+  // 货架类配送商出库数量
+  giveOrderWeightListForStockShelfGoods(data) {
+    return axiosInstance.post('nxdepartmentorders/giveOrderWeightListForStockShelfGoods', data);
+  },
 
   nxDisPrintGbPurBatch(data) {
     return axiosInstance.get(`gbdistributerpurchasebatch/nxDisPrintGbPurBatch/${data}`);
@@ -110,8 +118,27 @@ const apiMethods = {
     return axiosInstance.get(`nxdepartmentbill/getBillApplys?${queryString}`);
   },
 
+  /**
+   * 下载账单Excel（需后端实现 download/downloadBillExcelNx 接口）
+   * @param {string} billId - 账单ID (nxDepartmentBillId)
+   * @returns {Promise<Blob>} Excel 文件 Blob
+   */
+  downloadBillExcel(billId) {
+    return axiosInstance.get(`download/downloadBillExcelNx?billId=${billId}`, {
+      responseType: 'blob',
+      showLoading: false
+    });
+  },
+
   saveAccountReturnBill(data) {
     return axiosInstance.post('nxdepartmentbill/saveAccountReturnBill', data);
+  },
+
+
+  saveManulOrder(data) {
+    return axiosInstance.post('nxdepartmentorders/save', data, {
+      headers: { 'Content-Type': 'application/json' }
+    });
   },
 
   /**
@@ -187,13 +214,27 @@ const apiMethods = {
     });
   },
 
-  // 根据商品名称快速搜索商品（配送商和系统商品）
-  queryDisGoodsByQuickSearchWithDepId(data) {
+
+
+  // 手动下单在指定订单
+  manualOrderBefore(data) {
+    // 后端接口使用 @RequestBody，需要发送 JSON 格式
+    return axiosInstance.post('nxdepartmentorders/saveBefore', data, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  },
+
+
+  // 根据商品名称快速搜索商品（配送商和系统商品），extraConfig 可传 { signal } 用于 AbortController
+  queryDisGoodsByQuickSearchWithDepId(data, extraConfig = {}) {
     return axiosInstance.post('nxdistributergoods/queryDisGoodsByQuickSearchWithDepIdCollDis', data, {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      timeout: 60000 // 设置超时时间为 3 分钟（180000 毫秒）
+      timeout: 60000,
+      ...extraConfig
     });
   },
 
@@ -423,3 +464,4 @@ const apiMethods = {
 };
 
 export default apiMethods;
+

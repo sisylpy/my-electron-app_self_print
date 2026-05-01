@@ -1,4 +1,4 @@
-import request from '../utils/request'
+﻿import request from '../utils/request'
 
 export default {
     // 登录
@@ -22,3 +22,4 @@ export default {
 
 
 }
+

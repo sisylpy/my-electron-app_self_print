@@ -1,4 +1,4 @@
-
+﻿
 const orders = {
     namespaced: true,
     types: {
@@ -41,3 +41,4 @@ const orders = {
 }
 
 export default orders
+

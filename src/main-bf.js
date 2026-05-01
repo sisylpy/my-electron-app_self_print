@@ -2585,7 +2585,7 @@ function savePrintBill(depFatherId, depId, tradeNo, userId, paperCount) {
   });
 
   const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_master_war_exploded/api/nxdepartmentbill/saveAccountBillPrinter/`
+    ? `http://localhost:8080/nongxinle_war_exploded/api/nxdepartmentbill/saveAccountBillPrinter/`
     : `https://grainservice.club:8443/nongxinle/api/nxdepartmentbill/saveAccountBillPrinter/`;
 
   console.log('🌐 [savePrintBill] 请求URL:', apiUrl);
@@ -2663,7 +2663,7 @@ ipcMain.on('device-config-response', (event, deviceConfig, printParams) => {
   }
   
   const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_master_war_exploded/api/machine/print/record`
+    ? `http://localhost:8080/nongxinle_war_exploded/api/machine/print/record`
     : `https://grainservice.club:8443/nongxinle/api/machine/print/record`;
 
   // 构建设备记录数据 - 按照后端接口要求，确保数据类型正确
@@ -2756,7 +2756,7 @@ ipcMain.on('device-config-response-for-merge', (event, deviceConfig, printParams
   console.log('📋 收到printParams (合并接口):', printParams);
   
   const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_master_war_exploded/api/nxdepartmentbill/saveAccountBillPrinterSelf`
+    ? `http://localhost:8080/nongxinle_war_exploded/api/nxdepartmentbill/saveAccountBillPrinterSelf`
     : `https://grainservice.club:8443/nongxinle/api/nxdepartmentbill/saveAccountBillPrinterSelf`;
 
   // 构建合并接口的请求数据
@@ -2839,7 +2839,7 @@ function savePrintBillGb(gbDepFatherId, gbDepId, tradeNo, userId, nxDisId, paper
   console.log('GB订单保存:', gbDepFatherId, gbDepId, tradeNo, userId, nxDisId);
 
   const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_master_war_exploded/api/nxdepartmentbill/saveAccountBillPrinterGb/`
+    ? `http://localhost:8080/nongxinle_war_exploded/api/nxdepartmentbill/saveAccountBillPrinterGb/`
     : `https://grainservice.club:8443/nongxinle/api/nxdepartmentbill/saveAccountBillPrinterGb/`;
 
   // 发起请求
@@ -2883,7 +2883,7 @@ function savePrintBillGbPb(gbBatchId, paperCount) {
   console.log("gbBatchId",gbBatchId, '0000保gbBatchIdgbBatchId');
 
   const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_master_war_exploded/api/gbdistributerpurchasebatch/nxDisPrintGbPurBatch/`
+    ? `http://localhost:8080/nongxinle_war_exploded/api/gbdistributerpurchasebatch/nxDisPrintGbPurBatch/`
     : `https://grainservice.club:8443/nongxinle/api/gbdistributerpurchasebatch/nxDisPrintGbPurBatch/`;
     axios.get(`${apiUrl}${gbBatchId}`)
     .then(response => {

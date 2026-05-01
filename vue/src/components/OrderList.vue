@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <div ref="scrollContainer" class="order-list-container flex-grow-1"
          style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0;"
          @keydown="handleGoodsListKeydown">
@@ -34,51 +34,33 @@
                         class="order-item-card mb-1 p-1 rounded border-bottom"
                         :style="{
                     position: 'relative',
-                    backgroundColor: isPausedOrder(orderIndex) ? '#fee' : (isCurrentReadingOrder(orderIndex) ? '#fff3cd' : (keyboardSelectedOrderIndex === orderIndex ? '#e7f3ff' : '#fff')),
+                    backgroundColor: getOrderItemBackgroundColor(item, orderIndex),
                     transition: 'background-color 0.3s ease'
                 }">
 
                     <!-- 之前添加新订单的商品选择面板 -->
                     <div v-if="addingOrderBeforeIndex === orderIndex"
-                         class="mb-3 p-3 border rounded"
-                         style="background-color: #fff3cd; border-color: #ffc107; position: relative; z-index: 11;">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="mb-0" style="color: #856404;">在之前添加新订单</h6>
-                            <button class="btn btn-sm btn-link p-0"
-                                    @click="$emit('cancel-add-order-before')"
-                                    style="font-size: 14px; color: #856404;">✕
-                            </button>
-                        </div>
-
-                        <!-- 商品搜索 -->
-                        <div class="mb-2 position-relative">
-                            <label class="form-label small mb-1"
-                                   style="color: #856404;">商品名称</label>
-                            <div class="d-flex gap-2 align-items-center">
+                         class="p-1 border rounded mb-1"
+                         style="background-color: #fff; position: relative; z-index: 11;">
+                        <!-- 第一行：商品名称、数量、规格、关闭按钮 -->
+                        <div class="d-flex align-items-center gap-2 mb-1" style="min-height: 32px;">
+                            <!-- 商品名称 -->
+                            <div style="flex: 2; min-width: 0; position: relative;">
                                 <input
                                         type="text"
-                                        class="form-control form-control-sm flex-grow-1"
+                                        class="form-control form-control-sm"
                                         :value="beforeOrderForm.goodsName"
-                                        @input="beforeOrderForm.goodsName = $event.target.value"
-                                        @keydown.enter="handleBeforeOrderGoodsNameEnter($event)"
-                                        placeholder="搜索商品（按回车搜索）..."
-                                        style="background-color: #fff;"
+                                        @input="onBeforeOrderGoodsNameInput($event)"
+                                        @keydown="handleBeforeOrderGoodsNameKeydown($event)"
+                                        @keydown.tab="onBeforeOrderTab($event, 'goods-name', orderIndex)"
+                                        data-input-type="before-order-goods-name"
+                                        placeholder="商品名称"
+                                        style="background-color: #fff; font-size: 16px;"
                                 />
-                                <!-- 保存新商品按钮：当有商品名称、没有选中商品时显示 -->
-                                <button v-if="beforeOrderForm.goodsName && !beforeOrderForm.selectedGoods"
-                                        class="btn btn-sm"
-                                        style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s; flex-shrink: 0;"
-                                        @click="$emit('save-new-goods-from-before-order', { item, orderIndex })"
-                                        title="保存新商品"
-                                        @mouseenter="$event.target.style.color='#495057'"
-                                        @mouseleave="$event.target.style.color='#6c757d'">
-                                    💾
-                                </button>
-                            </div>
-                            <!-- 搜索结果下拉框 -->
-                            <div v-if="beforeOrderForm.showSearchResults && (beforeOrderForm.disArr?.length > 0 || beforeOrderForm.nxArr?.length > 0)"
-                                 class="border rounded mt-1 bg-white shadow-lg"
-                                 style="max-height: 300px; overflow-y: auto; position: absolute; z-index: 1000; width: 100%;">
+                                <!-- 搜索结果下拉框 -->
+                                <div v-if="beforeOrderForm.showSearchResults && (beforeOrderForm.disArr?.length > 0 || beforeOrderForm.nxArr?.length > 0)"
+                                     class="border rounded mt-1 bg-white shadow-lg"
+                                     style="max-height: 300px; overflow-y: auto; position: absolute; z-index: 1000; width: 100%;">
                                 <div class="d-flex justify-content-between align-items-center p-2 border-bottom"
                                      style="background-color: #f8f9fa;">
                                     <span class="small text-muted">搜索结果</span>
@@ -91,21 +73,27 @@
 
                                 <!-- 配送商商品列表 -->
                                 <div v-if="beforeOrderForm.disArr && beforeOrderForm.disArr.length > 0">
-                                    <div class="text-muted small fw-bold p-2 border-bottom"
-                                         style="background-color: #f0f0f0;">
+                                    <div class="text-muted small fw-bold p-2 border-bottom">
                                         配送商品 ({{ beforeOrderForm.disArr.length }})
                                     </div>
                                     <div v-for="(goods, idx) in beforeOrderForm.disArr"
                                          :key="goods?.nxDistributerGoodsId || idx"
                                          class="p-2 border-bottom"
+                                         :data-search-index="idx"
                                          @click="$emit('select-before-order-goods', goods)"
                                          style="cursor: pointer;"
-                                         :style="{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f8f9fa' }">
+                                         :style="{ backgroundColor: (beforeOrderForm.selectedSearchIndex === idx) ? 'rgba(13, 110, 253, 0.1)' : (idx % 2 === 0 ? '#fff' : '#f8f9fa') }">
                                         <div class="d-flex">
                                             <div class="flex-grow-1" style="min-width: 0;">
                                                 <!-- 商品信息 -->
                                                 <div v-if="goods">
                                                     <span class="text-muted fw-bold me-2" style="color: #666;">{{ idx + 1 }}.</span>
+                                                    <span v-if="disId != null && goods.nxDgDistributerId != null && goods.nxDgDistributerId !== disId && goods.goodsNxDistributerName"
+                                                      class="font-xs text-primary me-1">[{{ goods.goodsNxDistributerName }}]</span>
+                                                <span v-if="goods.nxDgGoodsBrand && goods.nxDgGoodsBrand !== 'null'"
+                                                      class="badge bg-warning text-dark me-1">
+                                            {{ goods.nxDgGoodsBrand }}
+                                        </span>
                                                     <span>{{ goods.nxDgGoodsName }}</span>
                                                     <span class="ms-2" v-if="goods.nxDgItemsPerCarton">
                                                     ({{ goods.nxDgGoodsStandardWeight }} *{{ goods.nxDgItemsPerCarton }}/{{ goods.nxDgCartonUnit }})
@@ -152,16 +140,24 @@
                                 <!-- 系统商品列表 -->
                                 <div v-if="beforeOrderForm.nxArr && beforeOrderForm.nxArr.length > 0">
                                     <div class="text-muted small fw-bold p-2 border-bottom"
-                                         style="background-color: #f0f0f0;">
+                                         style="background-color: #fff;">
                                         系统商品 ({{ beforeOrderForm.nxArr.length }})
                                     </div>
                                     <div v-for="(goods, idx) in beforeOrderForm.nxArr"
                                          :key="goods?.nxGoodsId || idx"
                                          class="p-2 border-bottom"
+                                         :data-search-index="(beforeOrderForm.disArr?.length || 0) + idx"
                                          style="cursor: pointer;"
-                                         :style="{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f8f9fa' }">
+                                         :style="{ backgroundColor: (beforeOrderForm.selectedSearchIndex === (beforeOrderForm.disArr?.length || 0) + idx) ? 'rgba(13, 110, 253, 0.1)' : (idx % 2 === 0 ? '#fff' : '#f8f9fa') }">
                                         <div class="d-flex justify-content-between align-items-center" v-if="goods">
                                             <div>
+                                                <span class="text-muted fw-bold me-2" style="color: #666;">{{ idx + 1 }}.</span>
+                                                <span v-if="disId != null && goods.nxDgDistributerId != null && goods.nxDgDistributerId !== disId && goods.goodsNxDistributerName"
+                                                      class="font-xs text-primary me-1">[{{ goods.goodsNxDistributerName }}]</span>
+                                                <span v-if="(goods.nxDgGoodsBrand && goods.nxDgGoodsBrand !== 'null') || (goods.nxGoodsBrand && goods.nxGoodsBrand !== 'null')"
+                                                      class="badge bg-warning text-dark me-1">
+                                                    {{ goods.nxDgGoodsBrand || goods.nxGoodsBrand }}
+                                                </span>
                                                 <span>{{ goods.nxGoodsName }}</span>
 
                                                 <span class="ms-2"
@@ -189,57 +185,54 @@
                                     </div>
                                 </div>
                             </div>
-                        </div>
-
-
-                        <!-- 数量、规格、备注 -->
-                        <div class="row g-2 mb-2">
-                            <div class="col-4">
-                                <label class="form-label small mb-1"
-                                       style="color: #856404;">数量</label>
+                            </div>
+                            <!-- 数量 -->
+                            <div style="width: 50px; flex-shrink: 0;">
                                 <input
                                         type="number"
-                                        class="form-control form-control-sm"
+                                        class="form-control form-control-sm text-center"
                                         :value="beforeOrderForm.quantity"
                                         @input="$emit('before-order-quantity-input', $event.target.value)"
-                                        style="background-color: #fff;"
+                                        @keydown.enter="onBeforeOrderQuantityEnter($event, item, orderIndex)"
+                                        @keydown.tab="onBeforeOrderTab($event, 'quantity', orderIndex)"
+                                        data-input-type="before-order-quantity"
+                                        placeholder="数量"
+                                        style="background-color: #fff; font-size: 16px;"
                                 />
                             </div>
-                            <div class="col-4">
-                                <label class="form-label small mb-1"
-                                       style="color: #856404;">规格</label>
+                            <!-- 规格 -->
+                            <div style="width: 50px; flex-shrink: 0;">
                                 <input
                                         type="text"
-                                        class="form-control form-control-sm"
+                                        class="form-control form-control-sm text-center"
                                         :value="beforeOrderForm.standard"
                                         @input="$emit('before-order-standard-input', $event.target.value)"
-                                        style="background-color: #fff;"
+                                        @keydown.enter="onBeforeOrderStandardEnter($event, item, orderIndex)"
+                                        @keydown.tab="onBeforeOrderTab($event, 'standard', orderIndex)"
+                                        data-input-type="before-order-standard"
+                                        placeholder="规格"
+                                        style="background-color: #fff; font-size: 16px;"
                                 />
                             </div>
-                            <div class="col-4">
-                                <label class="form-label small mb-1"
-                                       style="color: #856404;">备注</label>
-                                <input
-                                        type="text"
-                                        class="form-control form-control-sm"
-                                        :value="beforeOrderForm.remark"
-                                        @input="$emit('before-order-remark-input', $event.target.value)"
-                                        style="background-color: #fff;"
-                                />
+                            <!-- 操作按钮 -->
+                            <div style="flex-shrink: 0; display: flex; gap: 4px;">
+                                <!-- 保存按钮 -->
+                                <button v-if="String(beforeOrderForm.goodsName || '').length > 0"
+                                        class="btn btn-sm"
+                                        :disabled="!canAddBeforeOrder(beforeOrderForm)"
+                                        :style="!canAddBeforeOrder(beforeOrderForm) ? 'font-size: 14px; padding: 4px 8px; background-color: transparent !important; border: none; color: #adb5bd; cursor: not-allowed;' : 'font-size: 14px; padding: 4px 8px; background-color: transparent !important; border: none; color: #6c757d; transition: all 0.2s;'"
+                                        @click="beforeOrderForm.selectedGoods ? $emit('save-before-order', { item, orderIndex }) : $emit('save-new-goods-from-before-order', { item, orderIndex })"
+                                        :title="beforeOrderForm.selectedGoods ? '保存订单' : '保存新商品'"
+                                        @mouseenter="canAddBeforeOrder(beforeOrderForm) ? $event.target.style.color='#495057' : null"
+                                        @mouseleave="canAddBeforeOrder(beforeOrderForm) ? $event.target.style.color='#6c757d' : null">
+                                    💾
+                                </button>
+                                <!-- 关闭按钮 -->
+                                <button class="btn btn-sm btn-link p-0"
+                                        @click="$emit('cancel-add-order-before')"
+                                        style="font-size: 14px;">✕
+                                </button>
                             </div>
-                        </div>
-
-                        <!-- 操作按钮 -->
-                        <div class="d-flex gap-2 justify-content-end">
-                            <button class="btn btn-sm btn-secondary"
-                                    @click="$emit('cancel-add-order-before')">
-                                取消
-                            </button>
-                            <button class="btn btn-sm btn-primary"
-                                    @click="$emit('save-before-order', { item, orderIndex })"
-                                    :disabled="!beforeOrderForm.selectedGoods || !beforeOrderForm.quantity || !beforeOrderForm.standard || !beforeOrderForm.standard.toString().trim()">
-                                保存订单
-                            </button>
                         </div>
                     </div>
 
@@ -260,7 +253,7 @@
                         <!-- 商品名称输入框 -->
                         <div style="flex: 2; min-width: 0; display: flex; align-items: center; gap: 4px;"
                              class="position-relative">
-                        <span v-if="item.nxDoStatus === 0 ">
+                        <span v-if="item.nxDoStatus > -1 ">
 <!--                            加这里-->
                         <span class=" form-control-md">{{item.nxDistributerGoodsEntity?.nxDgGoodsName || item.nxDoGoodsName || ''}}</span>
                             <span class="form-control-sm text-dark-emphasis"
@@ -279,7 +272,7 @@
                 </span>
                             <input v-else
                                    type="text"
-                                   class="form-control form-control-md"
+                                   class="form-control form-control-lg"
                                    data-order-input="goods-name"
                                    :value="getGoodsNameValue(item, orderIndex)"
                                    @input="handleGoodsNameInput($event, item, orderIndex)"
@@ -289,8 +282,7 @@
                                    @blur="$emit('goods-name-blur', { item, orderIndex })"
                                    :disabled="item.nxDoStatus === 0 || !isValidOrderQuantityAndStandard(item)"
                                    :title="!isValidOrderQuantityAndStandard(item) ? '请先填写数量和规格' : ''"
-                                   placeholder="请输入商品名称（按回车键查询）"
-                                   style="font-size: 14px; background-color: transparent; flex: 1;"
+                                   style="font-size: 16px; background-color: transparent; flex: 1;"
                             />
                             <!-- 展开/收起匹配商品列表的图标 -->
                             <button
@@ -315,9 +307,8 @@
                                     @keydown.enter="handleQuantityEnter($event, item, orderIndex)"
                                     @keydown.tab="handleTabKey($event, orderIndex, 'quantity')"
                                     @focus="handleQuantityOrStandardFocus(orderIndex)"
-                                    :disabled="item.nxDoStatus === 0"
-                                    placeholder="数量"
-                                    style="background-color: transparent;"
+                                    :disabled="item.nxDoStatus > -1"
+                                    style="background-color: transparent; font-size: 16px;"
                             />
                         </div>
                         <!-- 规格 -->
@@ -331,9 +322,8 @@
                                     @keydown.enter="handleStandardEnter($event, item, orderIndex)"
                                     @keydown.tab="handleTabKey($event, orderIndex, 'standard')"
                                     @focus="handleQuantityOrStandardFocus(orderIndex)"
-                                    :disabled="item.nxDoStatus === 0"
-                                    placeholder="规格"
-                                    style="background-color: transparent;"
+                                    :disabled="item.nxDoStatus > -1"
+                                    style="background-color: transparent; font-size: 16px;"
                             />
                         </div>
                         <!-- 状态 -->
@@ -406,7 +396,6 @@
                                         :value="item.standardWeight"
                                         @input="$emit('remark-input', { item, orderIndex, value: $event.target.value, field: 'standardWeight' })"
                                         :disabled="item.nxDoStatus === 0"
-                                        placeholder="规格重量"
                                         style="width: 90px;"
                                 /><span class="text-muted small mx-1">/</span><input
                                     type="text"
@@ -414,7 +403,6 @@
                                     :value="item.itemUnit"
                                     @input="$emit('remark-input', { item, orderIndex, value: $event.target.value, field: 'itemUnit' })"
                                     :disabled="item.nxDoStatus === 0"
-                                    placeholder="商品单位"
                                     style="width: 70px;"
                             />
 
@@ -430,7 +418,6 @@
                                         :value="item.itemsPerCarton"
                                         @input="$emit('remark-input', { item, orderIndex, value: $event.target.value, field: 'itemsPerCarton' })"
                                         :disabled="item.nxDoStatus === 0"
-                                        placeholder="数量"
                                         min="0"
                                         step="1"
                                         style="width: 60px;"
@@ -443,7 +430,6 @@
                                         :value="item.cartonUnit"
                                         @input="$emit('remark-input', { item, orderIndex, value: $event.target.value, field: 'cartonUnit' })"
                                         :disabled="item.nxDoStatus === 0"
-                                        placeholder="大包装"
                                         style="width: 60px;"
                                 />
                             </div>
@@ -459,7 +445,6 @@
                                 :value="item.nxDoRemark"
                                 @input="$emit('remark-input', { item, orderIndex, value: $event.target.value, field: 'nxDoRemark' })"
                                 :disabled="item.nxDoStatus === 0"
-                                placeholder="备注"
                                 maxlength="15"
                                 style="font-size: 12px; background-color: transparent; width: 200px; flex-shrink: 0;"
                         />
@@ -763,11 +748,24 @@
 
         </div>
     </div>
+
+    <!-- Toast 提示组件 -->
+    <Toast
+            v-model:visible="toastVisible"
+            :message="toastMessage"
+            :type="toastType"
+            :duration="toastDuration"
+    />
 </template>
 
 <script>
+    import Toast from './Toast.vue';
+
     export default {
         name: 'OrderList',
+        components: {
+            Toast
+        },
         data() {
             return {
                 isRecording: false,
@@ -801,7 +799,13 @@
                 selectedSearchResultIndex: 0,  // 搜索下拉框选中索引（strArr + nxArr 合并后的索引）
                 selectedNxGoodsIndex: 0,  // 推荐系统商品（nxGoodsEntities）选中索引
                 keyboardSelectedOrderIndex: -1,  // 上下键切换后的选中订单索引（用于高亮显示）
-                _skipCloseMatchedGoodsOnNextFocus: false  // 朗读停止后自动聚焦时设为 true，避免刚展开的推荐商品被立即关闭
+                _skipCloseMatchedGoodsOnNextFocus: false,  // 朗读停止后自动聚焦时设为 true，避免刚展开的推荐商品被立即关闭
+
+                // Toast 提示相关
+                toastVisible: false,
+                toastMessage: '',
+                toastType: 'info',
+                toastDuration: 3000
             }
         },
         watch: {
@@ -1157,6 +1161,25 @@
             },
             stoppedIndex() {
                 this._emitTTSState();
+            },
+            // 监听"在之前添加新订单"的添加索引变化，自动聚焦到商品名称输入框
+            addingOrderBeforeIndex(val) {
+                console.log('🎯 [OrderList watch] addingOrderBeforeIndex 变化:', val);
+                if (val !== null && val >= 0) {
+                    // 使用双重 nextTick 确保 DOM 完全渲染后再聚焦
+                    this.$nextTick(() => {
+                        this.$nextTick(() => this.focusBeforeOrderInput('before-order-goods-name', val));
+                    });
+                }
+            },
+            // 监听"在之前添加新订单"的商品选择变化，自动聚焦到数量输入框
+            'beforeOrderForm.selectedGoods'(val) {
+                console.log('🎯 [OrderList watch] beforeOrderForm.selectedGoods 变化:', val);
+                console.log('📍 [OrderList watch] addingOrderBeforeIndex:', this.addingOrderBeforeIndex);
+                if (val && this.addingOrderBeforeIndex >= 0) {
+                    console.log('✅ [OrderList watch] 准备聚焦到数量输入框');
+                    this.$nextTick(() => this.focusBeforeOrderInput('before-order-quantity', this.addingOrderBeforeIndex));
+                }
             }
         },
         computed: {
@@ -1185,6 +1208,16 @@
                 const isShortcutKey = e.key === ' ' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Enter';
                 if (isShortcutKey) {
                     console.log('[OrderList] document keydown key=', e.key, 'inContainer=', inContainer, 'isReadingState=', isReadingState);
+                }
+                // 如果焦点在"在之前添加新订单"的输入框中，不处理全局快捷键
+                const target = e.target;
+                const isInBeforeOrderInput = target && (
+                    target.getAttribute('data-input-type')?.startsWith('before-order') ||
+                    target.closest('[data-input-type^="before-order"]')
+                );
+                if (isInBeforeOrderInput) {
+                    console.log('[OrderList] 焦点在"在之前添加新订单"输入框中，跳过全局处理');
+                    return;
                 }
                 if (inContainer) return;
                 if (!isShortcutKey) return;
@@ -1402,6 +1435,14 @@
             }
         },
         methods: {
+            // 显示 Toast 提示
+            showToast(message, type = 'info', duration = 3000) {
+                this.toastMessage = message;
+                this.toastType = type;
+                this.toastDuration = duration;
+                this.toastVisible = true;
+            },
+
             _emitTTSState() {
                 this.$emit('tts-state', {
                     isTTSPlaying: this.isTTSPlaying,
@@ -1409,22 +1450,168 @@
                     stoppedIndex: this.stoppedIndex
                 });
             },
-            // 处理商品名称输入框回车事件（用于"在之前添加新订单"表单）- 参照 handleGoodsNameEnter 的实现
-            handleBeforeOrderGoodsNameEnter(event) {
-                // 阻止默认行为（防止表单提交等）
-                event.preventDefault();
-                // 直接从输入框获取值
-                const goodsName = event.target.value;
+            // 处理商品名称输入框键盘事件（用于"在之前添加新订单"表单）
+            handleBeforeOrderGoodsNameKeydown(event) {
+                // 中文输入法组字时，↑↓ 用于选候选字
+                if (event.isComposing) return;
 
-                if (!goodsName || !goodsName.trim()) {
-                    console.log('⚠️ [handleBeforeOrderGoodsNameEnter] 商品名称为空，不触发搜索');
+                const form = this.beforeOrderForm;
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    const currentInputValue = event.target.value;
+                    console.log('🔑 [handleBeforeOrderGoodsNameKeydown] ========== 按下回车 ==========');
+                    console.log('🔑 [handleBeforeOrderGoodsNameKeydown] 当前输入值:', `"${currentInputValue}"`);
+                    console.log('🔑 [handleBeforeOrderGoodsNameKeydown] showSearchResults:', form.showSearchResults);
+                    console.log('🔑 [handleBeforeOrderGoodsNameKeydown] lastSearchStr:', `"${form.lastSearchStr || 'null'}"`);
+                    console.log('🔑 [handleBeforeOrderGoodsNameKeydown] disArr.length:', form.disArr?.length || 0);
+                    console.log('🔑 [handleBeforeOrderGoodsNameKeydown] nxArr.length:', form.nxArr?.length || 0);
+                    
+                    // 判断是否满足选择商品的条件
+                    const hasSearchResults = form.showSearchResults && (form.disArr?.length > 0 || form.nxArr?.length > 0);
+                    const inputValueMatch = currentInputValue === form.lastSearchStr;
+                    
+                    console.log('🔑 [handleBeforeOrderGoodsNameKeydown] 有搜索结果:', hasSearchResults);
+                    console.log('🔑 [handleBeforeOrderGoodsNameKeydown] 输入值与上次搜索一致:', inputValueMatch);
+                    
+                    // 如果搜索结果已显示且有结果,且当前输入值和上次搜索的值一致,选择当前选中的商品
+                    if (hasSearchResults && inputValueMatch) {
+                        console.log('✅ [handleBeforeOrderGoodsNameKeydown] 条件满足,选择商品');
+                        const idx = form.selectedSearchIndex ?? 0;
+                        const disLen = form.disArr?.length || 0;
+                        if (idx < disLen) {
+                            this.$emit('select-before-order-goods', form.disArr[idx]);
+                            return;
+                        }
+                        if (idx < disLen + (form.nxArr?.length || 0)) {
+                            this.$emit('download-goods-nx', { goods: form.nxArr[idx - disLen], orderIndex: this.addingOrderBeforeIndex });
+                            return;
+                        }
+                    }
+                    // 否则触发搜索
+                    const goodsName = currentInputValue;
+                    if (!goodsName || !goodsName.trim()) {
+                        console.log('⚠️ [handleBeforeOrderGoodsNameKeydown] 商品名称为空，不触发搜索');
+                        return;
+                    }
+                    console.log('🔍 [handleBeforeOrderGoodsNameKeydown] 条件不满足,触发新搜索');
+                    console.log('📤 [handleBeforeOrderGoodsNameKeydown] 准备 emit before-order-goods-name-enter，值:', goodsName);
+                    this.$emit('before-order-goods-name-enter', { type: 'search', searchStr: goodsName });
+                } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                    // 如果搜索结果已显示且有结果，上下键选择商品
+                    if (form.showSearchResults && (form.disArr?.length > 0 || form.nxArr?.length > 0)) {
+                        console.log('⬇️ [handleBeforeOrderGoodsNameKeydown] 按下:', event.key, 'selectedSearchIndex:', form.selectedSearchIndex, 'total:', (form.disArr?.length || 0) + (form.nxArr?.length || 0));
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const total = (form.disArr?.length || 0) + (form.nxArr?.length || 0);
+                        if (event.key === 'ArrowDown') {
+                            form.selectedSearchIndex = (form.selectedSearchIndex + 1) % total;
+                        } else if (event.key === 'ArrowUp') {
+                            form.selectedSearchIndex = form.selectedSearchIndex <= 0 ? total - 1 : form.selectedSearchIndex - 1;
+                        }
+                        console.log('⬆️ [handleBeforeOrderGoodsNameKeydown] 更新后 selectedSearchIndex:', form.selectedSearchIndex);
+                        this.$nextTick(() => this.scrollBeforeOrderSearchIntoView());
+                    }
+                }
+            },
+            // 处理"在之前添加新订单"的商品名称输入事件
+            onBeforeOrderGoodsNameInput(event) {
+                const value = event.target.value;
+                const form = this.beforeOrderForm;
+                console.log('📝 [onBeforeOrderGoodsNameInput] 输入值:', value, '旧值:', form.goodsName, 'showSearchResults:', form.showSearchResults);
+                form.goodsName = value;
+                // 隐藏之前的搜索结果，这样用户修改输入后按回车会触发新搜索而不是选择旧商品
+                if (form.showSearchResults) {
+                    form.showSearchResults = false;
+                    form.searchResults = []; // 清空搜索结果
+                    form.disArr = [];
+                    form.nxArr = [];
+                    form.selectedSearchIndex = 0;
+                    form.lastSearchStr = null;
+                    form.selectedGoods = null; // 清空已选择的商品
+                    console.log('🔄 [onBeforeOrderGoodsNameInput] 输入改变，重置所有搜索相关状态');
+                } else {
+                    console.log('ℹ️ [onBeforeOrderGoodsNameInput] 搜索结果未显示,无需隐藏');
+                }
+            },
+            // 插入订单表单：是否可保存（与 ManualEntryUpload.vue 的 canAddBeforeOrder 逻辑一致）
+            canAddBeforeOrder(form) {
+                if (!form.goodsName || !String(form.goodsName).trim()) return false;
+                if (form.selectedGoods) {
+                    return !!(form.quantity && String(form.quantity).trim() && form.standard && String(form.standard).trim());
+                }
+                return true;
+            },
+            // 滚动搜索结果到可视区域
+            scrollBeforeOrderSearchIntoView() {
+                const container = this.$refs.scrollContainer;
+                if (!container || !this.beforeOrderForm) return;
+                const dropdown = container.querySelector('[data-input-type="before-order-goods-name"]')?.parentElement.querySelector('.border.rounded.mt-1.bg-white.shadow-lg');
+                if (!dropdown) {
+                    console.log('⚠️ [scrollBeforeOrderSearchIntoView] 未找到下拉容器');
                     return;
                 }
-
-                // 触发搜索事件
-                console.log('📤 [handleBeforeOrderGoodsNameEnter] 准备 emit before-order-goods-name-input，值:', goodsName);
-                this.$emit('before-order-goods-name-input', goodsName);
-                console.log('✅ [handleBeforeOrderGoodsNameEnter] 事件已触发');
+                const idx = this.beforeOrderForm.selectedSearchIndex ?? 0;
+                const el = dropdown.querySelector(`[data-search-index="${idx}"]`);
+                if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            },
+            // 处理"在之前添加新订单"的数量输入框回车 - 跳转到规格输入框
+            onBeforeOrderQuantityEnter(e, item, orderIndex) {
+                if (e.isComposing) return;
+                e.preventDefault();
+                this.focusBeforeOrderInput('before-order-standard', orderIndex);
+            },
+            // 处理"在之前添加新订单"的规格输入框回车 - 保存订单
+            onBeforeOrderStandardEnter(e, item, orderIndex) {
+                if (e.isComposing) return;
+                e.preventDefault();
+                const form = this.beforeOrderForm;
+                if (form.selectedGoods && form.quantity && form.standard) {
+                    this.$emit('save-before-order', { item, orderIndex });
+                }
+            },
+            // 处理"在之前添加新订单"的 Tab 键跳转
+            onBeforeOrderTab(e, inputType, orderIndex) {
+                const types = ['before-order-goods-name', 'before-order-quantity', 'before-order-standard'];
+                const idx = types.indexOf(inputType);
+                const direction = e.shiftKey ? -1 : 1;
+                const nextIdx = idx + direction;
+                if (nextIdx >= 0 && nextIdx < 3) {
+                    e.preventDefault();
+                    this.focusBeforeOrderInput(types[nextIdx], orderIndex);
+                }
+            },
+            // 聚焦到"在之前添加新订单"的指定输入框
+            focusBeforeOrderInput(inputType, orderIndex) {
+                console.log('🎯 [focusBeforeOrderInput] 准备聚焦:', { inputType, orderIndex });
+                this.$nextTick(() => {
+                    const container = this.$refs.scrollContainer;
+                    console.log('📦 [focusBeforeOrderInput] container:', container);
+                    if (!container) {
+                        console.log('⚠️ [focusBeforeOrderInput] container 为空');
+                        return;
+                    }
+                    // 查找对应订单行的输入框
+                    const orderItem = container.querySelector(`[data-order-index="${orderIndex}"]`);
+                    console.log('📦 [focusBeforeOrderInput] orderItem:', orderItem);
+                    if (!orderItem) {
+                        console.log('⚠️ [focusBeforeOrderInput] 找不到订单行:', orderIndex);
+                        // 列出所有订单行进行调试
+                        const allOrderItems = container.querySelectorAll('[data-order-index]');
+                        console.log('🔍 [focusBeforeOrderInput] 所有订单行:', Array.from(allOrderItems).map(el => el.getAttribute('data-order-index')));
+                        return;
+                    }
+                    const el = orderItem.querySelector(`[data-input-type="${inputType}"]`);
+                    console.log('📦 [focusBeforeOrderInput] input element:', el);
+                    if (el) {
+                        el.focus();
+                        console.log('✅ [focusBeforeOrderInput] 已聚焦到输入框:', inputType);
+                    } else {
+                        console.log('⚠️ [focusBeforeOrderInput] 找不到输入框:', { inputType, orderIndex });
+                        // 列出订单行中所有输入框进行调试
+                        const allInputs = orderItem.querySelectorAll('[data-input-type]');
+                        console.log('🔍 [focusBeforeOrderInput] 订单行中所有输入框:', Array.from(allInputs).map(el => el.getAttribute('data-input-type')));
+                    }
+                });
             },
 
             // 获取商品名称输入框的值（优先使用本地值，否则使用 item 的值）
@@ -1598,6 +1785,8 @@
                     return; // 让 handleGoodsListKeydown 处理回车（选中）
                 }
                 const value = event.target.value;
+                // 先同步值到 item.nxDoGoodsName,这样父组件的 handleGoodsNameInput 才能获取到最新值
+                item.nxDoGoodsName = value;
                 this.$emit('goods-name-input', {item, orderIndex, value: value});
                 delete this.goodsNameInputValues[orderIndex];
                 this.$nextTick(() => this.scrollToOrderItem(orderIndex));
@@ -1848,20 +2037,26 @@
             },
             scrollSearchResultIntoView() {
                 this.$nextTick(() => {
-                    const el = this.$el.querySelector(`.search-results-container .goods-item[data-goods-index="${this.selectedSearchResultIndex}"]`);
+                    const container = this.$refs.scrollContainer;
+                    if (!container) return;
+                    const el = container.querySelector(`.search-results-container .goods-item[data-goods-index="${this.selectedSearchResultIndex}"]`);
                     if (el) el.scrollIntoView({block: 'nearest', behavior: 'smooth'});
                 });
             },
             scrollMatchedGoodsIntoView(orderIndex) {
                 this.$nextTick(() => {
+                    const container = this.$refs.scrollContainer;
+                    if (!container) return;
                     const idx = this.selectedMatchedGoodsIndex[orderIndex] ?? 0;
-                    const el = this.$el.querySelector(`.matched-goods-list[data-order-index="${orderIndex}"] .matched-goods-item[data-goods-index="${idx}"]`);
+                    const el = container.querySelector(`.matched-goods-list[data-order-index="${orderIndex}"] .matched-goods-item[data-goods-index="${idx}"]`);
                     if (el) el.scrollIntoView({block: 'nearest', behavior: 'smooth'});
                 });
             },
             scrollNxGoodsIntoView() {
                 this.$nextTick(() => {
-                    const el = this.$el.querySelector(`.nx-goods-entities-container .goods-item[data-goods-index="${this.selectedNxGoodsIndex}"]`);
+                    const container = this.$refs.scrollContainer;
+                    if (!container) return;
+                    const el = container.querySelector(`.nx-goods-entities-container .goods-item[data-goods-index="${this.selectedNxGoodsIndex}"]`);
                     if (el) el.scrollIntoView({block: 'nearest', behavior: 'smooth'});
                 });
             },
@@ -1980,7 +2175,7 @@
                         errorMessage = error.message || '未知错误';
                     }
 
-                    alert(errorMessage);
+                    this.showToast(errorMessage, 'error');
                 } finally {
                     // ✅ 释放启动锁
                     this.isStarting = false;
@@ -2243,7 +2438,7 @@
             // 朗读订单列表（分段合成 + 队列播放）
             async readOrderList() {
                 if (!this.orderItems || this.orderItems.length === 0) {
-                    alert('没有订单可朗读');
+                    this.showToast('没有订单可朗读', 'warning');
                     return;
                 }
                 this.keyboardSelectedOrderIndex = -1;
@@ -2305,7 +2500,7 @@
             // 从指定订单开始朗读
             async readOrderListFromIndex(startOrderIndex) {
                 if (!this.orderItems || this.orderItems.length === 0) {
-                    alert('没有订单可朗读');
+                    this.showToast('没有订单可朗读', 'warning');
                     return;
                 }
                 if (startOrderIndex < 0 || startOrderIndex >= this.orderItems.length) {
@@ -2588,6 +2783,22 @@
             // 判断是否是暂停的订单
             isPausedOrder(orderIndex) {
                 return this.stoppedIndex >= 0 && this.stoppedIndex === orderIndex;
+            },
+
+            // 获取订单项背景色（含 nxDoPurchaseStatus 采购状态，参考 TodayOrders）
+            getOrderItemBackgroundColor(item, orderIndex) {
+                if (this.isPausedOrder(orderIndex)) return '#fee';
+                if (this.isCurrentReadingOrder(orderIndex)) return '#fff3cd';
+                if (this.keyboardSelectedOrderIndex === orderIndex) return '#e7f3ff';
+                // nxDoStatus > -1 时订单已提交，有 nxDoPurchaseStatus
+                if (item && item.nxDoStatus > -1) {
+                    const ps = item.nxDoPurchaseStatus;
+                    if (ps == 4) return '#fff';           // 已采购
+                    if (ps == 3) return '#f8d7da';       // liziClock
+                    if (ps == 5) return '#d1ecf1';       // liziDelivery
+                    if (ps != 4 && item.nxDoStatus == 0) return '#f1fbfd';  // liziBack
+                }
+                return '#fff';
             },
 
             // 点击暂停图标时取消朗读状态（清除 stoppedIndex，不再显示暂停）
@@ -2930,7 +3141,7 @@
 
                     if (stoppedOrder && stoppedOrder.nxDoStatus === -2) {
                         console.log('[OrderList] 停止的订单状态为 -2，需要确定商品，不能继续朗读');
-                        alert('当前订单需要确定商品，请先处理后再继续朗读');
+                        this.showToast('当前订单需要确定商品，请先处理后再继续朗读', 'warning');
                         return;
                     }
                 }
@@ -3104,6 +3315,8 @@
             'tts-state',
             'cancel-add-order-before',
             'before-order-goods-name-input',
+            'before-order-goods-name-enter',
+            'before-order-goods-name-keydown',
             'select-before-order-goods',
             'close-before-order-search-results',
             'download-goods-nx',
@@ -3257,4 +3470,5 @@
         }
     }
 </style>
+
 

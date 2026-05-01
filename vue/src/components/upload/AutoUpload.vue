@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <div class="upload-section" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
         <div class="row g-3" style="flex: 1; min-height: 0; overflow: hidden; margin: 0; align-items: stretch;">
             <!-- 左侧：文件列表和操作 / 图片预览 -->
@@ -432,4 +432,5 @@ export default {
         justify-content: center;
     }
 </style>
+
 

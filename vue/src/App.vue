@@ -1,4 +1,4 @@
-
+﻿
 <template>
   <!-- 显示匹配的组件 -->
   <div id="app-container">
@@ -23,7 +23,16 @@ export default {
       inactivityTimer: null, // 无操作计时器
       inactivityTimeout: 0.5 * 60 * 1000, // 30秒超时（毫秒）
       lastActivityTime: Date.now(), // 最后活动时间
+      /** MCP 同一 taskId 短时间内 IPC+inject 双通道去重 */
+      _mcpLastTaskId: null,
+      _mcpLastTaskAt: 0,
     }
+  },
+  created() {
+    // 尽量早挂载，避免主进程 inject 早于 mounted 导致 no-handler
+    window.__grainHandleMcpPrintTask = (task) => {
+      this.handleMcpPrintTaskFromMain(task, 'inject');
+    };
   },
   mounted() {
     // 自动清理设备配置缓存
@@ -176,9 +185,49 @@ export default {
         }
       });
     }
+    
+    // 监听 MCP 打印任务（由主进程通过 IPC 发送）
+    if (window.electronAPI && window.electronAPI.onMcpPrintTrigger) {
+      window.electronAPI.onMcpPrintTrigger((task) => {
+        this.handleMcpPrintTaskFromMain(task, 'ipc');
+      });
+    } else {
+      console.warn('⚠️ [MCP] electronAPI.onMcpPrintTrigger 不可用（仍可依赖 inject 后援）');
+    }
   },
   
   methods: {
+    /**
+     * @param {'ipc'|'inject'} source — ipc：preload 频道；inject：主进程 executeJavaScript 后援
+     */
+    handleMcpPrintTaskFromMain(task, source) {
+      console.log(`🖨️ [MCP] 收到打印任务 (${source}):`, task);
+      const id = task && task.taskId;
+      const now = Date.now();
+      if (id != null && id === this._mcpLastTaskId && now - this._mcpLastTaskAt < 2500) {
+        try {
+          if (window.electronAPI && typeof window.electronAPI.rendererConsoleLog === 'function') {
+            window.electronAPI.rendererConsoleLog(`[MCP] App 去重跳过 taskId=${id} (${source})`);
+          }
+        } catch (e) {}
+        return;
+      }
+      this._mcpLastTaskId = id;
+      this._mcpLastTaskAt = now;
+      try {
+        if (window.electronAPI && typeof window.electronAPI.rendererConsoleLog === 'function') {
+          window.electronAPI.rendererConsoleLog(
+            `[MCP] App 收到(${source}) type=${task && task.type} taskId=${id} dep=${task && task.departmentId}`
+          );
+        }
+      } catch (e) {}
+      if (task && task.type === 'nx_delivery') {
+        this.triggerPrintDeliveryOrder(task);
+      } else {
+        console.warn('⚠️ [MCP] 未知的任务类型:', task && task.type);
+      }
+    },
+
     // 启动无操作超时检测
     startInactivityTimer() {
       this.inactivityTimer = setInterval(() => {
@@ -246,10 +295,41 @@ export default {
       events.forEach(event => {
         document.removeEventListener(event, this.resetInactivityTimer, true);
       });
+    },
+    
+    // 触发配送单打印（由 MCP 任务触发）
+    triggerPrintDeliveryOrder(task) {
+      const summary = `[MCP] App triggerPrintDeliveryOrder taskId=${task.taskId} dep=${task.departmentId} mode=${task.printMode || 'all'}`;
+      console.log('🖨️ [MCP] ▼', summary, task);
+      try {
+        if (window.electronAPI && typeof window.electronAPI.rendererConsoleLog === 'function') {
+          window.electronAPI.rendererConsoleLog(`${summary} payload=${JSON.stringify(task)}`);
+        }
+      } catch (e) {}
+      this.$store.commit('ENQUEUE_MCP_PRINT_TASK', task);
+      if (this.$route.name !== 'Bills') {
+        this.$router.push({ name: 'Bills' }).catch((err) => {
+          if (err && err.name !== 'NavigationDuplicated') {
+            console.error('🖨️ [MCP] 进入 Bills 失败:', err);
+            try {
+              if (window.electronAPI && typeof window.electronAPI.rendererConsoleLog === 'function') {
+                window.electronAPI.rendererConsoleLog(`[MCP] 路由失败: ${err.message || err}`);
+              }
+            } catch (e) {}
+          }
+        });
+      } else {
+        try {
+          if (window.electronAPI && typeof window.electronAPI.rendererConsoleLog === 'function') {
+            window.electronAPI.rendererConsoleLog('[MCP] 已在 Bills 页，仅更新 Vuex，交由 Bills 监听消费');
+          }
+        } catch (e) {}
+      }
     }
   },
   
   beforeUnmount() {
+    delete window.__grainHandleMcpPrintTask;
     // 清理计时器和事件监听器
     if (this.inactivityTimer) {
       clearInterval(this.inactivityTimer);

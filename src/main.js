@@ -2,6 +2,7 @@
 const { app, BrowserWindow, ipcMain, screen, dialog, shell, Menu } = require('electron');
 const path = require('path')
 const fs = require('fs')
+const appLogger = require('./appLogger')
 // 暂时禁用 @nut-tree 模块以避免打包问题
 // let mouse, keyboard, Key;
 // try {
@@ -31,6 +32,14 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 const axios = require('axios');
 
+// MCP 服务器模块
+let mcpServer = null;
+const mcpModule = require('./mcp-server');
+const { pushMcpPrintTaskToRenderer } = require('./mcp-print-push');
+let mainWindowRef = null; // 保存 mainWindow 引用供 MCP 使用
+/** Stdio MCP（mcp-server-cli.js）打印任务轮询定时器，需在 will-quit 中清理 */
+let mcpCliPollingInterval = null;
+
 // 注意：当前使用 HTTP API（一句话识别），不需要 WebSocket
 // 如果需要实时流式识别，可以后续添加 WebSocket 支持
 
@@ -40,8 +49,20 @@ const axios = require('axios');
 const VUE3_DEVTOOLS_ID = 'ljjemllljcmogpfapbkkighbhhppjdbg';
 
 
-const isDev = !app.isPackaged; // 使用 app.isPackaged 来检测开发模式
+const electron = require('electron');
+const isDev = !electron.app.isPackaged; // 使用 app.isPackaged 来检测开发模式
 let mainWindow;
+
+// 低内存优化：生产环境下启用 Chromium 内存节省开关（客户电脑内存不足时减少卡顿）
+if (!isDev && process.platform === 'win32') {
+  app.commandLine.appendSwitch('disable-background-networking');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
+  app.commandLine.appendSwitch('disable-background-timer-throttling');
+  app.commandLine.appendSwitch('disable-extensions');
+  app.commandLine.appendSwitch('disable-features', 'TranslateUI');
+  // 可选：--disable-gpu 在部分老旧显卡上可减少显存，若出现花屏可注释
+  // app.commandLine.appendSwitch('disable-gpu');
+}
 
 // 创建中文菜单
 function createMenu() {
@@ -49,6 +70,13 @@ function createMenu() {
     {
       label: '文件',
       submenu: [
+        {
+          label: '取消自动登录',
+          click: () => {
+            clearAutoLoginFromMenu().catch((err) => console.error('[取消自动登录]', err));
+          }
+        },
+        { type: 'separator' },
         {
           label: '退出',
           accelerator: process.platform === 'darwin' ? 'Cmd+Q' : 'Ctrl+Q',
@@ -95,6 +123,14 @@ function createMenu() {
       label: '帮助',
       submenu: [
         {
+          label: '打开日志文件夹',
+          click: () => {
+            const dir = appLogger.getLogDir();
+            shell.openPath(dir);
+          }
+        },
+        { type: 'separator' },
+        {
           label: '关于',
           click: () => {
             dialog.showMessageBox(mainWindow, {
@@ -131,61 +167,191 @@ function createMenu() {
   Menu.setApplicationMenu(menu);
 }
 
-async function createWindow() {
+function getRememberPrinterUserFlagPath() {
+  return path.join(app.getPath('userData'), 'remember-printer-user.flag');
+}
 
-  const { width, height } = screen.getPrimaryDisplay().size;
+/** 菜单「取消自动登录」：与渲染层 rememberPrinterUser 一致 */
+const REMEMBER_PRINTER_USER_STORAGE_KEY = 'rememberPrinterUser';
 
-  mainWindow = new BrowserWindow({
-    width: width,
-    height: height,
-    autoHideMenuBar: true,  // 隐藏菜单栏（可以通过 Alt 键显示）
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,          // 推荐关闭 Node 集成
-      contextIsolation: true,          // 启用上下文隔离
-      enableRemoteModule: false
+async function clearAutoLoginFromMenu() {
+  try {
+    const p = getRememberPrinterUserFlagPath();
+    if (fs.existsSync(p)) {
+      fs.unlinkSync(p);
     }
-    
-  });
-
-  if (isDev) {
-    const devURL = 'http://localhost:3000'; // 改回localhost
-    mainWindow.loadURL(devURL);
-
-    // try {
-    //   // 强制加载 Vue DevTools
-    //   const extensionName = await installExtension(VUEJS3_DEVTOOLS);
-    //   console.log(`已安装扩展: ${extensionName}`);
-    //   mainWindow.webContents.openDevTools();
-    // } catch (err) {
-    //   console.error('安装扩展时出错:', err);
-    // }
-
-
-    // 生产环境不加载DevTools
-
-
-  } else {
-    const prodPath = path.join(__dirname, '../dist/vue/index.html');
-    mainWindow.loadFile(prodPath);
-    console.log(`Loading production file: ${prodPath}`);
-
+  } catch (e) {
+    console.error('[取消自动登录] 删除标志文件失败', e);
   }
 
-  // 右键菜单：在文本输入框/textarea 等可编辑区域显示粘贴、复制、剪切、全选（Electron 默认不显示系统右键菜单）
-  const contextMenuTemplate = [
-    { role: 'undo', label: '撤销' },
-    { role: 'redo', label: '重做' },
-    { type: 'separator' },
-    { role: 'cut', label: '剪切' },
-    { role: 'copy', label: '复制' },
-    { role: 'paste', label: '粘贴' },
-    { role: 'selectAll', label: '全选' }
-  ];
-  const contextMenu = Menu.buildFromTemplate(contextMenuTemplate);
-  mainWindow.webContents.on('context-menu', (_event, params) => {
-    if (params.isEditable) {
-      contextMenu.popup();
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  if (win && !win.isDestroyed()) {
+    try {
+      await win.webContents.executeJavaScript(
+        `try {
+          localStorage.removeItem(${JSON.stringify(REMEMBER_PRINTER_USER_STORAGE_KEY)});
+          window.dispatchEvent(new CustomEvent('grain-clear-remember-printer-user'));
+        } catch (e) {}`,
+        true
+      );
+    } catch (e) {
+      console.error('[取消自动登录] 渲染进程清理失败', e);
+    }
+  }
+
+  dialog.showMessageBox(win && !win.isDestroyed() ? win : undefined, {
+    type: 'info',
+    title: '已取消自动登录',
+    message: '已关闭「记住用户」自动进入账单。',
+    detail: '下次启动应用后需从轮播页进入并扫码登录。当前窗口可继续使用。',
+    buttons: ['确定'],
+  });
+}
+
+/** 注册 IPC handlers（只执行一次，避免 createWindow 多次调用时重复注册导致报错） */
+function setupIpcHandlers() {
+  // MCP 打印请求：MCP 服务器通过 IPC 通知渲染进程执行打印
+  ipcMain.on('mcp-print-request', (event, printParams) => {
+    console.log('[MCP] ipcMain 收到渲染进程转发的 mcp-print-request（极少使用）:', printParams);
+    // 将打印请求转发到渲染进程
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      pushMcpPrintTaskToRenderer(mainWindow.webContents, printParams);
+      console.log('[MCP] 已推送到渲染进程（IPC + inject 后援）');
+    }
+  });
+  
+  // 获取 MCP 服务器状态
+  ipcMain.handle('get-mcp-status', async () => {
+    return {
+      running: mcpServer !== null,
+      port: mcpModule.loadMcpConfig().port,
+      host: mcpModule.loadMcpConfig().host
+    };
+  });
+  
+  // 更新 MCP 配置
+  ipcMain.handle('update-mcp-config', async (event, config) => {
+    mcpModule.saveMcpConfig(config);
+    return { success: true };
+  });
+
+  // MCP 调用 API（通过渲染进程的 axios 实例）
+  ipcMain.handle('mcp-call-api', async (event, apiPath, method, data) => {
+    return new Promise((resolve) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        // 将 data 序列化为 JS 字面量，在渲染进程中用 URLSearchParams 发 form-urlencoded
+        const dataStr = data ? JSON.stringify(data) : 'null';
+        mainWindow.webContents.executeJavaScript(`
+          (async () => {
+            try {
+              const axios = window.axios;
+              if (!axios) {
+                return { error: 'axios not found in renderer context' };
+              }
+              // 调试：打印 axios 配置
+              console.log('[MCP] axios baseURL:', axios.defaults.baseURL);
+              console.log('[MCP] apiPath:', '${apiPath}');
+              const reqData = ${dataStr};
+              let response;
+              if ('${method}' === 'GET') {
+                response = await axios.get('${apiPath}');
+              } else {
+                // 统一使用 application/x-www-form-urlencoded
+                const params = new URLSearchParams();
+                for (const key in reqData) {
+                  if (reqData.hasOwnProperty(key)) {
+                    params.append(key, reqData[key]);
+                  }
+                }
+                response = await axios.post('${apiPath}', params, {
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                });
+              }
+              return response.data;
+            } catch (error) {
+              if (error.response) {
+                return error.response.data;
+              }
+              return { error: error.message };
+            }
+          })()
+        `).then(result => {
+          resolve(result);
+        }).catch(error => {
+          resolve({ error: error.message });
+        });
+      } else {
+        resolve({ error: '窗口不可用' });
+      }
+    });
+  });
+  
+  // MCP 获取登录信息（从渲染进程的 localStorage 获取）
+  ipcMain.handle('get-login-info-for-mcp', async () => {
+    return new Promise((resolve) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.executeJavaScript(`
+          new Promise((resolve) => {
+            try {
+              const disUser = localStorage.getItem('disUser');
+              if (disUser) {
+                resolve({ success: true, data: JSON.parse(disUser) });
+              } else {
+                resolve({ success: false, error: '未登录' });
+              }
+            } catch (e) {
+              resolve({ success: false, error: e.message });
+            }
+          })
+        `).then(resolve).catch(e => resolve({ success: false, error: e.message }));
+      } else {
+        resolve({ success: false, error: '窗口不可用' });
+      }
+    });
+  });
+  
+  // 「记住用户」与 localStorage 双写：file 协议下部分环境 localStorage 不可靠，用 userData 兜底（sendSync 供路由守卫同步读取）
+  ipcMain.on('remember-printer-user-get-sync', (event) => {
+    try {
+      const p = getRememberPrinterUserFlagPath();
+      event.returnValue = fs.existsSync(p) && fs.readFileSync(p, 'utf8').trim() === '1' ? '1' : '0';
+    } catch {
+      event.returnValue = '0';
+    }
+  });
+  ipcMain.on('remember-printer-user-set-sync', (event, enabled) => {
+    try {
+      const p = getRememberPrinterUserFlagPath();
+      if (enabled) {
+        fs.writeFileSync(p, '1', 'utf8');
+      } else if (fs.existsSync(p)) {
+        fs.unlinkSync(p);
+      }
+    } catch (e) {
+      console.error('[remember-printer-user-set-sync]', e);
+    }
+  });
+
+  /** 异步写入 userData 标志，不阻塞渲染进程（勾选「记住用户」须用此通道，勿用 sendSync） */
+  ipcMain.on('remember-printer-user-set-async', (_event, enabled) => {
+    try {
+      const p = getRememberPrinterUserFlagPath();
+      if (enabled) {
+        fs.writeFileSync(p, '1', 'utf8');
+      } else if (fs.existsSync(p)) {
+        fs.unlinkSync(p);
+      }
+    } catch (e) {
+      console.error('[remember-printer-user-set-async]', e);
+    }
+  });
+
+  /** 渲染进程 console 默认不进终端；需要时转发到主进程 stdout（便于打包后排查） */
+  ipcMain.on('renderer-console-log', (event, line) => {
+    try {
+      console.log(typeof line === 'string' ? line : String(line));
+    } catch (e) {
+      console.error('[renderer-console-log]', e);
     }
   });
 
@@ -278,6 +444,65 @@ async function createWindow() {
         reject({ success: false, error: `加载失败: ${errorDescription}`, errorCode });
       });
     });
+  });
+}
+
+async function createWindow() {
+
+  const { width, height } = screen.getPrimaryDisplay().size;
+
+  mainWindow = new BrowserWindow({
+    width: width,
+    height: height,
+    autoHideMenuBar: true,  // 隐藏菜单栏（可以通过 Alt 键显示）
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,          // 推荐关闭 Node 集成
+      contextIsolation: true,          // 启用上下文隔离
+      enableRemoteModule: false
+    }
+    
+  });
+
+  if (isDev) {
+    const devURL = 'http://localhost:3000'; // 改回localhost
+    mainWindow.loadURL(devURL);
+
+    // try {
+    //   // 强制加载 Vue DevTools
+    //   const extensionName = await installExtension(VUEJS3_DEVTOOLS);
+    //   console.log(`已安装扩展: ${extensionName}`);
+    //   mainWindow.webContents.openDevTools();
+    // } catch (err) {
+    //   console.error('安装扩展时出错:', err);
+    // }
+
+
+    // 生产环境不加载DevTools
+
+
+  } else {
+    const prodPath = path.join(__dirname, '../dist/vue/index.html');
+    mainWindow.loadFile(prodPath);
+    console.log(`Loading production file: ${prodPath}`);
+
+  }
+
+  // 右键菜单：在文本输入框/textarea 等可编辑区域显示粘贴、复制、剪切、全选（Electron 默认不显示系统右键菜单）
+  const contextMenuTemplate = [
+    { role: 'undo', label: '撤销' },
+    { role: 'redo', label: '重做' },
+    { type: 'separator' },
+    { role: 'cut', label: '剪切' },
+    { role: 'copy', label: '复制' },
+    { role: 'paste', label: '粘贴' },
+    { role: 'selectAll', label: '全选' }
+  ];
+  const contextMenu = Menu.buildFromTemplate(contextMenuTemplate);
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    if (params.isEditable) {
+      contextMenu.popup();
+    }
   });
 
   console.log('Window created');
@@ -1036,6 +1261,31 @@ ipcMain.handle('select-folder', async () => {
   return { success: false, path: null };
 });
 
+// 另存为对话框（选择保存路径和文件名）
+ipcMain.handle('show-save-dialog', async (event, options = {}) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: options.title || '保存订单Excel',
+    defaultPath: options.defaultPath || '订单.xlsx',
+    filters: options.filters || [{ name: 'Excel', extensions: ['xlsx', 'xls'] }]
+  });
+  if (!result.canceled && result.filePath) {
+    return { success: true, filePath: result.filePath };
+  }
+  return { success: false, filePath: null };
+});
+
+// 将 Buffer 写入指定文件路径
+ipcMain.handle('save-buffer-to-file', async (event, buffer, filePath) => {
+  try {
+    const buf = Buffer.from(buffer);
+    fs.writeFileSync(filePath, buf);
+    return { success: true };
+  } catch (error) {
+    console.error('保存文件失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // 保存客户文件夹路径配置
 ipcMain.handle('save-customer-folder-path', async (event, customerId, folderPath) => {
   try {
@@ -1448,12 +1698,35 @@ function loadTencentCloudConfig() {
   return DEFAULT_TENCENT_CLOUD_CONFIG;
 }
 
-let TENCENT_CLOUD_CONFIG = null;
+/** 每次从磁盘读取，避免用户放好 tencent-cloud.json 后未重启仍用空配置 */
 function getTencentCloudConfig() {
-  if (!TENCENT_CLOUD_CONFIG) {
-    TENCENT_CLOUD_CONFIG = loadTencentCloudConfig();
+  return loadTencentCloudConfig();
+}
+
+/** 提示里带上本机实际路径（应用名可能是「粒子」等，与安装包显示名不一致） */
+function getTencentCloudSetupHint() {
+  const userConfigPath = path.join(app.getPath('userData'), 'tencent-cloud.json');
+  return `请将腾讯云 secretId、secretKey 写入下面文件（文件名必须完全一致）：\n${userConfigPath}\n（可对照应用目录内 config/tencent-cloud.example.json）\n修改保存后建议完全退出应用再打开。`;
+}
+
+function isTencentCloudKeyUsable(secretId, secretKey) {
+  if (!secretId || !secretKey || typeof secretId !== 'string' || typeof secretKey !== 'string') return false;
+  const id = secretId.trim();
+  const key = secretKey.trim();
+  if (!id || !key) return false;
+  if (/^YOUR_/i.test(id) || /^YOUR_/i.test(key)) return false;
+  if (id.includes('YOUR_TENCENT') || key.includes('YOUR_TENCENT')) return false;
+  return true;
+}
+
+function tencentCloudConfigErrorMessage(cfg) {
+  if (!cfg.secretId || !cfg.secretKey) {
+    return getTencentCloudSetupHint();
   }
-  return TENCENT_CLOUD_CONFIG;
+  if (!isTencentCloudKeyUsable(cfg.secretId, cfg.secretKey)) {
+    return `${getTencentCloudSetupHint()}\n\n当前检测到仍为示例占位符（如 YOUR_...），请改为控制台里的真实密钥。`;
+  }
+  return getTencentCloudSetupHint();
 }
 
 // 存储当前语音识别会话
@@ -1541,8 +1814,8 @@ ipcMain.handle('start-voice-recognition', async (event) => {
     console.log('[语音识别] 开始语音识别（主进程 PCM 录音）...');
     
     const cfg = getTencentCloudConfig();
-    if (!cfg.secretId || !cfg.secretKey) {
-      return { success: false, error: '请配置腾讯云密钥：复制 config/tencent-cloud.example.json 为 tencent-cloud.json 或放入用户数据目录，并填入 secretId、secretKey' };
+    if (!isTencentCloudKeyUsable(cfg.secretId, cfg.secretKey)) {
+      return { success: false, error: tencentCloudConfigErrorMessage(cfg) };
     }
     
     // 如果已有会话，先清理
@@ -1791,8 +2064,8 @@ ipcMain.handle('text-to-speech', async (event, text, sessionId) => {
     }
     
     const cfg = getTencentCloudConfig();
-    if (!cfg.secretId || !cfg.secretKey) {
-      return { success: false, error: '请配置腾讯云密钥：复制 config/tencent-cloud.example.json 为 tencent-cloud.json 或放入用户数据目录，并填入 secretId、secretKey' };
+    if (!isTencentCloudKeyUsable(cfg.secretId, cfg.secretKey)) {
+      return { success: false, error: tencentCloudConfigErrorMessage(cfg) };
     }
     
     // 调用腾讯云 TTS API
@@ -2494,7 +2767,7 @@ function savePrintBill(depFatherId, depId, tradeNo, userId, paperCount) {
   });
 
   const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_master_war_exploded/api/nxdepartmentbill/saveAccountBillPrinter/`
+    ? `http://localhost:8080/nongxinle_war_exploded/api/nxdepartmentbill/saveAccountBillPrinter/`
     : `https://grainservice.club:8443/nongxinle/api/nxdepartmentbill/saveAccountBillPrinter/`;
 
   console.log('🌐 [savePrintBill] 请求URL:', apiUrl);
@@ -2572,7 +2845,7 @@ ipcMain.on('device-config-response', (event, deviceConfig, printParams) => {
   }
   
   const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_master_war_exploded/api/machine/print/record`
+    ? `http://localhost:8080/nongxinle_war_exploded/api/machine/print/record`
     : `https://grainservice.club:8443/nongxinle/api/machine/print/record`;
 
   // 构建设备记录数据 - 按照后端接口要求，确保数据类型正确
@@ -2665,7 +2938,7 @@ ipcMain.on('device-config-response-for-merge', (event, deviceConfig, printParams
   console.log('📋 收到printParams (合并接口):', printParams);
   
   const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_master_war_exploded/api/nxdepartmentbill/saveAccountBillPrinterSelf`
+    ? `http://localhost:8080/nongxinle_war_exploded/api/nxdepartmentbill/saveAccountBillPrinterSelf`
     : `https://grainservice.club:8443/nongxinle/api/nxdepartmentbill/saveAccountBillPrinterSelf`;
 
   // 构建合并接口的请求数据
@@ -2748,7 +3021,7 @@ function savePrintBillGb(gbDepFatherId, gbDepId, tradeNo, userId, nxDisId, paper
   console.log('GB订单保存:', gbDepFatherId, gbDepId, tradeNo, userId, nxDisId);
 
   const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_master_war_exploded/api/nxdepartmentbill/saveAccountBillPrinterGb/`
+    ? `http://localhost:8080/nongxinle_war_exploded/api/nxdepartmentbill/saveAccountBillPrinterGb/`
     : `https://grainservice.club:8443/nongxinle/api/nxdepartmentbill/saveAccountBillPrinterGb/`;
 
   // 发起请求
@@ -2792,7 +3065,7 @@ function savePrintBillGbPb(gbBatchId, paperCount) {
   console.log("gbBatchId",gbBatchId, '0000保gbBatchIdgbBatchId');
 
   const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_master_war_exploded/api/gbdistributerpurchasebatch/nxDisPrintGbPurBatch/`
+    ? `http://localhost:8080/nongxinle_war_exploded/api/gbdistributerpurchasebatch/nxDisPrintGbPurBatch/`
     : `https://grainservice.club:8443/nongxinle/api/gbdistributerpurchasebatch/nxDisPrintGbPurBatch/`;
     axios.get(`${apiUrl}${gbBatchId}`)
     .then(response => {
@@ -2818,17 +3091,119 @@ function savePrintBillGbPb(gbBatchId, paperCount) {
 // 设置应用名称为"粒子"
 app.setName('粒子');
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // 日志目录、会话头、主进程异常、渲染进程 app-log IPC
+  appLogger.init(ipcMain, shell);
   // 创建中文菜单
   createMenu();
+  // IPC handlers 只注册一次，避免 createWindow 多次调用时重复注册报错
+  setupIpcHandlers();
   
   createWindow();
+  
+  // 启动 MCP HTTP 服务器
+  try {
+    const mcpConfig = mcpModule.loadMcpConfig();
+    mcpServer = await mcpModule.createMcpServer(mcpConfig.port, mcpConfig.host);
+    console.log(`[MCP] 服务器已启动，监听 http://${mcpConfig.host}:${mcpConfig.port}`);
+  } catch (error) {
+    console.error('[MCP] 启动失败:', error);
+  }
+
+  // 轮询 Stdio MCP（mcp-server-cli.js）的 HTTP 队列，端口 3002；用 127.0.0.1 避免与 localhost → IPv6 绑定不一致
+  const MCP_CLI_PRINT_TASKS_URL = 'http://127.0.0.1:3002/print-tasks';
+  let mcpCliPollConnectWarned = false;
+
+  function pollMcpCliPrintTasks() {
+    const req = http.get(MCP_CLI_PRINT_TASKS_URL, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        if (res.statusCode !== 200) {
+          return;
+        }
+        mcpCliPollConnectWarned = false;
+        try {
+          const parsed = JSON.parse(data);
+          const tasks = parsed.tasks;
+          if (!Array.isArray(tasks) || tasks.length === 0) {
+            return;
+          }
+          console.log(
+            '[MCP] 收到来自 CodeBuddy 的打印任务:',
+            tasks.length,
+            tasks.map((t) => ({
+              taskId: t.taskId,
+              departmentId: t.departmentId,
+              name: t.departmentName
+            }))
+          );
+          const target =
+            mainWindow && !mainWindow.isDestroyed()
+              ? mainWindow
+              : BrowserWindow.getAllWindows()[0];
+          if (!target || target.isDestroyed()) {
+            console.warn('[MCP] 无可用主窗口，无法下发打印任务（队列已在 MCP 进程中取出）');
+            return;
+          }
+          tasks.forEach((task) => {
+            const wc = target.webContents;
+            const payload = JSON.stringify(task);
+            console.log('[MCP] ── 即将 IPC mcp-print-trigger 到渲染进程 ──');
+            console.log('[MCP] webContents.id=', wc.id, 'url=', wc.getURL());
+            console.log('[MCP] 任务 JSON:', payload);
+            console.log(
+              '[MCP] 提示：若 IPC 在开发模式下未触达，将自动执行 executeJavaScript 后援；' +
+                '终端中应出现 [MCP] App 收到(inject|ipc)。'
+            );
+            pushMcpPrintTaskToRenderer(wc, task);
+            console.log(
+              '[MCP] 已派发任务（含后援）',
+              task.taskId,
+              task.departmentName,
+              'depId=',
+              task.departmentId,
+              'type=',
+              task.type
+            );
+          });
+        } catch (e) {
+          console.warn('[MCP] CLI 轮询响应解析失败:', e.message);
+        }
+      });
+    });
+    req.on('error', (err) => {
+      if (!mcpCliPollConnectWarned) {
+        console.warn(
+          '[MCP] 无法连接 127.0.0.1:3002（请确认 Cursor/WorkBuddy 已启动 grain-print MCP: mcp-server-cli.js）',
+          err.code || err.message
+        );
+        mcpCliPollConnectWarned = true;
+      }
+    });
+    req.setTimeout(1500, () => req.destroy());
+  }
+
+  pollMcpCliPrintTasks();
+  mcpCliPollingInterval = setInterval(pollMcpCliPrintTasks, 2000);
 
   // 对于 macOS，当所有窗口关闭时重新激活应用的处理
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
 
   });
+});
+
+// 应用退出时关闭 MCP 服务器
+app.on('will-quit', () => {
+  if (mcpCliPollingInterval) {
+    clearInterval(mcpCliPollingInterval);
+    console.log('[MCP] 轮询已停止');
+  }
+  if (mcpServer) {
+    mcpServer.close();
+    console.log('[MCP] 服务器已关闭');
+  }
 });
 
 app.on('window-all-closed', () => {

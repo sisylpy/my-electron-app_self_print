@@ -1,4 +1,4 @@
-<template>
+﻿<template>
 
     <div class="applyBodyPage " style="position: relative;">
         <!-- 打印蒙版 -->
@@ -364,24 +364,29 @@
 
     </div>
 
+    <!-- AlertDialog 自定义弹窗组件 -->
+    <AlertDialog ref="alertDialog" />
+
 </template>
 
 
 <script>
     import api from '@/api/all'
     import {mapState} from 'vuex';
-    import * as XLSX from 'xlsx';
     import QRCode from 'qrcode'
     import PrintCalibrationPanel from '@/components/PrintCalibrationPanel.vue'
     import { initPrinterProfile, getCurrentPrinterName, loadPrinterProfile, DEFAULT_PROFILE } from '@/utils/printerProfile'
+    import AlertDialog from '../AlertDialog.vue'
 
     export default {
         name: "ApplyFiftyPanel",
         components: {
-            PrintCalibrationPanel
+            PrintCalibrationPanel,
+            AlertDialog
         },
         props: ['nxDepFatherId', 'nxDepId', 'depName', 'depPrintName',
-            'updateTime', 'gbDepFatherId', 'gbDepId', 'gbDisId', 'gbBatchId', 'orderData', 'isHistoryOrder'],
+            'updateTime', 'disId', 'disName', 'gbDepFatherId', 'gbDepId', 'gbDepName', 'gbDisId', 'gbBatchId', 'orderData', 'isHistoryOrder', 'printAllOrders',
+            'todayOrderList', 'todayOrderDepArr', 'todayOrderTradeNo', 'hasSubDepartments'],
         computed: {
             // 统一过滤后的数据源（只保留有小计的行，如果有子部门则插入部门名称行）
             _filteredRows() {
@@ -408,9 +413,9 @@
                     return [];
                 }
                 
-                // 过滤掉无效订单
+                // 过滤掉无效订单；printAllOrders 时不过滤 nxDoSubtotal，打印全部订单
                 const filtered = dataSource.filter(
-                    it => it && Object.keys(it).length > 0 && it.nxDoSubtotal !== undefined
+                    it => it && Object.keys(it).length > 0 && (this.printAllOrders || it.nxDoSubtotal !== undefined)
                 );
                 
                 // 历史订单（有 orderData）时只用 orderData.arr，不使用 departmentsData（来自今日订单 fetchOrderData）
@@ -440,7 +445,7 @@
                             
                             // 添加该部门的订单
                             dep.depOrders.forEach(order => {
-                                if (order && order.nxDoSubtotal !== undefined) {
+                                if (order && (this.printAllOrders || order.nxDoSubtotal !== undefined)) {
                                     result.push({
                                         ...order,
                                         isDepartmentHeader: false,
@@ -500,7 +505,9 @@
             },
 
             disInfo() {
-                return this.disUser && this.disUser.nxDistributerEntity ? this.disUser.nxDistributerEntity : {};
+                const entity = this.disUser?.nxDistributerEntity;
+                if (entity && Object.keys(entity).length) return entity;
+                return { nxDistributerName: this.effectiveDisName || '配送商', nxDistributerAddress: '' };
             },
             
             // 判断是否是溯源类型的配送商
@@ -509,11 +516,20 @@
                        this.disUser.nxDistributerEntity && 
                        this.disUser.nxDistributerEntity.nxDistributerType == 2;
             },
-            disId() {
-                return this.disUser && this.disUser.nxDistributerEntity ? this.disUser.nxDistributerEntity.nxDistributerId : -1;
+            effectiveDisId() {
+                const fromProp = this.disId;
+                if (fromProp != null && fromProp !== '' && fromProp !== -1) {
+                    const n = typeof fromProp === 'number' ? fromProp : parseInt(fromProp, 10);
+                    if (!isNaN(n) && n >= 0) return n;
+                }
+                const fromEntity = this.disUser?.nxDistributerEntity?.nxDistributerId;
+                const fromDiu = this.disUser?.nxDiuDistributerId;
+                const val = fromEntity ?? fromDiu ?? -1;
+                return val != null && val !== '' ? (typeof val === 'number' ? val : parseInt(val, 10) || -1) : -1;
             },
-            disName() {
-                return this.disUser && this.disUser.nxDistributerEntity ? this.disUser.nxDistributerEntity.nxDistributerName : '';
+            effectiveDisName() {
+                if (this.disName && String(this.disName).trim()) return this.disName;
+                return this.disUser?.nxDistributerEntity?.nxDistributerName || '';
             },
 
             todayDate() {
@@ -694,6 +710,53 @@
             // 监听applyArrPrint的变化，重新计算页数
             applyArrPrint() {
                 console.log("applyArrPrint changed, length:", this.applyArrPrint.length);
+            },
+            todayOrderList: {
+                handler(newVal) {
+                    if (this.gbBatchId >= 0 || !this.printAllOrders) return;
+                    if (Array.isArray(newVal) && newVal.length > 0 && !this.orderData) {
+                        this.applyArrPrint = [...newVal];
+                        this.departmentsData = [];
+                        this.subtotal = this.applyArrPrint.reduce((sum, o) => sum + parseFloat(o.nxDoSubtotal || 0), 0);
+                        this.subtotalHanzi = this.numberToChinese(parseFloat(this.subtotal.toFixed(1)), false);
+                        this.tradeNo = this.todayOrderTradeNo || '';
+                        if (this.tradeNo) this.generateQRCode();
+                        console.log("🖨️ [ApplyFiftyPanel] todayOrderList 更新，订单数:", newVal.length, "合计:", this.subtotal, "单号:", this.tradeNo);
+                    }
+                },
+                immediate: false,
+                deep: true
+            },
+            todayOrderDepArr: {
+                handler(newVal) {
+                    if (this.gbBatchId >= 0 || !this.printAllOrders) return;
+                    if (this.hasSubDepartments && Array.isArray(newVal) && newVal.length > 0 && !this.orderData) {
+                        this.departmentsData = (newVal || []).map(dep => ({
+                            depId: dep.depId,
+                            depName: dep.depName,
+                            depOrders: dep.depOrders || [],
+                            depSubtotal: dep.depSubtotal
+                        }));
+                        this.applyArrPrint = [];
+                        this.subtotal = this.departmentsData.reduce((sum, dep) => {
+                            const depTotal = (dep.depSubtotal != null && dep.depSubtotal !== '') ? parseFloat(dep.depSubtotal) : NaN;
+                            return sum + (!isNaN(depTotal) ? depTotal : (dep.depOrders || []).reduce((s, o) => s + parseFloat(o.nxDoSubtotal || 0), 0));
+                        }, 0);
+                        this.subtotalHanzi = this.numberToChinese(parseFloat(this.subtotal.toFixed(1)), false);
+                        this.tradeNo = this.todayOrderTradeNo || '';
+                        if (this.tradeNo) this.generateQRCode();
+                        console.log("🖨️ [ApplyFiftyPanel] todayOrderDepArr 更新，部门数:", this.departmentsData.length, "合计:", this.subtotal, "单号:", this.tradeNo);
+                    }
+                },
+                immediate: false,
+                deep: true
+            },
+            todayOrderTradeNo: {
+                handler(newVal) {
+                    if (this.gbBatchId >= 0 || !this.printAllOrders || this.orderData) return;
+                    if (newVal) { this.tradeNo = newVal; this.generateQRCode(); }
+                },
+                immediate: false
             }
         },
 
@@ -781,6 +844,32 @@
                     subtotal: this.subtotal,
                     orderDate: this.orderDate
                 });
+            } else if (this.todayOrderList?.length > 0 || (this.todayOrderDepArr?.length > 0 && this.hasSubDepartments)) {
+                // 今日订单打印：直接使用传入的订单数据，不调用 API
+                if (this.hasSubDepartments && this.todayOrderDepArr?.length > 0) {
+                    this.departmentsData = this.todayOrderDepArr.map(dep => ({
+                        depId: dep.depId,
+                        depName: dep.depName,
+                        depOrders: dep.depOrders || [],
+                        depSubtotal: dep.depSubtotal
+                    }));
+                    this.applyArrPrint = [];
+                    this.subtotal = this.departmentsData.reduce((sum, dep) => {
+                        const depTotal = (dep.depSubtotal != null && dep.depSubtotal !== '') ? parseFloat(dep.depSubtotal) : NaN;
+                        return sum + (!isNaN(depTotal) ? depTotal : (dep.depOrders || []).reduce((s, o) => s + parseFloat(o.nxDoSubtotal || 0), 0));
+                    }, 0);
+                    this.subtotalHanzi = this.numberToChinese(parseFloat(this.subtotal.toFixed(1)), false);
+                    console.log("🖨️ [ApplyFiftyPanel] 使用今日订单子部门数据，部门数:", this.departmentsData.length, "合计:", this.subtotal);
+                } else {
+                    this.applyArrPrint = Array.isArray(this.todayOrderList) ? [...this.todayOrderList] : [];
+                    this.departmentsData = [];
+                    this.subtotal = this.applyArrPrint.reduce((sum, o) => sum + parseFloat(o.nxDoSubtotal || 0), 0);
+                    this.subtotalHanzi = this.numberToChinese(parseFloat(this.subtotal.toFixed(1)), false);
+                    console.log("🖨️ [ApplyFiftyPanel] 使用今日订单列表数据，订单数:", this.applyArrPrint.length, "合计:", this.subtotal);
+                }
+                this.tradeNo = this.todayOrderTradeNo || '';
+                this.orderDate = new Date().toISOString().slice(0, 10);
+                if (this.tradeNo) this.generateQRCode();
             } else if (this.gbBatchId < 0) {
                 // 新订单：调用 API 获取数据
                 console.log("fetchOrderDatafetchOrderData");
@@ -1261,16 +1350,6 @@
             async fetchOrderData() {
                 console.log("========== [fetchOrderData] 开始获取订单数据 ==========");
                 try {
-                    // 调试：打印所有相关属性值
-                    console.log("参数值检查:", {
-                        nxDepFatherId: this.nxDepFatherId,
-                        nxDepId: this.nxDepId,
-                        gbDepFatherId: this.gbDepFatherId,
-                        gbDepId: this.gbDepId,
-                        resFatherId: this.resFatherId,
-                        disId: this.disId
-                    });
-                    
                     // 辅助函数：将值转换为整数，如果无效则返回 -1（后端需要所有参数）
                     const toIntOrMinusOne = (value) => {
                         if (value === null || value === undefined || value === '') {
@@ -1280,12 +1359,23 @@
                         return isNaN(num) ? -1 : num;
                     };
 
+                    // 调试：打印所有相关属性值
+                    console.log("参数值检查:", {
+                        nxDepFatherId: this.nxDepFatherId,
+                        nxDepId: this.nxDepId,
+                        gbDepFatherId: this.gbDepFatherId,
+                        gbDepId: this.gbDepId,
+                        resFatherId: this.resFatherId,
+                        disId: toIntOrMinusOne(this.effectiveDisId)
+                    });
+
                     // 构建请求参数对象（用于 phoneGetToFillDepOrders）
                     const requestData = {
                         depFatherId: toIntOrMinusOne(this.nxDepFatherId),
+                        depId: toIntOrMinusOne(this.nxDepId),
                         gbDepFatherId: toIntOrMinusOne(this.gbDepFatherId),
                         resFatherId: toIntOrMinusOne(this.resFatherId),
-                        disId: toIntOrMinusOne(this.disId)
+                        disId: toIntOrMinusOne(this.effectiveDisId)
                     };
 
                     console.log("📤 [fetchOrderData] 准备调用 phoneGetToFillDepOrders 接口，参数:", requestData);
@@ -1294,6 +1384,19 @@
                     let res = await api.phoneGetToFillDepOrders(requestData);
                     
                     console.log("📥 [fetchOrderData] phoneGetToFillDepOrders 接口返回:", res.data);
+                    if (res.data?.data) {
+                        const d = res.data.data;
+                        console.log("📦 [ApplyFiftyPanel] phoneGetToFillDepOrders 金额字段:", {
+                            finishCount: d.finishCount,
+                            hasPriceCount: d.hasPriceCount,
+                            hasWeightCount: d.hasWeightCount,
+                            subAmount: d.subAmount,
+                            total: d.total,
+                            totalCount: d.totalCount,
+                            totalHanzi: d.totalHanzi,
+                            tradeNo: d.tradeNo
+                        });
+                    }
                     
                     // 判断是否有子部门：检查 arr 的第一个元素是否有 depOrders 字段
                     let hasSubDepartments = false;
@@ -1316,7 +1419,7 @@
                     params.append('gbDepFatherId', toIntOrMinusOne(this.gbDepFatherId));
                     params.append('gbDepId', toIntOrMinusOne(this.gbDepId));
                     params.append('resFatherId', toIntOrMinusOne(this.resFatherId));
-                    params.append('disId', toIntOrMinusOne(this.disId));
+                    params.append('disId', toIntOrMinusOne(this.effectiveDisId));
 
                         console.log("📤 [fetchOrderData] 调用 disGetToFillDepOrders 接口，参数:", params.toString());
                         res = await api.disGetToFillDepOrders(params);
@@ -2449,7 +2552,8 @@
                     orderMatch: rootOrderFont.trim() === (this.orderContentFontSize + 'px')
                 });
                 
-                console.log("📊 [printOnly] 准备打印, 总页数: " + this.printPagesData.length);
+                const orderCount = this._filteredRows.filter(r => !r.isDepartmentHeader).length;
+                console.log("📊 [printOnly] 准备打印, 订单条数:", orderCount, "总页数:", this.printPagesData.length);
                 console.log("📊 [printOnly] 当前字体大小设置:", {
                     distributorNameFontSize: this.distributorNameFontSize,
                     orderContentFontSize: this.orderContentFontSize,
@@ -2488,7 +2592,7 @@
                         console.log("📝 [printOnly] 使用 sendPrintRequest 接口");
                     } else if (this.gbDepFatherId !== -1) {
                         usePrintRequest = window.electronAPI.sendPrintRequestGb;
-                        printParams = [this.gbDepFatherId, this.gbDepId, this.tradeNo, this.disUser.nxDistributerUserId, this.disId];
+                        printParams = [this.gbDepFatherId, this.gbDepId, this.tradeNo, this.disUser.nxDistributerUserId, this.effectiveDisId];
                         console.log("📝 [printOnly] 使用 sendPrintRequestGb 接口");
                     } else if (this.gbBatchId !== -1) {
                         usePrintRequest = window.electronAPI.sendPrintRequestGbBatch;
@@ -2617,7 +2721,7 @@
                                     gbDepId: this.gbDepId,
                                     tradeNo: this.tradeNo,
                                     userId: this.disUser?.nxDistributerUserId,
-                                    disId: this.disId,
+                                    disId: this.effectiveDisId,
                                     paperCount: paperCount,
                                     shouldSave: shouldSave
                                 });
@@ -2627,7 +2731,7 @@
                                     this.gbDepId,
                                     this.tradeNo,  // 使用原始tradeNo，不用带页码
                                     this.disUser.nxDistributerUserId,
-                                    this.disId,
+                                    this.effectiveDisId,
                                     paperCount,  // 传入总页数
                                     shouldSave   // 只在最后一页为true
                                 );
@@ -2690,8 +2794,9 @@
                     }
                 }
 
+                const totalOrderCount = this._filteredRows.filter(r => !r.isDepartmentHeader).length;
                 console.log("\n✅ [printOnly] ========== 所有页面打印完成 ==========");
-                console.log(`✅ [printOnly] 总计打印 ${this.printPagesData.length} 页`);
+                console.log(`✅ [printOnly] 总计打印 ${this.printPagesData.length} 页，${totalOrderCount} 条订单`);
                 } finally {
                     // 无论成功还是失败，都隐藏打印蒙版
                     this.isPrinting = false;
@@ -2699,13 +2804,15 @@
             },
 
             // 导出Excel方法
-            downLoadOnly() {
+            async downLoadOnly() {
                 console.log("=== downLoadOnly 开始导出Excel ===");
-                
+                const XLSXMod = await import('xlsx');
+                const XLSX = XLSXMod.default || XLSXMod;
+
                 const rows = this._filteredRows;
                 if (!rows || rows.length === 0) {
                     console.error("❌ [downLoadOnly] 数据为空，无法导出");
-                    alert('没有数据可导出');
+                    await this.$refs.alertDialog.alert('没有数据可导出', 'warning');
                     return;
                 }
 
@@ -3299,3 +3406,5 @@
 
 
 </style>
+
+

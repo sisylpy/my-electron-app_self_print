@@ -1,4 +1,4 @@
-<template>
+﻿<template>
     <div class="mb-3" style="flex-shrink: 0;">
         <div class="form-group d-flex gap-3 align-items-center flex-wrap">
             <label class="mb-0" style="cursor: pointer;">
@@ -62,6 +62,7 @@ export default {
     emits: ['update:modelValue']
 }
 </script>
+
 
 
 

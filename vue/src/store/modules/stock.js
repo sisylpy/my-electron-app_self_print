@@ -1,4 +1,4 @@
-
+﻿
 const stock = {
     namespaced: true,
     types: {
@@ -32,3 +32,4 @@ const stock = {
 }
 
 export default stock
+

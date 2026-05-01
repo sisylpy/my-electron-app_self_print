@@ -1,4 +1,4 @@
-// src/api/deviceAdmin.js
+﻿// src/api/deviceAdmin.js
 import axiosInstance from './axios';
 
 const api = '/api';
@@ -61,3 +61,4 @@ const deviceAdminApi = {
 };
 
 export default deviceAdminApi;
+

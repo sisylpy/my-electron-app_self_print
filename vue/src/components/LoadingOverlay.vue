@@ -1,4 +1,4 @@
-<!-- src/components/LoadingOverlay.vue -->
+﻿<!-- src/components/LoadingOverlay.vue -->
 <template>
     <div v-if="isLoading" class="loading-overlay">
       <div class="spinner"></div>

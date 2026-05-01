@@ -1,4 +1,4 @@
-/**
+﻿/**
  * OCR 任务执行器
  * 负责执行任务队列中的任务，调用API并处理结果
  */
@@ -427,4 +427,5 @@ export default {
   executeExcelTask,
   checkAndStartExecutor
 };
+
 
