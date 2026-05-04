@@ -180,15 +180,25 @@
                 <!-- 未打印订单客户视图 - 显示订单详情组件（先加载组件再渲染，避免 [object Promise]） -->
                 <div v-if="currentView === 'order' && depPrintName && depPrintName !== '' && !loadedOrderPrintComponent" class="text-center p-5 text-muted">加载中...</div>
                 <keep-alive v-else-if="currentView === 'order' && loadedOrderPrintComponent">
-                    <component ref="orderPrintComponentRef" :is="loadedOrderPrintComponent" :nxDepFatherId="nxDepFatherId" :nxDepId="nxDepId" :depName="depName"
-                               :depPrintName="depPrintName"
-                               :updateTime="updateTime" :disId="disId" :disName="disName" :gbDepFatherId="gbDepFatherId"
-                               :gbDepId="gbDepId"
-                               :gbDepName="gbDepName" :gbDisId="gbDisId" :gbBatchId="gbBatchId"
-
-                               @order-saved="handleOrderSavedFromPrintView"
-                               @print-only="handlePrintOnly"
-                    ></component>
+                    <component
+                        :key="orderPrintCacheKey"
+                        ref="orderPrintComponentRef"
+                        :is="loadedOrderPrintComponent"
+                        :nxDepFatherId="nxDepFatherId"
+                        :nxDepId="nxDepId"
+                        :depName="depName"
+                        :depPrintName="depPrintName"
+                        :updateTime="updateTime"
+                        :disId="disId"
+                        :disName="disName"
+                        :gbDepFatherId="gbDepFatherId"
+                        :gbDepId="gbDepId"
+                        :gbDepName="gbDepName"
+                        :gbDisId="gbDisId"
+                        :gbBatchId="gbBatchId"
+                        @order-saved="handleOrderSavedFromPrintView"
+                        @print-only="handlePrintOnly"
+                    />
                 </keep-alive>
 
                 <!-- 配送单视图 - 无数据提示 -->
@@ -442,7 +452,7 @@
                 nxDepId: "",
                 depName: "",
                 depPrintName: "",
-                updateTime: new Date().getMilliseconds(),
+                updateTime: Date.now(),
                 pollInterval: null,  // 保存定时器ID
                 pollStartTime: null, // 轮询开始时间
 
@@ -584,6 +594,15 @@
             /** 供 watch：Vue 3 下直接 watch $store.state 路径不可靠 */
             mcpPrintQueueRef() {
                 return this.$store.state.mcpPrintQueue;
+            },
+
+            /** 配送单右侧打印区：切换客户时必须区分缓存实例，否则 keep-alive 内组件可能沿用上一份订单数据 */
+            orderPrintCacheKey() {
+                const gb = this.gbBatchId;
+                if (gb != null && gb !== '' && gb !== -1) {
+                    return `order-print-gb-${gb}-${this.depPrintName || ''}`;
+                }
+                return `order-print-nx-${this.nxDepFatherId}-${this.nxDepId}-${this.depPrintName || ''}`;
             },
 
         },
@@ -1347,16 +1366,21 @@
                 });
             },
 
-            /** 配送单视图下动态 Apply 组件异步拉单后再打印 */
+            /**
+             * 配送单视图下动态 Apply 组件异步拉单后再打印。
+             * MCP 连续打多子部门时，若仅判断 depMatch + applyArrPrint.length>0，可能在 reloadByContext
+             * 尚未清空上一档（父级全店）数据前就触发 printOnly，导致第一张打成全店、第二张才正确。
+             * 因此：depMatch 后须至少见到一次「当前部门下 applyArrPrint 被清空」，再接受「有行项目 + 有页」才打印。
+             */
             async waitAndTriggerOrderViewPrint(expected) {
                 this.mcpTeeLog('waitAndTriggerOrderViewPrint：开始等待 Apply 与 printPagesData（最多约 20s）');
-                // onclick 立刻进循环时，子组件可能尚未收到新 props，watch 也未清空上一户的 applyArrPrint；先等 DOM/子更新刷掉陈旧数据
                 await this.$nextTick();
                 await this.$nextTick();
                 const maxWait = 20000;
                 const step = 120;
                 let waited = 0;
                 let lastTee = -2000;
+                let sawEmptyOrdersWhileDepMatch = false;
                 while (waited < maxWait) {
                     const comp = this.$refs.orderPrintComponentRef;
                     if (comp && typeof comp.printOnly === 'function') {
@@ -1364,16 +1388,22 @@
                         const depMatch =
                             Number(comp.nxDepFatherId) === Number(expected.nxDepFatherId) &&
                             Number(comp.nxDepId) === Number(expected.nxDepId);
-                        const ordersReady =
-                            Array.isArray(comp.applyArrPrint) && comp.applyArrPrint.length > 0;
-                        if (
+                        const orderLen = Array.isArray(comp.applyArrPrint) ? comp.applyArrPrint.length : 0;
+                        if (depMatch && orderLen === 0) {
+                            sawEmptyOrdersWhileDepMatch = true;
+                        }
+                        const ordersReady = orderLen > 0;
+                        const dataConsistent =
                             depMatch &&
                             ordersReady &&
+                            sawEmptyOrdersWhileDepMatch &&
                             pages &&
                             Array.isArray(pages) &&
-                            pages.length > 0
-                        ) {
-                            this.mcpTeeLog(`★ 就绪，调用 printOnly（${pages.length} 页） dep=${expected.nxDepId}`);
+                            pages.length > 0;
+                        if (dataConsistent) {
+                            this.mcpTeeLog(
+                                `★ 就绪，调用 printOnly（${pages.length} 页） dep=${expected.nxDepId}（已确认清空后再拉单）`
+                            );
                             await comp.printOnly();
                             this.mcpTeeLog('★ printOnly 已完成');
                             return;
@@ -1389,7 +1419,9 @@
                               Number(comp.nxDepId) === Number(expected.nxDepId)
                             : false;
                         const ordLen = comp && Array.isArray(comp.applyArrPrint) ? comp.applyArrPrint.length : 'n/a';
-                        this.mcpTeeLog(`等待中 ${waited}ms ref=${comp ? 'y' : 'n'} depMatch=${depMatch} orders=${ordLen} printPages=${pLen}`);
+                        this.mcpTeeLog(
+                            `等待中 ${waited}ms ref=${comp ? 'y' : 'n'} depMatch=${depMatch} orders=${ordLen} printPages=${pLen} sawEmpty=${sawEmptyOrdersWhileDepMatch}`
+                        );
                     }
                     await new Promise((r) => setTimeout(r, step));
                     waited += step;
@@ -1762,7 +1794,7 @@
                                     this.gbDisId = gbArr[0].gbDepartmentDisId;
                                     this.depName = gbArr[0].gbDepartmentName;
                                     this.depPrintName = gbArr[0].gbDepartmentPrintName;
-                                    this.updateTime = new Date().getMilliseconds();
+                                    this.updateTime = Date.now();
                                     this.nxDepFatherId = -1;
                                     this.nxDepId = -1;
                                     this.isactivepb = -1;
@@ -1777,7 +1809,7 @@
                                     this.gbBatchId = gbBatchArr[0].gbDistributerPurchaseBatchId;
                                     this.depName = gbBatchArr[0].gbDistributerEntity.gbDistributerName;
                                     this.depPrintName = gbBatchArr[0].gbDistributerEntity.gbDistributerPrintName;
-                                    this.updateTime = new Date().getMilliseconds();
+                                    this.updateTime = Date.now();
                                 } else {
                                     this.nxDepFatherId = -1;
                                     this.nxDepId = -1;
@@ -1838,7 +1870,7 @@
                     this.gbBatchId = gbBatchId;
                 this.depPrintName = finalDepPrintName;
                 this.subAmount = 0;
-                this.updateTime = new Date().getMilliseconds();
+                this.updateTime = Date.now();
 
             },
             onclick(index, nxDepFatherId, nxDeId, depName, subDepName, depPrintName, subAmount) {
@@ -1866,7 +1898,7 @@
                     this.depName = depName + subDepName;
                 this.depPrintName = finalDepPrintName;
                 this.subAmount = 0;
-                this.updateTime = new Date().getMilliseconds();
+                this.updateTime = Date.now();
             },
 
 
@@ -1896,7 +1928,7 @@
                 this.depName = depName + subDepName;
                 this.depPrintName = finalDepPrintName;
                 this.subAmount = subAmount;
-                this.updateTime = new Date().getMilliseconds();
+                this.updateTime = Date.now();
                 console.log("点击了子部门:", subDepName);
 
             },

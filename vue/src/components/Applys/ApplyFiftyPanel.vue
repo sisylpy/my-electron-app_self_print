@@ -1441,34 +1441,63 @@
                             // phoneGetToFillDepOrders 返回的 arr 是子部门数组
                             const depArr = res.data.data.arr || [];
                             console.log("📋 [fetchOrderData] 子部门数量:", depArr.length);
-                            
-                            // 合并所有子部门的订单到一个数组
+
+                            const fatherSel = toIntOrMinusOne(this.nxDepFatherId);
+                            const depSel = toIntOrMinusOne(this.nxDepId);
+                            const isSingleSubSelection =
+                                fatherSel > 0 && depSel > 0 && fatherSel !== depSel;
+
+                            let depArrScoped = depArr;
+                            if (isSingleSubSelection) {
+                                depArrScoped = depArr.filter((dep) => Number(dep.depId) === depSel);
+                                if (depArrScoped.length === 0) {
+                                    console.warn(
+                                        "[fetchOrderData] 子部门 depId=",
+                                        depSel,
+                                        "在接口 arr 中无匹配"
+                                    );
+                                } else {
+                                    console.log(
+                                        "✅ [fetchOrderData] 仅保留子部门 depId=",
+                                        depSel
+                                    );
+                                }
+                            }
+
                             let allOrders = [];
-                            depArr.forEach((dep, index) => {
+                            depArrScoped.forEach((dep, index) => {
                                 console.log(`\n📁 [fetchOrderData] ========== 子部门 ${index + 1} ==========`);
                                 console.log(`📁 [fetchOrderData] 子部门名称:`, dep.depName);
                                 console.log(`📁 [fetchOrderData] 子部门ID:`, dep.depId);
                                 console.log(`📁 [fetchOrderData] 子部门小计:`, dep.depSubtotal);
                                 console.log(`📁 [fetchOrderData] 子部门订单数量:`, dep.depOrders ? dep.depOrders.length : 0);
-                                
+
                                 if (dep.depOrders && Array.isArray(dep.depOrders) && dep.depOrders.length > 0) {
-                                    // 将子部门的订单添加到总数组
                                     allOrders = allOrders.concat(dep.depOrders);
                                     console.log(`✅ [fetchOrderData] 已添加 ${dep.depOrders.length} 条订单到总数组`);
                                 }
                             });
-                            
+
                             console.log(`📊 [fetchOrderData] 合并后总订单数: ${allOrders.length}`);
-                            
-                            // 设置订单数据
+
                             this.tradeNo = res.data.data.tradeNo;
                             this.generateQRCode();
-                            this.subtotal = parseFloat(res.data.data.total) || 0;
-                            this.subtotalHanzi = res.data.data.totalHanzi || '';
+                            if (isSingleSubSelection) {
+                                const subNum = allOrders.reduce(
+                                    (sum, o) =>
+                                        sum +
+                                        parseFloat(o.nxDoSubtotal || o.nxDepartmentOrderSubTotal || 0),
+                                    0
+                                );
+                                this.subtotal = subNum;
+                                this.subtotalHanzi = this.numberToChinese(parseFloat(subNum.toFixed(1)), false);
+                            } else {
+                                this.subtotal = parseFloat(res.data.data.total) || 0;
+                                this.subtotalHanzi = res.data.data.totalHanzi || '';
+                            }
                             this.applyArrPrint = allOrders;
-                            
-                            // 保存子部门信息，用于后续打印时按部门分组
-                            this.departmentsData = depArr.map(dep => ({
+
+                            this.departmentsData = depArrScoped.map((dep) => ({
                                 depId: dep.depId,
                                 depName: dep.depName,
                                 depSubtotal: dep.depSubtotal,

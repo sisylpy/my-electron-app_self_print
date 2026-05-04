@@ -163,8 +163,9 @@ const MCP_TOOLS = [
 ];
 
 // 应用状态（通过环境变量或命令行参数传入）
+const PRODUCTION_API_BASE = 'https://grainservice.club:8443/nongxinle/api/';
 const CONFIG = {
-  apiUrl: process.env.GRAIN_API_URL || 'http://192.168.0.105:8080/nongxinle_war_exploded/api/',
+  apiUrl: process.env.GRAIN_API_URL || PRODUCTION_API_BASE,
   disId: process.env.GRAIN_DIS_ID || null
 };
 
@@ -203,9 +204,19 @@ function sendNotification(method, params = {}) {
  */
 async function handleRequest(request) {
   const { id, method, params = {} } = request;
-  
+
+  // JSON-RPC Notification：消息无 `id` 字段。MCP 在 initialize 之后会发 `notifications/initialized`，
+  // 规范要求服务端不得对该通知返回任何响应。若此处回 error，会破坏 stdio 流，上层 connector-proxy
+  // 可能认为会话未就绪，出现「工具未注册 / not found in connector」类错误。
+  // JSON-RPC Notification：无 `id` 字段的请求不得返回任何响应。
+  // MCP 在 initialize 之后会发 `notifications/initialized` 等，若回复 error 会破坏 stdio 会话。
+  if (!Object.prototype.hasOwnProperty.call(request, 'id')) {
+    log('[MCP] 收到通知(不回复):', method || '(no method)');
+    return;
+  }
+
   log('[MCP] 收到请求:', method, params);
-  
+
   try {
     switch (method) {
       case 'initialize':
