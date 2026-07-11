@@ -1549,15 +1549,11 @@
                         } else {
                             i++;
                         }
-                        // 保存当前单元格和行
-                        if (currentCell.trim() || currentRow.length > 0) {
-                            currentRow.push(currentCell.trim());
-                            if (currentRow.length > 0) {
-                                rows.push(currentRow);
-                            }
-                            currentRow = [];
-                            currentCell = '';
-                        }
+                        // 每遇换行都产生一行（含完全空行），保留与 Excel 相同的行对齐
+                        currentRow.push(currentCell.trim());
+                        rows.push(currentRow.slice());
+                        currentRow = [];
+                        currentCell = '';
                     } else {
                         // 普通字符
                         currentCell += char;
@@ -1565,12 +1561,10 @@
                     }
                 }
 
-                // 处理最后一行
-                if (currentCell.trim() || currentRow.length > 0) {
+                // 处理最后一行（无结尾换行符的片段）
+                if (currentCell.length > 0 || currentRow.length > 0) {
                     currentRow.push(currentCell.trim());
-                    if (currentRow.length > 0) {
-                        rows.push(currentRow);
-                    }
+                    rows.push(currentRow.slice());
                 }
 
                 console.log('🔧 [解析数据] 解析完成，共', rows.length, '行');
@@ -4727,7 +4721,7 @@
 
             // 保存 Excel 粘贴订单
             async saveExcelPasteOrders() {
-                const checkResult = this.checkOrderContent(this.orderItems);
+                const checkResult = await this.checkOrderContent(this.orderItems);
                 if (checkResult !== true) {
                     this.draftSelectedOrderIndex = checkResult >= 0 ? checkResult : -1;
                     return;

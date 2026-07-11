@@ -223,6 +223,8 @@
                     @select-task="handleSelectExcelPasteTask"
                     @re-upload="reUpload"
                     @show-fix-items="showFixItems"
+                    @clear-order-items="clearExcelPasteOrderItems"
+                    @save-orders="saveExcelPasteOrders"
                     @finish-task="onFinishTask"
                     @table-data-update="handleExcelPasteTableDataUpdate"
                     @cell-click="handleExcelPasteCellClick"
@@ -1179,8 +1181,15 @@
                     this.showDeepSeekLoading = false;
                 }
             },
-            clearExcelPasteOrderItems() {
-                this.orderItems = [];
+            async clearExcelPasteOrderItems() {
+                if (this.orderItems.length === 0) {
+                    return;
+                }
+                const confirmed = await this.$refs.alertDialog.confirm('确定要清空所有订单商品吗？');
+                if (confirmed) {
+                    this.orderItems = [];
+                    this.resetSearchAndMatchedGoodsState();
+                }
             },
             excelPasteTableDataToCsv() {
                 const columns = ['goodsName', 'quantity', 'specification', 'specificationWeight', 'cartonQuantity', 'cartonName', 'remark'];
@@ -4711,38 +4720,124 @@
                 }
             },
 
+            // 检查订单内容（与 PlaceOrder.checkOrderContent 一致）
+            async checkOrderContent(orderArr = null) {
+                const orders = orderArr || this.orderItems;
 
-            // 检查订单内容（参考微信小程序的 _checkOrderContent）
-            // async checkOrderContent(orderArr = null) {
-            //     const orders = orderArr || this.orderItems;
-            //
-            //     if (!orders || orders.length === 0) {
-            //         await this.$refs.alertDialog.alert('没有可保存的订单', 'warning');
-            //         return false;
-            //     }
-            //
-            //     for (let i = 0; i < orders.length; i++) {
-            //         const order = orders[i];
-            //
-            //         if (!order.nxDoGoodsName || order.nxDoGoodsName.trim() === '') {
-            //             await this.$refs.alertDialog.alert(`第${i + 1}条订单商品名称为空`, 'warning');
-            //             return false;
-            //         }
-            //
-            //         if (!order.nxDoQuantity || Number(order.nxDoQuantity) <= 0) {
-            //             await this.$refs.alertDialog.alert(`第${i + 1}条订单数量无效`, 'warning');
-            //             return false;
-            //         }
-            //
-            //         if (!order.nxDoStandard || order.nxDoStandard.trim() === '') {
-            //             await this.$refs.alertDialog.alert(`第${i + 1}条订单规格为空`, 'warning');
-            //             return false;
-            //         }
-            //     }
-            //
-            //     return true;
-            // },
+                if (!orders || orders.length === 0) {
+                    await this.$refs.alertDialog.alert('没有可保存的订单', 'warning');
+                    return -1;
+                }
 
+                for (let i = 0; i < orders.length; i++) {
+                    const order = orders[i];
+                    const rowNum = i + 1;
+
+                    if (!order.nxDoGoodsName || order.nxDoGoodsName.trim() === '') {
+                        await this.$refs.alertDialog.alert(`第${rowNum}条订单商品名称为空`, 'warning');
+                        return i;
+                    }
+
+                    const qty = order.nxDoQuantity;
+                    if (qty === undefined || qty === null || String(qty).trim() === '') {
+                        await this.$refs.alertDialog.alert(`第${rowNum}条订单数量为空`, 'warning');
+                        return i;
+                    }
+                    const qtyNum = Number(qty);
+                    if (Number.isNaN(qtyNum)) {
+                        await this.$refs.alertDialog.alert(`第${rowNum}条订单数量必须是数字`, 'warning');
+                        return i;
+                    }
+                    if (qtyNum <= 0) {
+                        await this.$refs.alertDialog.alert(`第${rowNum}条订单数量必须大于 0`, 'warning');
+                        return i;
+                    }
+
+                    if (!order.nxDoStandard || order.nxDoStandard.trim() === '') {
+                        await this.$refs.alertDialog.alert(`第${rowNum}条订单规格为空`, 'warning');
+                        return i;
+                    }
+
+                    const spec = order.nxDoStandard.trim();
+                    const chineseOnly = /^[\u4e00-\u9fff]+$/;
+                    if (!chineseOnly.test(spec)) {
+                        await this.$refs.alertDialog.alert(`第${rowNum}条订单规格必须为汉字`, 'warning');
+                        return i;
+                    }
+                    if (spec.length > 2) {
+                        await this.$refs.alertDialog.alert(`第${rowNum}条订单规格汉字数量不能大于 2 个，当前为 ${spec.length} 个`, 'warning');
+                        return i;
+                    }
+                }
+
+                return true;
+            },
+
+            async saveExcelPasteOrders() {
+                if (this.savingOrder) return;
+                const checkResult = await this.checkOrderContent(this.orderItems);
+                if (checkResult !== true) {
+                    return;
+                }
+
+                try {
+                    this.savingOrder = true;
+                    this.$store.commit('SET_LOADING', true);
+
+                    const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
+
+                    const orderData = this.orderItems.map(item => ({
+                        ...item,
+                        nxDoDepartmentId: targetDepId,
+                        nxDoDepartmentFatherId: this.selectedAllCustomer,
+                        nxDoDistributerId: this.disUser?.nxDiuDistributerId,
+                        nxDoIsAgent: this.disUser?.nxDistributerUserId || this.disUser?.nxDiuDistributerId
+                    }));
+
+                    const tableCsv = this.excelPasteTableDataToCsv();
+                    const res = await api.pasteSearchGoods({
+                        orderList: orderData,
+                        pasteText: tableCsv || '',
+                        type: 2
+                    });
+
+                    if (res && res.data && res.data.code === 0) {
+                        const taskId = res.data.taskId;
+                        const task = res.data.task;
+                        this.orderItems = res.data.data;
+                        if (taskId != null && task) {
+                            this.currentTaskId = taskId;
+                            this.currentTask = task;
+                            this.excelPasteSaveCount = this.orderItems.length > 0 ? this.orderItems.length : null;
+
+                            if (task.nxOcrTaskStatus === 2) {
+                                this.stopAllReading();
+                                this.showTaskCompleteModal = true;
+                                this.taskCompleteModalTaskId = taskId;
+                                this.taskCompleteModalSourceType = 'excel-paste';
+                                this.taskCompleteModalTask = task;
+                            }
+
+                            this.$nextTick(() => {
+                                if (this.$refs.excelPasteUploadRef?.addOrUpdateTaskAndSelect) {
+                                    this.$refs.excelPasteUploadRef.addOrUpdateTaskAndSelect(task);
+                                }
+                            });
+                        }
+                        this.resetSearchAndMatchedGoodsState();
+                        this.$emit('task-list-changed');
+                    } else {
+                        const errorMsg = res?.data?.msg || '保存失败';
+                        await this.$refs.alertDialog.alert(errorMsg, 'error');
+                    }
+                } catch (error) {
+                    console.error('保存订单失败:', error);
+                    await this.$refs.alertDialog.alert('保存订单失败，请重试：' + (error.message || '未知错误'), 'error');
+                } finally {
+                    this.savingOrder = false;
+                    this.$store.commit('SET_LOADING', false);
+                }
+            },
 
         }
     }

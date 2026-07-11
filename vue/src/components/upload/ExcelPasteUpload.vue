@@ -185,7 +185,8 @@
                                             :edit-render="{ name: 'input', props: { placeholder: '大包装名称' } }"></vxe-column>
                                 <vxe-column field="remark" title="备注" min-width="100"
                                             :edit-render="{ name: 'input', props: { placeholder: '备注' } }"></vxe-column>
-                                <vxe-column title="" width="72" align="center" fixed="right" class-name="excel-paste-actions-col" v-if="excelPasteOrderItems.length == 0 && !hasTableData">
+                                <!-- 仅在「未生成右侧订单」时可编辑表格：操作列与 hasTableData 无关，有数据后仍需 +/− 调整行 -->
+                                <vxe-column title="" width="72" align="center" fixed="right" class-name="excel-paste-actions-col" v-if="excelPasteOrderItems.length == 0">
                                     <template #default="{ row, rowIndex }" >
                                         <span v-if="rowHasData(row || tableData[rowIndex])" class="excel-paste-row-actions">
                                             <button type="button" class="excel-paste-btn excel-paste-btn-add" title="在上方插入一行" @click.stop="onInsertRowAbove(rowIndex)">+</button>
@@ -901,25 +902,20 @@ export default {
                     } else {
                         i++;
                     }
-                    if (currentCell.trim() || currentRow.length > 0) {
-                        currentRow.push(currentCell.trim());
-                        if (currentRow.length > 0) {
-                            rows.push(currentRow);
-                        }
-                        currentRow = [];
-                        currentCell = '';
-                    }
+                    // 每遇换行都产生一行（含 Excel 中的完全空行），否则中间空行会被吃掉、后面行对齐错位
+                    currentRow.push(currentCell.trim());
+                    rows.push(currentRow.slice());
+                    currentRow = [];
+                    currentCell = '';
                 } else {
                     currentCell += char;
                     i++;
                 }
             }
 
-            if (currentCell.trim() || currentRow.length > 0) {
+            if (currentCell.length > 0 || currentRow.length > 0) {
                 currentRow.push(currentCell.trim());
-                if (currentRow.length > 0) {
-                    rows.push(currentRow);
-                }
+                rows.push(currentRow.slice());
             }
 
             return rows;
