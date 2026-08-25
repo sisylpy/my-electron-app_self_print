@@ -7,7 +7,7 @@ import config from '../config'; // 引入配置文件
 // 开发环境使用 Vite 代理（相对路径），生产环境使用远程地址
 const apiUrl = process.env.NODE_ENV === 'development'
   ? '/api/'
-  : (config.baseURL || 'https://grainservice.club:8443/nongxinle/api/');
+  : config.baseURL;
 
 // 创建 Axios 实例
 const axiosInstance = axios.create({
@@ -119,4 +119,3 @@ axiosInstance.interceptors.response.use(
 
 
 export default axiosInstance;
-

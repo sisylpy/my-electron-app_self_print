@@ -1,49 +1,125 @@
-﻿import { createRouter, createWebHistory } from 'vue-router';
-
-// 直接引入页面组件
+import { createRouter, createWebHashHistory } from 'vue-router';
 import Home from '@/views/Home.vue';
-import Bills from '@/views/Bills.vue';
-// import Return from '@/views/Return.vue';
-// import PreparePrint from '@/views/PreparePrint.vue';
+import Screen from '@/views/Screen.vue';
+import store from '@/store';
+import { customerRoutes } from '@/modules/customer';
+import { dispatchRoutes } from '@/modules/dispatch';
+import { orderRoutes } from '@/modules/order';
+import { printRoutes } from '@/modules/print';
+import { settingRoutes } from '@/modules/setting';
+import { predictionLabRoutes } from '@/modules/predictionLab';
+import { writeAppLog } from '@/utils/appLog';
+import { canAccessModule, defaultRouteNameForUser } from '@/utils/disUserRole';
+import {
+  parseStoredDisUser,
+  isRememberPrinterUserEnabled,
+  isKioskEntryRoute,
+  resolveBillsQueryFromDisUser,
+} from '@/utils/rememberPrinterUser';
+
+export const coreRoutes = [
+  {
+    path: '/',
+    name: 'Screen',
+    component: Screen,
+    meta: {
+      shell: false,
+      module: 'core',
+      title: '配送商登录',
+    },
+  },
+  {
+    path: '/home',
+    name: 'Home',
+    component: Home,
+    meta: {
+      shell: false,
+      module: 'core',
+      title: '配送商选择',
+    },
+  },
+];
+
+export const routes = [
+  ...coreRoutes,
+  ...orderRoutes,
+  ...printRoutes,
+  ...dispatchRoutes,
+  ...customerRoutes,
+  ...predictionLabRoutes,
+  ...settingRoutes,
+];
 
 const router = createRouter({
-  mode: 'hash', 
-  // 使用 history 模式
-  history: createWebHistory(process.env.BASE_URL),
-  routes: [
-    {
-      path: '/',
-      name: 'Home',
-      component: Home, // 首页组件
-    },
-    {
-      path: '/bills',
-      name: 'Bills',
-      component: Bills, // Bills 页面
-    },
-    // {
-    //   path: '/return',
-    //   name: 'Return',
-    //   component: Return, // Return 页面
-    // },
-    // {
-    //   path: '/prepare-print',
-    //   name: 'PreparePrint',
-    //   component: PreparePrint, // PreparePrint 页面
-    // },
-    // 默认重定向到首页
-    {
-      path: '/:pathMatch(.*)*',
-      redirect: '/',
-    },
-  ],
+  history: createWebHashHistory(),
+  routes,
 });
 
-// 捕获重复导航的错误
-const originalPush = router.push;
-router.push = function push(location) {
-  return originalPush.call(this, location).catch((err) => err);
-};
+/**
+ * 保留现有记住用户行为：只在轮播入口自动进入 Bills。
+ * /dispatch 不参与自动重定向，也不会改变打印入口。
+ */
+router.beforeEach((to, from, next) => {
+  const currentUser = store.state.disUser || parseStoredDisUser();
+  if (currentUser && to.meta?.module
+      && !canAccessModule(to.meta.module, currentUser)) {
+    next({ name: defaultRouteNameForUser(currentUser), replace: true });
+    return;
+  }
+  if (to.name === 'Home' || (to.path || '').replace(/\/$/, '') === '/home') {
+    next();
+    return;
+  }
+  if (!isKioskEntryRoute(to)) {
+    next();
+    return;
+  }
+  const remember = isRememberPrinterUserEnabled();
+  if (!remember) {
+    writeAppLog('info', 'router', 'remember-auto-login:skip', {
+      reason: 'remember-flag-off',
+      to: to.fullPath,
+      name: to.name,
+    });
+    next();
+    return;
+  }
+  let user = store.state.disUser;
+  if (!resolveBillsQueryFromDisUser(user)) {
+    user = parseStoredDisUser();
+    if (user && resolveBillsQueryFromDisUser(user)) {
+      store.commit('SET_DISUSER', user);
+    }
+  }
+  const query = resolveBillsQueryFromDisUser(user);
+  if (!query) {
+    writeAppLog('info', 'router', 'remember-auto-login:skip', {
+      reason: 'no-valid-disUser',
+      to: to.fullPath,
+      name: to.name,
+      hasLocalDis: !!parseStoredDisUser(),
+    });
+    next();
+    return;
+  }
+  writeAppLog('info', 'router', 'remember-auto-login:redirect-bills', {
+    disId: query.disId,
+    to: to.fullPath,
+  });
+  next({
+    name: 'Bills',
+    query: {
+      disId: query.disId,
+      disName: query.disName,
+    },
+    replace: true,
+  });
+});
+
+router.onError((error) => {
+  writeAppLog('error', 'router', error?.message || String(error), {
+    stack: error?.stack,
+  });
+});
 
 export default router;
-

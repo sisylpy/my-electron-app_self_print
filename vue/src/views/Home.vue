@@ -26,6 +26,27 @@
         </div>
         </div>
 
+        <div class="test-login-divider"><span>测试服务器临时入口</span></div>
+        <form class="test-login" @submit.prevent="loginWithTestUserId">
+          <label for="test-distributer-user-id">配送商用户 ID</label>
+          <div class="test-login__controls">
+            <input
+              id="test-distributer-user-id"
+              v-model.trim="testUserId"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              maxlength="10"
+              placeholder="例如：312"
+              :disabled="testLoggingIn"
+            />
+            <button type="submit" :disabled="testLoggingIn || !testUserId">
+              {{ testLoggingIn ? '登录中…' : '直接登录' }}
+            </button>
+          </div>
+          <p v-if="testLoginError" class="test-login__error">{{ testLoginError }}</p>
+        </form>
+
         <!-- 登录提示 -->
         <p class="login-instructions" @click="goScreen">退出登录</p>
       </div>
@@ -37,6 +58,8 @@
 
 import api from '../api/all.js'
 import QRCode from 'qrcode'
+import { defaultRouteNameForUser } from '@/utils/disUserRole'
+import config from '@/config'
 
 
 export default {
@@ -50,20 +73,11 @@ export default {
       showMarketError: false, // 显示市场不匹配错误
       countdown: 10, // 倒计时秒数
       countdownTimer: null, // 倒计时定时器
+      testUserId: '',
+      testLoggingIn: false,
+      testLoginError: '',
     }
   },
-
-  beforeUnmount() {
-  // 清除定时器，防止内存泄漏
-  if (this.pollInterval) {
-    console.log("清除轮询定时器，防止内存泄漏")
-    clearInterval(this.pollInterval);
-  }
-  if (this.countdownTimer) {
-    console.log("清除倒计时定时器，防止内存泄漏")
-    clearInterval(this.countdownTimer);
-  }
-},
 
 mounted() {
   // 重置所有状态
@@ -83,7 +97,7 @@ mounted() {
   
     generateQRCode() {
       this.sessionId = this.generateUniqueSessionId();  // 生成唯一会话 ID
-      const qrCodeUrl = `https://grainservice.club:8443/nongxinle/api/nxdistributer/printerLogin?scene=${this.sessionId}`;
+      const qrCodeUrl = `${config.baseURL}nxdistributer/printerLogin?scene=${this.sessionId}`;
       
       QRCode.toDataURL(qrCodeUrl, (err, qrCodeUrl) => {
         if (err) {
@@ -120,98 +134,10 @@ mounted() {
     }
 
     // 继续检查登录状态
-    api.checkLoginStatus(sessionId,{ showLoading: false }).then((response) => {
+    api.checkLoginStatus(sessionId,{ showLoading: false }).then(async (response) => {
       const data = response.data;
       if (data.loggedIn) {
-        console.log('用户登录成功，用户ID:', data.user);
-        
-        // 🔍 检查设备配置缓存和市场ID验证
-        const deviceConfig = localStorage.getItem('deviceAdminConfig');
-        
-        // 详细检查用户数据结构
-        console.log('🔍 用户数据结构:', data.user);
-        console.log('🔍 nxDistributerEntity:', data.user.nxDistributerEntity);
-        console.log('🔍 nxDistributerSysMarketId:', data.user.nxDistributerEntity?.nxDistributerSysMarketId);
-        
-        // 尝试多种可能的字段路径
-        const userMarketId = data.user.nxDistributerEntity?.nxDistributerSysMarketId || 
-                            data.user.nxDistributerSysMarketId || 
-                            data.user.marketId ||
-                            data.user.nxMarketId;
-        
-        console.log('🔍 验证开始:');
-        console.log('  - 设备配置存在:', !!deviceConfig);
-        console.log('  - 用户市场ID:', userMarketId);
-        
-        if (deviceConfig) {
-          try {
-            const config = JSON.parse(deviceConfig);
-            const configMarketId = config.deviceAdminInfo?.marketId;
-            
-            console.log('📋 用户市场ID:', userMarketId, '类型:', typeof userMarketId);
-            console.log('📋 设备配置市场ID:', configMarketId, '类型:', typeof configMarketId);
-            
-            // 转换为字符串进行比较
-            const userMarketIdStr = String(userMarketId);
-            const configMarketIdStr = String(configMarketId);
-            console.log('📋 转换后用户市场ID:', userMarketIdStr);
-            console.log('📋 转换后设备配置市场ID:', configMarketIdStr);
-            
-            
-            // 更严格的验证：必须有设备配置且用户市场ID存在
-            if (!configMarketId) {
-              console.log('❌ 设备未配置市场ID，阻止登录');
-              this.showMarketMismatchError();
-              this.startCountdown();
-              return;
-            }
-            
-            if (!userMarketId) {
-              console.log('❌ 用户市场ID为空，阻止登录');
-              this.showMarketMismatchError();
-              this.startCountdown();
-              return;
-            }
-            
-            if (configMarketIdStr !== userMarketIdStr) {
-              console.log('❌ 市场ID不匹配，显示10秒倒计时');
-              console.log('❌ 比较结果:', configMarketIdStr, '!==', userMarketIdStr);
-              // 停止轮询
-              clearInterval(this.pollInterval);
-              // 显示错误信息并开始倒计时
-              this.showMarketMismatchError();
-              this.startCountdown();
-              return; // 阻止登录
-            } else if (configMarketIdStr === userMarketIdStr) {
-              console.log('✅ 市场ID匹配，允许登录');
-              console.log('✅ 比较结果:', configMarketIdStr, '===', userMarketIdStr);
-            }
-          } catch (error) {
-            console.error('❌ 解析设备配置失败:', error);
-            localStorage.removeItem('deviceAdminConfig');
-            // 配置解析失败也阻止登录
-            this.showMarketMismatchError();
-            this.startCountdown();
-            return;
-          }
-        } else {
-          console.log('✅ 无设备配置缓存，直接允许登录');
-          // 没有设备配置，直接允许登录
-        }
-        
-        // 只有验证通过才能继续登录流程
-        console.log('✅ 市场ID验证通过，继续登录流程');
-        
-        // 用户登录成功，停止轮询
-        clearInterval(this.pollInterval);
-        this.$store.commit('SET_DISUSER', data.user);
-        this.$router.push({
-          name: 'Bills',
-          query: {
-            disId: data.user.nxDiuDistributerId,
-            disName: data.user.nxDistributerEntity.nxDistributerName
-          }
-        });
+        await this.completeLogin(data.user, data.dispatchAuth);
       } else {
         console.log('用户未登录，继续轮询...');
       }
@@ -221,17 +147,119 @@ mounted() {
   }, 5000);  // 每 5 秒轮询一次
 },
 
+    async loginWithTestUserId() {
+      this.testLoginError = '';
+      const userId = Number(this.testUserId);
+      if (!Number.isSafeInteger(userId) || userId <= 0 || userId > 2147483647) {
+        this.testLoginError = '请输入正确的配送商用户 ID';
+        return;
+      }
+      const testLogin = window.electronAPI?.userSession?.testLogin;
+      if (typeof testLogin !== 'function') {
+        this.testLoginError = '请在 Electron 桌面端使用测试登录';
+        return;
+      }
+
+      this.testLoggingIn = true;
+      try {
+        const result = await testLogin(userId);
+        if (!result?.ok || !result.data?.user) {
+          this.testLoginError = result?.message || '测试登录失败';
+          return;
+        }
+        const accepted = await this.completeLogin(result.data.user, null, true);
+        if (!accepted) {
+          await window.electronAPI?.userSession?.logout?.();
+        }
+      } catch (error) {
+        this.testLoginError = error?.message || '测试登录失败，请检查测试服务器';
+      } finally {
+        this.testLoggingIn = false;
+      }
+    },
+
+    async completeLogin(user, dispatchAuth = null, dispatchSessionAlreadyStored = false) {
+      if (!user?.nxDistributerUserId || !user?.nxDiuDistributerId
+          || !user?.nxDistributerEntity) {
+        this.testLoginError = '服务器返回的用户信息不完整';
+        return false;
+      }
+      const deviceConfig = localStorage.getItem('deviceAdminConfig');
+      const userMarketId = user.nxDistributerEntity?.nxDistributerSysMarketId
+        || user.nxDistributerSysMarketId
+        || user.marketId
+        || user.nxMarketId;
+
+      if (deviceConfig) {
+        try {
+          const storedConfig = JSON.parse(deviceConfig);
+          const configMarketId = storedConfig.deviceAdminInfo?.marketId;
+          if (!configMarketId || !userMarketId
+              || String(configMarketId) !== String(userMarketId)) {
+            this.stopPolling();
+            this.showMarketMismatchError();
+            this.startCountdown();
+            return false;
+          }
+        } catch (error) {
+          console.error('解析设备配置失败:', error);
+          localStorage.removeItem('deviceAdminConfig');
+          this.stopPolling();
+          this.showMarketMismatchError();
+          this.startCountdown();
+          return false;
+        }
+      }
+
+      this.stopPolling();
+
+      // 原扫码登录同时完成调度授权。老板的短期令牌交给 Electron
+      // 主进程校验和保存；文员登录时主动清除之前可能残留的老板授权。
+      const dispatchApi = window.electronAPI?.dispatchAuth;
+      if (!dispatchSessionAlreadyStored && dispatchApi) {
+        if (Number(user.nxDiuAdmin) === 0 && dispatchAuth?.accessToken) {
+          const authResult = await dispatchApi.adoptLoginSession?.(dispatchAuth, {
+            persistSession: false,
+          });
+          if (!authResult?.ok) {
+            console.warn('[desktop-login] 调度授权保存失败:', authResult?.message);
+            await dispatchApi.logout?.();
+          }
+        } else {
+          await dispatchApi.logout?.();
+        }
+      }
+
+      this.$store.commit('SET_DISUSER', user);
+      const requestedRoute = this.$route.query?.returnTo;
+      const targetRoute = requestedRoute === 'DispatchWorkbench'
+        && Number(user.nxDiuAdmin) === 0
+        ? 'DispatchWorkbench'
+        : defaultRouteNameForUser(user);
+      await this.$router.push({
+        name: targetRoute,
+        query: {
+          disId: user.nxDiuDistributerId,
+          disName: user.nxDistributerEntity.nxDistributerName,
+        },
+      });
+      return true;
+    },
+
+    stopPolling() {
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval);
+        this.pollInterval = null;
+      }
+    },
+
     // 定义轮询函数
     pollForUserInfo0(sessionId) {
       this.pollInterval = setInterval(() => {
-        api.checkLoginStatus(sessionId).then((response) => {
+        api.checkLoginStatus(sessionId).then(async (response) => {
           const data = response.data;
           if (data.loggedIn) {
-            console.log('用户登录成功，用户ID:', data.user);
-            // 用户登录成功，停止轮询
-            clearInterval(this.pollInterval);
-            this.$store.commit('SET_DISUSER', data.user);
-            this.$router.push({ name: 'Bills', query: { disId: data.user.nxDiuDistributerId, disName: data.user.nxDistributerEntity.nxDistributerName} });
+            await this.completeLogin(data.user, data.dispatchAuth);
           } else {
             console.log('用户未登录，继续轮询...');
           }
@@ -276,8 +304,7 @@ mounted() {
   beforeUnmount() {
     // 清除定时器，防止内存泄漏
     if (this.pollInterval) {
-      console.log("清除定时器，防止内存泄漏")
-      clearInterval(this.pollInterval);
+      this.stopPolling();
     }
     if (this.countdownTimer) {
       clearInterval(this.countdownTimer);
@@ -332,6 +359,87 @@ mounted() {
   height: 150px;
   object-fit: contain;
   margin-bottom: 10px;
+}
+
+.test-login-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 12px;
+  color: #718078;
+  font-size: 12px;
+}
+
+.test-login-divider::before,
+.test-login-divider::after {
+  height: 1px;
+  flex: 1;
+  background: #dce5e0;
+  content: '';
+}
+
+.test-login {
+  padding: 14px;
+  border: 1px solid #cfe3d9;
+  border-radius: 8px;
+  background: #f5faf7;
+  text-align: left;
+}
+
+.test-login label {
+  display: block;
+  margin-bottom: 8px;
+  color: #345447;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.test-login__controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  gap: 8px;
+}
+
+.test-login input,
+.test-login button {
+  box-sizing: border-box;
+  height: 38px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.test-login input {
+  min-width: 0;
+  padding: 0 11px;
+  border: 1px solid #cbd8d1;
+  outline: none;
+  background: #fff;
+}
+
+.test-login input:focus {
+  border-color: #15945d;
+  box-shadow: 0 0 0 3px rgba(21, 148, 93, .1);
+}
+
+.test-login button {
+  border: 1px solid #15945d;
+  color: #fff;
+  background: #15945d;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.test-login button:disabled {
+  border-color: #a8c8b8;
+  background: #a8c8b8;
+  cursor: not-allowed;
+}
+
+.test-login__error {
+  margin: 8px 0 0;
+  color: #b9473d;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 /* 市场错误样式 */

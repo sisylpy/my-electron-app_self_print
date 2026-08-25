@@ -1,0 +1,833 @@
+{
+  "contract": "prediction-policy-electron-fixture/v1",
+  "sourceContract": "prediction-lab-policy-engine-decision-replay/v1",
+  "sourceReplaySha256": "4174879902a3e888fd2d2ab4437d691e79a126fede4c0ff624315abd27eb8ac3",
+  "frozen": true,
+  "readOnly": true,
+  "purpose": "DESKTOP_UX_VALIDATION_NOT_AGGREGATE_MODEL_EVALUATION",
+  "selectionReason": "真实饭馆、同一客户日同时包含 A/B/C，便于验证分组、数量复核和 C 级折叠交互",
+  "distributerId": 56,
+  "departmentId": 120,
+  "customerLabel": "沛宜配送 / 王永",
+  "predictionDate": "2025-08-23",
+  "algorithmVersion": "V8_REPLENISHMENT_STATE",
+  "levelCounts": {
+    "LEVEL_A": 5,
+    "LEVEL_B": 14,
+    "LEVEL_C": 9
+  },
+  "items": [
+    {
+      "goodsId": 22208,
+      "goodsName": "绿尖椒",
+      "unit": "斤",
+      "predictedQuantity": 1.8,
+      "actualQuantity": 2,
+      "outcome": "HIT",
+      "level": "LEVEL_A",
+      "trustScorePercent": 73.8944,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 0.2,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 2,
+        "medianCycleDays": 1,
+        "fitOccurrences": 26,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 2 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑命中可信度 68.8%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 90.5%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，商品采购间隔稳定度 58.1%，形成负向条件贡献",
+        "相对拟合样本，V8 当前购物篮内相对排名质量 100.0%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22311,
+      "goodsName": "韭菜",
+      "unit": "斤",
+      "predictedQuantity": 7.88,
+      "actualQuantity": 8,
+      "outcome": "HIT",
+      "level": "LEVEL_B",
+      "trustScorePercent": 51.2837,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 0.12,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 2,
+        "medianCycleDays": 1,
+        "fitOccurrences": 26,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 2 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，补货周期压力 85.7%，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 46.7%，形成负向条件贡献",
+        "相对拟合样本，商品采购间隔稳定度 59.5%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22660,
+      "goodsName": "西兰苔",
+      "unit": "斤",
+      "predictedQuantity": 5,
+      "actualQuantity": 6,
+      "outcome": "HIT",
+      "level": "LEVEL_A",
+      "trustScorePercent": 74.4099,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 1,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 1,
+        "fitOccurrences": 35,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 68.8%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 91.7%，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22383,
+      "goodsName": "蒿子杆",
+      "unit": "斤",
+      "predictedQuantity": 5,
+      "actualQuantity": 8,
+      "outcome": "HIT",
+      "level": "LEVEL_B",
+      "trustScorePercent": 51.0213,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 3,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 2,
+        "medianCycleDays": 1,
+        "fitOccurrences": 22,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 2 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，补货周期压力 85.0%，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 46.2%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 66.7%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22214,
+      "goodsName": "姜",
+      "unit": "斤",
+      "predictedQuantity": 4.38,
+      "actualQuantity": null,
+      "outcome": "EXTRA",
+      "level": "LEVEL_B",
+      "trustScorePercent": 43.7614,
+      "quantityComparable": false,
+      "quantityAbsoluteError": null,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 1,
+        "fitOccurrences": 24,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，客户行为稳定度 90.5%，形成正向模型证据",
+        "相对拟合样本，预测日前 30 天客户有订单 30 天，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 53.3%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22254,
+      "goodsName": "大蒜米",
+      "unit": "斤",
+      "predictedQuantity": 10.8,
+      "actualQuantity": null,
+      "outcome": "EXTRA",
+      "level": "LEVEL_C",
+      "trustScorePercent": 25.8439,
+      "quantityComparable": false,
+      "quantityAbsoluteError": null,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 1,
+        "fitOccurrences": 14,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，近期频率趋势稳定度 45.5%，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，客户行为稳定度 90.5%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 50.0%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 45.5%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22287,
+      "goodsName": "丝瓜",
+      "unit": "斤",
+      "predictedQuantity": 7.5,
+      "actualQuantity": 8,
+      "outcome": "HIT",
+      "level": "LEVEL_A",
+      "trustScorePercent": 71.9334,
+      "quantityComparable": false,
+      "quantityAbsoluteError": null,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 2,
+        "medianCycleDays": 1,
+        "fitOccurrences": 28,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 2 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 90.9%，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，商品采购间隔稳定度 64.3%，形成负向条件贡献",
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22356,
+      "goodsName": "黄心苦苣",
+      "unit": "斤",
+      "predictedQuantity": 1.75,
+      "actualQuantity": 2,
+      "outcome": "HIT",
+      "level": "LEVEL_B",
+      "trustScorePercent": 60.7768,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 0.25,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 1,
+        "fitOccurrences": 29,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 90.9%，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，客户行为稳定度 90.5%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，商品采购间隔稳定度 68.3%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22284,
+      "goodsName": "三色堇",
+      "unit": "盒",
+      "predictedQuantity": 1,
+      "actualQuantity": 2,
+      "outcome": "HIT",
+      "level": "LEVEL_A",
+      "trustScorePercent": 78.349,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 1,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 1,
+        "fitOccurrences": 38,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 68.8%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 86.1%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 91.7%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22801,
+      "goodsName": "长杆香菜",
+      "unit": "斤",
+      "predictedQuantity": 3.75,
+      "actualQuantity": 4,
+      "outcome": "HIT",
+      "level": "LEVEL_C",
+      "trustScorePercent": 31.3087,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 0.25,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 1,
+        "fitOccurrences": 21,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，客户行为稳定度 90.5%，形成正向模型证据",
+        "相对拟合样本，预测日前 30 天客户有订单 30 天，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 44.4%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑命中可信度 50.0%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22160,
+      "goodsName": "罗马生菜",
+      "unit": "斤",
+      "predictedQuantity": 8,
+      "actualQuantity": 10,
+      "outcome": "HIT",
+      "level": "LEVEL_B",
+      "trustScorePercent": 68.0182,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 2,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 1,
+        "fitOccurrences": 29,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 68.8%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 91.7%，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，商品采购间隔稳定度 68.3%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22814,
+      "goodsName": "广东茄子",
+      "unit": "斤",
+      "predictedQuantity": 10,
+      "actualQuantity": null,
+      "outcome": "EXTRA",
+      "level": "LEVEL_B",
+      "trustScorePercent": 55.3074,
+      "quantityComparable": false,
+      "quantityAbsoluteError": null,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 2,
+        "medianCycleDays": 1,
+        "fitOccurrences": 20,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 2 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 76.5%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 50.0%，形成负向条件贡献",
+        "相对拟合样本，相邻订单延续率 30.0%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22368,
+      "goodsName": "香葱",
+      "unit": "斤",
+      "predictedQuantity": 2,
+      "actualQuantity": 4,
+      "outcome": "HIT",
+      "level": "LEVEL_B",
+      "trustScorePercent": 66.0512,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 2,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 1,
+        "fitOccurrences": 32,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 90.9%，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，相邻订单延续率 71.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，补货周期压力 60.0%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22213,
+      "goodsName": "口蘑",
+      "unit": "斤",
+      "predictedQuantity": 2,
+      "actualQuantity": 8,
+      "outcome": "HIT",
+      "level": "LEVEL_C",
+      "trustScorePercent": 36.4079,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 6,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 1,
+        "fitOccurrences": 19,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，客户行为稳定度 90.5%，形成正向模型证据",
+        "相对拟合样本，预测日前 30 天客户有订单 30 天，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 33.3%，形成负向条件贡献",
+        "相对拟合样本，相邻订单延续率 33.3%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22640,
+      "goodsName": "板蓝根苔",
+      "unit": "斤",
+      "predictedQuantity": 6,
+      "actualQuantity": 5,
+      "outcome": "HIT",
+      "level": "LEVEL_B",
+      "trustScorePercent": 45.8684,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 1,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 1,
+        "fitOccurrences": 28,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，客户行为稳定度 90.5%，形成正向模型证据",
+        "相对拟合样本，相邻订单延续率 63.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 50.0%，形成负向条件贡献",
+        "相对拟合样本，商品采购间隔稳定度 62.8%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 24929,
+      "goodsName": "红线椒",
+      "unit": "斤",
+      "predictedQuantity": 2.25,
+      "actualQuantity": 4,
+      "outcome": "HIT",
+      "level": "LEVEL_B",
+      "trustScorePercent": 47.3135,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 1.75,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 1,
+        "fitOccurrences": 25,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，客户行为稳定度 90.5%，形成正向模型证据",
+        "相对拟合样本，预测日前 30 天客户有订单 30 天，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 54.5%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22151,
+      "goodsName": "绿甘蓝",
+      "unit": "斤",
+      "predictedQuantity": 15,
+      "actualQuantity": 10,
+      "outcome": "HIT",
+      "level": "LEVEL_C",
+      "trustScorePercent": 37.8859,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 5,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 3,
+        "medianCycleDays": 1,
+        "fitOccurrences": 6,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 3 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，补货周期压力 85.7%，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 20.0%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑命中可信度 50.0%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22219,
+      "goodsName": "黄豆芽",
+      "unit": "斤",
+      "predictedQuantity": 6.75,
+      "actualQuantity": null,
+      "outcome": "EXTRA",
+      "level": "LEVEL_C",
+      "trustScorePercent": 32.1591,
+      "quantityComparable": false,
+      "quantityAbsoluteError": null,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 2,
+        "medianCycleDays": 1,
+        "fitOccurrences": 20,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 2 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，客户行为稳定度 90.5%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 30.0%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 50.0%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22680,
+      "goodsName": "青椒",
+      "unit": "斤",
+      "predictedQuantity": 3.38,
+      "actualQuantity": 2,
+      "outcome": "HIT",
+      "level": "LEVEL_C",
+      "trustScorePercent": 21.4382,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 1.38,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 1,
+        "fitOccurrences": 19,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，客户行为稳定度 90.5%，形成正向模型证据",
+        "相对拟合样本，预测日前 30 天客户有订单 30 天，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 36.4%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 57.1%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22374,
+      "goodsName": "扁豆角",
+      "unit": "斤",
+      "predictedQuantity": 8,
+      "actualQuantity": null,
+      "outcome": "EXTRA",
+      "level": "LEVEL_B",
+      "trustScorePercent": 57.9007,
+      "quantityComparable": false,
+      "quantityAbsoluteError": null,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 1,
+        "fitOccurrences": 25,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 90.0%，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，客户行为稳定度 90.5%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 56.2%，形成负向条件贡献",
+        "相对拟合样本，补货周期压力 55.6%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22152,
+      "goodsName": "油菜",
+      "unit": "斤",
+      "predictedQuantity": 1.75,
+      "actualQuantity": null,
+      "outcome": "EXTRA",
+      "level": "LEVEL_C",
+      "trustScorePercent": 20.3151,
+      "quantityComparable": false,
+      "quantityAbsoluteError": null,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 2,
+        "medianCycleDays": 2,
+        "fitOccurrences": 17,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，当前购物篮动态关联支持 44.0%，形成正向模型证据",
+        "相对拟合样本，客户行为稳定度 90.5%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 33.3%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 33.3%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22191,
+      "goodsName": "冰草",
+      "unit": "斤",
+      "predictedQuantity": 1,
+      "actualQuantity": null,
+      "outcome": "EXTRA",
+      "level": "LEVEL_B",
+      "trustScorePercent": 56.6106,
+      "quantityComparable": false,
+      "quantityAbsoluteError": null,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 2,
+        "medianCycleDays": 1,
+        "fitOccurrences": 21,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 2 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，当前购物篮动态关联支持 43.9%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 54.5%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 60.0%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22217,
+      "goodsName": "紫皮洋葱",
+      "unit": "斤",
+      "predictedQuantity": 3.38,
+      "actualQuantity": 3,
+      "outcome": "HIT",
+      "level": "LEVEL_B",
+      "trustScorePercent": 64.2949,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 0.38,
+      "evidence": {
+        "state": "OVERDUE",
+        "daysSinceLast": 3,
+        "medianCycleDays": 1,
+        "fitOccurrences": 25,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 3 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 90.0%，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，商品采购间隔稳定度 55.8%，形成负向条件贡献",
+        "相对拟合样本，补货周期压力 47.4%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22379,
+      "goodsName": "西红柿",
+      "unit": "斤",
+      "predictedQuantity": 10,
+      "actualQuantity": 15,
+      "outcome": "HIT",
+      "level": "LEVEL_B",
+      "trustScorePercent": 60.1563,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 5,
+      "evidence": {
+        "state": "OVERDUE",
+        "daysSinceLast": 3,
+        "medianCycleDays": 1,
+        "fitOccurrences": 24,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 3 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 87.5%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 43.8%，形成负向条件贡献",
+        "相对拟合样本，补货周期压力 44.7%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22286,
+      "goodsName": "黄瓜",
+      "unit": "斤",
+      "predictedQuantity": 10,
+      "actualQuantity": 40,
+      "outcome": "HIT",
+      "level": "LEVEL_B",
+      "trustScorePercent": 67.7251,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 30,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 1,
+        "fitOccurrences": 31,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，相邻订单延续率 83.3%，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，近期频率趋势稳定度 68.2%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，补货周期压力 53.3%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22168,
+      "goodsName": "大娃娃菜",
+      "unit": "斤",
+      "predictedQuantity": 5,
+      "actualQuantity": null,
+      "outcome": "EXTRA",
+      "level": "LEVEL_C",
+      "trustScorePercent": 37.124,
+      "quantityComparable": false,
+      "quantityAbsoluteError": null,
+      "evidence": {
+        "state": "APPROACHING",
+        "daysSinceLast": 3,
+        "medianCycleDays": 2,
+        "fitOccurrences": 16,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 80.0%，形成正向模型证据",
+        "相对拟合样本，当前购物篮动态关联支持 30.1%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 28.6%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑命中可信度 50.0%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22187,
+      "goodsName": "丝瓜尖",
+      "unit": "斤",
+      "predictedQuantity": 4.38,
+      "actualQuantity": 6,
+      "outcome": "HIT",
+      "level": "LEVEL_A",
+      "trustScorePercent": 80.053,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 1.62,
+      "evidence": {
+        "state": "OVERDUE",
+        "daysSinceLast": 3,
+        "medianCycleDays": 1,
+        "fitOccurrences": 34,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 3 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 90.9%，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，补货周期压力 31.9%，形成负向条件贡献",
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献"
+      ]
+    },
+    {
+      "goodsId": 22815,
+      "goodsName": "去叶中葱",
+      "unit": "斤",
+      "predictedQuantity": 15,
+      "actualQuantity": 15,
+      "outcome": "HIT",
+      "level": "LEVEL_C",
+      "trustScorePercent": 35.7585,
+      "quantityComparable": true,
+      "quantityAbsoluteError": 0,
+      "evidence": {
+        "state": "CONSUMING",
+        "daysSinceLast": 1,
+        "medianCycleDays": 2,
+        "fitOccurrences": 19,
+        "recentCustomerActiveDays": 30,
+        "productProfileKnown": true
+      },
+      "supportingReasons": [
+        "相对拟合样本，补货状态稳定度 66.7%，形成正向模型证据",
+        "相对拟合样本，画像期客户活跃日占比 100.0%，形成正向模型证据",
+        "相对拟合样本，V8 当前购物篮内相对排名质量 3.6%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 45.5%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 2.0 天，形成负向条件贡献"
+      ]
+    }
+  ]
+}

@@ -2,7 +2,10 @@
   "mcpServers": {
     "grain-print": {
       "command": "node",
-      "args": ["/Users/lpy/Documents/wxPro/ai/my-electron-app_self_print/src/mcp-server-cli.js"]
+      "args": ["/Users/lpy/Documents/javaWeb/imJava/nongxinle/app/nxl-distributer/ai-priter-electic/src/mcp-server-cli.js"],
+      "env": {
+        "GRAIN_DIS_ID": "请填写配送商ID"
+      }
     }
   }
 }

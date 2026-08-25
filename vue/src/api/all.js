@@ -1,5 +1,6 @@
 ﻿// src/api/index.js
 import axiosInstance from './axios'; // 使用配置了拦截器的 Axios 实例
+import config from '../config';
 
 const api = '/api';
 if (!api) {
@@ -17,6 +18,13 @@ const apiMethods = {
   // 获取今天的订单客户
   webNxDisGetTodayOrderCustomer(disId) {
     return axiosInstance.get(`nxdepartmentorders/webNxDisGetTodayOrderCustomer/${disId}`);
+  },
+
+  // 订单工作台：获取所有进行中客户、状态统计及识别任务。
+  disGetTodayOrderCustomer(disId) {
+    return axiosInstance.get(`nxdepartmentorders/disGetTodayOrderCustomer/${disId}`, {
+      showLoading: false,
+    });
   },
 
   webNxDisGetTodayReturnCustomer(data) {
@@ -97,8 +105,10 @@ const apiMethods = {
   },
 
   // 获取全部客户列表
-  disGetAllCustomer(disId) {
-    return axiosInstance.get(`nxdepartment/disGetAllCustomer/${disId}`);
+  disGetAllCustomer(disId, responsibleUserId) {
+    return axiosInstance.get(`nxdepartment/disGetAllCustomer/${disId}`, {
+      params: responsibleUserId ? { responsibleUserId } : undefined,
+    });
   },
 
   // 获取客户历史订单
@@ -325,10 +335,29 @@ const apiMethods = {
   },
 
   // 保存订单（批量，使用 pasteSearchGoods，传 orderList + pasteText）
-  pasteSearchGoods(data) {
+  async pasteSearchGoods(data) {
     const body = typeof data === 'object' && data !== null && !Array.isArray(data)
       ? data
       : { orderList: Array.isArray(data) ? data : [], pasteText: '' };
+
+    const desktopWriter = typeof window !== 'undefined'
+      ? window.electronAPI?.orderWrite?.savePasteOrders
+      : null;
+    if (typeof desktopWriter === 'function') {
+      const result = await desktopWriter(body);
+      if (result?.ok) {
+        // 保持原有 Axios 调用方的 res.data 返回契约，业务组件无需感知传输通道。
+        return { data: result.data };
+      }
+      const error = new Error(result?.message || '保存订单失败');
+      error.response = {
+        status: result?.status || 0,
+        data: result?.data || { msg: result?.message || '保存订单失败' },
+      };
+      error.requestId = result?.requestId || null;
+      throw error;
+    }
+
     return axiosInstance.post('ocr/pasteSearchGoods', body, {
       headers: {
         'Content-Type': 'application/json'
@@ -408,8 +437,11 @@ const apiMethods = {
   },
 
   // 获取配送商下未完成订单的任务列表（今日任务客户）
-  getDisTaskFatherDepartmentList(disId) {
-    return axiosInstance.get(`ocr/disGetTaskDepFatherList/${disId}`, { showLoading: false });
+  getDisTaskFatherDepartmentList(disId, responsibleUserId) {
+    return axiosInstance.get(`ocr/disGetTaskDepFatherList/${disId}`, {
+      params: responsibleUserId != null ? { responsibleUserId } : undefined,
+      showLoading: false
+    });
   },
 
   // 完成任务
@@ -440,7 +472,7 @@ const apiMethods = {
 
   /** 图片等静态资源服务器地址（不带 api/） */
   getImageServerURL() {
-    return 'https://grainservice.club:8443/nongxinle/';
+    return new URL('../', config.baseURL).toString();
   },
   
   // 注意：小程序直接使用腾讯云插件，不通过后端API
@@ -464,4 +496,3 @@ const apiMethods = {
 };
 
 export default apiMethods;
-

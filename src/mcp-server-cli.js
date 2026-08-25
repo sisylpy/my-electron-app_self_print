@@ -5,6 +5,11 @@
  */
 
 const http = require('http');
+const crypto = require('crypto');
+const {
+  getMcpCliBridgeTokenPath,
+  readOrCreateMcpCliBridgeToken
+} = require('./mcp-auth');
 
 // 性能优化：移除所有调试日志输出
 const DEBUG = false;
@@ -17,6 +22,7 @@ const MCP_VERSION = '2024-11-05';
 const HTTP_PORT = 3002;
 // 使用 127.0.0.1，与 Electron 主进程轮询地址一致，避免仅绑定 IPv4 时 localhost 走 ::1 连不上
 const HTTP_HOST = '127.0.0.1';
+const HTTP_AUTH_TOKEN = readOrCreateMcpCliBridgeToken();
 
 // 打印任务队列（供 Electron 轮询）
 let pendingPrintTasks = [];
@@ -24,12 +30,42 @@ let pendingPrintTasks = [];
 // 创建简单的 HTTP 服务器（供 Electron 轮询打印任务）
 function createHttpServer() {
   const server = http.createServer((req, res) => {
-    // 设置 CORS
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', 'application/json');
-    
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+
+    const remoteAddress = req.socket.remoteAddress;
+    const isLoopback =
+      remoteAddress === '127.0.0.1' ||
+      remoteAddress === '::1' ||
+      remoteAddress === '::ffff:127.0.0.1';
+    if (!isLoopback) {
+      res.writeHead(403);
+      res.end(JSON.stringify({ error: 'Local access only' }));
+      return;
+    }
+    if (req.headers.origin || req.headers['sec-fetch-site']) {
+      res.writeHead(403);
+      res.end(JSON.stringify({ error: 'Browser-origin requests are not allowed' }));
+      return;
+    }
+    const authorization = String(req.headers.authorization || '');
+    const providedToken = authorization.startsWith('Bearer ')
+      ? authorization.slice('Bearer '.length)
+      : '';
+    const actual = Buffer.from(providedToken);
+    const expected = Buffer.from(HTTP_AUTH_TOKEN);
+    const authorized =
+      actual.length === expected.length &&
+      actual.length > 0 &&
+      crypto.timingSafeEqual(actual, expected);
+    if (!authorized) {
+      res.writeHead(401, { 'WWW-Authenticate': 'Bearer' });
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
+      return;
+    }
+
     if (req.method === 'OPTIONS') {
-      res.writeHead(200);
+      res.writeHead(405);
       res.end();
       return;
     }
@@ -41,24 +77,6 @@ function createHttpServer() {
       pendingPrintTasks = [];  // 获取后清除
       res.writeHead(200);
       res.end(JSON.stringify({ tasks }));
-      return;
-    }
-    
-    // POST /print-task - 添加打印任务（由 MCP tools/call 调用）
-    if (req.method === 'POST' && pathname === '/print-task') {
-      let body = '';
-      req.on('data', chunk => body += chunk);
-      req.on('end', () => {
-        try {
-          const task = JSON.parse(body);
-          pendingPrintTasks.push(task);
-          res.writeHead(200);
-          res.end(JSON.stringify({ success: true, taskId: Date.now() }));
-        } catch (e) {
-          res.writeHead(400);
-          res.end(JSON.stringify({ error: 'Invalid JSON' }));
-        }
-      });
       return;
     }
     
@@ -163,9 +181,15 @@ const MCP_TOOLS = [
 ];
 
 // 应用状态（通过环境变量或命令行参数传入）
-const PRODUCTION_API_BASE = 'https://grainservice.club:8443/nongxinle/api/';
+const {
+  PRODUCTION_API_BASE_URL,
+  normalizeNongxinleApiBaseUrl,
+} = require('./api-runtime');
+function normalizeApiBaseUrl(value) {
+  return normalizeNongxinleApiBaseUrl(value, 'GRAIN_API_URL');
+}
 const CONFIG = {
-  apiUrl: process.env.GRAIN_API_URL || PRODUCTION_API_BASE,
+  apiUrl: normalizeApiBaseUrl(process.env.GRAIN_API_URL || PRODUCTION_API_BASE_URL),
   disId: process.env.GRAIN_DIS_ID || null
 };
 
@@ -732,4 +756,5 @@ startHttpServer();
 // 启动提示
 console.error('[MCP] GrainPrint MCP Server (Stdio) v1.0.0 已启动');
 console.error('[MCP] HTTP 服务器运行在 http://127.0.0.1:3002');
+console.error('[MCP] HTTP 鉴权令牌文件:', getMcpCliBridgeTokenPath());
 console.error('[MCP] 使用 GRAIN_DIS_ID:', CONFIG.disId || '未设置');

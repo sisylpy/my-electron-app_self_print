@@ -5,7 +5,11 @@
             <!-- 侧边栏 -->
             <div class="col-md-2 sidebar-container">
                 <!-- 客户管理按钮组 -->
-                <div class="btn-group w-100 mb-3" role="group" style="flex-shrink: 0;">
+                <div
+                        v-if="!$route.meta.billsView"
+                        class="btn-group w-100 mb-3"
+                        role="group"
+                        style="flex-shrink: 0;">
                     <button type="button"
                             :class="currentView === 'order' ? 'btn btn-primary' : 'btn btn-outline-primary'"
                             @click="switchToOrderCustomers">
@@ -86,7 +90,7 @@
                         <!-- 无数据时显示提示 -->
                         <div v-else class="empty-customer-list text-center p-4">
                             <div class="text-muted">
-                                <div class="mb-2" style="font-size: 48px;">📋</div>
+                                <div class="empty-state-mark mb-2">单</div>
                                 <div class="fw-bold mb-1">暂无配送单客户</div>
                                 <div class="small">请等待数据加载或联系管理员</div>
                             </div>
@@ -108,7 +112,7 @@
                         </ul>
                         <div v-else class="empty-customer-list text-center p-4">
                             <div class="text-muted">
-                                <div class="mb-2" style="font-size: 48px;">📋</div>
+                                <div class="empty-state-mark mb-2">任</div>
                                 <div class="fw-bold mb-1">暂无今日任务客户</div>
                                 <div class="small">点击上方按钮加载有未完成任务的客户列表</div>
                             </div>
@@ -204,7 +208,7 @@
                 <!-- 配送单视图 - 无数据提示 -->
                 <div v-else-if="currentView === 'order'" class="empty-order-content text-center p-5">
                     <div class="text-muted">
-                        <div class="mb-3" style="font-size: 64px;">📦</div>
+                        <div class="empty-state-mark mb-3">印</div>
                         <h5 class="fw-bold mb-2">暂无配送单数据</h5>
                         <p class="mb-0">请在左侧选择客户查看订单详情</p>
                     </div>
@@ -214,7 +218,7 @@
                 <div v-if="currentView === 'task'" class="task-order-wrapper">
                     <div v-if="!selectedTask" class="text-center p-5">
                         <div class="text-muted">
-                            <div class="mb-3" style="font-size: 64px;">📋</div>
+                            <div class="empty-state-mark mb-3">任</div>
                             <h5 class="fw-bold mb-2">请选择客户</h5>
                             <p class="mb-0">在左侧选择有未完成任务的客户，右侧将按该客户的父级部门拉取任务并显示订单</p>
                         </div>
@@ -260,7 +264,7 @@
                                         type="button"
                                         role="tab"
                                         @click="switchAllCustomerTab(0)">
-                                    💾 今日订单
+                                    今日订单
                                     <span class="badge bg-primary ms-2" v-if="todayOrderCount > 0">{{ todayOrderCount }}</span>
                                 </button>
                             </li>
@@ -275,7 +279,7 @@
                                             role="tab"
                                             @click="switchAllCustomerTab(1)"
                                             style="border: none; border-radius: 0;">
-                                        ➕ 下单
+                                        新建订单
                                     </button>
                                     <!-- 子部门选择（只在"下单"标签页显示） -->
                                     <div v-if="allCustomerTabIndex === 1 && hasSubDepartments" 
@@ -305,7 +309,7 @@
                                         type="button"
                                         role="tab"
                                         @click="switchAllCustomerTab(2)">
-                                    📋 历史订单
+                                    历史订单
                                 </button>
                             </li>
                         </ul>
@@ -402,8 +406,8 @@
     import { markRaw } from 'vue';
     import api from "../api/all";
     import TodayOrders from '@/components/TodayOrders.vue';
-    import PlaceOrder from '@/components/PlaceOrder.vue';
-    import TaskOrder from '@/components/TaskOrder.vue';
+    import PlaceOrder from '@/modules/order/components/PlaceOrderWorkspace.vue';
+    import TaskOrder from '@/modules/order/components/TaskOrderWorkspace.vue';
     import HistoryOrders from '@/components/HistoryOrders.vue';
 
     const applyComponentMap = {
@@ -507,6 +511,8 @@
                 _mcpPrintRouteLock: false,
                 /** 防止 Vuex MCP 任务重复消费 */
                 _mcpStoreConsuming: false,
+                /** mounted 后才允许路由视图适配发起数据读取 */
+                productRouteReady: false,
 
                 // 预加载的打印组件（避免 Vue 3 将 async 组件渲染为 [object Promise]）
                 loadedOrderPrintComponent: null,
@@ -668,17 +674,23 @@
                     console.log('disUser发生变化:', newVal);
                     if (newVal && newVal.nxDiuDistributerId) {
                         console.log('disUser已设置，nxDiuDistributerId:', newVal.nxDiuDistributerId);
-                        // 如果disUser从null变为有值，且当前视图是订单视图，则获取客户列表
-                        if (!oldVal && newVal && this.currentView === 'order') {
-                            this.fetchCustomerList();
+                        if (!oldVal && newVal) {
+                            if (this.productRouteReady && this.$route.meta?.billsView) {
+                                this.applyProductRoute(this.$route);
+                            } else if (!this.$route.meta?.billsView && this.currentView === 'order') {
+                                this.fetchCustomerList();
+                            }
                         }
                     }
                 },
                 immediate: true
             },
             '$route': {
-                handler() {
+                handler(route) {
                     this.tryConsumeMcpPrintRoute();
+                    if (this.productRouteReady) {
+                        this.$nextTick(() => this.applyProductRoute(route));
+                    }
                 },
                 immediate: true
             },
@@ -709,7 +721,7 @@
         },
 
 
-        mounted() {
+        async mounted() {
 
 
             // 检查 window.electronAPI 是否存在
@@ -723,20 +735,25 @@
             // 检查disUser状态
             console.log('mounted时的disUser状态:', this.disUser);
 
-            // 只有在disUser存在时才调用fetchCustomerList（MCP 带 mcpPrint 进页时由 tryConsumeMcpPrintRoute 拉列表，避免与 skipAutoSelect 逻辑打架）
-            if (this.disUser && this.disUser.nxDiuDistributerId) {
-                if (this.$store.state.mcpPrintQueue.length > 0 || this.$route.query.mcpPrint === 'true') {
-                    console.log('[MCP] Bills mounted：跳过初次 fetchCustomerList，等待 MCP 流程拉列表');
-                    try {
-                        if (window.electronAPI && typeof window.electronAPI.rendererConsoleLog === 'function') {
-                            window.electronAPI.rendererConsoleLog('[MCP] Bills mounted：skip fetch（MCP pending 或 query）');
-                        }
-                    } catch (e) {}
+            this.productRouteReady = true;
+            const routeHandled = await this.applyProductRoute(this.$route);
+
+            // 兼容未接入 ProductShell 的历史路由。MCP 带 mcpPrint 进页时仍由原流程拉列表。
+            if (!routeHandled) {
+                if (this.disUser && this.disUser.nxDiuDistributerId) {
+                    if (this.$store.state.mcpPrintQueue.length > 0 || this.$route.query.mcpPrint === 'true') {
+                        console.log('[MCP] Bills mounted：跳过初次 fetchCustomerList，等待 MCP 流程拉列表');
+                        try {
+                            if (window.electronAPI && typeof window.electronAPI.rendererConsoleLog === 'function') {
+                                window.electronAPI.rendererConsoleLog('[MCP] Bills mounted：skip fetch（MCP pending 或 query）');
+                            }
+                        } catch (e) {}
+                    } else {
+                        await this.fetchCustomerList();
+                    }
                 } else {
-                    this.fetchCustomerList();
+                    console.warn('mounted时disUser未初始化，等待disUser设置后再获取客户列表');
                 }
-            } else {
-                console.warn('mounted时disUser未初始化，等待disUser设置后再获取客户列表');
             }
 
             // 监听来自主进程的 'refresh-customer-list' 消息
@@ -752,6 +769,35 @@
         },
 
         methods: {
+            /**
+             * ProductShell 路由只选择 Bills 已有视图，不复制或改写任何业务流程。
+             * MCP 查询优先级最高，继续由原有打印消费链路处理。
+             */
+            async applyProductRoute(route = this.$route) {
+                const billsView = route?.meta?.billsView;
+                if (!billsView) return false;
+                if (route?.query?.mcpPrint === 'true' || this.$store.state.mcpPrintQueue.length > 0) {
+                    return true;
+                }
+                if (!this.disUser || !this.disUser.nxDiuDistributerId) {
+                    return true;
+                }
+                if (billsView === 'task') {
+                    await this.switchToTaskList();
+                    return true;
+                }
+                if (billsView === 'all') {
+                    this.allCustomerTabIndex = Number(route.meta.billsTab || 0);
+                    await this.switchToAllCustomers();
+                    return true;
+                }
+                if (billsView === 'order') {
+                    await this.switchToOrderCustomers();
+                    return true;
+                }
+                return false;
+            },
+
             /** MCP 调试：同时打到 DevTools 与主进程终端（renderer-console-log） */
             mcpTeeLog(msg) {
                 const line = `[MCP][Bills] ${msg}`;
@@ -880,13 +926,13 @@
                 }
                 
                 // 刷新客户列表数据
-                this.fetchCustomerList();
+                return this.fetchCustomerList();
             },
 
             // 切换到全部客户列表视图
             switchToAllCustomers() {
                 this.currentView = 'all';
-                this.initAllCustomers();
+                return this.initAllCustomers();
             },
 
             // 切换到今日任务视图并拉取任务列表
@@ -901,7 +947,8 @@
                 this.taskListLoading = true;
                 this.taskList = [];
                 try {
-                    const res = await api.getDisTaskFatherDepartmentList(disId);
+                    const responsibleUserId = this.disUser && this.disUser.nxDistributerUserId;
+                    const res = await api.getDisTaskFatherDepartmentList(disId, responsibleUserId);
                     const data = res && res.data;
                     // 打印完整响应，便于核对后端返回结构（code、data/list 等）
                     console.log('[Bills] switchToTaskList API 原始响应', {
@@ -950,7 +997,8 @@
                 if (!disId) return;
                 this.taskListLoading = true;
                 try {
-                    const res = await api.getDisTaskFatherDepartmentList(disId);
+                    const responsibleUserId = this.disUser && this.disUser.nxDistributerUserId;
+                    const res = await api.getDisTaskFatherDepartmentList(disId, responsibleUserId);
                     const data = res && res.data;
                     if (data && (data.code === 0 || data.code === 200)) {
                         const list = data.data || data.list || [];
@@ -1478,7 +1526,10 @@
                     }
 
                     console.log('开始获取全部客户，disId:', this.disUser.nxDiuDistributerId);
-                    const res = await api.disGetAllCustomer(this.disUser.nxDiuDistributerId);
+                    const res = await api.disGetAllCustomer(
+                        this.disUser.nxDiuDistributerId,
+                        this.disUser.nxDistributerUserId
+                    );
 
                     if (res && res.data && res.data.code === 0) {
                         this.taskCount = res.data.taskCount;
@@ -2294,7 +2345,8 @@
     .bills-container {
         display: flex;
         flex-direction: column;
-        height: 100vh;
+        height: 100%;
+        min-width: 0;
         overflow: hidden;
     }
 
@@ -2567,16 +2619,6 @@
     }
 
 </style>
-
-
-
-
-
-
-
-
-
-
 
 
 

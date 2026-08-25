@@ -246,27 +246,27 @@ export default {
         // 当前配置值（从父组件传入）
         currentLeftMargin: {
             type: Number,
-            default: 12
+            default: DEFAULT_PROFILE.safeLeftMm
         },
         currentRightMargin: {
             type: Number,
-            default: 12
+            default: DEFAULT_PROFILE.safeRightMm
         },
         distributorNameFontSize: {
             type: Number,
-            default: 18
+            default: DEFAULT_PROFILE.distributorNameFontSize
         },
         orderContentFontSize: {
             type: Number,
-            default: 14
+            default: DEFAULT_PROFILE.orderContentFontSize
         },
         lineHeight: {
             type: Number,
-            default: 24
+            default: DEFAULT_PROFILE.lineHeight
         },
         headerFontSize: {
             type: Number,
-            default: 14
+            default: DEFAULT_PROFILE.headerFontSize
         }
     },
     data() {
@@ -278,8 +278,8 @@ export default {
             internalHeaderFontSize: this.headerFontSize,
             internalCurrentLeftMargin: this.currentLeftMargin,
             internalCurrentRightMargin: this.currentRightMargin,
-            zoomFactor: 1.0,  // 缩放系数
-            maxPrintableWidth: 200,  // 最大可打印宽度（mm），内容区域上限
+            zoomFactor: DEFAULT_PROFILE.zoomFactor,
+            maxPrintableWidth: DEFAULT_PROFILE.maxPrintableWidth,
             measuredWidth: 100,  // 用户测量的横向长度（mm）
             systemConfig: null,  // 系统配置信息
             isMac: false,  // 是否 macOS（用于显示「设为系统默认」）

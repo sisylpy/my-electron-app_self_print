@@ -1,5 +1,5 @@
 {
-  "host": "localhost",
+  "host": "127.0.0.1",
   "port": 3001,
-  "backendUrl": "https://grainservice.club:8443/nongxinle/api"
+  "backendUrl": "https://grainservice.club:8443/nongxinle/api/"
 }

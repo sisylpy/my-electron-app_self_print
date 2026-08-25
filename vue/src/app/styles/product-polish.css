@@ -1,0 +1,573 @@
+/*
+ * ProductShell 视觉精修层。
+ *
+ * 只约束产品壳层内的交互界面，不触碰 Apply* 等打印模板的尺寸、DPI、分页和边距。
+ * 视觉基准：白色工作面、低饱和灰绿背景、翡翠绿单一强调色、细边框、克制圆角。
+ */
+
+.product-shell {
+  color: var(--product-text);
+  background: var(--product-bg);
+}
+
+.product-shell button,
+.product-shell a,
+.product-shell input,
+.product-shell select,
+.product-shell textarea {
+  transition:
+    color .15s ease,
+    border-color .15s ease,
+    background-color .15s ease,
+    box-shadow .15s ease;
+}
+
+/* Bills / AI 录单 / 订单 / 打印入口 */
+.product-shell .bills-container {
+  background: transparent;
+}
+
+.product-shell .bills-container .bill-body {
+  display: grid;
+  grid-template-columns: 252px minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+  justify-content: stretch;
+  margin: 0;
+  padding: 16px 18px 18px;
+  background: transparent;
+}
+
+.product-shell .bills-container .sidebar-container {
+  width: auto;
+  max-width: none;
+  padding: 0;
+  background: transparent;
+}
+
+.product-shell .bills-container .customer-search-box {
+  padding: 0 0 12px;
+  border: 0;
+  background: transparent;
+}
+
+.product-shell .bills-container .customer-search-box .input-group {
+  overflow: hidden;
+  border: 1px solid var(--product-border);
+  border-radius: 4px;
+  background: #fff;
+}
+
+.product-shell .bills-container .customer-search-box .input-group-text,
+.product-shell .bills-container .customer-search-box .form-control,
+.product-shell .bills-container .customer-search-box .btn {
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+}
+
+.product-shell .bills-container .customer-search-box .form-control:focus {
+  box-shadow: inset 0 -2px 0 var(--product-primary);
+}
+
+.product-shell .bills-container .customer-list-box {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.product-shell .bills-container .customer-list-body {
+  padding-right: 4px;
+}
+
+.product-shell .bills-container .customer-type-header {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--product-border);
+  border-radius: 4px;
+  color: var(--product-text-secondary) !important;
+  background: #f8faf9;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.product-shell .bills-container .customer-type-header:hover {
+  color: var(--product-text) !important;
+  background: #f3f7f5;
+}
+
+.product-shell .bills-container .customer-list li,
+.product-shell .bills-container .customer-type-section li {
+  margin-bottom: 3px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--product-text-secondary);
+  background: transparent;
+}
+
+.product-shell .bills-container .customer-list li:hover,
+.product-shell .bills-container .customer-type-section li:hover {
+  border-color: #e4eae6;
+  background: #f7f9f8;
+}
+
+.product-shell .bills-container .customer-list li.active,
+.product-shell .bills-container .customer-type-section li.active {
+  border-color: #cde7d8;
+  color: #086d42;
+  background: var(--product-primary-soft);
+  box-shadow: inset 3px 0 0 var(--product-primary);
+}
+
+.product-shell .bills-container .customer-list li.active > a,
+.product-shell .bills-container .customer-type-section li.active > a {
+  color: #086d42 !important;
+  background: transparent !important;
+}
+
+.product-shell .bills-container .badge.bg-primary,
+.product-shell .bills-container .btn-primary {
+  border-color: var(--product-primary) !important;
+  color: #fff !important;
+  background: var(--product-primary) !important;
+}
+
+.product-shell .bills-container .btn-outline-primary {
+  border-color: #b9cbc0 !important;
+  color: #317054 !important;
+  background: #fff !important;
+}
+
+.product-shell .bills-container .btn,
+.product-shell .bills-container .badge {
+  border-radius: 3px;
+  box-shadow: none !important;
+}
+
+.product-shell .bills-container .main-content-container {
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--product-border);
+  border-radius: 6px;
+  background: var(--product-surface);
+  box-shadow: 0 12px 34px rgba(24, 51, 38, .045);
+}
+
+.product-shell .bills-container .empty-state-mark {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid #d6e4dc;
+  border-radius: 4px;
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.product-shell .bills-container .main-content-container > div {
+  min-height: 100%;
+}
+
+.product-shell .bills-container .main-content-container .card.shadow-lg {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none !important;
+}
+
+.product-shell .bills-container .main-content-container .nav-tabs {
+  gap: 22px;
+  border-bottom: 1px solid var(--product-border);
+}
+
+.product-shell .bills-container .main-content-container .nav-tabs .nav-link {
+  min-height: 46px;
+  padding: 10px 2px;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  color: var(--product-text-secondary);
+  background: transparent !important;
+  font-weight: 700;
+}
+
+.product-shell .bills-container .main-content-container .nav-tabs .nav-link:hover {
+  color: var(--product-text);
+}
+
+.product-shell .bills-container .main-content-container .nav-tabs .nav-link.active {
+  border-bottom-color: var(--product-primary) !important;
+  color: var(--product-primary-strong) !important;
+}
+
+.product-shell .bills-container .nav-link-active-wrapper {
+  border: 0 !important;
+  border-radius: 0 !important;
+}
+
+.product-shell .save-order-tab {
+  color: var(--product-text);
+}
+
+.product-shell .save-order-tab input[type='radio'],
+.product-shell .save-order-tab input[type='checkbox'] {
+  accent-color: var(--product-primary);
+}
+
+.product-shell .save-order-tab .card,
+.product-shell .upload-section .card {
+  border: 1px solid var(--product-border) !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+.product-shell .save-order-tab .card-header,
+.product-shell .upload-section .card-header {
+  border-bottom: 1px solid var(--product-border);
+  background: #f7f9f8;
+}
+
+.product-shell .save-order-tab .form-control,
+.product-shell .save-order-tab .form-select,
+.product-shell .upload-section .form-control,
+.product-shell .upload-section .form-select {
+  border-color: #d5dfd9;
+  border-radius: 3px;
+  box-shadow: none;
+}
+
+.product-shell .save-order-tab .form-control:focus,
+.product-shell .save-order-tab .form-select:focus,
+.product-shell .upload-section .form-control:focus,
+.product-shell .upload-section .form-select:focus {
+  border-color: var(--product-primary);
+  box-shadow: 0 0 0 2px rgba(17, 155, 93, .1);
+}
+
+.product-shell .save-order-tab .table,
+.product-shell .upload-section .table {
+  border-color: var(--product-border);
+  color: var(--product-text);
+}
+
+.product-shell .save-order-tab .table thead th,
+.product-shell .upload-section .table thead th {
+  border-color: var(--product-border);
+  color: #3c4b43;
+  background: #f5f7f6;
+}
+
+.product-shell .save-order-tab .btn,
+.product-shell .upload-section .btn {
+  border-radius: 3px;
+  box-shadow: none !important;
+}
+
+.product-shell .save-order-tab .btn-primary,
+.product-shell .upload-section .btn-primary {
+  border-color: var(--product-primary);
+  background: var(--product-primary);
+}
+
+.product-shell .bills-container .alert-info {
+  border-color: #cfe7da;
+  border-radius: 4px;
+  color: #426356;
+  background: #f0f8f4;
+}
+
+/* 调度工作台 */
+.product-shell .dispatch-workbench {
+  padding: 14px 16px 16px;
+  color: var(--product-text);
+  background: transparent;
+}
+
+.product-shell .dispatch-workbench__header {
+  display: flex !important;
+  min-height: 44px;
+  grid-template-columns: none !important;
+  justify-content: space-between !important;
+  gap: 18px;
+  padding: 8px 12px;
+  border: 1px solid var(--product-border);
+  border-radius: 5px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.product-shell .dispatch-workbench__status {
+  align-items: flex-start;
+}
+
+.product-shell .dispatch-workbench__status > span {
+  color: var(--product-primary-strong);
+}
+
+.product-shell .dispatch-workbench__status i {
+  background: var(--product-primary);
+  box-shadow: 0 0 0 3px rgba(17, 155, 93, .09);
+}
+
+.product-shell .dispatch-workbench__header-actions button,
+.product-shell .dispatch-workbench__header-actions a,
+.product-shell .dispatch-workbench__command-bar button,
+.product-shell .dispatch-workbench__warning button,
+.product-shell .dispatch-workbench__feedback button {
+  border-radius: 3px;
+  box-shadow: none;
+}
+
+.product-shell .dispatch-workbench__header-actions .login-button,
+.product-shell .dispatch-workbench__command-bar button.primary {
+  border-color: var(--product-primary);
+  background: var(--product-primary);
+}
+
+.product-shell .dispatch-workbench__header-actions .session-button {
+  border-color: #c9e2d4;
+  color: #176f49;
+  background: #f0f8f4;
+}
+
+.product-shell .dispatch-workbench__guardrail,
+.product-shell .dispatch-workbench__command-bar,
+.product-shell .dispatch-workbench__feedback,
+.product-shell .dispatch-workbench__warning {
+  border-color: var(--product-border);
+  border-radius: 4px !important;
+  background: #f8faf9 !important;
+  box-shadow: none !important;
+}
+
+.product-shell .dispatch-workbench__guardrail strong {
+  padding: 0;
+  border-radius: 0;
+  color: var(--product-primary-strong);
+  background: transparent;
+}
+
+.product-shell .dispatch-workbench__layout {
+  gap: 12px;
+}
+
+.product-shell .dispatch-workbench .left-panel,
+.product-shell .dispatch-workbench .workspace,
+.product-shell .dispatch-workbench .detail-panel {
+  border-color: var(--product-border);
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+.product-shell .dispatch-workbench .left-panel__switch,
+.product-shell .dispatch-workbench .workspace__phase-tabs {
+  padding: 0;
+  border-bottom: 1px solid var(--product-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.product-shell .dispatch-workbench .left-panel__switch button,
+.product-shell .dispatch-workbench .workspace__phase-tabs button {
+  border-radius: 0;
+  color: var(--product-text-secondary);
+}
+
+.product-shell .dispatch-workbench .left-panel__switch button.active,
+.product-shell .dispatch-workbench .workspace__phase-tabs button.active {
+  color: var(--product-primary-strong);
+  background: transparent;
+  box-shadow: inset 0 -2px 0 var(--product-primary);
+}
+
+.product-shell .dispatch-workbench .workspace__phase-tabs button.active span {
+  background: var(--product-primary);
+}
+
+.product-shell .dispatch-workbench .left-panel__filters button,
+.product-shell .dispatch-workbench .order-card,
+.product-shell .dispatch-workbench .driver-card,
+.product-shell .dispatch-workbench .route-card,
+.product-shell .dispatch-workbench .customer-detail__field {
+  border-color: var(--product-border);
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.product-shell .dispatch-workbench .left-panel__filters button.active,
+.product-shell .dispatch-workbench .order-card.selected,
+.product-shell .dispatch-workbench .driver-card.selected,
+.product-shell .dispatch-workbench .route-card.selected {
+  border-color: #99cbb1;
+  color: var(--product-primary-strong);
+  background: #f0f8f4;
+  box-shadow: inset 3px 0 0 var(--product-primary);
+}
+
+.product-shell .dispatch-workbench .order-card__sequence,
+.product-shell .dispatch-workbench .driver-card__avatar,
+.product-shell .dispatch-workbench .route-card__driver > i,
+.product-shell .dispatch-workbench .route-card__seq,
+.product-shell .dispatch-workbench .customer-detail__hero > span {
+  border-radius: 3px;
+  color: #fff;
+  background: var(--product-primary);
+  box-shadow: none;
+}
+
+.product-shell .dispatch-workbench .order-card__status,
+.product-shell .dispatch-workbench .route-card__badge,
+.product-shell .dispatch-workbench .customer-detail__header > span,
+.product-shell .dispatch-workbench .customer-detail__hero em {
+  border-radius: 3px;
+  color: #317054;
+  background: #edf6f1;
+}
+
+.product-shell .dispatch-workbench .workspace__summary,
+.product-shell .dispatch-workbench .customer-detail__hero {
+  border: 1px solid var(--product-border);
+  border-radius: 4px !important;
+  background: #f7faf8 !important;
+}
+
+.product-shell .dispatch-workbench .workspace__summary-copy strong,
+.product-shell .dispatch-workbench .route-card__progress > div strong,
+.product-shell .dispatch-workbench .driver-card__stage {
+  color: var(--product-primary-strong);
+}
+
+.product-shell .dispatch-workbench .route-card__header {
+  background: #f8faf9;
+}
+
+.product-shell .dispatch-workbench .route-card__progress > i {
+  border-radius: 1px;
+  background: #e2e9e5;
+}
+
+.product-shell .dispatch-workbench .route-card__progress b {
+  border-radius: 1px;
+  background: var(--product-primary);
+}
+
+.product-shell .dispatch-workbench .route-card__timeline li > button {
+  border-radius: 3px;
+}
+
+.product-shell .dispatch-workbench .route-card__timeline li > button:hover,
+.product-shell .dispatch-workbench .route-card__timeline li.active > button {
+  background: #f1f7f4;
+}
+
+.product-shell .dispatch-workbench .route-card__connector,
+.product-shell .dispatch-workbench .customer-detail__timeline > div:not(:last-child)::after {
+  background: #d8e3dd;
+}
+
+.product-shell .dispatch-workbench .customer-detail__timeline > div > span {
+  background: var(--product-primary);
+  box-shadow: 0 0 0 1px #9fceb5;
+}
+
+.product-shell .dispatch-workbench .route-map__badge {
+  border-radius: 3px;
+  color: #317054;
+  background: #edf6f1;
+}
+
+.product-shell .dispatch-workbench .route-map__canvas,
+.product-shell .dispatch-workbench .route-map__empty {
+  border-color: var(--product-border);
+  border-radius: 4px;
+  color: var(--product-text-secondary);
+  background: #f7faf8;
+}
+
+.product-shell .dispatch-workbench .route-map__eyebrow {
+  color: var(--product-primary-strong);
+}
+
+/* 设置中心 */
+.product-shell .settings-center {
+  padding: 16px 18px;
+}
+
+.product-shell .settings-center__summary article,
+.product-shell .settings-card {
+  border-color: var(--product-border);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.product-shell .summary-icon {
+  border-radius: 4px;
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
+}
+
+.product-shell .summary-icon.is-mcp,
+.product-shell .summary-icon.is-runtime {
+  color: #4f6258 !important;
+  background: #eef2f0 !important;
+}
+
+.product-shell .settings-card header,
+.product-shell .settings-card__note,
+.product-shell .settings-card__feedback {
+  background: #f8faf9;
+}
+
+.product-shell .settings-card button {
+  border-radius: 3px;
+  box-shadow: none;
+}
+
+/* 弹窗：克制层级，不使用渐变和大圆角。 */
+.product-shell .dialog-backdrop,
+.product-shell .confirm-backdrop {
+  background: rgba(20, 29, 24, .48);
+}
+
+.product-shell .driver-dialog,
+.product-shell .dispatch-login-dialog,
+.product-shell .confirm-dialog {
+  border: 1px solid var(--product-border);
+  border-radius: 6px !important;
+  box-shadow: 0 18px 55px rgba(17, 34, 25, .18) !important;
+}
+
+.product-shell .driver-dialog button,
+.product-shell .dispatch-login-dialog button,
+.product-shell .confirm-dialog button,
+.product-shell .driver-dialog__list > button {
+  border-radius: 3px;
+}
+
+.product-shell .driver-dialog__list > button.selected {
+  border-color: #99cbb1;
+  background: #f0f8f4;
+  box-shadow: inset 3px 0 0 var(--product-primary);
+}
+
+.product-shell .driver-dialog__avatar,
+.product-shell .dispatch-login-dialog .primary,
+.product-shell .driver-dialog .primary,
+.product-shell .confirm-dialog .primary {
+  border-radius: 3px;
+  background: var(--product-primary) !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 1280px) {
+  .product-shell .bills-container .bill-body {
+    grid-template-columns: 220px minmax(0, 1fr);
+    padding: 12px;
+  }
+}

@@ -367,7 +367,7 @@
         },
         props: ['nxDepFatherId', 'nxDepId', 'depName', 'depPrintName',
             'updateTime', 'disId', 'disName', 'gbDepFatherId', 'gbDepId', 'gbDepName', 'gbDisId', 'gbBatchId', 'orderData', 'isHistoryOrder', 'printAllOrders',
-            'todayOrderList', 'todayOrderDepArr', 'todayOrderTradeNo', 'hasSubDepartments'],
+            'todayOrderList', 'todayOrderDepArr', 'todayOrderTradeNo', 'hasSubDepartments', 'orderIds'],
         watch: {
             // 监听字体大小变化，确保CSS变量同步更新
             distributorNameFontSize(newValue) {
@@ -1786,7 +1786,8 @@
                                 this.disUser.nxDistributerUserId,
                                     paperCount,  // 传入总页数
                                     shouldSave,  // 只在最后一页为true
-                                    !!this.isHistoryOrder  // 历史订单打印时跳过保存接口和刷新客户列表
+                                    !!this.isHistoryOrder,  // 历史订单打印时跳过保存接口和刷新客户列表
+                                    this.orderIds
                             );
                         } else if (this.gbDepFatherId !== -1) {
                                 printResult = await window.electronAPI.sendPrintRequestGbWithCallback(
@@ -2434,5 +2435,4 @@
 }
 
 </style>
-
 

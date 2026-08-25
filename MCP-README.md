@@ -1,111 +1,92 @@
-# GrainPrint MCP 服务器
+# GrainPrint MCP 使用说明
 
-本模块为 GrainPrint 应用提供 MCP（Model Context Protocol）接口，支持通过 WorkBuddy 等 MCP Client 调用配送单打印功能。
+GrainPrint 提供配送单客户查询、预览、确认打印和按子部门打印能力。MCP 只下发打印意图，最终仍复用桌面端现有 Vue 模板、打印机配置、分页、走纸等待和打印记录流程。
 
-## 功能概述
+## 推荐方式：Stdio MCP
 
-- **获取客户列表**：`get_delivery_customers` - 获取今日有待打印配送单的客户列表
-- **预览配送单**：`preview_delivery_order` - 预览指定客户的配送单 HTML 内容
-- **确认打印**：`confirm_print_delivery_order` - 确认并打印指定客户的配送单
-
-## 快速开始
-
-### 1. 启动应用
-
-应用启动后会自动启动 MCP HTTP 服务器，默认监听 `http://localhost:3001`。
-
-### 2. 配置 WorkBuddy
-
-在 WorkBuddy 中导入配置文件 `mcp-config-workbuddy.json`：
+WorkBuddy、Cursor 等客户端优先直接启动 `src/mcp-server-cli.js`：
 
 ```json
 {
   "mcpServers": {
     "grain-print": {
-      "transport": "http",
-      "url": "http://localhost:3001"
+      "command": "node",
+      "args": [
+        "/Users/lpy/Documents/javaWeb/imJava/nongxinle/app/nxl-distributer/ai-priter-electic/src/mcp-server-cli.js"
+      ],
+      "env": {
+        "GRAIN_DIS_ID": "配送商ID"
+      }
     }
   }
 }
 ```
 
-### 3. 使用示例
+Stdio 进程与 Electron 之间的本地打印队列：
 
-在 WorkBuddy 中使用以下命令：
+- 只监听 `127.0.0.1:3002`；
+- 不开放 CORS，拒绝浏览器 Origin；
+- 使用 Bearer Token；
+- Token 自动生成在 `~/.grain-print/mcp-bridge-token`，权限为当前用户可读写；
+- Electron 和 Stdio 进程自动读取同一个 Token，无需手工复制；
+- 打印任务通过 Electron IPC 投递，并按 `taskId` 回执和有限重试。
 
-```javascript
-// 1. 获取今日配送单客户列表
-await mcp.grain-print.get_delivery_customers();
-// 返回：{ customers: [{ id, name, printName, subDepartments: [...] }] }
+## 可选方式：内嵌 HTTP MCP
 
-// 2. 预览指定客户的配送单
-await mcp.grain-print.preview_delivery_order({
-  department_id: 123  // 部门ID
-});
-// 返回：{ success, departmentName, orderCount, html }
+Electron 启动后会在 `127.0.0.1:3001` 启动内嵌服务。此入口适合明确支持自定义 HTTP Header 的 MCP 客户端。
 
-// 3. 确认打印配送单
-await mcp.grain-print.confirm_print_delivery_order({
-  department_id: 123
-});
-// 返回：{ success, message, departmentName, orderCount }
-```
+安全要求：
 
-## 配置说明
+- 每个请求必须带 `Authorization: Bearer <token>`；
+- Token 自动生成在 Electron `userData/mcp-auth-token`；
+- 桌面端 MCP 状态接口会返回 Token 文件路径，但不会把 Token 内容暴露给页面；
+- 只接受本机连接；
+- 拒绝带 `Origin` 或 `Sec-Fetch-Site` 的浏览器请求；
+- 请求体上限为 1 MB；
+- 后端只允许已登记的两个配送单接口；
+- `backendUrl` 只允许农心乐生产接口，或 `localhost`/`127.0.0.1`/`::1` 本机开发地址。
 
-### 修改端口
-
-编辑 `src/mcp-config.json`：
+内嵌 HTTP 配置示例：
 
 ```json
 {
-  "host": "localhost",
-  "port": 3002,  // 修改为其他端口
-  "backendUrl": "http://192.168.0.105:8080/nongxinle_war_exploded/api"
+  "host": "127.0.0.1",
+  "port": 3001,
+  "backendUrl": "https://grainservice.club:8443/nongxinle/api/"
 }
 ```
 
-### 后端 API 地址
+`host` 会被强制固定为 `127.0.0.1`。修改端口或后端地址后需要重启 Electron。
 
-如果后端 API 地址不同，请修改 `backendUrl`。
+## 工具
 
-## MCP 协议
+- `get_delivery_customers`：今日待打印配送单客户；
+- `preview_delivery_order`：预览指定客户；
+- `confirm_print_delivery_order`：确认并下发打印；
+- `dispatch_delivery_print_to_app`：只下发已有打印意图；
+- `print_each_subdepartment_delivery_order`：按子部门顺序下发。
 
-本服务使用 JSON-RPC 2.0 协议，支持以下方法：
+多子部门客户必须先确认打印范围：全店、单个子部门或每个子部门各打一张。无子部门客户可以直接确认打印。
 
-### initialize
+## 安全边界
 
-初始化连接。
+- MCP 只能使用 Electron 当前内存中的最小配送商会话摘要；
+- 配送商 ID 仍属于客户端输入，`nongxinle-server` 必须按当前会话校验租户归属；
+- 不读取渲染进程 `localStorage`，不在页面执行动态脚本；
+- 不向 preload 暴露任意 API 代理；
+- 不允许 MCP 自定义任意后端路径；
+- Token 不写日志，不进入源码和安装包；
+- 退出 Electron 后，内存会话摘要会被清理。
 
-### tools/list
+## 故障排查
 
-列出所有可用工具。
+连接失败时检查：
 
-### tools/call
+1. GrainPrint 是否已启动；
+2. Stdio 客户端配置中的脚本路径是否是当前项目路径；
+3. `GRAIN_DIS_ID` 是否已设置；
+4. 3001/3002 端口是否被占用；
+5. Token 文件是否存在且当前用户可读；
+6. Electron 应用日志中是否出现鉴权失败或打印投递未回执。
 
-调用指定工具。
-
-## 注意事项
-
-1. **用户登录**：MCP 调用使用应用内已登录的用户身份
-2. **自动登录**：如果应用开启了"记住用户"功能，MCP 可直接使用保存的登录状态
-3. **仅 NX 类型**：当前仅支持 NX 类型配送单（不支持 GB 供应商订货单）
-
-## 故障排除
-
-### 连接失败
-
-1. 确认应用已启动
-2. 检查端口是否被占用：`lsof -i :3001`
-3. 确认防火墙允许访问
-
-### 用户未登录
-
-1. 打开应用并完成登录
-2. 开启"记住用户"功能以便下次自动登录
-
-### 打印无响应
-
-1. 确认打印机已连接
-2. 检查打印机设置为默认
-3. 查看应用日志获取详细错误信息
+出现打印无响应时，还需确认打印机在线、默认打印机配置存在，并检查现有六模板打印流程。不要通过删除 DPI、边距或逐页等待来绕过问题。

@@ -4,19 +4,12 @@
  * 配置文件统一存储在 printer-config.json 中
  */
 
+import { DEFAULT_PRINTER_PROFILE } from '@/modules/print/config/printerDefaults';
+
 /**
- * 默认配置
+ * 保留原导出名，避免打印模板和校准面板发生契约变化。
  */
-const DEFAULT_PROFILE = {
-    safeLeftMm: 12,
-    safeRightMm: 12,
-    distributorNameFontSize: 18,
-    orderContentFontSize: 14,
-    lineHeight: 24,  // 行间距（px），默认 24px
-    headerFontSize: 14,  // 表头字体大小（px），默认 14px
-    zoomFactor: 1.0,  // 缩放系数，默认 1.0（不缩放）
-    maxPrintableWidth: 200  // 最大可打印宽度（mm），内容区域上限，不同打印机可调整 180-205
-};
+const DEFAULT_PROFILE = DEFAULT_PRINTER_PROFILE;
 
 /**
  * 获取当前打印机名称（从文件系统读取）

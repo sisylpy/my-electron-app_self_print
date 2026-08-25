@@ -1,9 +1,11 @@
 ﻿
 <template>
-  <!-- 显示匹配的组件 -->
   <div id="app-container">
     <LoadingOverlay />
-    <router-view v-if="$route" />
+    <ProductShell v-if="$route && $route.meta.shell !== false">
+      <router-view />
+    </ProductShell>
+    <router-view v-else-if="$route" />
     <div v-else style="padding: 20px; color: red;">
       ⚠️ 路由未加载，当前路由: {{ $route }}
     </div>
@@ -11,28 +13,25 @@
 </template>
  
 <script>
+import ProductShell from './app/layout/ProductShell.vue';
 import LoadingOverlay from './components/LoadingOverlay.vue';
 
 export default {
   name: 'App',
   components: {
     LoadingOverlay,
+    ProductShell,
   },
   data() {
     return {
       inactivityTimer: null, // 无操作计时器
       inactivityTimeout: 0.5 * 60 * 1000, // 30秒超时（毫秒）
       lastActivityTime: Date.now(), // 最后活动时间
-      /** MCP 同一 taskId 短时间内 IPC+inject 双通道去重 */
+      /** MCP 重试投递可能重复到达，按 taskId 短时间去重。 */
       _mcpLastTaskId: null,
       _mcpLastTaskAt: 0,
+      _mcpPrintCleanup: null,
     }
-  },
-  created() {
-    // 尽量早挂载，避免主进程 inject 早于 mounted 导致 no-handler
-    window.__grainHandleMcpPrintTask = (task) => {
-      this.handleMcpPrintTaskFromMain(task, 'inject');
-    };
   },
   mounted() {
     // 自动清理设备配置缓存
@@ -188,18 +187,16 @@ export default {
     
     // 监听 MCP 打印任务（由主进程通过 IPC 发送）
     if (window.electronAPI && window.electronAPI.onMcpPrintTrigger) {
-      window.electronAPI.onMcpPrintTrigger((task) => {
+      this._mcpPrintCleanup = window.electronAPI.onMcpPrintTrigger((task) => {
         this.handleMcpPrintTaskFromMain(task, 'ipc');
       });
     } else {
-      console.warn('⚠️ [MCP] electronAPI.onMcpPrintTrigger 不可用（仍可依赖 inject 后援）');
+      console.warn('⚠️ [MCP] electronAPI.onMcpPrintTrigger 不可用');
     }
   },
   
   methods: {
-    /**
-     * @param {'ipc'|'inject'} source — ipc：preload 频道；inject：主进程 executeJavaScript 后援
-     */
+    /** @param {'ipc'} source */
     handleMcpPrintTaskFromMain(task, source) {
       console.log(`🖨️ [MCP] 收到打印任务 (${source}):`, task);
       const id = task && task.taskId;
@@ -307,6 +304,18 @@ export default {
         }
       } catch (e) {}
       this.$store.commit('ENQUEUE_MCP_PRINT_TASK', task);
+      // 调度工作台属于持续操作场景，MCP 任务只进入可靠队列，不得抢占当前页面。
+      // 用户进入打印中心后，Bills 会按原有 FIFO 流程继续消费，不改变打印实现。
+      if (this.$route.name === 'DispatchWorkbench') {
+        try {
+          if (window.electronAPI && typeof window.electronAPI.rendererConsoleLog === 'function') {
+            window.electronAPI.rendererConsoleLog(
+              `[MCP] 派单页面保护：taskId=${task.taskId} 已入队，等待进入打印中心后执行`
+            );
+          }
+        } catch (e) {}
+        return;
+      }
       if (this.$route.name !== 'Bills') {
         this.$router.push({ name: 'Bills' }).catch((err) => {
           if (err && err.name !== 'NavigationDuplicated') {
@@ -329,7 +338,10 @@ export default {
   },
   
   beforeUnmount() {
-    delete window.__grainHandleMcpPrintTask;
+    if (typeof this._mcpPrintCleanup === 'function') {
+      this._mcpPrintCleanup();
+      this._mcpPrintCleanup = null;
+    }
     // 清理计时器和事件监听器
     if (this.inactivityTimer) {
       clearInterval(this.inactivityTimer);

@@ -1,0 +1,40 @@
+:root {
+  --product-bg: #f4f7f5;
+  --product-surface: #ffffff;
+  --product-surface-soft: #f7f9f8;
+  --product-border: #dde5e0;
+  --product-border-strong: #cbd7d0;
+  --product-text: #17211c;
+  --product-text-secondary: #5f6f67;
+  --product-text-muted: #89958f;
+  --product-primary: #119b5d;
+  --product-primary-strong: #087747;
+  --product-primary-soft: #eaf6ef;
+  --product-blue: #119b5d;
+  --product-blue-soft: #eaf6ef;
+  --product-warning: #9a6a18;
+  --product-warning-soft: #fff8e9;
+  --product-danger: #b14949;
+  --product-danger-soft: #fff3f2;
+  --product-radius-sm: 3px;
+  --product-radius-md: 5px;
+  --product-radius-lg: 7px;
+  --product-shadow: 0 12px 36px rgba(28, 48, 38, 0.055);
+  --product-sidebar-width: 132px;
+  --product-header-height: 76px;
+}
+
+html,
+body,
+#app,
+#app-container {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--product-text);
+  background: var(--product-bg);
+}

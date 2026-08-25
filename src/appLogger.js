@@ -166,12 +166,14 @@ function bindProcessHandlers() {
  * 注册 IPC：渲染进程 send('app-log')、invoke 取路径 / 打开文件夹
  * @param {import('electron').IpcMain} ipcMain
  * @param {import('electron').Shell} shell
+ * @param {(event: import('electron').IpcMainEvent | import('electron').IpcMainInvokeEvent) => void} assertTrustedEvent
  */
-function registerIpc(ipcMain, shell) {
+function registerIpc(ipcMain, shell, assertTrustedEvent) {
   if (ipcRegistered) return;
   ipcRegistered = true;
 
   ipcMain.on('app-log', (event, payload) => {
+    assertTrustedEvent(event);
     if (!payload || typeof payload !== 'object') return;
     const level = ['error', 'warn', 'info', 'debug'].includes(payload.level)
       ? payload.level
@@ -181,12 +183,14 @@ function registerIpc(ipcMain, shell) {
     append(level, tag, message, payload.meta);
   });
 
-  ipcMain.handle('app-log-dir', () => {
+  ipcMain.handle('app-log-dir', (event) => {
+    assertTrustedEvent(event);
     ensureLogDir();
     return logDir;
   });
 
-  ipcMain.handle('open-app-log-dir', async () => {
+  ipcMain.handle('open-app-log-dir', async (event) => {
+    assertTrustedEvent(event);
     ensureLogDir();
     const err = await shell.openPath(logDir);
     return { ok: !err, path: logDir, error: err || undefined };
@@ -196,11 +200,11 @@ function registerIpc(ipcMain, shell) {
 /**
  * 须在 app.whenReady() 内调用（保证 getPath 可用）
  */
-function init(ipcMain, shell) {
+function init(ipcMain, shell, assertTrustedEvent) {
   ensureLogDir();
   writeSessionHeader();
   bindProcessHandlers();
-  registerIpc(ipcMain, shell);
+  registerIpc(ipcMain, shell, assertTrustedEvent);
 
   // 开发包：在运行 Electron 的终端里打印路径（日志不在项目目录下）
   if (!app.isPackaged) {

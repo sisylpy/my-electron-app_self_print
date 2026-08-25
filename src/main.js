@@ -1,8 +1,19 @@
 // src/main.js
-const { app, BrowserWindow, ipcMain, screen, dialog, shell, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, dialog, shell, Menu, safeStorage } = require('electron');
 const path = require('path')
 const fs = require('fs')
 const appLogger = require('./appLogger')
+const {
+  PRINT_RUNTIME_CONFIG,
+  createCalibrationPrintOptions,
+  createSilentPrintOptions,
+  getDriverManagedDpiOptions,
+} = require('./print/config');
+const {
+  assertDeviceConfigResponse,
+  assertPrintMetadata,
+  sanitizePrinterProfile,
+} = require('./print/validation');
 // 暂时禁用 @nut-tree 模块以避免打包问题
 // let mouse, keyboard, Key;
 // try {
@@ -26,16 +37,29 @@ const os = require('os');
 const crypto = require('crypto');
 const https = require('https');
 const http = require('http');
-const { exec } = require('child_process');
+const { pathToFileURL } = require('url');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const axios = require('axios');
+const { createDispatchGateway } = require('./dispatch/dispatch-gateway');
+const { createOrderWriteGateway } = require('./order/order-write-gateway');
+const { PRODUCTION_API_BASE_URL } = require('./api-runtime');
 
 // MCP 服务器模块
 let mcpServer = null;
 const mcpModule = require('./mcp-server');
-const { pushMcpPrintTaskToRenderer } = require('./mcp-print-push');
+const {
+  pushMcpPrintTaskToRenderer,
+  acknowledgeMcpPrintTask,
+  clearMcpPrintDeliveriesForWebContents
+} = require('./mcp-print-push');
+const {
+  readOrCreateToken,
+  getMcpCliBridgeTokenPath,
+  readOrCreateMcpCliBridgeToken
+} = require('./mcp-auth');
 let mainWindowRef = null; // 保存 mainWindow 引用供 MCP 使用
 /** Stdio MCP（mcp-server-cli.js）打印任务轮询定时器，需在 will-quit 中清理 */
 let mcpCliPollingInterval = null;
@@ -52,6 +76,245 @@ const VUE3_DEVTOOLS_ID = 'ljjemllljcmogpfapbkkighbhhppjdbg';
 const electron = require('electron');
 const isDev = !electron.app.isPackaged; // 使用 app.isPackaged 来检测开发模式
 let mainWindow;
+let mcpSessionUser = null;
+let dispatchGateway = null;
+let orderWriteGateway = null;
+const selectedFolderCapabilities = new Set();
+const saveFileCapabilities = new Set();
+
+function trustedRendererUrl(url) {
+  if (typeof url !== 'string') return false;
+  if (isDev) {
+    try {
+      const parsed = new URL(url);
+      return (
+        parsed.protocol === 'http:' &&
+        ['localhost', '127.0.0.1'].includes(parsed.hostname) &&
+        parsed.port === '3000'
+      );
+    } catch {
+      return false;
+    }
+  }
+  try {
+    const expectedUrl = pathToFileURL(
+      path.join(__dirname, '../dist/vue/index.html')
+    );
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === 'file:' &&
+      parsed.origin === expectedUrl.origin &&
+      parsed.pathname === expectedUrl.pathname
+    );
+  } catch {
+    return false;
+  }
+}
+
+function assertTrustedRendererEvent(event) {
+  const sender = event && event.sender;
+  const expected = mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null;
+  const senderUrl =
+    (event && event.senderFrame && event.senderFrame.url) ||
+    (sender && !sender.isDestroyed() ? sender.getURL() : '');
+  if (!expected || !sender || sender.id !== expected.id || !trustedRendererUrl(senderUrl)) {
+    throw new Error('拒绝来自非可信渲染进程的 IPC 调用');
+  }
+}
+
+function assertPrintHtml(printData) {
+  if (typeof printData !== 'string' || printData.length === 0) {
+    throw new Error('打印内容必须是非空 HTML 字符串');
+  }
+  if (Buffer.byteLength(printData, 'utf8') > PRINT_RUNTIME_CONFIG.maxHtmlBytes) {
+    throw new Error('打印内容超过 50MB 限制');
+  }
+}
+
+function serializePrintError(error) {
+  if (!error) return '未知打印错误';
+  if (typeof error === 'string') return error;
+  return error.error || error.message || String(error);
+}
+
+function publishPrintJobStatus(status) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('print-job-status', {
+    timestamp: new Date().toISOString(),
+    ...status,
+  });
+}
+
+async function runTrackedPrintJob(label, work) {
+  const jobId = crypto.randomUUID();
+  publishPrintJobStatus({ jobId, label, state: 'printing', message: `${label}正在发送到打印机` });
+  try {
+    const result = await work();
+    publishPrintJobStatus({ jobId, label, state: 'success', message: `${label}已提交` });
+    return result;
+  } catch (error) {
+    publishPrintJobStatus({
+      jobId,
+      label,
+      state: 'failed',
+      retryable: true,
+      message: `${label}失败：${serializePrintError(error)}`,
+    });
+    throw error;
+  }
+}
+
+function getDispatchGateway() {
+  if (!dispatchGateway) {
+    dispatchGateway = createDispatchGateway({
+      app,
+      safeStorage,
+      axios,
+      isDev,
+    });
+  }
+  return dispatchGateway;
+}
+
+function getOrderWriteGateway() {
+  if (!orderWriteGateway) {
+    orderWriteGateway = createOrderWriteGateway({ axios, appLogger });
+  }
+  return orderWriteGateway;
+}
+
+function sanitizeMcpSessionUser(value) {
+  if (!value || typeof value !== 'object') return null;
+  const rawId = value.nxDiuDistributerId;
+  const id = Number(rawId);
+  if (!Number.isSafeInteger(id) || id <= 0) return null;
+  const distributorName =
+    value.nxDistributerEntity &&
+    typeof value.nxDistributerEntity.nxDistributerName === 'string'
+      ? value.nxDistributerEntity.nxDistributerName.slice(0, 100)
+      : '';
+  return {
+    nxDiuDistributerId: id,
+    nxDistributerEntity: {
+      nxDistributerName: distributorName
+    }
+  };
+}
+
+function getEmbeddedMcpTokenPath() {
+  return path.join(app.getPath('userData'), 'mcp-auth-token');
+}
+
+function getEmbeddedMcpToken() {
+  return readOrCreateToken(getEmbeddedMcpTokenPath());
+}
+
+function getCustomerFoldersConfigPath() {
+  return path.join(app.getPath('userData'), 'customer-folders.json');
+}
+
+function normalizeAbsolutePath(candidatePath) {
+  if (typeof candidatePath !== 'string' || candidatePath.length === 0 || candidatePath.length > 4096) {
+    throw new Error('文件路径无效');
+  }
+  return path.resolve(candidatePath);
+}
+
+function realPathIfExists(candidatePath) {
+  const absolutePath = normalizeAbsolutePath(candidatePath);
+  if (!fs.existsSync(absolutePath)) return absolutePath;
+  return fs.realpathSync.native ? fs.realpathSync.native(absolutePath) : fs.realpathSync(absolutePath);
+}
+
+function isPathWithin(candidatePath, rootPath) {
+  const candidate = realPathIfExists(candidatePath);
+  const root = realPathIfExists(rootPath);
+  const relative = path.relative(root, candidate);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function getConfiguredCustomerRoots() {
+  try {
+    const configPath = getCustomerFoldersConfigPath();
+    if (!fs.existsSync(configPath)) return [];
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    return Object.values(config)
+      .filter((value) => typeof value === 'string' && path.isAbsolute(value))
+      .map((value) => realPathIfExists(value));
+  } catch (error) {
+    console.warn('[文件权限] 客户文件夹配置读取失败:', error.message);
+    return [];
+  }
+}
+
+function assertAuthorizedCustomerPath(candidatePath) {
+  const roots = [
+    ...selectedFolderCapabilities,
+    ...getConfiguredCustomerRoots()
+  ];
+  if (!roots.some((root) => isPathWithin(candidatePath, root))) {
+    throw new Error('文件路径不在已授权的客户文件夹内');
+  }
+}
+
+const MCP_BACKEND_ROUTES = [
+  {
+    method: 'GET',
+    pattern: /^nxdepartmentorders\/webNxDisGetTodayOrderCustomer\/\d+$/
+  },
+  {
+    method: 'POST',
+    pattern: /^nxdepartmentorders\/phoneGetToFillDepOrders$/
+  }
+];
+
+async function callMcpBackendApi(apiPath, method = 'GET', data = null) {
+  const normalizedMethod = String(method || 'GET').toUpperCase();
+  const normalizedPath = String(apiPath || '');
+  const allowed = MCP_BACKEND_ROUTES.some(
+    (route) => route.method === normalizedMethod && route.pattern.test(normalizedPath)
+  );
+  if (!allowed) {
+    throw new Error('MCP 后端接口不在白名单中');
+  }
+
+  const config = mcpModule.loadMcpConfig();
+  const requestUrl = new URL(normalizedPath, config.backendUrl).toString();
+  const cookieList =
+    mainWindow && !mainWindow.isDestroyed()
+      ? await mainWindow.webContents.session.cookies.get({ url: requestUrl })
+      : [];
+  const cookieHeader = cookieList
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join('; ');
+  const headers = cookieHeader ? { Cookie: cookieHeader } : {};
+
+  if (normalizedMethod === 'GET') {
+    const response = await axios.get(requestUrl, {
+      headers,
+      timeout: 15000,
+      maxRedirects: 0
+    });
+    return response.data;
+  }
+
+  const form = new URLSearchParams();
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    for (const [key, value] of Object.entries(data)) {
+      if (value == null) continue;
+      form.append(key, String(value));
+    }
+  }
+  const response = await axios.post(requestUrl, form.toString(), {
+    headers: {
+      ...headers,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    timeout: 15000,
+    maxRedirects: 0
+  });
+  return response.data;
+}
 
 // 低内存优化：生产环境下启用 Chromium 内存节省开关（客户电脑内存不足时减少卡顿）
 if (!isDev && process.platform === 'win32') {
@@ -171,9 +434,6 @@ function getRememberPrinterUserFlagPath() {
   return path.join(app.getPath('userData'), 'remember-printer-user.flag');
 }
 
-/** 菜单「取消自动登录」：与渲染层 rememberPrinterUser 一致 */
-const REMEMBER_PRINTER_USER_STORAGE_KEY = 'rememberPrinterUser';
-
 async function clearAutoLoginFromMenu() {
   try {
     const p = getRememberPrinterUserFlagPath();
@@ -187,13 +447,7 @@ async function clearAutoLoginFromMenu() {
   const win = BrowserWindow.getFocusedWindow() || mainWindow;
   if (win && !win.isDestroyed()) {
     try {
-      await win.webContents.executeJavaScript(
-        `try {
-          localStorage.removeItem(${JSON.stringify(REMEMBER_PRINTER_USER_STORAGE_KEY)});
-          window.dispatchEvent(new CustomEvent('grain-clear-remember-printer-user'));
-        } catch (e) {}`,
-        true
-      );
+      win.webContents.send('clear-remember-printer-user');
     } catch (e) {
       console.error('[取消自动登录] 渲染进程清理失败', e);
     }
@@ -210,109 +464,184 @@ async function clearAutoLoginFromMenu() {
 
 /** 注册 IPC handlers（只执行一次，避免 createWindow 多次调用时重复注册导致报错） */
 function setupIpcHandlers() {
-  // MCP 打印请求：MCP 服务器通过 IPC 通知渲染进程执行打印
+  // 订单写请求由主进程发送，避免 Electron 渲染层的 file/localhost Origin 被服务端拒绝。
+  // 这里只开放经过校验的“保存粘贴订单”，不提供任意 URL 或任意 HTTP 代理。
+  ipcMain.handle('order-write-save-paste-orders', async (event, payload) => {
+    assertTrustedRendererEvent(event);
+    return getOrderWriteGateway().savePasteOrders(payload);
+  });
+
+  // 桌面调度：token 只存在主进程，渲染进程仅能调用以下白名单能力。
+  ipcMain.handle('dispatch-auth-get-session', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().getSession();
+  });
+  ipcMain.handle('dispatch-auth-adopt-login-session', async (event, auth, options) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().adoptLoginSession(auth, options);
+  });
+  ipcMain.handle('dispatch-auth-begin-login', async (event, options) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().beginLogin(options);
+  });
+  ipcMain.handle('dispatch-auth-poll-login', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().pollLogin();
+  });
+  ipcMain.handle('dispatch-auth-cancel-login', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().cancelLogin();
+  });
+  ipcMain.handle('dispatch-auth-logout', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().logout();
+  });
+  ipcMain.handle('user-session-logout', async (event) => {
+    assertTrustedRendererEvent(event);
+    const cleanupWarnings = [];
+    const rememberFlagPath = getRememberPrinterUserFlagPath();
+    try {
+      if (fs.existsSync(rememberFlagPath)) {
+        fs.unlinkSync(rememberFlagPath);
+      }
+    } catch (error) {
+      cleanupWarnings.push(error?.message || '自动登录标志清理失败');
+      appLogger.append('warn', 'logout', 'remember-user-flag-clear-failed', {
+        message: error?.message,
+      });
+    }
+    mcpSessionUser = null;
+
+    let dispatchResult = { ok: true };
+    try {
+      dispatchResult = await getDispatchGateway().logout();
+    } catch (error) {
+      dispatchResult = {
+        ok: false,
+        message: error?.message || '派单登录缓存清理失败',
+      };
+      cleanupWarnings.push(dispatchResult.message);
+    }
+
+    const rendererSession = event.sender?.session;
+    if (rendererSession) {
+      const storageResults = await Promise.allSettled([
+        rendererSession.clearStorageData({ storages: ['cookies'] }),
+        rendererSession.clearCache(),
+      ]);
+      storageResults.forEach((result) => {
+        if (result.status === 'rejected') {
+          cleanupWarnings.push(result.reason?.message || '浏览器登录缓存清理失败');
+        }
+      });
+    }
+    return {
+      ok: cleanupWarnings.length === 0,
+      dispatchSessionCleared: dispatchResult?.ok !== false,
+      message: cleanupWarnings.join('；'),
+    };
+  });
+  ipcMain.handle('user-session-test-login', async (event, userId) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().testLogin(userId);
+  });
+  ipcMain.handle('dispatch-get-capabilities', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().capabilities();
+  });
+  ipcMain.handle('dispatch-create-idempotency-key', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().createId();
+  });
+  ipcMain.handle('dispatch-confirm-stop', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().confirmStop(command);
+  });
+  ipcMain.handle('dispatch-preview-route', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().previewRoute(command);
+  });
+  ipcMain.handle('dispatch-preview-route-expansion', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().previewRouteExpansion(command);
+  });
+  ipcMain.handle('dispatch-load-route-edit-page', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadRouteEditPage(command);
+  });
+  ipcMain.handle('dispatch-confirm-route', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().confirmRoute(command);
+  });
+  ipcMain.handle('dispatch-lock-planning-stop', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().lockPlanningStop(command);
+  });
+  ipcMain.handle('dispatch-unlock-planning-stop', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().unlockPlanningStop(command);
+  });
+  ipcMain.handle('dispatch-update-driver-employment', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().updateDriverEmployment(command);
+  });
+  ipcMain.handle('dispatch-map-load-tile', async (event, tile) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadMapTile(tile);
+  });
+  ipcMain.handle('dispatch-map-load-config', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadMapConfig();
+  });
+
+  // MCP 打印请求：只接受主窗口通过白名单 preload 发起的请求。
   ipcMain.on('mcp-print-request', (event, printParams) => {
+    assertTrustedRendererEvent(event);
     console.log('[MCP] ipcMain 收到渲染进程转发的 mcp-print-request（极少使用）:', printParams);
-    // 将打印请求转发到渲染进程
     if (mainWindow && !mainWindow.isDestroyed()) {
       pushMcpPrintTaskToRenderer(mainWindow.webContents, printParams);
-      console.log('[MCP] 已推送到渲染进程（IPC + inject 后援）');
+      console.log('[MCP] 已推送到渲染进程（IPC + ack）');
     }
+  });
+
+  ipcMain.on('mcp-print-ack', (event, taskId) => {
+    assertTrustedRendererEvent(event);
+    acknowledgeMcpPrintTask(event.sender.id, taskId);
+  });
+
+  ipcMain.on('mcp-session-user', (event, user) => {
+    assertTrustedRendererEvent(event);
+    mcpSessionUser = sanitizeMcpSessionUser(user);
   });
   
   // 获取 MCP 服务器状态
-  ipcMain.handle('get-mcp-status', async () => {
+  ipcMain.handle('get-mcp-status', async (event) => {
+    assertTrustedRendererEvent(event);
+    const config = mcpModule.loadMcpConfig();
     return {
       running: mcpServer !== null,
-      port: mcpModule.loadMcpConfig().port,
-      host: mcpModule.loadMcpConfig().host
+      port: config.port,
+      host: config.host,
+      authRequired: true,
+      tokenFile: getEmbeddedMcpTokenPath()
     };
   });
   
   // 更新 MCP 配置
   ipcMain.handle('update-mcp-config', async (event, config) => {
-    mcpModule.saveMcpConfig(config);
-    return { success: true };
-  });
-
-  // MCP 调用 API（通过渲染进程的 axios 实例）
-  ipcMain.handle('mcp-call-api', async (event, apiPath, method, data) => {
-    return new Promise((resolve) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        // 将 data 序列化为 JS 字面量，在渲染进程中用 URLSearchParams 发 form-urlencoded
-        const dataStr = data ? JSON.stringify(data) : 'null';
-        mainWindow.webContents.executeJavaScript(`
-          (async () => {
-            try {
-              const axios = window.axios;
-              if (!axios) {
-                return { error: 'axios not found in renderer context' };
-              }
-              // 调试：打印 axios 配置
-              console.log('[MCP] axios baseURL:', axios.defaults.baseURL);
-              console.log('[MCP] apiPath:', '${apiPath}');
-              const reqData = ${dataStr};
-              let response;
-              if ('${method}' === 'GET') {
-                response = await axios.get('${apiPath}');
-              } else {
-                // 统一使用 application/x-www-form-urlencoded
-                const params = new URLSearchParams();
-                for (const key in reqData) {
-                  if (reqData.hasOwnProperty(key)) {
-                    params.append(key, reqData[key]);
-                  }
-                }
-                response = await axios.post('${apiPath}', params, {
-                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-                });
-              }
-              return response.data;
-            } catch (error) {
-              if (error.response) {
-                return error.response.data;
-              }
-              return { error: error.message };
-            }
-          })()
-        `).then(result => {
-          resolve(result);
-        }).catch(error => {
-          resolve({ error: error.message });
-        });
-      } else {
-        resolve({ error: '窗口不可用' });
-      }
-    });
-  });
-  
-  // MCP 获取登录信息（从渲染进程的 localStorage 获取）
-  ipcMain.handle('get-login-info-for-mcp', async () => {
-    return new Promise((resolve) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.executeJavaScript(`
-          new Promise((resolve) => {
-            try {
-              const disUser = localStorage.getItem('disUser');
-              if (disUser) {
-                resolve({ success: true, data: JSON.parse(disUser) });
-              } else {
-                resolve({ success: false, error: '未登录' });
-              }
-            } catch (e) {
-              resolve({ success: false, error: e.message });
-            }
-          })
-        `).then(resolve).catch(e => resolve({ success: false, error: e.message }));
-      } else {
-        resolve({ success: false, error: '窗口不可用' });
-      }
-    });
+    assertTrustedRendererEvent(event);
+    const normalized = mcpModule.saveMcpConfig(config);
+    return {
+      success: true,
+      config: normalized,
+      restartRequired: true
+    };
   });
   
   // 「记住用户」与 localStorage 双写：file 协议下部分环境 localStorage 不可靠，用 userData 兜底（sendSync 供路由守卫同步读取）
   ipcMain.on('remember-printer-user-get-sync', (event) => {
     try {
+      assertTrustedRendererEvent(event);
       const p = getRememberPrinterUserFlagPath();
       event.returnValue = fs.existsSync(p) && fs.readFileSync(p, 'utf8').trim() === '1' ? '1' : '0';
     } catch {
@@ -321,6 +650,7 @@ function setupIpcHandlers() {
   });
   ipcMain.on('remember-printer-user-set-sync', (event, enabled) => {
     try {
+      assertTrustedRendererEvent(event);
       const p = getRememberPrinterUserFlagPath();
       if (enabled) {
         fs.writeFileSync(p, '1', 'utf8');
@@ -333,8 +663,9 @@ function setupIpcHandlers() {
   });
 
   /** 异步写入 userData 标志，不阻塞渲染进程（勾选「记住用户」须用此通道，勿用 sendSync） */
-  ipcMain.on('remember-printer-user-set-async', (_event, enabled) => {
+  ipcMain.on('remember-printer-user-set-async', (event, enabled) => {
     try {
+      assertTrustedRendererEvent(event);
       const p = getRememberPrinterUserFlagPath();
       if (enabled) {
         fs.writeFileSync(p, '1', 'utf8');
@@ -349,6 +680,7 @@ function setupIpcHandlers() {
   /** 渲染进程 console 默认不进终端；需要时转发到主进程 stdout（便于打包后排查） */
   ipcMain.on('renderer-console-log', (event, line) => {
     try {
+      assertTrustedRendererEvent(event);
       console.log(typeof line === 'string' ? line : String(line));
     } catch (e) {
       console.error('[renderer-console-log]', e);
@@ -357,24 +689,39 @@ function setupIpcHandlers() {
 
   // 监听来自渲染进程的打印请求（旧接口，保持兼容）
   ipcMain.on('print-request', (event, printData, depFatherId, depId, tradeNo, userId, paperCount) => {
+    assertTrustedRendererEvent(event);
+    assertPrintHtml(printData);
+    assertPrintMetadata({ depFatherId, depId, tradeNo, userId, paperCount });
     printContentToWindow(printData, depFatherId, depId , tradeNo, userId, paperCount);
   });
 
   ipcMain.on('print-request-gb', (event, printData, gbDepFatherId, gbDepId, tradeNo, userId, nxDisId, paperCount) => {
+    assertTrustedRendererEvent(event);
+    assertPrintHtml(printData);
+    assertPrintMetadata({ gbDepFatherId, gbDepId, tradeNo, userId, nxDisId, paperCount });
     printContentToWindowGb(printData, gbDepFatherId, gbDepId , tradeNo, userId, nxDisId, paperCount);
   });
 
   ipcMain.on('print-request-gb-batch', (event, printData, gbBatchId, paperCount) => {
+    assertTrustedRendererEvent(event);
+    assertPrintHtml(printData);
+    assertPrintMetadata({ gbBatchId, paperCount });
     printContentToWindowGbPb(printData, gbBatchId, paperCount);
   });
 
   // 新的IPC handlers：支持回执的打印接口（返回Promise）
-  ipcMain.handle('print-request-with-callback', async (event, printData, depFatherId, depId, tradeNo, userId, paperCount, shouldSave, isHistoryOrder) => {
-    console.log('📥 [IPC Handler] 收到打印请求:', { depFatherId, depId, tradeNo, userId, paperCount, shouldSave, isHistoryOrder });
+  ipcMain.handle('print-request-with-callback', async (event, printData, depFatherId, depId, tradeNo, userId, paperCount, shouldSave, isHistoryOrder, orderIds) => {
+    assertTrustedRendererEvent(event);
+    assertPrintHtml(printData);
+    assertPrintMetadata({ depFatherId, depId, tradeNo, userId, paperCount, shouldSave, isHistoryOrder, orderIds });
+    console.log('📥 [IPC Handler] 收到打印请求:', { depFatherId, depId, tradeNo, userId, paperCount, shouldSave, isHistoryOrder, orderIds });
     console.log('📥 [IPC Handler] HTML内容长度:', printData ? printData.length : 0);
     
     try {
-      const result = await printContentToWindowWithCallback(printData, depFatherId, depId, tradeNo, userId, paperCount, shouldSave, isHistoryOrder);
+      const result = await runTrackedPrintJob(
+        '配送单打印',
+        () => printContentToWindowWithCallback(printData, depFatherId, depId, tradeNo, userId, paperCount, shouldSave, isHistoryOrder, orderIds)
+      );
       console.log('📤 [IPC Handler] 打印请求完成:', result);
       return result;
     } catch (error) {
@@ -384,8 +731,14 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('print-request-gb-with-callback', async (event, printData, gbDepFatherId, gbDepId, tradeNo, userId, nxDisId, paperCount, shouldSave) => {
+    assertTrustedRendererEvent(event);
+    assertPrintHtml(printData);
+    assertPrintMetadata({ gbDepFatherId, gbDepId, tradeNo, userId, nxDisId, paperCount, shouldSave });
     try {
-      const result = await printContentToWindowGbWithCallback(printData, gbDepFatherId, gbDepId, tradeNo, userId, nxDisId, paperCount, shouldSave);
+      const result = await runTrackedPrintJob(
+        '国标订单打印',
+        () => printContentToWindowGbWithCallback(printData, gbDepFatherId, gbDepId, tradeNo, userId, nxDisId, paperCount, shouldSave)
+      );
       return result;
     } catch (error) {
       throw error;
@@ -393,8 +746,14 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('print-request-gb-batch-with-callback', async (event, printData, gbBatchId, paperCount, shouldSave) => {
+    assertTrustedRendererEvent(event);
+    assertPrintHtml(printData);
+    assertPrintMetadata({ gbBatchId, paperCount, shouldSave });
     try {
-      const result = await printContentToWindowGbPbWithCallback(printData, gbBatchId, paperCount, shouldSave);
+      const result = await runTrackedPrintJob(
+        '国标批次打印',
+        () => printContentToWindowGbPbWithCallback(printData, gbBatchId, paperCount, shouldSave)
+      );
       return result;
     } catch (error) {
       throw error;
@@ -403,6 +762,8 @@ function setupIpcHandlers() {
 
   // 打印校准页：弹出系统打印对话框，让用户设置分辨率等并保存为默认
   ipcMain.handle('print-calibration-page', async (event, htmlContent) => {
+    assertTrustedRendererEvent(event);
+    assertPrintHtml(htmlContent);
     return new Promise((resolve, reject) => {
       const printWindow = new BrowserWindow({
         show: false,
@@ -412,21 +773,16 @@ function setupIpcHandlers() {
         }
       });
 
-      printWindow.webContents.setZoomFactor(1.0);
+      printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
       printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
 
       printWindow.webContents.on('did-finish-load', () => {
-        printWindow.webContents.setZoomFactor(1.0);
+        printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
         const defaultPrinter = getDefaultPrinterName();
         console.log('[校准页面] 弹出打印对话框，使用打印机:', defaultPrinter || '系统默认');
 
         setTimeout(() => {
-          printWindow.webContents.print({
-            silent: false, // 弹出打印对话框，用户可设置分辨率并保存为默认
-            printBackground: true,
-            deviceName: defaultPrinter || '',
-            marginsType: 1, // 无边距
-          }, (success, error) => {
+          printWindow.webContents.print(createCalibrationPrintOptions(defaultPrinter), (success, error) => {
             printWindow.destroy();
             if (success) {
               console.log('[校准页面] ✅ 打印成功，用户设置已保存为默认');
@@ -436,7 +792,7 @@ function setupIpcHandlers() {
               resolve({ success: false, error: error || '用户取消' });
             }
           });
-        }, 500);
+        }, PRINT_RUNTIME_CONFIG.renderDelayMs);
       });
 
       printWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
@@ -459,6 +815,7 @@ async function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,          // 推荐关闭 Node 集成
       contextIsolation: true,          // 启用上下文隔离
+      sandbox: true,
       enableRemoteModule: false
     }
     
@@ -504,6 +861,20 @@ async function createWindow() {
       contextMenu.popup();
     }
   });
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+    if (!trustedRendererUrl(navigationUrl)) {
+      event.preventDefault();
+      console.warn('[安全] 已阻止主窗口导航到非可信地址:', navigationUrl);
+    }
+  });
+  const mainWindowWebContentsId = mainWindow.webContents.id;
+  mainWindow.on('closed', () => {
+    clearMcpPrintDeliveriesForWebContents(mainWindowWebContentsId);
+    mainWindow = null;
+    mainWindowRef = null;
+    mcpSessionUser = null;
+  });
 
   console.log('Window created');
 
@@ -515,14 +886,16 @@ async function createWindow() {
   console.log('Window created'); // Log here too
 }
 
-ipcMain.handle('get-os-info', () => {
+ipcMain.handle('get-os-info', (event) => {
+  assertTrustedRendererEvent(event);
   return {
     platform: os.platform(),
     arch: os.arch(),
   };
 });
 
-ipcMain.on('trigger-enter-key', () => {
+ipcMain.on('trigger-enter-key', (event) => {
+  assertTrustedRendererEvent(event);
   console.log('Received trigger-enter-key');
   keyboard.pressKey(Key.Enter);
   keyboard.releaseKey(Key.Enter);
@@ -533,6 +906,7 @@ ipcMain.on('trigger-enter-key', () => {
 // 获取系统打印机列表
 ipcMain.handle('get-system-printers', async (event) => {
   try {
+    assertTrustedRendererEvent(event);
     const platform = os.platform();
     let printers = [];
     let defaultPrinterName = '';
@@ -567,11 +941,13 @@ ipcMain.handle('get-system-printers', async (event) => {
       console.log('[打印机] 🔧 使用系统命令获取打印机列表');
       
       let command;
+      let commandArgs;
       let parseFunction;
       
       if (platform === 'darwin') {
         // macOS: 使用 lpstat 命令获取所有打印机
-        command = 'lpstat -p 2>/dev/null';
+        command = 'lpstat';
+        commandArgs = ['-p'];
         parseFunction = (stdout) => {
           const lines = stdout.split('\n').filter(line => line.startsWith('printer'));
           return lines.map(line => {
@@ -582,7 +958,7 @@ ipcMain.handle('get-system-printers', async (event) => {
         
         // 同时获取默认打印机
         try {
-          const { stdout } = await execAsync('lpstat -d 2>/dev/null');
+          const { stdout } = await execFileAsync('lpstat', ['-d']);
           const match = stdout.match(/system default destination:\s*(\S+)/);
           if (match) {
             defaultPrinterName = match[1];
@@ -593,7 +969,8 @@ ipcMain.handle('get-system-printers', async (event) => {
         }
       } else if (platform === 'win32') {
         // Windows: 使用 wmic 命令
-        command = 'wmic printer get name,default /value';
+        command = 'wmic';
+        commandArgs = ['printer', 'get', 'name,default', '/value'];
         parseFunction = (stdout) => {
           const printers = [];
           let currentPrinter = {};
@@ -618,7 +995,8 @@ ipcMain.handle('get-system-printers', async (event) => {
         };
       } else {
         // Linux: 使用 lpstat 命令
-        command = 'lpstat -p 2>/dev/null';
+        command = 'lpstat';
+        commandArgs = ['-p'];
         parseFunction = (stdout) => {
           const lines = stdout.split('\n').filter(line => line.startsWith('printer'));
           return lines.map(line => {
@@ -629,8 +1007,8 @@ ipcMain.handle('get-system-printers', async (event) => {
       }
       
       try {
-        console.log('[打印机] 执行命令:', command);
-        const { stdout, stderr } = await execAsync(command, {
+        console.log('[打印机] 执行命令:', command, commandArgs);
+        const { stdout, stderr } = await execFileAsync(command, commandArgs, {
           timeout: 10000,
           maxBuffer: 1024 * 1024 * 10 // 10MB buffer
         });
@@ -661,7 +1039,7 @@ ipcMain.handle('get-system-printers', async (event) => {
         // 如果命令失败，尝试获取默认打印机（仅 macOS）
         if (platform === 'darwin') {
           try {
-            const { stdout } = await execAsync('lpstat -d 2>/dev/null');
+            const { stdout } = await execFileAsync('lpstat', ['-d']);
             const match = stdout.match(/system default destination:\s*(\S+)/);
             if (match && match[1]) {
               defaultPrinterName = match[1];
@@ -714,6 +1092,10 @@ ipcMain.handle('get-system-printers', async (event) => {
 // 保存默认打印机配置
 ipcMain.handle('save-default-printer', async (event, printerName) => {
   try {
+    assertTrustedRendererEvent(event);
+    if (typeof printerName !== 'string' || printerName.length > 256) {
+      throw new Error('打印机名称无效');
+    }
     const userDataPath = app.getPath('userData');
     const configPath = path.join(userDataPath, 'printer-config.json');
     
@@ -740,6 +1122,7 @@ ipcMain.handle('save-default-printer', async (event, printerName) => {
 // 读取默认打印机配置
 ipcMain.handle('get-default-printer', async (event) => {
   try {
+    assertTrustedRendererEvent(event);
     const userDataPath = app.getPath('userData');
     const configPath = path.join(userDataPath, 'printer-config.json');
     
@@ -762,6 +1145,17 @@ ipcMain.handle('get-default-printer', async (event) => {
 // 保存打印机配置文件（持久化到文件系统）
 ipcMain.handle('save-printer-profile', async (event, deviceName, profile) => {
   try {
+    assertTrustedRendererEvent(event);
+    if (
+      typeof deviceName !== 'string' ||
+      deviceName.length === 0 ||
+      deviceName.length > 256 ||
+      !profile ||
+      typeof profile !== 'object' ||
+      Array.isArray(profile)
+    ) {
+      throw new Error('打印机配置参数无效');
+    }
     const userDataPath = app.getPath('userData');
     const profilesPath = path.join(userDataPath, 'printer-profiles.json');
     
@@ -771,16 +1165,9 @@ ipcMain.handle('save-printer-profile', async (event, deviceName, profile) => {
       profiles = JSON.parse(profilesData);
     }
     
-    // 只保存需要的字段，确保不包含 scale 等旧字段
+    // 只允许现场校准支持的字段和数值范围，忽略任何额外属性。
     const cleanProfile = {
-      safeLeftMm: profile.safeLeftMm,
-      safeRightMm: profile.safeRightMm,
-      distributorNameFontSize: profile.distributorNameFontSize,
-      orderContentFontSize: profile.orderContentFontSize,
-      lineHeight: profile.lineHeight ?? 24,  // 行间距，默认 24px
-      headerFontSize: profile.headerFontSize ?? 14,  // 表头字体大小
-      zoomFactor: profile.zoomFactor ?? 1.0,  // 缩放系数，默认 1.0
-      maxPrintableWidth: profile.maxPrintableWidth ?? 195,  // 最大可打印宽度（mm）
+      ...sanitizePrinterProfile(profile),
       updatedAt: new Date().toISOString()
     };
     
@@ -800,6 +1187,10 @@ ipcMain.handle('save-printer-profile', async (event, deviceName, profile) => {
 // 加载打印机配置文件（从文件系统）
 ipcMain.handle('load-printer-profile', async (event, deviceName) => {
   try {
+    assertTrustedRendererEvent(event);
+    if (typeof deviceName !== 'string' || deviceName.length === 0 || deviceName.length > 256) {
+      throw new Error('打印机名称无效');
+    }
     const userDataPath = app.getPath('userData');
     const profilesPath = path.join(userDataPath, 'printer-profiles.json');
     
@@ -824,6 +1215,7 @@ ipcMain.handle('load-printer-profile', async (event, deviceName) => {
 // 加载所有打印机配置文件（用于调试和迁移）
 ipcMain.handle('load-all-printer-profiles', async (event) => {
   try {
+    assertTrustedRendererEvent(event);
     const userDataPath = app.getPath('userData');
     const profilesPath = path.join(userDataPath, 'printer-profiles.json');
     
@@ -847,6 +1239,7 @@ ipcMain.handle('load-all-printer-profiles', async (event) => {
 // 支持 Windows 和 macOS
 ipcMain.handle('get-printer-system-config', async (event) => {
   try {
+    assertTrustedRendererEvent(event);
     const platform = os.platform();
     
     console.log('[打印机系统配置] 当前平台:', platform);
@@ -890,25 +1283,40 @@ ipcMain.handle('get-printer-system-config', async (event) => {
       console.log('[打印机系统配置] 开始执行 PowerShell 命令获取系统配置');
       
       // 使用临时文件方式执行 PowerShell 命令，避免引号转义问题
-      const tempDir = os.tmpdir();
-      const tempScriptPath = path.join(tempDir, `printer-config-${Date.now()}.ps1`);
+      const tempScriptDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'grain-printer-config-')
+      );
+      const tempScriptPath = path.join(tempScriptDir, 'read-config.ps1');
+      const cleanupTempScript = () => {
+        try {
+          if (fs.existsSync(tempScriptPath)) {
+            fs.unlinkSync(tempScriptPath);
+          }
+          if (fs.existsSync(tempScriptDir)) {
+            fs.rmdirSync(tempScriptDir);
+          }
+        } catch (cleanupError) {
+          console.warn('[打印机系统配置] 清理临时脚本失败:', cleanupError);
+        }
+      };
       
       try {
         // 将 PowerShell 命令写入临时文件
-        fs.writeFileSync(tempScriptPath, psCommand.trim(), 'utf8');
+        fs.writeFileSync(tempScriptPath, psCommand.trim(), {
+          encoding: 'utf8',
+          mode: 0o600,
+          flag: 'wx'
+        });
         
         // 执行临时脚本文件
-        const { stdout, stderr } = await execAsync(
-          `powershell -NoProfile -ExecutionPolicy Bypass -File "${tempScriptPath}"`,
+        const { stdout, stderr } = await execFileAsync(
+          'powershell',
+          ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', tempScriptPath],
           { encoding: 'utf8', timeout: 10000 }
         );
         
         // 清理临时文件
-        try {
-          fs.unlinkSync(tempScriptPath);
-        } catch (unlinkError) {
-          console.warn('[打印机系统配置] 清理临时文件失败:', unlinkError);
-        }
+        cleanupTempScript();
         
         if (stderr && stderr.trim()) {
           console.warn('[打印机系统配置] PowerShell 警告:', stderr);
@@ -949,13 +1357,7 @@ ipcMain.handle('get-printer-system-config', async (event) => {
         };
       } catch (execError) {
         // 确保临时文件被清理
-        try {
-          if (fs.existsSync(tempScriptPath)) {
-            fs.unlinkSync(tempScriptPath);
-          }
-        } catch (unlinkError) {
-          console.warn('[打印机系统配置] 清理临时文件失败:', unlinkError);
-        }
+        cleanupTempScript();
         
         // 重新抛出错误，让外层 catch 处理
         throw execError;
@@ -973,7 +1375,7 @@ ipcMain.handle('get-printer-system-config', async (event) => {
         let defaultPrinterStderr = '';
         
         try {
-          const result = await execAsync('lpstat -d', { encoding: 'utf8', timeout: 5000 });
+          const result = await execFileAsync('lpstat', ['-d'], { encoding: 'utf8', timeout: 5000 });
           defaultPrinterOutput = result.stdout || '';
           defaultPrinterStderr = result.stderr || '';
         } catch (lpstatError) {
@@ -989,7 +1391,11 @@ ipcMain.handle('get-printer-system-config', async (event) => {
           // 尝试备用方法：获取所有打印机
           console.log('[打印机系统配置] macOS: 尝试备用方法，获取所有打印机列表');
           try {
-            const { stdout: allPrintersOutput } = await execAsync('lpstat -p', { encoding: 'utf8', timeout: 5000 });
+            const { stdout: allPrintersOutput } = await execFileAsync(
+              'lpstat',
+              ['-p'],
+              { encoding: 'utf8', timeout: 5000 }
+            );
             console.log('[打印机系统配置] macOS: 所有打印机列表输出:', allPrintersOutput);
             
             // 解析打印机名称（格式：printer 打印机名 is idle...）
@@ -1061,7 +1467,11 @@ ipcMain.handle('get-printer-system-config', async (event) => {
           
           // 尝试从 lpstat -a 输出中提取打印机名称（备用方案）
           try {
-            const { stdout: lpstatAll } = await execAsync('lpstat -a', { encoding: 'utf8', timeout: 5000 });
+            const { stdout: lpstatAll } = await execFileAsync(
+              'lpstat',
+              ['-a'],
+              { encoding: 'utf8', timeout: 5000 }
+            );
             console.log('[打印机系统配置] macOS: lpstat -a 输出:', lpstatAll);
             
             // 从 lpstat -a 输出中提取第一个打印机名称
@@ -1088,6 +1498,13 @@ ipcMain.handle('get-printer-system-config', async (event) => {
         const printerName = defaultPrinterMatch[1].trim();
         console.log('[打印机系统配置] macOS: ✅ 找到默认打印机:', printerName);
         console.log('[打印机系统配置] macOS: 打印机名称（去除空白）:', JSON.stringify(printerName));
+        if (!/^[A-Za-z0-9._-]{1,255}$/.test(printerName)) {
+          return {
+            success: false,
+            error: '系统返回的打印机队列名称包含不允许的字符',
+            config: null
+          };
+        }
         
         // 获取打印机详细信息
         let hDpi = 300; // macOS 默认值
@@ -1100,7 +1517,7 @@ ipcMain.handle('get-printer-system-config', async (event) => {
         
         try {
           // 尝试获取打印机选项
-          const lpoptionsResult = await execAsync(`lpoptions -p "${printerName}" -l`, { 
+          const lpoptionsResult = await execFileAsync('lpoptions', ['-p', printerName, '-l'], {
             encoding: 'utf8', 
             timeout: 5000 
           });
@@ -1227,6 +1644,7 @@ ipcMain.handle('get-printer-system-config', async (event) => {
 
 // macOS：将分辨率设为打印机系统默认（用 lpoptions 写入，一键同步可读取）
 ipcMain.handle('set-printer-resolution', async (event, hDpi, vDpi) => {
+  assertTrustedRendererEvent(event);
   if (process.platform !== 'darwin') {
     return { success: false, error: '仅 macOS 支持' };
   }
@@ -1235,8 +1653,20 @@ ipcMain.handle('set-printer-resolution', async (event, hDpi, vDpi) => {
     if (!printerName) {
       return { success: false, error: '未配置默认打印机' };
     }
-    const resolutionValue = `${hDpi}x${vDpi}dpi`;
-    await execAsync(`lpoptions -p "${printerName}" -o Resolution=${resolutionValue}`, { encoding: 'utf8', timeout: 5000 });
+    if (!/^[A-Za-z0-9._-]{1,255}$/.test(printerName)) {
+      return { success: false, error: '打印机队列名称包含不允许的字符' };
+    }
+    const allowedResolutions = new Set(['120x60', '180x180', '360x180']);
+    const resolutionPair = `${Number(hDpi)}x${Number(vDpi)}`;
+    if (!allowedResolutions.has(resolutionPair)) {
+      return { success: false, error: '不支持的打印分辨率' };
+    }
+    const resolutionValue = `${resolutionPair}dpi`;
+    await execFileAsync(
+      'lpoptions',
+      ['-p', printerName, '-o', `Resolution=${resolutionValue}`],
+      { encoding: 'utf8', timeout: 5000 }
+    );
     console.log('[打印机] 已设置分辨率:', resolutionValue, '打印机:', printerName);
     return { success: true };
   } catch (error) {
@@ -1248,14 +1678,17 @@ ipcMain.handle('set-printer-resolution', async (event, hDpi, vDpi) => {
 // ========== 文件夹和文件操作相关 IPC ==========
 
 // 选择文件夹对话框
-ipcMain.handle('select-folder', async () => {
+ipcMain.handle('select-folder', async (event) => {
+  assertTrustedRendererEvent(event);
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory'],
     title: '选择订单存储文件夹'
   });
   
   if (!result.canceled && result.filePaths.length > 0) {
-    return { success: true, path: result.filePaths[0] };
+    const selectedPath = realPathIfExists(result.filePaths[0]);
+    selectedFolderCapabilities.add(selectedPath);
+    return { success: true, path: selectedPath };
   }
   
   return { success: false, path: null };
@@ -1263,13 +1696,24 @@ ipcMain.handle('select-folder', async () => {
 
 // 另存为对话框（选择保存路径和文件名）
 ipcMain.handle('show-save-dialog', async (event, options = {}) => {
+  assertTrustedRendererEvent(event);
+  const safeOptions =
+    options && typeof options === 'object' && !Array.isArray(options) ? options : {};
   const result = await dialog.showSaveDialog(mainWindow, {
-    title: options.title || '保存订单Excel',
-    defaultPath: options.defaultPath || '订单.xlsx',
-    filters: options.filters || [{ name: 'Excel', extensions: ['xlsx', 'xls'] }]
+    title:
+      typeof safeOptions.title === 'string'
+        ? safeOptions.title.slice(0, 100)
+        : '保存订单Excel',
+    defaultPath:
+      typeof safeOptions.defaultPath === 'string'
+        ? safeOptions.defaultPath.slice(0, 512)
+        : '订单.xlsx',
+    filters: [{ name: 'Excel', extensions: ['xlsx', 'xls'] }]
   });
   if (!result.canceled && result.filePath) {
-    return { success: true, filePath: result.filePath };
+    const selectedFilePath = normalizeAbsolutePath(result.filePath);
+    saveFileCapabilities.add(selectedFilePath);
+    return { success: true, filePath: selectedFilePath };
   }
   return { success: false, filePath: null };
 });
@@ -1277,8 +1721,17 @@ ipcMain.handle('show-save-dialog', async (event, options = {}) => {
 // 将 Buffer 写入指定文件路径
 ipcMain.handle('save-buffer-to-file', async (event, buffer, filePath) => {
   try {
+    assertTrustedRendererEvent(event);
+    const normalizedFilePath = normalizeAbsolutePath(filePath);
+    if (!saveFileCapabilities.has(normalizedFilePath)) {
+      throw new Error('保存路径没有有效的系统对话框授权');
+    }
     const buf = Buffer.from(buffer);
-    fs.writeFileSync(filePath, buf);
+    if (buf.length > 100 * 1024 * 1024) {
+      throw new Error('文件超过 100MB 限制');
+    }
+    fs.writeFileSync(normalizedFilePath, buf);
+    saveFileCapabilities.delete(normalizedFilePath);
     return { success: true };
   } catch (error) {
     console.error('保存文件失败:', error);
@@ -1289,16 +1742,32 @@ ipcMain.handle('save-buffer-to-file', async (event, buffer, filePath) => {
 // 保存客户文件夹路径配置
 ipcMain.handle('save-customer-folder-path', async (event, customerId, folderPath) => {
   try {
+    assertTrustedRendererEvent(event);
+    const normalizedCustomerId = String(customerId);
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(normalizedCustomerId)) {
+      throw new Error('客户标识无效');
+    }
     const userDataPath = app.getPath('userData');
-    const configPath = path.join(userDataPath, 'customer-folders.json');
+    const configPath = getCustomerFoldersConfigPath();
     
     let config = {};
     if (fs.existsSync(configPath)) {
       const configData = fs.readFileSync(configPath, 'utf-8');
       config = JSON.parse(configData);
     }
-    
-    config[customerId] = folderPath;
+
+    if (folderPath === '') {
+      delete config[normalizedCustomerId];
+    } else {
+      const normalizedFolderPath = realPathIfExists(folderPath);
+      if (!selectedFolderCapabilities.has(normalizedFolderPath)) {
+        throw new Error('客户文件夹必须由当前系统选择对话框授权');
+      }
+      if (!fs.existsSync(normalizedFolderPath) || !fs.statSync(normalizedFolderPath).isDirectory()) {
+        throw new Error('客户文件夹不存在');
+      }
+      config[normalizedCustomerId] = normalizedFolderPath;
+    }
     
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
     
@@ -1312,8 +1781,13 @@ ipcMain.handle('save-customer-folder-path', async (event, customerId, folderPath
 // 读取客户文件夹路径配置
 ipcMain.handle('get-customer-folder-path', async (event, customerId) => {
   try {
+    assertTrustedRendererEvent(event);
+    const normalizedCustomerId = String(customerId);
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(normalizedCustomerId)) {
+      throw new Error('客户标识无效');
+    }
     const userDataPath = app.getPath('userData');
-    const configPath = path.join(userDataPath, 'customer-folders.json');
+    const configPath = getCustomerFoldersConfigPath();
     
     if (!fs.existsSync(configPath)) {
       return { success: true, path: null };
@@ -1322,7 +1796,11 @@ ipcMain.handle('get-customer-folder-path', async (event, customerId) => {
     const configData = fs.readFileSync(configPath, 'utf-8');
     const config = JSON.parse(configData);
     
-    return { success: true, path: config[customerId] || null };
+    const configuredPath = config[normalizedCustomerId] || null;
+    if (configuredPath) {
+      selectedFolderCapabilities.add(realPathIfExists(configuredPath));
+    }
+    return { success: true, path: configuredPath };
   } catch (error) {
     console.error('读取客户文件夹路径失败:', error);
     return { success: false, error: error.message, path: null };
@@ -1332,6 +1810,8 @@ ipcMain.handle('get-customer-folder-path', async (event, customerId) => {
 // 扫描文件夹中的文件（Excel 和图片）
 ipcMain.handle('scan-folder-files', async (event, folderPath, includeProcessed = false) => {
   try {
+    assertTrustedRendererEvent(event);
+    assertAuthorizedCustomerPath(folderPath);
     if (!fs.existsSync(folderPath)) {
       return { success: false, error: '文件夹不存在', files: [] };
     }
@@ -1428,11 +1908,16 @@ ipcMain.handle('scan-folder-files', async (event, folderPath, includeProcessed =
 // 读取文件内容（用于发送到渲染进程）
 ipcMain.handle('read-file', async (event, filePath) => {
   try {
+    assertTrustedRendererEvent(event);
+    assertAuthorizedCustomerPath(filePath);
     if (!fs.existsSync(filePath)) {
       return { success: false, error: '文件不存在' };
     }
     
     const fileBuffer = fs.readFileSync(filePath);
+    if (fileBuffer.length > 100 * 1024 * 1024) {
+      return { success: false, error: '文件超过 100MB 限制' };
+    }
     const base64 = fileBuffer.toString('base64');
     
     return { success: true, data: base64, fileName: path.basename(filePath) };
@@ -1445,6 +1930,9 @@ ipcMain.handle('read-file', async (event, filePath) => {
 // 移动文件到"已处理"文件夹
 ipcMain.handle('move-file-to-processed', async (event, filePath, targetFolder) => {
   try {
+    assertTrustedRendererEvent(event);
+    assertAuthorizedCustomerPath(filePath);
+    assertAuthorizedCustomerPath(targetFolder);
     const fileName = path.basename(filePath);
     const processedFolder = path.join(targetFolder, '已处理');
     
@@ -1477,6 +1965,8 @@ ipcMain.handle('move-file-to-processed', async (event, filePath, targetFolder) =
 // 将"已处理"文件夹中的所有文件移动到"已完成"文件夹
 ipcMain.handle('move-processed-to-completed', async (event, targetFolder) => {
   try {
+    assertTrustedRendererEvent(event);
+    assertAuthorizedCustomerPath(targetFolder);
     const processedFolder = path.join(targetFolder, '已处理');
     const completedFolder = path.join(targetFolder, '已完成');
     
@@ -1543,6 +2033,8 @@ ipcMain.handle('move-processed-to-completed', async (event, targetFolder) => {
 // 将"已处理"文件夹中的所有文件移回上一层文件夹（客户文件夹）
 ipcMain.handle('move-processed-to-parent', async (event, targetFolder) => {
   try {
+    assertTrustedRendererEvent(event);
+    assertAuthorizedCustomerPath(targetFolder);
     const processedFolder = path.join(targetFolder, '已处理');
     
     // 检查"已处理"文件夹是否存在
@@ -1603,6 +2095,11 @@ ipcMain.handle('move-processed-to-parent', async (event, targetFolder) => {
 // 打开文件（用默认程序打开，如果文件已移动到"已处理"文件夹，则从"已处理"文件夹打开）
 ipcMain.handle('open-file', async (event, filePath, customerFolderPath) => {
   try {
+    assertTrustedRendererEvent(event);
+    assertAuthorizedCustomerPath(filePath);
+    if (customerFolderPath) {
+      assertAuthorizedCustomerPath(customerFolderPath);
+    }
     let finalFilePath = filePath;
     
     // 如果原文件不存在，检查是否在"已处理"文件夹中
@@ -1653,6 +2150,8 @@ ipcMain.handle('open-file', async (event, filePath, customerFolderPath) => {
 // 打开文件所在的文件夹并选中文件
 ipcMain.handle('open-folder', async (event, filePath) => {
   try {
+    assertTrustedRendererEvent(event);
+    assertAuthorizedCustomerPath(filePath);
     if (!fs.existsSync(filePath)) {
       return { success: false, error: '文件不存在' };
     }
@@ -1669,7 +2168,7 @@ ipcMain.handle('open-folder', async (event, filePath) => {
 
 // ==================== 腾讯云语音识别相关功能 ====================
 
-// 腾讯云配置（从配置文件读取）
+// 腾讯云长期凭据禁止进入 Electron；保留接口契约，等待 nongxinle-server 代理。
 const DEFAULT_TENCENT_CLOUD_CONFIG = {
   secretId: '',
   secretKey: '',
@@ -1679,34 +2178,15 @@ const DEFAULT_TENCENT_CLOUD_CONFIG = {
 };
 
 function loadTencentCloudConfig() {
-  const userDataPath = app.getPath('userData');
-  const projectConfigPath = path.join(app.getAppPath(), 'config', 'tencent-cloud.json');
-  const userConfigPath = path.join(userDataPath, 'tencent-cloud.json');
-  const pathsToTry = [userConfigPath, projectConfigPath];
-  for (const configPath of pathsToTry) {
-    if (fs.existsSync(configPath)) {
-      try {
-        const data = fs.readFileSync(configPath, 'utf-8');
-        const config = JSON.parse(data);
-        return { ...DEFAULT_TENCENT_CLOUD_CONFIG, ...config };
-      } catch (e) {
-        console.warn('[腾讯云] 配置文件解析失败:', configPath, e.message);
-      }
-    }
-  }
-  console.warn('[腾讯云] 未找到配置文件，请复制 config/tencent-cloud.example.json 为 tencent-cloud.json 并填入密钥');
-  return DEFAULT_TENCENT_CLOUD_CONFIG;
+  return { ...DEFAULT_TENCENT_CLOUD_CONFIG };
 }
 
-/** 每次从磁盘读取，避免用户放好 tencent-cloud.json 后未重启仍用空配置 */
 function getTencentCloudConfig() {
   return loadTencentCloudConfig();
 }
 
-/** 提示里带上本机实际路径（应用名可能是「粒子」等，与安装包显示名不一致） */
 function getTencentCloudSetupHint() {
-  const userConfigPath = path.join(app.getPath('userData'), 'tencent-cloud.json');
-  return `请将腾讯云 secretId、secretKey 写入下面文件（文件名必须完全一致）：\n${userConfigPath}\n（可对照应用目录内 config/tencent-cloud.example.json）\n修改保存后建议完全退出应用再打开。`;
+  return '客户端腾讯云长期密钥已禁用；该语音能力需迁移到 nongxinle-server 后再启用。';
 }
 
 function isTencentCloudKeyUsable(secretId, secretKey) {
@@ -1811,6 +2291,7 @@ function generateTencentCloudSignature(secretId, secretKey, service, action, tim
 // 开始语音识别（在主进程录制 PCM）
 ipcMain.handle('start-voice-recognition', async (event) => {
   try {
+    assertTrustedRendererEvent(event);
     console.log('[语音识别] 开始语音识别（主进程 PCM 录音）...');
     
     const cfg = getTencentCloudConfig();
@@ -1888,6 +2369,7 @@ ipcMain.handle('start-voice-recognition', async (event) => {
 
 // 发送音频数据（PCM 模式下不需要，音频直接在主进程录制）
 ipcMain.handle('send-audio-data', async (event, audioDataArray) => {
+  assertTrustedRendererEvent(event);
   // PCM 模式下，音频数据直接在主进程录制，不需要从渲染进程发送
   console.log('[语音识别] send-audio-data 被调用，但 PCM 模式下不需要');
   return { success: true, message: 'PCM 模式下音频在主进程录制' };
@@ -1896,6 +2378,7 @@ ipcMain.handle('send-audio-data', async (event, audioDataArray) => {
 // 停止语音识别并获取结果
 ipcMain.handle('stop-voice-recognition', async (event) => {
   try {
+    assertTrustedRendererEvent(event);
     console.log('[语音识别] 停止识别，开始处理音频...');
     
     if (!currentVoiceRecognitionSession) {
@@ -2057,6 +2540,7 @@ function getDefaultPrinterName() {
 // 语音合成：将文本转换为语音
 ipcMain.handle('text-to-speech', async (event, text, sessionId) => {
   try {
+    assertTrustedRendererEvent(event);
     console.log('[TTS] 开始语音合成，文本:', text);
     
     if (!text || !text.trim()) {
@@ -2194,10 +2678,11 @@ ipcMain.handle('text-to-speech', async (event, text, sessionId) => {
 // 打印 DPI：EPSON_LQ_730K 等针式打印机系统报告为 120x60，匹配此值可减少缩放模糊
 // 不传 dpi，让驱动使用系统默认。Mac 用户可通过「设为系统默认」按钮设置 lpoptions
 function getPrintDpiOptions() {
-  return {};
+  return getDriverManagedDpiOptions();
 }
 
 function printContentToWindowGbPb(printContent, gbBatchId, paperCount) {
+  publishPrintJobStatus({ label: '国标批次打印', state: 'printing', message: '国标批次打印正在发送到打印机' });
   const printWindow = new BrowserWindow({
     show: false, // 不显示打印窗口
     webPreferences: {
@@ -2207,33 +2692,33 @@ function printContentToWindowGbPb(printContent, gbBatchId, paperCount) {
   });
 
   // 设置打印窗口的缩放比例，确保字体清晰
-  printWindow.webContents.setZoomFactor(1.0);
+  printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
 
   printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(printContent));
 
   printWindow.webContents.on('did-finish-load', () => {
     // 确保在打印前设置正确的缩放
-    printWindow.webContents.setZoomFactor(1.0);
+    printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
     
     // 获取默认打印机名称
     const defaultPrinter = getDefaultPrinterName();
     console.log('[打印] GB批次打印，使用打印机:', defaultPrinter || '系统默认打印机');
     
-    printWindow.webContents.print({
-      marginsType: 0, // 0 = default, 1 = none, 2 = minimum
-      silent: true,  // 静默打印，不弹出对话框
-      printBackground: true, // 开启背景打印，防止边框/样式丢失
-      deviceName: defaultPrinter || '',// 使用配置的默认打印机，空字符串使用系统默认打印机
-      margins: {
-        marginType: 'none' // 或使用具体的数值，如 { top: 0, bottom: 0, left: 0, right: 0 }
-      },
-      ...getPrintDpiOptions(),
-    }, (success, error) => {
+    printWindow.webContents.print(createSilentPrintOptions(defaultPrinter, {
+      includeLegacyMargins: true
+    }), (success, error) => {
       if (success) {
+        publishPrintJobStatus({ label: '国标批次打印', state: 'success', message: '国标批次打印已提交' });
         console.log('打印成功userId', gbBatchId);
         // 调用GB批次保存接口
         savePrintBillGbPb(gbBatchId, paperCount);
       } else {
+        publishPrintJobStatus({
+          label: '国标批次打印',
+          state: 'failed',
+          retryable: true,
+          message: `国标批次打印失败：${serializePrintError(error)}`
+        });
         console.log('打印失败userId', error, gbBatchId);
       }
     });
@@ -2252,28 +2737,21 @@ function printContentToWindowGbPbWithCallback(printContent, gbBatchId, paperCoun
     });
 
     // 设置打印窗口的缩放比例，确保字体清晰
-    printWindow.webContents.setZoomFactor(1.0);
+    printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
 
     printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(printContent));
 
     printWindow.webContents.on('did-finish-load', () => {
       // 确保在打印前设置正确的缩放
-      printWindow.webContents.setZoomFactor(1.0);
+      printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
       
       // 获取默认打印机名称
       const defaultPrinter = getDefaultPrinterName();
       console.log('[打印] GB批次打印（IPC回执），使用打印机:', defaultPrinter || '系统默认打印机');
       
-      printWindow.webContents.print({
-        marginsType: 0,
-        silent: true,
-        printBackground: true, // 开启背景打印，防止边框/样式丢失
-        deviceName: defaultPrinter || '', // 使用配置的默认打印机
-        margins: {
-          marginType: 'none'
-        },
-        ...getPrintDpiOptions(),
-      }, (success, error) => {
+      printWindow.webContents.print(createSilentPrintOptions(defaultPrinter, {
+        includeLegacyMargins: true
+      }), (success, error) => {
         printWindow.destroy();
         
         if (success) {
@@ -2303,6 +2781,7 @@ function printContentToWindowGbPbWithCallback(printContent, gbBatchId, paperCoun
 
 
 function printContentToWindowGb(printContent, gbDepFatherId, gbDepId, tradeNo, userId, nxDisId, paperCount) {
+  publishPrintJobStatus({ label: '国标订单打印', state: 'printing', message: '国标订单打印正在发送到打印机' });
   const printWindow = new BrowserWindow({
     show: false, // 不显示打印窗口
     webPreferences: {
@@ -2312,33 +2791,33 @@ function printContentToWindowGb(printContent, gbDepFatherId, gbDepId, tradeNo, u
   });
 
   // 设置打印窗口的缩放比例，确保字体清晰
-  printWindow.webContents.setZoomFactor(1.0);
+  printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
 
   printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(printContent));
 
   printWindow.webContents.on('did-finish-load', () => {
     // 确保在打印前设置正确的缩放
-    printWindow.webContents.setZoomFactor(1.0);
+    printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
     
     // 获取默认打印机名称
     const defaultPrinter = getDefaultPrinterName();
     console.log('[打印] GB订单打印，使用打印机:', defaultPrinter || '系统默认打印机');
     
-    printWindow.webContents.print({
-      marginsType: 0, // 0 = default, 1 = none, 2 = minimum
-      silent: true,  // 静默打印，不弹出对话框
-      printBackground: true, // 开启背景打印，防止边框/样式丢失
-      deviceName: defaultPrinter || '',// 使用配置的默认打印机，空字符串使用系统默认打印机
-      margins: {
-        marginType: 'none' // 或使用具体的数值，如 { top: 0, bottom: 0, left: 0, right: 0 }
-      },
-      ...getPrintDpiOptions(),
-    }, (success, error) => {
+    printWindow.webContents.print(createSilentPrintOptions(defaultPrinter, {
+      includeLegacyMargins: true
+    }), (success, error) => {
       if (success) {
+        publishPrintJobStatus({ label: '国标订单打印', state: 'success', message: '国标订单打印已提交' });
         console.log('打印成功userId', userId);
         // 调用GB订单保存接口
         savePrintBillGb(gbDepFatherId, gbDepId, tradeNo, userId, nxDisId, paperCount);
       } else {
+        publishPrintJobStatus({
+          label: '国标订单打印',
+          state: 'failed',
+          retryable: true,
+          message: `国标订单打印失败：${serializePrintError(error)}`
+        });
         console.log('打印失败userId', error, userId);
       }
     });
@@ -2357,28 +2836,21 @@ function printContentToWindowGbWithCallback(printContent, gbDepFatherId, gbDepId
     });
 
     // 设置打印窗口的缩放比例，确保字体清晰
-    printWindow.webContents.setZoomFactor(1.0);
+    printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
 
     printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(printContent));
 
     printWindow.webContents.on('did-finish-load', () => {
       // 确保在打印前设置正确的缩放
-      printWindow.webContents.setZoomFactor(1.0);
+      printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
       
       // 获取默认打印机名称
       const defaultPrinter = getDefaultPrinterName();
       console.log('[打印] GB订单打印（IPC回执），使用打印机:', defaultPrinter || '系统默认打印机');
       
-      printWindow.webContents.print({
-        marginsType: 0,
-        silent: true,
-        printBackground: true, // 开启背景打印，防止边框/样式丢失
-        deviceName: defaultPrinter || '', // 使用配置的默认打印机
-        margins: {
-          marginType: 'none'
-        },
-        ...getPrintDpiOptions(),
-      }, (success, error) => {
+      printWindow.webContents.print(createSilentPrintOptions(defaultPrinter, {
+        includeLegacyMargins: true
+      }), (success, error) => {
         printWindow.destroy();
         
         if (success) {
@@ -2409,6 +2881,7 @@ function printContentToWindowGbWithCallback(printContent, gbDepFatherId, gbDepId
 
 
 function printContentToWindow(printContent, depFatherId, depId, tradeNo, userId, paperCount) {
+  publishPrintJobStatus({ label: '配送单打印', state: 'printing', message: '配送单正在发送到打印机' });
   const printWindow = new BrowserWindow({
     show: false, // 不显示打印窗口
     webPreferences: {
@@ -2418,29 +2891,23 @@ function printContentToWindow(printContent, depFatherId, depId, tradeNo, userId,
   });
 
   // 设置打印窗口的缩放比例，确保字体清晰
-  printWindow.webContents.setZoomFactor(1.0);
+  printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
 
   printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(printContent));
 
   printWindow.webContents.on('did-finish-load', () => {
     // 确保在打印前设置正确的缩放
-    printWindow.webContents.setZoomFactor(1.0);
+    printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
     
     // 获取默认打印机名称
     const defaultPrinter = getDefaultPrinterName();
     console.log('[打印] 普通订单打印，使用打印机:', defaultPrinter || '系统默认打印机');
     
-    printWindow.webContents.print({
-      marginsType: 0, // 0 = default, 1 = none, 2 = minimum
-      silent: true,  // 静默打印，不弹出对话框
-      printBackground: true, // 开启背景打印，防止边框/样式丢失
-      deviceName: defaultPrinter || '',// 使用配置的默认打印机，空字符串使用系统默认打印机
-      margins: {
-        marginType: 'none' // 或使用具体的数值，如 { top: 0, bottom: 0, left: 0, right: 0 }
-      },
-      ...getPrintDpiOptions(),
-    }, (success, error) => {
+    printWindow.webContents.print(createSilentPrintOptions(defaultPrinter, {
+      includeLegacyMargins: true
+    }), (success, error) => {
       if (success) {
+        publishPrintJobStatus({ label: '配送单打印', state: 'success', message: '配送单已提交' });
         console.log('打印成功userId', userId);
         
         // 检查是否有设备配置，决定使用哪个接口
@@ -2455,6 +2922,12 @@ function printContentToWindow(printContent, depFatherId, depId, tradeNo, userId,
         }
         console.log('✅ 已发送设备配置检查请求');
       } else {
+        publishPrintJobStatus({
+          label: '配送单打印',
+          state: 'failed',
+          retryable: true,
+          message: `配送单打印失败：${serializePrintError(error)}`
+        });
         console.log('打印失败userId', error, userId);
       }
     });
@@ -2462,7 +2935,7 @@ function printContentToWindow(printContent, depFatherId, depId, tradeNo, userId,
 }
 
 // 新的打印函数：返回Promise，支持IPC回执。isHistoryOrder=true 时跳过保存接口和刷新客户列表
-function printContentToWindowWithCallback(printContent, depFatherId, depId, tradeNo, userId, paperCount, shouldSave = true, isHistoryOrder = false) {
+function printContentToWindowWithCallback(printContent, depFatherId, depId, tradeNo, userId, paperCount, shouldSave = true, isHistoryOrder = false, orderIds) {
   console.log('🚀 [printContentToWindowWithCallback] ========== 开始创建打印窗口 ==========');
   console.log('🚀 [printContentToWindowWithCallback] 参数:', { depFatherId, depId, tradeNo, userId, paperCount, shouldSave, isHistoryOrder });
   console.log('🚀 [printContentToWindowWithCallback] HTML长度:', printContent ? printContent.length : 0);
@@ -2479,7 +2952,7 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
     console.log('🪟 [printContentToWindowWithCallback] BrowserWindow 创建成功');
 
     // 设置打印窗口的缩放比例，确保字体清晰
-    printWindow.webContents.setZoomFactor(1.0);
+    printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
 
     const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(printContent);
     console.log('📄 [printContentToWindowWithCallback] 加载打印内容，URL长度:', dataUrl.length);
@@ -2504,7 +2977,7 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
         isResolved = true;
         reject({ success: false, error: '打印超时', timeout: true });
       }
-    }, 10000); // 10秒超时
+    }, PRINT_RUNTIME_CONFIG.requestTimeoutMs);
     
     printWindow.webContents.on('did-finish-load', () => {
       console.log('📄 [printContentToWindowWithCallback] 打印窗口加载完成，准备打印');
@@ -2512,7 +2985,7 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
       console.log('📄 [printContentToWindowWithCallback] 打印参数:', { depFatherId, depId, tradeNo, userId, paperCount, shouldSave });
       
       // 确保在打印前设置正确的缩放
-      printWindow.webContents.setZoomFactor(1.0);
+      printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
       
       // 添加延迟，确保内容完全渲染（根据 GPT 建议，延迟 500ms 确保 HTML/CSS/图片完全加载）
       setTimeout(async () => {
@@ -2524,7 +2997,7 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
         // 额外延迟，确保内容完全渲染（特别是图片和 CSS）
         // GPT 建议：在 did-finish-load 之后延迟 500ms 调用打印
         console.log('⏳ [printContentToWindowWithCallback] 等待 500ms 确保内容完全渲染...');
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, PRINT_RUNTIME_CONFIG.renderDelayMs));
         
         if (isResolved) {
           console.warn('⚠️ [printContentToWindowWithCallback] 延迟期间已超时，跳过打印');
@@ -2620,15 +3093,7 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
         // 1. 使用 marginsType: 0 (默认边距)，比 'none' 更稳健
         // 2. 移除自定义 DPI，让驱动自己决定（针式打印机对 DPI 很敏感）
         // 3. 开启 printBackground 防止样式丢失
-        const printOptions = {
-          silent: true,
-          printBackground: true, // 开启背景打印，防止样式丢失
-          deviceName: finalPrinterName, // 使用验证后的打印机名称
-          marginsType: 0, // 0 = 默认边距，比 'none' 更稳健，兼容性更好
-          // 不设置 margins 对象，使用系统默认
-          // macOS 使用 300x300 DPI，Windows 不设置让驱动决定
-          ...getPrintDpiOptions(),
-        };
+        const printOptions = createSilentPrintOptions(finalPrinterName);
         
         console.log('🖨️ [printContentToWindowWithCallback] 打印参数:', printOptions);
         console.log('🖨️ [printContentToWindowWithCallback] 优化说明:');
@@ -2678,11 +3143,11 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
               if (mainWindow) {
                 console.log('💾 [IPC回执] 发送设备配置检查请求到渲染进程');
                 mainWindow.webContents.send('check-device-config-for-print', {
-                  depFatherId, depId, tradeNo, userId, paperCount
+                  depFatherId, depId, tradeNo, userId, paperCount, orderIds
                 });
               } else {
                 console.log('💾 [IPC回执] 主窗口不存在，直接调用保存接口');
-                savePrintBill(depFatherId, depId, tradeNo, userId, paperCount);
+                savePrintBill(depFatherId, depId, tradeNo, userId, paperCount, orderIds);
               }
             } else {
               console.log('⏭️ [IPC回执] 跳过保存，非最后一页');
@@ -2761,14 +3226,12 @@ function saveAccountBillPrinterSelf(depFatherId, depId, tradeNo, userId, paperCo
   }
 }
 
-function savePrintBill(depFatherId, depId, tradeNo, userId, paperCount) {
+function savePrintBill(depFatherId, depId, tradeNo, userId, paperCount, orderIds) {
   console.log('💾 [savePrintBill] 开始保存订单:', {
     depFatherId, depId, tradeNo, userId, paperCount
   });
 
-  const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_war_exploded/api/nxdepartmentbill/saveAccountBillPrinter/`
-    : `https://grainservice.club:8443/nongxinle/api/nxdepartmentbill/saveAccountBillPrinter/`;
+  const apiUrl = `${PRODUCTION_API_BASE_URL}nxdepartmentbill/saveAccountBillPrinter/`;
 
   console.log('🌐 [savePrintBill] 请求URL:', apiUrl);
 
@@ -2777,7 +3240,8 @@ function savePrintBill(depFatherId, depId, tradeNo, userId, paperCount) {
     depId: depId,
     depFatherId: depFatherId,
     tradeNo: tradeNo,
-    userId: userId
+    userId: userId,
+    orderIds: Array.isArray(orderIds) && orderIds.length ? orderIds.join(',') : undefined
   };
 
   console.log('📤 [savePrintBill] 请求数据:', postData);
@@ -2827,6 +3291,8 @@ function recordDevicePrint(printParams) {
 
 // 监听来自渲染进程的设备配置信息
 ipcMain.on('device-config-response', (event, deviceConfig, printParams) => {
+  assertTrustedRendererEvent(event);
+  assertDeviceConfigResponse(deviceConfig, printParams);
   console.log('📱 收到设备配置:', deviceConfig);
   console.log('📋 收到printParams:', printParams);
   console.log('👤 printParams.distributerName:', printParams.distributerName);
@@ -2844,9 +3310,7 @@ ipcMain.on('device-config-response', (event, deviceConfig, printParams) => {
     return;
   }
   
-  const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_war_exploded/api/machine/print/record`
-    : `https://grainservice.club:8443/nongxinle/api/machine/print/record`;
+  const apiUrl = `${PRODUCTION_API_BASE_URL}machine/print/record`;
 
   // 构建设备记录数据 - 按照后端接口要求，确保数据类型正确
   const deviceRecordData = {
@@ -2934,12 +3398,12 @@ ipcMain.on('device-config-response', (event, deviceConfig, printParams) => {
 
 // 监听来自渲染进程的设备配置信息 - 用于合并接口
 ipcMain.on('device-config-response-for-merge', (event, deviceConfig, printParams) => {
+  assertTrustedRendererEvent(event);
+  assertDeviceConfigResponse(deviceConfig, printParams);
   console.log('📱 收到设备配置 (合并接口):', deviceConfig);
   console.log('📋 收到printParams (合并接口):', printParams);
   
-  const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_war_exploded/api/nxdepartmentbill/saveAccountBillPrinterSelf`
-    : `https://grainservice.club:8443/nongxinle/api/nxdepartmentbill/saveAccountBillPrinterSelf`;
+  const apiUrl = `${PRODUCTION_API_BASE_URL}nxdepartmentbill/saveAccountBillPrinterSelf`;
 
   // 构建合并接口的请求数据
   const mergeData = {
@@ -2950,7 +3414,10 @@ ipcMain.on('device-config-response-for-merge', (event, deviceConfig, printParams
     deviceId: parseInt(deviceConfig?.selectedDevice?.nxPdId || 0),
     pricePerSheet: '0.00', // 默认价格，可以根据需要调整
     marketId: parseInt(deviceConfig?.deviceAdminInfo?.marketId || 0),
-    paperCount: Math.max(1, parseInt(printParams.paperCount || 1))
+    paperCount: Math.max(1, parseInt(printParams.paperCount || 1)),
+    orderIds: Array.isArray(printParams.orderIds) && printParams.orderIds.length
+      ? printParams.orderIds.join(',')
+      : undefined
   };
 
   console.log('📤 发送合并接口数据:', mergeData);
@@ -2985,6 +3452,11 @@ ipcMain.on('device-config-response-for-merge', (event, deviceConfig, printParams
 
 // 监听设备配置检查结果 - 决定使用哪个保存接口
 ipcMain.on('device-config-check-result', (event, hasDeviceConfig, printParams) => {
+  assertTrustedRendererEvent(event);
+  if (typeof hasDeviceConfig !== 'boolean') {
+    throw new TypeError('hasDeviceConfig 必须是布尔值');
+  }
+  assertPrintMetadata(printParams);
   console.log('📋 [主进程] 收到设备配置检查结果:', hasDeviceConfig);
   console.log('📋 [主进程] 打印参数:', JSON.stringify(printParams, null, 2));
   
@@ -3012,7 +3484,8 @@ ipcMain.on('device-config-check-result', (event, hasDeviceConfig, printParams) =
       printParams.depId, 
       printParams.tradeNo, 
       printParams.userId, 
-      printParams.paperCount
+      printParams.paperCount,
+      printParams.orderIds
     );
   }
 });
@@ -3020,9 +3493,7 @@ ipcMain.on('device-config-check-result', (event, hasDeviceConfig, printParams) =
 function savePrintBillGb(gbDepFatherId, gbDepId, tradeNo, userId, nxDisId, paperCount) {
   console.log('GB订单保存:', gbDepFatherId, gbDepId, tradeNo, userId, nxDisId);
 
-  const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_war_exploded/api/nxdepartmentbill/saveAccountBillPrinterGb/`
-    : `https://grainservice.club:8443/nongxinle/api/nxdepartmentbill/saveAccountBillPrinterGb/`;
+  const apiUrl = `${PRODUCTION_API_BASE_URL}nxdepartmentbill/saveAccountBillPrinterGb/`;
 
   // 发起请求
   const postData = {
@@ -3064,9 +3535,7 @@ function savePrintBillGb(gbDepFatherId, gbDepId, tradeNo, userId, nxDisId, paper
 function savePrintBillGbPb(gbBatchId, paperCount) {
   console.log("gbBatchId",gbBatchId, '0000保gbBatchIdgbBatchId');
 
-  const apiUrl = isDev
-    ? `http://localhost:8080/nongxinle_war_exploded/api/gbdistributerpurchasebatch/nxDisPrintGbPurBatch/`
-    : `https://grainservice.club:8443/nongxinle/api/gbdistributerpurchasebatch/nxDisPrintGbPurBatch/`;
+  const apiUrl = `${PRODUCTION_API_BASE_URL}gbdistributerpurchasebatch/nxDisPrintGbPurBatch/`;
     axios.get(`${apiUrl}${gbBatchId}`)
     .then(response => {
       console.log('GB批次保存成功:', response.data);
@@ -3093,7 +3562,7 @@ app.setName('粒子');
 
 app.whenReady().then(async () => {
   // 日志目录、会话头、主进程异常、渲染进程 app-log IPC
-  appLogger.init(ipcMain, shell);
+  appLogger.init(ipcMain, shell, assertTrustedRendererEvent);
   // 创建中文菜单
   createMenu();
   // IPC handlers 只注册一次，避免 createWindow 多次调用时重复注册报错
@@ -3104,18 +3573,53 @@ app.whenReady().then(async () => {
   // 启动 MCP HTTP 服务器
   try {
     const mcpConfig = mcpModule.loadMcpConfig();
-    mcpServer = await mcpModule.createMcpServer(mcpConfig.port, mcpConfig.host);
+    const mcpAuthToken = getEmbeddedMcpToken();
+    mcpServer = await mcpModule.createMcpServer(mcpConfig.port, mcpConfig.host, {
+      authToken: mcpAuthToken,
+      backendUrl: mcpConfig.backendUrl,
+      getDisUser: async () => mcpSessionUser,
+      callBackendApi: callMcpBackendApi,
+      sendPrintTask: (task) => {
+        const target =
+          mainWindow && !mainWindow.isDestroyed()
+            ? mainWindow
+            : BrowserWindow.getAllWindows()[0];
+        if (!target || target.isDestroyed()) {
+          return { ok: false, error: '无法找到应用窗口，请确保应用正在运行' };
+        }
+        return pushMcpPrintTaskToRenderer(target.webContents, task)
+          ? { ok: true }
+          : { ok: false, error: '打印任务投递失败' };
+      }
+    });
     console.log(`[MCP] 服务器已启动，监听 http://${mcpConfig.host}:${mcpConfig.port}`);
+    console.log('[MCP] 鉴权令牌文件:', getEmbeddedMcpTokenPath());
   } catch (error) {
     console.error('[MCP] 启动失败:', error);
   }
 
   // 轮询 Stdio MCP（mcp-server-cli.js）的 HTTP 队列，端口 3002；用 127.0.0.1 避免与 localhost → IPv6 绑定不一致
   const MCP_CLI_PRINT_TASKS_URL = 'http://127.0.0.1:3002/print-tasks';
+  const mcpCliBridgeToken = readOrCreateMcpCliBridgeToken();
+  console.log('[MCP] Stdio 打印桥鉴权令牌文件:', getMcpCliBridgeTokenPath());
   let mcpCliPollConnectWarned = false;
 
   function pollMcpCliPrintTasks() {
-    const req = http.get(MCP_CLI_PRINT_TASKS_URL, (res) => {
+    const target =
+      mainWindow && !mainWindow.isDestroyed()
+        ? mainWindow
+        : BrowserWindow.getAllWindows()[0];
+    if (!target || target.isDestroyed()) {
+      return;
+    }
+    const req = http.get(
+      MCP_CLI_PRINT_TASKS_URL,
+      {
+        headers: {
+          Authorization: `Bearer ${mcpCliBridgeToken}`
+        }
+      },
+      (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
@@ -3138,24 +3642,13 @@ app.whenReady().then(async () => {
               name: t.departmentName
             }))
           );
-          const target =
-            mainWindow && !mainWindow.isDestroyed()
-              ? mainWindow
-              : BrowserWindow.getAllWindows()[0];
-          if (!target || target.isDestroyed()) {
-            console.warn('[MCP] 无可用主窗口，无法下发打印任务（队列已在 MCP 进程中取出）');
-            return;
-          }
           tasks.forEach((task) => {
             const wc = target.webContents;
             const payload = JSON.stringify(task);
             console.log('[MCP] ── 即将 IPC mcp-print-trigger 到渲染进程 ──');
             console.log('[MCP] webContents.id=', wc.id, 'url=', wc.getURL());
             console.log('[MCP] 任务 JSON:', payload);
-            console.log(
-              '[MCP] 提示：若 IPC 在开发模式下未触达，将自动执行 executeJavaScript 后援；' +
-                '终端中应出现 [MCP] App 收到(inject|ipc)。'
-            );
+            console.log('[MCP] 使用 IPC + ack 投递；终端中应出现 [MCP] App 收到(ipc)。');
             pushMcpPrintTaskToRenderer(wc, task);
             console.log(
               '[MCP] 已派发任务（含后援）',
@@ -3171,7 +3664,8 @@ app.whenReady().then(async () => {
           console.warn('[MCP] CLI 轮询响应解析失败:', e.message);
         }
       });
-    });
+      }
+    );
     req.on('error', (err) => {
       if (!mcpCliPollConnectWarned) {
         console.warn(
@@ -3196,6 +3690,10 @@ app.whenReady().then(async () => {
 
 // 应用退出时关闭 MCP 服务器
 app.on('will-quit', () => {
+  if (dispatchGateway) {
+    dispatchGateway.dispose();
+    dispatchGateway = null;
+  }
   if (mcpCliPollingInterval) {
     clearInterval(mcpCliPollingInterval);
     console.log('[MCP] 轮询已停止');

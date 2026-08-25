@@ -1,0 +1,1990 @@
+{
+  "contract": "prediction-lab-live-shadow-acceptance/v1",
+  "acceptanceId": "D64_CORE_2026-08-22_DELIVERY_SHADOW",
+  "status": "SHADOW_ACCEPTANCE_SCORED",
+  "scoredAt": "2026-08-22T04:33:37+08:00",
+  "scope": {
+    "distributerId": 64,
+    "distributerName": "宏昌绿洲",
+    "departmentId": 1151,
+    "departmentName": "餐厅"
+  },
+  "dateSemantics": {
+    "businessDeliveryDate": "2026-08-22",
+    "modelOrderDate": "2026-08-21",
+    "trainingVisibleThrough": "2026-08-20",
+    "truthOrderDate": "2026-08-21",
+    "reason": "客户于 8 月 21 日下单、8 月 22 日配送；21 日订单是答案，不进入训练。"
+  },
+  "freezeVerification": {
+    "blindPredictionArtifact": "d64-2026-08-22-shadow-blind-prediction.json",
+    "blindPredictionArtifactSha256": "8e3c53841453c4f08bb3016720357f4bff4f0bb85389939f5ecaf1883d8f2609",
+    "predictionPayloadSha256": "22c21fb4fc13b4dd0e8252664c98da238fb6540bd387a4b29afc01786227e3cc",
+    "truthWasOpenedAfterPredictionFreeze": true,
+    "algorithmOrThresholdChangedAfterTruth": false,
+    "v8VersionChanged": false,
+    "policyEngineChanged": false,
+    "v9Registered": false
+  },
+  "truthSnapshot": {
+    "source": "NxDepartmentOrder current read model",
+    "snapshotAt": "2026-08-22T04:33:37+08:00",
+    "truthOrderDate": "2026-08-21",
+    "businessDeliveryDate": "2026-08-22",
+    "tradeNo": "HCLZ-08-22-BYLC",
+    "departmentGroups": [
+      {
+        "departmentId": 1152,
+        "departmentName": "蔬菜",
+        "orderLineCount": 55
+      },
+      {
+        "departmentId": 1153,
+        "departmentName": "调料",
+        "orderLineCount": 0
+      }
+    ],
+    "orderLineCount": 55,
+    "validQuantityStandardLineCount": 55,
+    "actualGoodsCount": 55,
+    "sourceResponseSha256": "61929f5b62c0a759e27d33d7604be439517584288958b5782da4c50de2697a94",
+    "primaryTruthFields": [
+      "nxDoDisGoodsId",
+      "nxDoGoodsName",
+      "nxDoQuantity",
+      "nxDoStandard"
+    ],
+    "weightUsedAsPrimaryTruth": false,
+    "note": "订单尚未完成履约；weight/printStandard 不参与本次主要评价。"
+  },
+  "metrics": {
+    "predictedGoodsCount": 43,
+    "actualGoodsCount": 55,
+    "hitGoodsCount": 39,
+    "missedGoodsCount": 16,
+    "extraGoodsCount": 4,
+    "precisionPercent": 90.7,
+    "coveragePercent": 70.9,
+    "f1Percent": 79.6,
+    "sameStandardComparableHitCount": 39,
+    "sameStandardQuantityMae": 2.99,
+    "sameStandardQuantityRmse": 6.69,
+    "sameStandardQuantityWapePercent": 27.9,
+    "sameStandardQuantityBias": -2.54,
+    "quantityHumanConfirmationRequired": true
+  },
+  "policyReplay": {
+    "byLevel": {
+      "LEVEL_A": {
+        "predictedGoodsCount": 32,
+        "hitGoodsCount": 30,
+        "extraGoodsCount": 2,
+        "precisionPercent": 93.8
+      },
+      "LEVEL_B": {
+        "predictedGoodsCount": 9,
+        "hitGoodsCount": 8,
+        "extraGoodsCount": 1,
+        "precisionPercent": 88.9
+      },
+      "LEVEL_C": {
+        "predictedGoodsCount": 2,
+        "hitGoodsCount": 1,
+        "extraGoodsCount": 1,
+        "precisionPercent": 50.0
+      }
+    },
+    "levelAPlusB": {
+      "predictedGoodsCount": 41,
+      "hitGoodsCount": 38,
+      "extraGoodsCount": 3,
+      "precisionPercent": 92.7
+    },
+    "levelCDefaultCollapsed": true,
+    "allLevelsRequireHumanConfirmation": true
+  },
+  "details": [
+    {
+      "goodsId": 23113,
+      "goodsName": "东古一品鲜",
+      "outcome": "HIT",
+      "predictedQuantity": 0.88,
+      "predictedStandard": "瓶",
+      "actualQuantities": [
+        {
+          "quantity": 3,
+          "standard": "瓶"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -2.12,
+      "quantityAbsoluteError": 2.12,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 87.6646,
+      "v8ConfidencePercent": 78.4,
+      "candidateRank": 28,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 85.7%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 90.5%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 93.5%，形成正向模型证据",
+        "相对拟合样本，相邻订单延续率 93.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献",
+        "相对拟合样本，补货状态稳定度 100.0%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 28；动态锚点 7 个",
+      "quantityMethod": "最新单位“瓶”最近 5 次中位数，趋势因子 0.875"
+    },
+    {
+      "goodsId": 23187,
+      "goodsName": "千叶豆腐",
+      "outcome": "HIT",
+      "predictedQuantity": 1,
+      "predictedStandard": "个",
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "个"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 79.3502,
+      "v8ConfidencePercent": 84.6,
+      "candidateRank": 24,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 77.1%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 93.1%，形成正向模型证据",
+        "相对拟合样本，商品周期证据量 3.91，形成正向模型证据",
+        "相对拟合样本，相邻订单延续率 79.6%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献",
+        "相对拟合样本，补货状态稳定度 100.0%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 24；动态锚点 7 个",
+      "quantityMethod": "最新单位“个”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23070,
+      "goodsName": "口蘑",
+      "outcome": "HIT",
+      "predictedQuantity": 0.5,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 0.5,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 75.4157,
+      "v8ConfidencePercent": 85.5,
+      "candidateRank": 22,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 74.3%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 92.9%，形成正向模型证据",
+        "相对拟合样本，商品周期证据量 3.87，形成正向模型证据",
+        "相对拟合样本，相邻订单延续率 77.1%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献",
+        "相对拟合样本，客户与商品联合概率 85.5%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 22；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23112,
+      "goodsName": "味达美冰糖老抽",
+      "outcome": "HIT",
+      "predictedQuantity": 1.13,
+      "predictedStandard": "瓶",
+      "actualQuantities": [
+        {
+          "quantity": 2,
+          "standard": "瓶"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -0.87,
+      "quantityAbsoluteError": 0.87,
+      "policyLevel": "LEVEL_B",
+      "policyTrustPercent": 71.1894,
+      "v8ConfidencePercent": 59.5,
+      "candidateRank": 40,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 95.5%，形成正向模型证据",
+        "相对拟合样本，补货状态稳定度 66.7%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 83.7%，形成正向模型证据",
+        "相对拟合样本，V8 当前购物篮内相对排名质量 9.3%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，补货周期压力 57.1%，形成负向条件贡献",
+        "相对拟合样本，相邻订单延续率 35.1%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 2 天，典型周期 2.0 天，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 2 天，商品自身周期中位数 2 天；相似周期历史预计篮子 43 项，本商品排序 40；动态锚点 7 个",
+      "quantityMethod": "最新单位“瓶”最近 5 次中位数，趋势因子 1.125"
+    },
+    {
+      "goodsId": 23133,
+      "goodsName": "圆白菜",
+      "outcome": "HIT",
+      "predictedQuantity": 45,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 70,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -25,
+      "quantityAbsoluteError": 25,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 92.4146,
+      "v8ConfidencePercent": 90.1,
+      "candidateRank": 9,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 94.3%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 96.8%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 96.8%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 100.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 100.0%，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 96.9%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 9；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1.125"
+    },
+    {
+      "goodsId": 23087,
+      "goodsName": "土豆",
+      "outcome": "HIT",
+      "predictedQuantity": 62,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 90,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -28,
+      "quantityAbsoluteError": 28,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 81.389,
+      "v8ConfidencePercent": 87.8,
+      "candidateRank": 21,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 74.3%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 85.2%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 92.9%，形成正向模型证据",
+        "相对拟合样本，相邻订单延续率 88.7%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，当前购物篮动态关联支持 87.4%，形成负向条件贡献",
+        "相对拟合样本，客户与商品联合概率 87.8%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 21；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23089,
+      "goodsName": "姜",
+      "outcome": "HIT",
+      "predictedQuantity": 10.0,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 10,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 88.0838,
+      "v8ConfidencePercent": 89.2,
+      "candidateRank": 17,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 85.7%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 89.7%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 88.9%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 93.8%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 94.1%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，客户与商品联合概率 89.2%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 17；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23085,
+      "goodsName": "小白菜",
+      "outcome": "HIT",
+      "predictedQuantity": 11.25,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 10,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 1.25,
+      "quantityAbsoluteError": 1.25,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 92.3298,
+      "v8ConfidencePercent": 90.1,
+      "candidateRank": 4,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 94.3%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 96.8%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 96.8%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 100.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 100.0%，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 96.9%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 4；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1.125"
+    },
+    {
+      "goodsId": 23104,
+      "goodsName": "带皮大蒜",
+      "outcome": "HIT",
+      "predictedQuantity": 1.13,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0.13,
+      "quantityAbsoluteError": 0.13,
+      "policyLevel": "LEVEL_B",
+      "policyTrustPercent": 66.6056,
+      "v8ConfidencePercent": 70.7,
+      "candidateRank": 36,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 91.7%，形成正向模型证据",
+        "相对拟合样本，商品周期证据量 3.78，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 71.0%，形成正向模型证据",
+        "相对拟合样本，相邻订单延续率 67.4%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，补货周期压力 58.8%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，商品采购间隔稳定度 68.2%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 36；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1.125"
+    },
+    {
+      "goodsId": 23094,
+      "goodsName": "平菇",
+      "outcome": "HIT",
+      "predictedQuantity": 3,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 7,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -4,
+      "quantityAbsoluteError": 4,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 72.4089,
+      "v8ConfidencePercent": 83.5,
+      "candidateRank": 25,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 74.3%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 92.9%，形成正向模型证据",
+        "相对拟合样本，商品周期证据量 3.83，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 74.2%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献",
+        "相对拟合样本，补货状态稳定度 100.0%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 25；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23095,
+      "goodsName": "有机菜花",
+      "outcome": "HIT",
+      "predictedQuantity": 3.5,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 2,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 1.5,
+      "quantityAbsoluteError": 1.5,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 72.2181,
+      "v8ConfidencePercent": 79.7,
+      "candidateRank": 27,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 71.4%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 92.6%，形成正向模型证据",
+        "相对拟合样本，商品周期证据量 3.83，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 74.2%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献",
+        "相对拟合样本，补货状态稳定度 100.0%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 27；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 0.875"
+    },
+    {
+      "goodsId": 23084,
+      "goodsName": "沙葱",
+      "outcome": "HIT",
+      "predictedQuantity": 1,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 2,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -1,
+      "quantityAbsoluteError": 1,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 81.4318,
+      "v8ConfidencePercent": 89.2,
+      "candidateRank": 19,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 80.0%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 89.7%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 93.3%，形成正向模型证据",
+        "相对拟合样本，商品周期证据量 3.93，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 93.8%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，客户与商品联合概率 89.2%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 19；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23142,
+      "goodsName": "番茄酱",
+      "outcome": "HIT",
+      "predictedQuantity": 1,
+      "predictedStandard": "桶",
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "桶"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_B",
+      "policyTrustPercent": 46.8295,
+      "v8ConfidencePercent": 58.5,
+      "candidateRank": 41,
+      "replenishmentState": "CONSUMING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 86.7%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 80.7%，形成正向模型证据",
+        "相对拟合样本，当前购物篮动态关联支持 38.8%，形成正向模型证据",
+        "相对拟合样本，V8 当前购物篮内相对排名质量 7.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 54.2%，形成负向条件贡献",
+        "相对拟合样本，补货周期压力 46.2%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 2 天，典型周期 3.0 天，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 CONSUMING，当前间隔 2 天，商品自身周期中位数 3 天；相似周期历史预计篮子 43 项，本商品排序 41；动态锚点 7 个",
+      "quantityMethod": "最新单位“桶”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 37235,
+      "goodsName": "白糖",
+      "outcome": "HIT",
+      "predictedQuantity": 10.0,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 10,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 91.1166,
+      "v8ConfidencePercent": 88.3,
+      "candidateRank": 20,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 91.4%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 93.7%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 96.8%，形成正向模型证据",
+        "相对拟合样本，相邻订单延续率 96.6%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，当前购物篮动态关联支持 90.0%，形成负向条件贡献",
+        "相对拟合样本，客户与商品联合概率 88.3%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 20；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23144,
+      "goodsName": "百花荆花蜂蜜",
+      "outcome": "HIT",
+      "predictedQuantity": 3,
+      "predictedStandard": "瓶",
+      "actualQuantities": [
+        {
+          "quantity": 3,
+          "standard": "瓶"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 86.444,
+      "v8ConfidencePercent": 78.2,
+      "candidateRank": 29,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 82.9%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 87.3%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 93.5%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 90.3%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献",
+        "相对拟合样本，补货状态稳定度 100.0%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 29；动态锚点 7 个",
+      "quantityMethod": "最新单位“瓶”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23132,
+      "goodsName": "紫皮洋葱",
+      "outcome": "HIT",
+      "predictedQuantity": 10.0,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 5,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 5,
+      "quantityAbsoluteError": 5,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 92.4139,
+      "v8ConfidencePercent": 89.8,
+      "candidateRank": 14,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 94.3%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 95.2%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 93.3%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 98.4%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 97.0%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 93.8%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 14；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23077,
+      "goodsName": "红尖椒",
+      "outcome": "HIT",
+      "predictedQuantity": 7,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 12,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -5,
+      "quantityAbsoluteError": 5,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 92.0996,
+      "v8ConfidencePercent": 90.1,
+      "candidateRank": 1,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 94.3%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 96.8%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 96.8%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 100.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 100.0%，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 96.9%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 1；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23081,
+      "goodsName": "绿尖椒",
+      "outcome": "HIT",
+      "predictedQuantity": 13.5,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 20,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -6.5,
+      "quantityAbsoluteError": 6.5,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 91.2394,
+      "v8ConfidencePercent": 90.1,
+      "candidateRank": 3,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 91.4%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 96.8%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 95.2%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 98.4%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 100.0%，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 96.9%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 3；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1.125"
+    },
+    {
+      "goodsId": 23069,
+      "goodsName": "胡萝卜",
+      "outcome": "HIT",
+      "predictedQuantity": 10.0,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 15,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -5,
+      "quantityAbsoluteError": 5,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 92.42,
+      "v8ConfidencePercent": 89.8,
+      "candidateRank": 12,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 94.3%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 96.8%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 93.3%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 100.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 97.0%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 93.8%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 12；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23184,
+      "goodsName": "节瓜",
+      "outcome": "HIT",
+      "predictedQuantity": 1,
+      "predictedStandard": "个",
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "个"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_B",
+      "policyTrustPercent": 54.5588,
+      "v8ConfidencePercent": 72.8,
+      "candidateRank": 34,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 87.0%，形成正向模型证据",
+        "相对拟合样本，商品周期证据量 3.66，形成正向模型证据",
+        "相对拟合样本，相邻订单延续率 66.7%，形成正向模型证据",
+        "相对拟合样本，V8 当前购物篮内相对排名质量 23.3%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，商品采购间隔稳定度 63.3%，形成负向条件贡献",
+        "相对拟合样本，补货周期压力 55.0%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑命中可信度 58.8%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 34；动态锚点 7 个",
+      "quantityMethod": "最新单位“个”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23216,
+      "goodsName": "花椒",
+      "outcome": "HIT",
+      "predictedQuantity": 2,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 2,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_B",
+      "policyTrustPercent": 58.5246,
+      "v8ConfidencePercent": 64.4,
+      "candidateRank": 38,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，补货状态稳定度 66.7%，形成正向模型证据",
+        "相对拟合样本，距上次购买 3 天，典型周期 2.0 天，形成正向模型证据",
+        "相对拟合样本，补货周期压力 76.9%，形成正向模型证据",
+        "相对拟合样本，当前购物篮动态关联支持 38.8%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，相邻订单延续率 8.0%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑命中可信度 55.6%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 66.7%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 3 天，商品自身周期中位数 2 天；相似周期历史预计篮子 43 项，本商品排序 38；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23101,
+      "goodsName": "芹菜",
+      "outcome": "HIT",
+      "predictedQuantity": 9,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 8,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 1,
+      "quantityAbsoluteError": 1,
+      "policyLevel": "LEVEL_B",
+      "policyTrustPercent": 51.5706,
+      "v8ConfidencePercent": 65.0,
+      "candidateRank": 37,
+      "replenishmentState": "CONSUMING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 90.5%，形成正向模型证据",
+        "相对拟合样本，补货状态稳定度 80.0%，形成正向模型证据",
+        "相对拟合样本，商品周期证据量 3.61，形成正向模型证据",
+        "相对拟合样本，V8 当前购物篮内相对排名质量 16.3%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 2.0 天，形成负向条件贡献",
+        "相对拟合样本，补货周期压力 45.0%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑命中可信度 55.9%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 CONSUMING，当前间隔 1 天，商品自身周期中位数 2 天；相似周期历史预计篮子 43 项，本商品排序 37；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1.125"
+    },
+    {
+      "goodsId": 23086,
+      "goodsName": "菠菜",
+      "outcome": "HIT",
+      "predictedQuantity": 8,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 10,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -2,
+      "quantityAbsoluteError": 2,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 90.7781,
+      "v8ConfidencePercent": 89.8,
+      "candidateRank": 15,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 91.4%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 93.3%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 92.1%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 95.2%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 96.6%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 93.8%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 15；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23079,
+      "goodsName": "蒜米",
+      "outcome": "HIT",
+      "predictedQuantity": 8.75,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 15,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -6.25,
+      "quantityAbsoluteError": 6.25,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 90.5997,
+      "v8ConfidencePercent": 90.1,
+      "candidateRank": 2,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 91.4%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 96.8%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 92.1%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 95.2%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 100.0%，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 96.9%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 2；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 0.875"
+    },
+    {
+      "goodsId": 23080,
+      "goodsName": "蒜苔",
+      "outcome": "HIT",
+      "predictedQuantity": 2,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 2,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 75.684,
+      "v8ConfidencePercent": 74.4,
+      "candidateRank": 33,
+      "replenishmentState": "OVERDUE",
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 2 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑命中可信度 68.6%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 96.0%，形成正向模型证据",
+        "相对拟合样本，商品周期证据量 3.83，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，补货周期压力 48.0%，形成负向条件贡献",
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献",
+        "相对拟合样本，补货状态稳定度 100.0%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 OVERDUE，当前间隔 2 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 33；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23326,
+      "goodsName": "薄荷叶",
+      "outcome": "HIT",
+      "predictedQuantity": 0.36,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 0.5,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -0.14,
+      "quantityAbsoluteError": 0.14,
+      "policyLevel": "LEVEL_B",
+      "policyTrustPercent": 70.0656,
+      "v8ConfidencePercent": 90.1,
+      "candidateRank": 10,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 83.3%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 96.8%，形成正向模型证据",
+        "相对拟合样本，近期频率趋势稳定度 22.6%，形成正向模型证据",
+        "相对拟合样本，相邻订单延续率 81.5%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，商品采购间隔稳定度 50.9%，形成负向条件贡献",
+        "相对拟合样本，当前购物篮动态关联支持 100.0%，形成负向条件贡献",
+        "相对拟合样本，客户有订单时该商品购买率 45.2%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 10；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 0.9"
+    },
+    {
+      "goodsId": 23082,
+      "goodsName": "螺丝椒",
+      "outcome": "HIT",
+      "predictedQuantity": 4,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 4,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 79.7533,
+      "v8ConfidencePercent": 89.8,
+      "candidateRank": 16,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 77.1%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 93.3%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 93.1%，形成正向模型证据",
+        "相对拟合样本，商品周期证据量 3.91，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 96.3%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 93.8%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 16；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23097,
+      "goodsName": "西红柿",
+      "outcome": "HIT",
+      "predictedQuantity": 20.0,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 25,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -5,
+      "quantityAbsoluteError": 5,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 89.8771,
+      "v8ConfidencePercent": 90.1,
+      "candidateRank": 8,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 94.3%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 96.8%，形成正向模型证据",
+        "相对拟合样本，相邻订单延续率 95.9%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 94.3%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 100.0%，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 96.9%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 8；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 25415,
+      "goodsName": "青柠檬",
+      "outcome": "HIT",
+      "predictedQuantity": 4,
+      "predictedStandard": "个",
+      "actualQuantities": [
+        {
+          "quantity": 4,
+          "standard": "个"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 83.1471,
+      "v8ConfidencePercent": 90.1,
+      "candidateRank": 11,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 84.6%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 96.8%，形成正向模型证据",
+        "相对拟合样本，近期频率趋势稳定度 12.9%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 89.7%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 100.0%，形成负向条件贡献",
+        "相对拟合样本，客户有订单时该商品购买率 43.5%，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 96.9%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 11；动态锚点 7 个",
+      "quantityMethod": "最新单位“个”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23185,
+      "goodsName": "面筋",
+      "outcome": "HIT",
+      "predictedQuantity": 1,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 80.2231,
+      "v8ConfidencePercent": 83.3,
+      "candidateRank": 26,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 2 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，补货周期压力 90.0%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 92.0%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑命中可信度 65.7%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献",
+        "相对拟合样本，补货状态稳定度 100.0%，形成负向条件贡献",
+        "相对拟合样本，客户行为稳定度 94.6%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 2 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 26；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23093,
+      "goodsName": "韭菜",
+      "outcome": "HIT",
+      "predictedQuantity": 4,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 4,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 89.1904,
+      "v8ConfidencePercent": 90.1,
+      "candidateRank": 7,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 88.6%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 96.8%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 91.9%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 93.5%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 100.0%，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 96.9%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 7；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23237,
+      "goodsName": "风车生粉",
+      "outcome": "HIT",
+      "predictedQuantity": 1,
+      "predictedStandard": "袋",
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "袋"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_B",
+      "policyTrustPercent": 53.7571,
+      "v8ConfidencePercent": 56.2,
+      "candidateRank": 43,
+      "replenishmentState": "OVERDUE",
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 5 天，典型周期 3.0 天，形成正向模型证据",
+        "相对拟合样本，当前购物篮动态关联支持 22.6%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 81.9%，形成正向模型证据",
+        "相对拟合样本，商品采购频率 25.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，相邻订单延续率 0.0%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 58.3%，形成负向条件贡献",
+        "相对拟合样本，客户有订单时该商品购买率 29.0%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 OVERDUE，当前间隔 5 天，商品自身周期中位数 3 天；相似周期历史预计篮子 43 项，本商品排序 43；动态锚点 7 个",
+      "quantityMethod": "最新单位“袋”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23102,
+      "goodsName": "馒头",
+      "outcome": "HIT",
+      "predictedQuantity": 7.2,
+      "predictedStandard": "个",
+      "actualQuantities": [
+        {
+          "quantity": 10,
+          "standard": "个"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -2.8,
+      "quantityAbsoluteError": 2.8,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 92.6137,
+      "v8ConfidencePercent": 78.0,
+      "candidateRank": 30,
+      "replenishmentState": "OVERDUE",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 94.3%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 95.2%，形成正向模型证据",
+        "相对拟合样本，距上次购买 2 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 98.4%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，补货周期压力 48.3%，形成负向条件贡献",
+        "相对拟合样本，当前购物篮动态关联支持 91.4%，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 90.6%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 OVERDUE，当前间隔 2 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 30；动态锚点 7 个",
+      "quantityMethod": "最新单位“个”最近 5 次中位数，趋势因子 0.9"
+    },
+    {
+      "goodsId": 23092,
+      "goodsName": "香芹",
+      "outcome": "HIT",
+      "predictedQuantity": 3,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 3,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 92.2103,
+      "v8ConfidencePercent": 90.1,
+      "candidateRank": 6,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 94.3%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 96.8%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 95.2%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 98.4%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 100.0%，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 96.9%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 6；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23064,
+      "goodsName": "香菜",
+      "outcome": "HIT",
+      "predictedQuantity": 0.5,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 0.5,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 89.5157,
+      "v8ConfidencePercent": 89.2,
+      "candidateRank": 18,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 88.6%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 92.1%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 89.7%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 95.2%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 93.8%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，客户与商品联合概率 89.2%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 18；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23096,
+      "goodsName": "鸡蛋",
+      "outcome": "HIT",
+      "predictedQuantity": 5,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 5,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": 0,
+      "quantityAbsoluteError": 0,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 89.1359,
+      "v8ConfidencePercent": 89.8,
+      "candidateRank": 13,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 88.6%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 93.3%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 90.5%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 93.5%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 97.0%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 93.8%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 13；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23076,
+      "goodsName": "黄心大白菜",
+      "outcome": "HIT",
+      "predictedQuantity": 2.63,
+      "predictedStandard": "个",
+      "actualQuantities": [
+        {
+          "quantity": 3,
+          "standard": "个"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -0.37,
+      "quantityAbsoluteError": 0.37,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 88.6158,
+      "v8ConfidencePercent": 77.2,
+      "candidateRank": 32,
+      "replenishmentState": "OVERDUE",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 82.9%，形成正向模型证据",
+        "相对拟合样本，距上次购买 2 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 88.9%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 91.9%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，补货周期压力 48.2%，形成负向条件贡献",
+        "相对拟合样本，当前购物篮动态关联支持 87.9%，形成负向条件贡献",
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 OVERDUE，当前间隔 2 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 32；动态锚点 7 个",
+      "quantityMethod": "最新单位“个”最近 5 次中位数，趋势因子 0.875"
+    },
+    {
+      "goodsId": 23098,
+      "goodsName": "黄瓜",
+      "outcome": "HIT",
+      "predictedQuantity": 11.25,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 15,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -3.75,
+      "quantityAbsoluteError": 3.75,
+      "policyLevel": "LEVEL_C",
+      "policyTrustPercent": 0.8732,
+      "v8ConfidencePercent": 71.1,
+      "candidateRank": 35,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，近期频率趋势稳定度 0.0%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 83.3%，形成正向模型证据",
+        "相对拟合样本，历史单位一致率 0.0%，形成正向模型证据",
+        "相对拟合样本，当前购物篮动态关联支持 41.1%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 0.0%，形成负向条件贡献",
+        "相对拟合样本，商品采购间隔稳定度 0.0%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 0.0%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 35；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1.125"
+    },
+    {
+      "goodsId": 23091,
+      "goodsName": "黄皮洋葱",
+      "outcome": "HIT",
+      "predictedQuantity": 30.0,
+      "predictedStandard": "斤",
+      "actualQuantities": [
+        {
+          "quantity": 40,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": true,
+      "quantityError": -10,
+      "quantityAbsoluteError": 10,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 92.4042,
+      "v8ConfidencePercent": 90.1,
+      "candidateRank": 5,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 94.3%，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 96.8%，形成正向模型证据",
+        "相对拟合样本，补货周期压力 96.8%，形成正向模型证据",
+        "相对拟合样本，客户有订单时该商品购买率 100.0%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，当前购物篮动态关联支持 100.0%，形成负向条件贡献",
+        "相对拟合样本，商品采购频率 96.9%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 5；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23238,
+      "goodsName": "八角",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 23100,
+      "goodsName": "冰草",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 2,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 39576,
+      "goodsName": "大垃圾袋",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "把"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 23068,
+      "goodsName": "干黑木耳",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 23406,
+      "goodsName": "彩毛巾",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 8,
+          "standard": "条"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 23178,
+      "goodsName": "方毛巾",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 6,
+          "standard": "条"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 23120,
+      "goodsName": "朝天椒",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 3,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 23193,
+      "goodsName": "桂皮",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 23186,
+      "goodsName": "法香",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 0.2,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 39595,
+      "goodsName": "生抽",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "瓶"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 23110,
+      "goodsName": "糖蒜",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "箱"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 37073,
+      "goodsName": "美极鲜",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "瓶"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 23195,
+      "goodsName": "花生米",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 3,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 23192,
+      "goodsName": "草果",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 24241,
+      "goodsName": "蚝油",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 1,
+          "standard": "桶"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 39658,
+      "goodsName": "袋子",
+      "outcome": "MISSED",
+      "predictedQuantity": null,
+      "predictedStandard": null,
+      "actualQuantities": [
+        {
+          "quantity": 6,
+          "standard": "斤"
+        }
+      ],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": null,
+      "policyTrustPercent": null,
+      "v8ConfidencePercent": null,
+      "candidateRank": null,
+      "replenishmentState": null,
+      "supportingReasons": [],
+      "riskReasons": [],
+      "v8Explanation": null,
+      "quantityMethod": null
+    },
+    {
+      "goodsId": 23099,
+      "goodsName": "圣女果",
+      "outcome": "EXTRA",
+      "predictedQuantity": 2.25,
+      "predictedStandard": "斤",
+      "actualQuantities": [],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": "LEVEL_B",
+      "policyTrustPercent": 48.1072,
+      "v8ConfidencePercent": 62.9,
+      "candidateRank": 39,
+      "replenishmentState": "CONSUMING",
+      "supportingReasons": [
+        "相对拟合样本，补货状态稳定度 66.7%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 89.5%，形成正向模型证据",
+        "相对拟合样本，V8 当前购物篮内相对排名质量 11.6%，形成正向模型证据",
+        "相对拟合样本，客户关系画像强度 79.6%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 51.5%，形成负向条件贡献",
+        "相对拟合样本，距上次购买 1 天，典型周期 2.0 天，形成负向条件贡献",
+        "相对拟合样本，补货周期压力 47.4%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 CONSUMING，当前间隔 1 天，商品自身周期中位数 2 天；相似周期历史预计篮子 43 项，本商品排序 39；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1.125"
+    },
+    {
+      "goodsId": 23090,
+      "goodsName": "大葱",
+      "outcome": "EXTRA",
+      "predictedQuantity": 30.0,
+      "predictedStandard": "斤",
+      "actualQuantities": [],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 92.2973,
+      "v8ConfidencePercent": 77.2,
+      "candidateRank": 31,
+      "replenishmentState": "OVERDUE",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 94.3%，形成正向模型证据",
+        "相对拟合样本，距上次购买 2 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，商品采购间隔稳定度 94.0%，形成正向模型证据",
+        "相对拟合样本，相邻订单延续率 97.9%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，补货周期压力 48.2%，形成负向条件贡献",
+        "相对拟合样本，当前购物篮动态关联支持 88.4%，形成负向条件贡献",
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 OVERDUE，当前间隔 2 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 31；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    },
+    {
+      "goodsId": 23111,
+      "goodsName": "紫林陈醋",
+      "outcome": "EXTRA",
+      "predictedQuantity": 0.88,
+      "predictedStandard": "桶",
+      "actualQuantities": [],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": "LEVEL_A",
+      "policyTrustPercent": 79.6309,
+      "v8ConfidencePercent": 84.7,
+      "candidateRank": 23,
+      "replenishmentState": "APPROACHING",
+      "supportingReasons": [
+        "相对拟合样本，拟合期 V8 平滑命中可信度 74.3%，形成正向模型证据",
+        "相对拟合样本，拟合期 V8 平滑覆盖可信度 92.9%，形成正向模型证据",
+        "相对拟合样本，商品周期证据量 3.97，形成正向模型证据",
+        "相对拟合样本，相邻订单延续率 84.9%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，距上次购买 1 天，典型周期 1.0 天，形成负向条件贡献",
+        "相对拟合样本，客户订货周期到期度 92.9%，形成负向条件贡献",
+        "相对拟合样本，历史数量稳定度 59.6%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 APPROACHING，当前间隔 1 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 23；动态锚点 7 个",
+      "quantityMethod": "最新单位“桶”最近 5 次中位数，趋势因子 0.875"
+    },
+    {
+      "goodsId": 23103,
+      "goodsName": "面条",
+      "outcome": "EXTRA",
+      "predictedQuantity": 5,
+      "predictedStandard": "斤",
+      "actualQuantities": [],
+      "standardComparable": false,
+      "quantityError": null,
+      "quantityAbsoluteError": null,
+      "policyLevel": "LEVEL_C",
+      "policyTrustPercent": 29.838,
+      "v8ConfidencePercent": 56.6,
+      "candidateRank": 42,
+      "replenishmentState": "OVERDUE",
+      "supportingReasons": [
+        "相对拟合样本，距上次购买 2 天，典型周期 1.0 天，形成正向模型证据",
+        "相对拟合样本，V8 当前购物篮内相对排名质量 4.7%，形成正向模型证据",
+        "相对拟合样本，当前购物篮动态关联支持 43.9%，形成正向模型证据",
+        "相对拟合样本，客户与商品联合概率 56.6%，形成正向模型证据"
+      ],
+      "riskReasons": [
+        "相对拟合样本，商品采购间隔稳定度 34.4%，形成负向条件贡献",
+        "相对拟合样本，拟合期 V8 平滑命中可信度 45.8%，形成负向条件贡献",
+        "相对拟合样本，补货周期压力 36.7%，形成负向条件贡献"
+      ],
+      "v8Explanation": "补货状态 OVERDUE，当前间隔 2 天，商品自身周期中位数 1 天；相似周期历史预计篮子 43 项，本商品排序 42；动态锚点 7 个",
+      "quantityMethod": "最新单位“斤”最近 5 次中位数，趋势因子 1"
+    }
+  ],
+  "hardBoundaries": {
+    "quantityTruth": "NXDO quantity + NXDO standard",
+    "weightExcludedFromPrimaryTruth": true,
+    "quantityRequiresHumanConfirmation": true,
+    "productionOrderOrProcurementWrite": false,
+    "v9Registered": false,
+    "closureStatusChanged": false,
+    "newAlgorithmResearchStarted": false
+  },
+  "frozenRuntime": {
+    "algorithmVersion": "V8_REPLENISHMENT_STATE",
+    "historyWindowDays": 30,
+    "trainingStartDate": "2026-07-22",
+    "trainingEndDate": "2026-08-20",
+    "trainingLineCount": 1397,
+    "trainingGoodsCount": 174,
+    "invalidQuantityLineCount": 0,
+    "orderPrediction": {
+      "predictedOrder": true,
+      "probabilityPercent": 90.2,
+      "cycleHazardPercent": 92.9,
+      "weekdayRatePercent": 83.3,
+      "recentRatePercent": 93.8,
+      "explanation": "客户订货概率=90.2%（间隔风险 92.9%，同星期 83.3%，近14天活跃 93.8%）；固定门槛 50%"
+    },
+    "policyEngine": "FROZEN_PREDICTION_POLICY_ENGINE_V1",
+    "policyLevelCounts": {
+      "LEVEL_A": 32,
+      "LEVEL_B": 9,
+      "LEVEL_C": 2
+    },
+    "topKIncreased": false,
+    "algorithmOrThresholdChanged": false
+  },
+  "desktopDisplay": {
+    "title": "D64 核心客户 · 8月22日现场 Shadow 验收",
+    "subtitle": "8月21日下单 / 8月22日配送",
+    "defaultFilter": "ALL",
+    "weightDisplayed": false
+  }
+}

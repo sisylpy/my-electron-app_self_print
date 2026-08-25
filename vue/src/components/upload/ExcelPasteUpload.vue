@@ -72,9 +72,18 @@
         </div>
         <div v-if="showExcelPastePromptModal" class="modal-backdrop fade show"></div>
 
-        <div class="row g-3" style="flex: 1; min-height: 0; overflow: hidden; margin: 0; align-items: stretch;">
+        <div
+            class="excel-paste-split"
+            :class="{
+                'is-left-active': activePane === 'left',
+                'is-right-active': activePane === 'right'
+            }"
+            @mouseleave="activePane = ''">
             <!-- 左侧：Excel 粘贴表格区域（min-height:0 防止溢出遮挡底部滚动条） -->
-            <div class="col-md-5" style="min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
+            <div
+                class="excel-paste-pane excel-paste-pane--left"
+                @mouseenter="activePane = 'left'"
+                @focusin="activePane = 'left'">
                 <div class="card h-100" style="min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
                     <div class="card-body p-2"
                          style="display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: hidden; position: relative;">
@@ -170,23 +179,23 @@
                                 style="font-size: 12px;"
                                 @cell-click="handleCellClick"
                                 @edit-closed="handleEditClosed">
-                                <vxe-column type="seq" title="序号" width="40" align="center" fixed="left"></vxe-column>
-                                <vxe-column field="goodsName" title="商品名称" width="90" fixed="left"
+                                <vxe-column type="seq" title="序号" width="38" align="center" fixed="left"></vxe-column>
+                                <vxe-column field="goodsName" title="商品名称" width="84" fixed="left"
                                             :edit-render="{ name: 'input', props: { placeholder: '商品名称' } }"></vxe-column>
-                                <vxe-column field="quantity" title="数量" width="60" align="center"
+                                <vxe-column field="quantity" title="数量" width="56" align="center"
                                             :edit-render="{ name: 'input', props: { placeholder: '数量' } }"></vxe-column>
-                                <vxe-column field="specification" title="规格" width="60" align="center"
+                                <vxe-column field="specification" title="规格" width="56" align="center"
                                             :edit-render="{ name: 'input', props: { placeholder: '规格' } }"></vxe-column>
-                                <vxe-column field="specificationWeight" title="规格重量" width="80" align="center"
+                                <vxe-column field="specificationWeight" title="规格重量" width="72" align="center"
                                             :edit-render="{ name: 'input', props: { placeholder: '规格重量' } }"></vxe-column>
-                                <vxe-column field="cartonQuantity" title="大包装数量" width="80" align="center"
+                                <vxe-column field="cartonQuantity" title="大包装数量" width="72" align="center"
                                             :edit-render="{ name: 'input', props: { placeholder: '大包装数量' } }"></vxe-column>
-                                <vxe-column field="cartonName" title="大包装名称" width="60" align="center"
+                                <vxe-column field="cartonName" title="大包装名称" width="56" align="center"
                                             :edit-render="{ name: 'input', props: { placeholder: '大包装名称' } }"></vxe-column>
-                                <vxe-column field="remark" title="备注" min-width="100"
+                                <vxe-column field="remark" title="备注" min-width="90"
                                             :edit-render="{ name: 'input', props: { placeholder: '备注' } }"></vxe-column>
                                 <!-- 仅在「未生成右侧订单」时可编辑表格：操作列与 hasTableData 无关，有数据后仍需 +/− 调整行 -->
-                                <vxe-column title="" width="72" align="center" fixed="right" class-name="excel-paste-actions-col" v-if="excelPasteOrderItems.length == 0">
+                                <vxe-column title="" width="60" align="center" fixed="right" class-name="excel-paste-actions-col" v-if="excelPasteOrderItems.length == 0">
                                     <template #default="{ row, rowIndex }" >
                                         <span v-if="rowHasData(row || tableData[rowIndex])" class="excel-paste-row-actions">
                                             <button type="button" class="excel-paste-btn excel-paste-btn-add" title="在上方插入一行" @click.stop="onInsertRowAbove(rowIndex)">+</button>
@@ -211,8 +220,10 @@
             </div>
 
             <!-- 右侧：订单列表（Excel 粘贴独立） -->
-            <div class="col-md-7 order-items-section"
-                 style="display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;">
+            <div
+                 class="excel-paste-pane excel-paste-pane--right order-items-section"
+                 @mouseenter="activePane = 'right'"
+                 @focusin="activePane = 'right'">
                 <div class="card h-100 p-3"
                      style="display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
                     <div class="d-flex justify-content-between align-items-center mb-3" style="flex-shrink: 0;">
@@ -433,6 +444,7 @@ export default {
         return {
             taskList: [],
             activeTaskId: null,
+            activePane: '',
             loadingTaskList: false,
             currentPasteRowIndex: 0,
             currentPasteColIndex: 0,
@@ -467,21 +479,15 @@ export default {
     watch: {
         depId: {
             handler(val) {
-                if (this._depIdLoadTimer) {
-                    clearTimeout(this._depIdLoadTimer);
-                    this._depIdLoadTimer = null;
-                }
+                this.cancelScheduledTaskListLoad();
+                this.taskList = [];
+                this.activeTaskId = null;
                 if (val != null) {
-                    // 延后请求，让 vxe-table 等先完成渲染，提升切换时的响应速度
-                    this._depIdLoadTimer = setTimeout(() => {
-                        this._depIdLoadTimer = null;
-                        this.loadTaskList();
-                    }, 0);
-                } else {
-                    this.taskList = [];
+                    // 先渲染可编辑表格；历史任务在浏览器空闲时静默读取。
+                    this.scheduleTaskListLoad();
                 }
             },
-            immediate: true
+            immediate: false
         },
         currentTaskId(val) {
             this.activeTaskId = val != null ? val : null;
@@ -497,6 +503,7 @@ export default {
         }
     },
     mounted() {
+        if (this.depId != null) this.scheduleTaskListLoad();
         this.$nextTick(() => {
             this.updateTableScrollState();
             this.bindTableScrollListener();
@@ -509,15 +516,36 @@ export default {
         window.addEventListener('resize', this._resizeHandler);
     },
     beforeUnmount() {
-        if (this._depIdLoadTimer) {
-            clearTimeout(this._depIdLoadTimer);
-            this._depIdLoadTimer = null;
-        }
+        this.isUnmounted = true;
+        this.cancelScheduledTaskListLoad();
         if (this._resizeHandler) {
             window.removeEventListener('resize', this._resizeHandler);
         }
     },
     methods: {
+        cancelScheduledTaskListLoad() {
+            if (this._taskListIdleId != null && typeof window.cancelIdleCallback === 'function') {
+                window.cancelIdleCallback(this._taskListIdleId);
+            }
+            if (this._taskListLoadTimer) clearTimeout(this._taskListLoadTimer);
+            this._taskListIdleId = null;
+            this._taskListLoadTimer = null;
+        },
+        scheduleTaskListLoad() {
+            this.cancelScheduledTaskListLoad();
+            const loadInBackground = () => {
+                this._taskListIdleId = null;
+                this._taskListLoadTimer = null;
+                if (!this.isUnmounted && this.depId != null) {
+                    this.loadTaskList(null, { selectFirst: false, silent: true });
+                }
+            };
+            if (typeof window.requestIdleCallback === 'function') {
+                this._taskListIdleId = window.requestIdleCallback(loadInBackground, { timeout: 1200 });
+            } else {
+                this._taskListLoadTimer = setTimeout(loadInBackground, 300);
+            }
+        },
         // 显示 Toast 提示
         showToast(message, type = 'info', duration = 3000) {
             this.toastMessage = message;
@@ -605,13 +633,17 @@ export default {
         },
 
         /**
-         * @param {number|null} [selectTaskId] - 刷新后要选中的任务 ID，不传则选中第一个并 emit select-task
+         * @param {number|null} [selectTaskId] - 刷新后要选中的任务 ID
+         * @param {{selectFirst?: boolean, silent?: boolean}} [options]
          */
-        async loadTaskList(selectTaskId) {
-            this.loadingTaskList = true;
+        async loadTaskList(selectTaskId, options = {}) {
+            const requestDepId = this.depId;
+            const selectFirst = options.selectFirst !== false;
+            if (!options.silent) this.loadingTaskList = true;
             try {
                 const taskType = this.taskType != null ? Number(this.taskType) : 2;
-                const res = await api.depGetTaskList(this.depId, taskType);
+                const res = await api.depGetTaskList(requestDepId, taskType);
+                if (String(requestDepId) !== String(this.depId)) return this.taskList;
                 const data = res && res.data;
                 if (data && data.code === 0) {
                     let list = data.data != null ? data.data : (data.list || data);
@@ -629,7 +661,7 @@ export default {
                                 return id != null && Number(id) === Number(selectTaskId);
                             });
                             if (found) this.$emit('select-task', { taskId: selectTaskId, task: found });
-                        } else {
+                        } else if (selectFirst) {
                             const first = this.taskList[0];
                             this.activeTaskId = first.nxOcrTaskId != null ? first.nxOcrTaskId : first.id;
                             this.$emit('select-task', { taskId: this.activeTaskId, task: first });
@@ -642,7 +674,7 @@ export default {
                 console.error('[PasteUpload] loadTaskList failed:', e);
                 this.taskList = [];
             } finally {
-                this.loadingTaskList = false;
+                if (!options.silent) this.loadingTaskList = false;
             }
             return this.taskList;
         },
@@ -1145,6 +1177,34 @@ export default {
 </script>
 
 <style scoped>
+    .excel-paste-split {
+        display: grid;
+        flex: 1;
+        min-height: 0;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 12px;
+        overflow: hidden;
+        align-items: stretch;
+        transition: grid-template-columns 220ms ease;
+    }
+
+    .excel-paste-split.is-left-active {
+        grid-template-columns: minmax(0, 1.12fr) minmax(0, .88fr);
+    }
+
+    .excel-paste-split.is-right-active {
+        grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr);
+    }
+
+    .excel-paste-pane {
+        display: flex;
+        min-width: 0;
+        min-height: 0;
+        height: 100%;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
     /* 表格左右滚动按钮 */
     .excel-paste-table-wrap {
         position: relative;
@@ -1346,7 +1406,3 @@ export default {
         }
     }
 </style>
-
-
-
-

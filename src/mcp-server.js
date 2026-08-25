@@ -4,11 +4,15 @@
  */
 
 const http = require('http');
-const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { app } = require('electron');
-const { pushMcpPrintTaskToRenderer } = require('./mcp-print-push');
+const {
+  PRODUCTION_API_BASE_URL,
+  PRODUCTION_BACKEND_ORIGIN,
+  PRODUCTION_BACKEND_PATH,
+} = require('./api-runtime');
 
 // MCP 协议常量
 const MCP_VERSION = '1.0.0';
@@ -16,77 +20,25 @@ const MCP_VERSION = '1.0.0';
 // 默认配置
 const DEFAULT_CONFIG = {
   port: 3001,
-  host: 'localhost'
+  host: '127.0.0.1',
+  backendUrl: PRODUCTION_API_BASE_URL
 };
 
-/**
- * 读取用户登录信息（通过 IPC 从渲染进程获取）
- */
+const MAX_REQUEST_BODY_BYTES = 1024 * 1024;
+let runtimeContext = {
+  getDisUser: async () => null,
+  callBackendApi: async () => {
+    throw new Error('MCP backend context is not configured');
+  },
+  sendPrintTask: () => ({ ok: false, error: 'MCP print context is not configured' })
+};
+
 async function getDisUser() {
-  try {
-    // 使用 BrowserWindow 获取 localStorage 数据
-    const { BrowserWindow } = require('electron');
-    const windows = BrowserWindow.getAllWindows();
-    
-    if (windows.length > 0 && !windows[0].isDestroyed()) {
-      const window = windows[0];
-      
-      // 使用 executeJavaScript 获取 localStorage 数据
-      const result = await window.webContents.executeJavaScript(`
-        new Promise((resolve) => {
-          try {
-            const disUser = localStorage.getItem('disUser');
-            if (disUser) {
-              resolve({ success: true, data: JSON.parse(disUser) });
-            } else {
-              resolve({ success: false, error: '未登录' });
-            }
-          } catch (e) {
-            resolve({ success: false, error: e.message });
-          }
-        })
-      `);
-      
-      if (result && result.success && result.data) {
-        console.log('[MCP] 获取到登录信息:', result.data.nxDiuDistributerId);
-        return result.data;
-      }
-    }
-  } catch (e) {
-    console.error('[MCP] 获取登录信息失败:', e);
-  }
-  return null;
+  return runtimeContext.getDisUser();
 }
 
-/**
- * 调用后端 API
- */
 async function callBackendApi(apiPath, method = 'GET', data = null) {
-  // 通过 BrowserWindow 的 webContents 调用 preload 暴露的 mcpCallApi 方法
-  const { BrowserWindow } = require('electron');
-  const windows = BrowserWindow.getAllWindows();
-  
-  if (windows.length === 0 || windows[0].isDestroyed()) {
-    throw new Error('没有可用的窗口');
-  }
-  
-  const win = windows[0];
-  
-  // 调用 preload 暴露的 mcpCallApi 方法
-  try {
-    const result = await win.webContents.executeJavaScript(`
-      (async () => {
-        const apiPath = '${apiPath}';
-        const method = '${method}';
-        const data = ${data ? JSON.stringify(data) : 'null'};
-        return await window.electronAPI.mcpCallApi(apiPath, method, data);
-      })()
-    `);
-    return result;
-  } catch (error) {
-    console.error('[MCP] API 调用失败:', error);
-    return { error: error.message };
-  }
+  return runtimeContext.callBackendApi(apiPath, method, data);
 }
 
 /**
@@ -254,14 +206,11 @@ function extractPreviewOrders(inner) {
 }
 
 function sendPrintTaskToRenderer(task) {
-  const { BrowserWindow } = require('electron');
-  const windows = BrowserWindow.getAllWindows();
-  if (windows.length === 0 || windows[0].isDestroyed()) {
-    return { ok: false, error: '无法找到应用窗口，请确保应用正在运行' };
+  const result = runtimeContext.sendPrintTask(task);
+  if (result && result.ok) {
+    console.log('[MCP HTTP] 已派发 mcp-print-trigger（IPC + ack）', task.taskId, task.departmentName);
   }
-  pushMcpPrintTaskToRenderer(windows[0].webContents, task);
-  console.log('[MCP HTTP] 已派发 mcp-print-trigger（IPC+inject）', task.taskId, task.departmentName);
-  return { ok: true };
+  return result;
 }
 
 /**
@@ -780,34 +729,136 @@ async function confirmPrintDeliveryOrder(departmentId, printMode = 'all', subDep
   }
 }
 
+function isLoopbackAddress(address) {
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
+}
+
+function hasValidBearerToken(req, expectedToken) {
+  const authorization = String(req.headers.authorization || '');
+  const prefix = 'Bearer ';
+  if (!authorization.startsWith(prefix)) return false;
+  const actualToken = authorization.slice(prefix.length);
+  const expected = Buffer.from(expectedToken);
+  const actual = Buffer.from(actualToken);
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+}
+
+function normalizeMcpConfig(config = {}) {
+  const port = Number(config.port);
+  const backendUrl = String(config.backendUrl || DEFAULT_CONFIG.backendUrl).trim();
+  let parsedBackendUrl;
+  try {
+    parsedBackendUrl = new URL(backendUrl);
+  } catch {
+    throw new Error('MCP backendUrl 无效');
+  }
+  const isLocalHttp =
+    parsedBackendUrl.protocol === 'http:' &&
+    ['127.0.0.1', 'localhost', '::1'].includes(parsedBackendUrl.hostname);
+  const isProductionBackend =
+    parsedBackendUrl.protocol === 'https:' &&
+    parsedBackendUrl.origin === PRODUCTION_BACKEND_ORIGIN &&
+    parsedBackendUrl.pathname === PRODUCTION_BACKEND_PATH;
+  if (!isProductionBackend && !isLocalHttp) {
+    throw new Error('MCP backendUrl 只允许农心乐正式接口或本机开发地址');
+  }
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+    throw new Error('MCP 端口必须在 1024-65535 范围内');
+  }
+  return {
+    host: '127.0.0.1',
+    port,
+    backendUrl: backendUrl.endsWith('/') ? backendUrl : `${backendUrl}/`
+  };
+}
+
 /**
- * 创建 MCP HTTP 服务器
+ * 创建只允许本机、非浏览器来源且带 Bearer Token 的 MCP HTTP 服务器。
  */
-function createMcpServer(port = DEFAULT_CONFIG.port, host = DEFAULT_CONFIG.host) {
+function createMcpServer(
+  port = DEFAULT_CONFIG.port,
+  host = DEFAULT_CONFIG.host,
+  options = {}
+) {
+  const config = normalizeMcpConfig({
+    port,
+    host,
+    backendUrl: options.backendUrl || DEFAULT_CONFIG.backendUrl
+  });
+  const authToken = String(options.authToken || '');
+  if (authToken.length < 32) {
+    throw new Error('MCP 鉴权令牌缺失或强度不足');
+  }
+  runtimeContext = {
+    getDisUser:
+      typeof options.getDisUser === 'function'
+        ? options.getDisUser
+        : runtimeContext.getDisUser,
+    callBackendApi:
+      typeof options.callBackendApi === 'function'
+        ? options.callBackendApi
+        : runtimeContext.callBackendApi,
+    sendPrintTask:
+      typeof options.sendPrintTask === 'function'
+        ? options.sendPrintTask
+        : runtimeContext.sendPrintTask
+  };
+
   const server = http.createServer(async (req, res) => {
-    // 设置 CORS 头
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+
+    if (!isLoopbackAddress(req.socket.remoteAddress)) {
+      res.writeHead(403);
+      res.end(JSON.stringify({ error: 'Local access only' }));
+      return;
+    }
+    if (req.headers.origin || req.headers['sec-fetch-site']) {
+      res.writeHead(403);
+      res.end(JSON.stringify({ error: 'Browser-origin requests are not allowed' }));
+      return;
+    }
+    if (!hasValidBearerToken(req, authToken)) {
+      res.writeHead(401, { 'WWW-Authenticate': 'Bearer' });
+      res.end(JSON.stringify({ error: 'Unauthorized' }));
+      return;
+    }
+
     if (req.method === 'OPTIONS') {
-      res.writeHead(200);
+      res.writeHead(405);
       res.end();
       return;
     }
     
     // 处理 JSON-RPC 请求
-    if (req.method === 'POST' && req.headers['content-type'] === 'application/json') {
+    if (
+      req.method === 'POST' &&
+      String(req.headers['content-type'] || '').toLowerCase().startsWith('application/json')
+    ) {
       let body = '';
-      req.on('data', chunk => body += chunk);
+      let bodyBytes = 0;
+      let bodyTooLarge = false;
+      req.on('data', (chunk) => {
+        if (bodyTooLarge) return;
+        bodyBytes += chunk.length;
+        if (bodyBytes > MAX_REQUEST_BODY_BYTES) {
+          bodyTooLarge = true;
+          res.writeHead(413);
+          res.end(JSON.stringify({ error: 'Request body too large' }));
+          req.destroy();
+          return;
+        }
+        body += chunk;
+      });
       req.on('end', async () => {
+        if (bodyTooLarge) return;
         try {
           const request = JSON.parse(body);
           const response = await handleMcpRequest(request);
-          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.writeHead(200);
           res.end(JSON.stringify(response));
         } catch (error) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.writeHead(400);
           res.end(JSON.stringify({
             jsonrpc: '2.0',
             error: {
@@ -822,7 +873,7 @@ function createMcpServer(port = DEFAULT_CONFIG.port, host = DEFAULT_CONFIG.host)
     
     // 返回服务信息
     if (req.method === 'GET' && req.url === '/') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.writeHead(200);
       res.end(JSON.stringify({
         name: 'grain-print-mcp',
         version: '1.0.0',
@@ -838,8 +889,8 @@ function createMcpServer(port = DEFAULT_CONFIG.port, host = DEFAULT_CONFIG.host)
   
   return new Promise((resolve, reject) => {
     server.on('error', reject);
-    server.listen(port, host, () => {
-      console.log(`[MCP] 服务器已启动: http://${host}:${port}`);
+    server.listen(config.port, config.host, () => {
+      console.log(`[MCP] 服务器已启动: http://${config.host}:${config.port}`);
       resolve(server);
     });
   });
@@ -853,10 +904,19 @@ function saveMcpConfig(config) {
   const configPath = path.join(userDataPath, 'mcp-config.json');
   
   try {
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+    const normalized = normalizeMcpConfig(config);
+    fs.writeFileSync(configPath, JSON.stringify(normalized, null, 2), {
+      encoding: 'utf8',
+      mode: 0o600
+    });
+    try {
+      fs.chmodSync(configPath, 0o600);
+    } catch {}
     console.log('[MCP] 配置已保存到:', configPath);
+    return normalized;
   } catch (error) {
     console.error('[MCP] 保存配置失败:', error);
+    throw error;
   }
 }
 
@@ -869,18 +929,19 @@ function loadMcpConfig() {
   
   try {
     if (fs.existsSync(configPath)) {
-      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      return normalizeMcpConfig(JSON.parse(fs.readFileSync(configPath, 'utf8')));
     }
   } catch (error) {
     console.error('[MCP] 加载配置失败:', error);
   }
   
-  return { ...DEFAULT_CONFIG };
+  return normalizeMcpConfig(DEFAULT_CONFIG);
 }
 
 module.exports = {
   createMcpServer,
   saveMcpConfig,
   loadMcpConfig,
+  normalizeMcpConfig,
   DEFAULT_CONFIG
 };

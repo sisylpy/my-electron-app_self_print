@@ -1,19 +1,9 @@
 ﻿import { createApp } from 'vue';
 import App from './App.vue';
-import { createRouter ,createWebHashHistory} from 'vue-router';
-import Home from './views/Home.vue';
-import Bills from './views/Bills.vue';
-import Screen from './views/Screen.vue';
-import TRyVue from './views/try.vue';
+import router from './router';
 import store from './store'; // 引入 store
 import { writeAppLog } from './utils/appLog';
 import toast from './plugins/toast';
-import {
-    parseStoredDisUser,
-    isRememberPrinterUserEnabled,
-    isKioskEntryRoute,
-    resolveBillsQueryFromDisUser,
-} from './utils/rememberPrinterUser';
 import jQuery from 'jquery'
 import { BootstrapVue3 } from 'bootstrap-vue-3';
 
@@ -22,92 +12,14 @@ import 'bootstrap/dist/js/bootstrap.bundle.min.js'
 
 import 'admin-lte/dist/css/adminlte.min.css'
 import 'admin-lte/dist/js/adminlte.min.js'
+import './app/styles/product-tokens.css'
 
 // 引入 vxe-table
 import VXETable from 'vxe-table'
 import 'vxe-table/lib/style.css'
+import './app/styles/product-polish.css'
 
-// 引入 axios 实例并暴露到 window（供 MCP 使用）
-import axiosInstance from './api/axios';
-
-// 在应用挂载后再暴露到 window，确保 Vue 上下文可用
-const exposeAxios = () => {
-  window.axios = axiosInstance;
-  window.axiosInstance = axiosInstance;
-  console.log('[Vue] axios 已暴露到 window:', !!window.axios);
-};
-
-// 立即暴露一次
-exposeAxios();
-const routes = [
-  // {
-  //   path: '/',
-  //   name: 'TRyVue',
-  //   component: TRyVue,
-  
-  // },
-  {
-    path: '/',
-    name: 'Screen',
-    component: Screen,
-  },
-  { path: '/home',  name: 'Home',component: Home },
-  { path: '/bills', name: 'Bills', component: Bills },
-];
 window.$ = window.jQuery = jQuery
-const router = createRouter({
-  history: createWebHashHistory(),
-  routes,
-});
-
-/**
- * 记住用户：仅在进入轮播页（/ Screen）时自动进账单。
- * 用户点「打印配送单」会进入 Home 扫码，若此处也拦截，会看不到二维码直接被送进 Bills。
- */
-router.beforeEach((to, from, next) => {
-  if (to.name === 'Home' || (to.path || '').replace(/\/$/, '') === '/home') {
-    next();
-    return;
-  }
-  if (!isKioskEntryRoute(to)) {
-    next();
-    return;
-  }
-  const remember = isRememberPrinterUserEnabled();
-  if (!remember) {
-    writeAppLog('info', 'router', 'remember-auto-login:skip', { reason: 'remember-flag-off', to: to.fullPath, name: to.name });
-    next();
-    return;
-  }
-  let u = store.state.disUser;
-  if (!resolveBillsQueryFromDisUser(u)) {
-    u = parseStoredDisUser();
-    if (u && resolveBillsQueryFromDisUser(u)) {
-      store.commit('SET_DISUSER', u);
-    }
-  }
-  const q = resolveBillsQueryFromDisUser(u);
-  if (!q) {
-    writeAppLog('info', 'router', 'remember-auto-login:skip', {
-      reason: 'no-valid-disUser',
-      to: to.fullPath,
-      name: to.name,
-      hasLocalDis: !!parseStoredDisUser(),
-    });
-    next();
-    return;
-  }
-  writeAppLog('info', 'router', 'remember-auto-login:redirect-bills', { disId: q.disId, to: to.fullPath });
-  next({
-    name: 'Bills',
-    query: { disId: q.disId, disName: q.disName },
-    replace: true,
-  });
-});
-
-router.onError((err) => {
-  writeAppLog('error', 'router', err?.message || String(err), { stack: err?.stack });
-});
 
 const app = createApp(App);
 app.use(router);
@@ -150,6 +62,7 @@ window.addEventListener('unhandledrejection', (event) => {
 const mountElement = document.getElementById('app');
 if (mountElement) {
   app.mount('#app');
+  window.electronAPI?.setMcpSessionUser?.(store.state.disUser || null);
   console.log('✅ Vue 应用已挂载到 #app');
   writeAppLog('info', 'renderer', 'vue-app-mounted', {
     hash: typeof window !== 'undefined' ? window.location.hash : ''
@@ -174,4 +87,3 @@ if (mountElement) {
   console.error('❌ 找不到 #app 元素！');
   writeAppLog('error', 'renderer', 'mount-failed: #app missing');
 }
-

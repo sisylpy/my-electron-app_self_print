@@ -1,6 +1,7 @@
 ﻿// src/store/index.js
 import { createStore } from 'vuex'; // 使用 Vuex 4.x 的创建方法
 import pageHeader from './modules/pageHeader';
+import dispatch from '@/modules/dispatch/store';
 import axiosInstance from '@/api/axios'; // 使用配置好的 Axios 实例
 
 // 从 localStorage 恢复 disUser
@@ -25,9 +26,54 @@ const state = {
   mcpPrintQueue: [],
 };
 
-export default createStore({  // 使用 createStore 替代 Vuex.Store
+function syncMcpSessionUser(value) {
+  try {
+    window.electronAPI?.setMcpSessionUser?.(value || null);
+  } catch (error) {
+    console.warn('[MCP] 同步内存会话摘要失败:', error);
+  }
+}
+
+function clearBrowserCookies() {
+  try {
+    document.cookie.split(';').forEach((cookie) => {
+      const separator = cookie.indexOf('=');
+      const name = (separator >= 0 ? cookie.slice(0, separator) : cookie).trim();
+      if (name) {
+        document.cookie = `${name}=; Max-Age=0; path=/; SameSite=Lax`;
+      }
+    });
+  } catch {
+    // Electron 主进程会清理 HttpOnly Cookie；浏览器预览只清理页面可见 Cookie。
+  }
+}
+
+function removeUserCache() {
+  const exactKeys = new Set([
+    'disUser',
+    'user',
+    'pasteArr',
+    'rememberPrinterUser',
+    'simpleTaskList',
+  ]);
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (key && (exactKeys.has(key) || key.startsWith('ocrOrderDepList'))) {
+      localStorage.removeItem(key);
+    }
+  }
+  try {
+    sessionStorage.clear();
+  } catch {
+    // 无可用 sessionStorage 时忽略。
+  }
+  clearBrowserCookies();
+}
+
+const store = createStore({  // 使用 createStore 替代 Vuex.Store
   modules: {
     pageHeader,
+    dispatch,
   },
   state,
   getters: {},
@@ -37,7 +83,12 @@ export default createStore({  // 使用 createStore 替代 Vuex.Store
     },
     SET_DISUSER(state, value) { // 修改为与 action 提交一致的名称
       state.disUser = value;
-      localStorage.setItem('disUser', JSON.stringify(value));
+      if (value) {
+        localStorage.setItem('disUser', JSON.stringify(value));
+      } else {
+        localStorage.removeItem('disUser');
+      }
+      syncMcpSessionUser(value);
     },
     SET_USER(state, value) { // 修改为与 action 提交一致的名称
       state.user = value;
@@ -61,6 +112,14 @@ export default createStore({  // 使用 createStore 替代 Vuex.Store
     CLEAR_MCP_PRINT_QUEUE(state) {
       state.mcpPrintQueue = [];
     },
+    CLEAR_USER_SESSION_CACHE(state) {
+      state.disUser = null;
+      state.user = '';
+      state.pasteArr = '';
+      state.mcpPrintQueue = [];
+      removeUserCache();
+      syncMcpSessionUser(null);
+    },
   },
   actions: {
     setLoading({ commit }, payload) {
@@ -77,7 +136,24 @@ export default createStore({  // 使用 createStore 替代 Vuex.Store
         commit('SET_LOADING', false); // 隐藏加载遮盖层
       }
     },
+    async logoutUserSession({ commit, dispatch }) {
+      let desktopResult = { ok: true };
+      try {
+        await dispatch('dispatch/cancelRead');
+        desktopResult = await window.electronAPI?.userSession?.logout?.() || { ok: true };
+      } catch (error) {
+        desktopResult = {
+          ok: false,
+          message: error?.message || '桌面安全会话清理失败',
+        };
+      } finally {
+        commit('dispatch/RESET_RUNTIME_STATE');
+        commit('CLEAR_USER_SESSION_CACHE');
+      }
+      return desktopResult;
+    },
     // 其他 actions...
   },
 });
 
+export default store;

@@ -8,6 +8,22 @@
     "dev:vue": "cd vue && vite",
     "dev:electron": "wait-on http://localhost:3000 && electron .",
     "build:vue": "cd vue && vite build",
+    "test:security": "node scripts/security-smoke.js",
+    "test:print-contract": "node scripts/print-contract-smoke.js",
+    "test:slice0": "node scripts/slice0-architecture-smoke.js",
+    "test:slice1": "node scripts/slice1-readonly-smoke.js",
+    "test:slice3": "node scripts/slice3-write-smoke.js",
+    "test:product-shell": "node scripts/product-shell-smoke.js",
+    "test:p2-p3": "node scripts/p2-p3-productization-smoke.js",
+    "test:p4": "node scripts/p4-product-experience-smoke.mjs",
+    "test:production-api": "node scripts/production-api-smoke.js",
+    "test:order-write": "node scripts/order-write-gateway-smoke.js",
+    "test:prediction-policy-ui": "node scripts/prediction-policy-ui-smoke.mjs",
+    "generate:prediction-policy-fixture": "node scripts/generate-prediction-policy-fixture.mjs",
+    "test:phase1": "npm run test:security && npm run test:print-contract",
+    "test:phase2-slice0": "npm run test:slice0 && npm run test:phase1 && npm run build:vue",
+    "test:phase2-slice1": "npm run test:slice0 && npm run test:slice1 && npm run test:phase1 && npm run build:vue",
+    "test:phase2-slice3": "npm run test:slice0 && npm run test:slice3 && npm run test:phase1 && npm run build:vue",
     "dist": "npm run build:vue && electron-builder",
     "dist:mac": "npm run build:vue && electron-builder --mac",
     "dist:win": "npm run build:vue && electron-builder --win"
@@ -22,9 +38,9 @@
     "files": [
       "dist/**/*",
       "src/**/*",
+      "!src/main-bf.js",
       "package.json",
-      "node_modules/**/*",
-      "config/**/*"
+      "node_modules/**/*"
     ],
     "asar": false,
     "win": {

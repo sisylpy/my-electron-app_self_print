@@ -1,13 +1,28 @@
 ﻿<template>
   <div class="saved-orders-tab"
        style="height: 100%; overflow: hidden; display: flex; flex-direction: column;">
+    <div v-if="batchPrintMode" class="batch-print-bar">
+      <div>
+        <strong>可打印 {{ printableOrders.length }} 项</strong>
+        <span>只有状态为 2 的商品可以加入本次配送批次</span>
+      </div>
+      <label>
+        <input
+          type="checkbox"
+          :checked="allPrintableSelected"
+          :disabled="!printableOrders.length"
+          @change="toggleAllPrintable($event.target.checked)"
+        >
+        全选可打印商品
+      </label>
+    </div>
     <!-- 订单列表显示区域 -->
     <div class="order-list-container" style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
       <!-- 无子部门的情况 -->
       <div v-if="!hasSubDepartments" class="order-table-wrapper">
         <!-- 固定表头 -->
         <div class="table-header-fixed bg-light border-bottom p-2 d-flex align-items-center fw-bold small">
-          <div style="width: 50px; flex-shrink: 0;" class="text-center table-cell">序号</div>
+          <div style="width: 70px; flex-shrink: 0;" class="text-center table-cell">{{ batchPrintMode ? '本批' : '序号' }}</div>
           <div style="width: 200px; flex-shrink: 0;" class="table-cell">商品名称</div>
           <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">订货</div>
           <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">出货数量</div>
@@ -30,7 +45,16 @@
               'liziClock': order.nxDoPurchaseStatus == 3
             }">
           <div v-if="order.nxDoStatus > -2" class="d-flex align-items-center">
-            <div style="width: 50px; flex-shrink: 0;" class="text-center fw-bold table-cell">{{ index + 1 }}</div>
+            <div style="width: 70px; flex-shrink: 0;" class="text-center fw-bold table-cell order-batch-cell">
+              <input
+                v-if="batchPrintMode && isPrintableOrder(order)"
+                type="checkbox"
+                :checked="isOrderSelected(order)"
+                :aria-label="`选择第${index + 1}项加入本批配送单`"
+                @change="togglePrintOrder(order, $event.target.checked)"
+              >
+              <span>{{ index + 1 }}</span>
+            </div>
             <div style="width: 200px; flex-shrink: 0;" class="table-cell">
               <div class="d-flex align-items-center flex-wrap" style="max-width: 300px;">
                 <span v-if="order.nxDistributerGoodsEntity && order.nxDistributerGoodsEntity.nxDgGoodsBrand && order.nxDistributerGoodsEntity.nxDgGoodsBrand !== 'null'"
@@ -138,7 +162,9 @@
             </div>
           </div>
           <div v-else class="d-flex align-items-center">
-            <div style="width: 50px; flex-shrink: 0;" class="text-center fw-bold table-cell">{{ index + 1 }}</div>
+            <div style="width: 70px; flex-shrink: 0;" class="text-center fw-bold table-cell order-batch-cell">
+              <span>{{ index + 1 }}</span>
+            </div>
             <div style="width: 200px; flex-shrink: 0;" class="table-cell">
               <span class="text-danger small me-2">(未完成)</span>
               <span class="me-2">{{ order.nxDoGoodsName }}</span>
@@ -171,7 +197,7 @@
       <!-- 有子部门的情况（列表抬头与列操作与单部门一致） -->
       <div v-else class="order-table-wrapper" style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
         <div class="table-header-fixed bg-light border-bottom p-2 d-flex align-items-center fw-bold small" style="flex-shrink: 0;">
-          <div style="width: 50px; flex-shrink: 0;" class="text-center table-cell">序号</div>
+          <div style="width: 70px; flex-shrink: 0;" class="text-center table-cell">{{ batchPrintMode ? '本批' : '序号' }}</div>
           <div style="width: 200px; flex-shrink: 0;" class="table-cell">商品名称</div>
           <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">订货</div>
           <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">出货数量</div>
@@ -201,7 +227,16 @@
                   'liziClock': order.nxDoPurchaseStatus == 3
                 }">
               <div v-if="order.nxDoStatus > -2" class="d-flex align-items-center">
-                <div style="width: 50px; flex-shrink: 0;" class="text-center fw-bold table-cell">{{ index + 1 }}</div>
+                <div style="width: 70px; flex-shrink: 0;" class="text-center fw-bold table-cell order-batch-cell">
+                  <input
+                    v-if="batchPrintMode && isPrintableOrder(order)"
+                    type="checkbox"
+                    :checked="isOrderSelected(order)"
+                    :aria-label="`选择${dep.depName}第${index + 1}项加入本批配送单`"
+                    @change="togglePrintOrder(order, $event.target.checked)"
+                  >
+                  <span>{{ index + 1 }}</span>
+                </div>
                 <div style="width: 200px; flex-shrink: 0;" class="table-cell">
                   <div class="d-flex align-items-center flex-wrap" style="max-width: 300px;">
                     <span v-if="order.nxDistributerGoodsEntity && order.nxDistributerGoodsEntity.nxDgGoodsBrand && order.nxDistributerGoodsEntity.nxDgGoodsBrand !== 'null'"
@@ -307,7 +342,9 @@
                 </div>
               </div>
               <div v-else class="d-flex align-items-center">
-                <div style="width: 50px; flex-shrink: 0;" class="text-center fw-bold table-cell">{{ index + 1 }}</div>
+                <div style="width: 70px; flex-shrink: 0;" class="text-center fw-bold table-cell order-batch-cell">
+                  <span>{{ index + 1 }}</span>
+                </div>
                 <div style="width: 200px; flex-shrink: 0;" class="table-cell">
                   <span class="text-danger small me-2">(未完成)</span>
                   <span class="me-2">{{ order.nxDoGoodsName }}</span>
@@ -653,14 +690,21 @@
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div class="d-flex flex-column gap-1">
           <div class="d-flex align-items-center gap-2">
-        <span>总计:</span>
-          <span class="fw-bold fs-5">{{ todayOrderTotal }}元</span>
+            <template v-if="batchPrintMode">
+              <span>本批已选:</span>
+              <span class="fw-bold fs-5">{{ selectedPrintOrders.length }} 项</span>
+              <span class="text-success fw-bold">¥{{ selectedPrintTotal.toFixed(2) }}</span>
+            </template>
+            <template v-else>
+              <span>总计:</span>
+              <span class="fw-bold fs-5">{{ todayOrderTotal }}元</span>
+            </template>
           </div>
           <!-- 订单状态统计 -->
           <div class="d-flex align-items-center gap-3 text-muted small" @click="handleStatsAreaClick">
-            <span>完成: <span class="text-success fw-bold">{{ orderStatusStats.completed || 0 }}</span></span>
-            <span>待完成: <span class="text-warning fw-bold">{{ orderStatusStats.pending || 0 }}</span></span>
-            <span>临时订单: <span class="text-danger fw-bold">{{ orderStatusStats.temp || 0 }}</span></span>
+            <span>{{ batchPrintMode ? '可打印' : '完成' }}: <span class="text-success fw-bold">{{ orderStatusStats.completed || 0 }}</span></span>
+            <span>处理中: <span class="text-warning fw-bold">{{ orderStatusStats.pending || 0 }}</span></span>
+            <span>待确认: <span class="text-danger fw-bold">{{ orderStatusStats.temp || 0 }}</span></span>
 
             <!-- 隐藏按钮，连续点击3次后显示 -->
             <div v-if="showSaveTrainingDataButton" class="d-flex align-items-center gap-3">
@@ -710,7 +754,7 @@
             class="btn btn-primary btn-sm"
             @click="handlePrintDeliveryOrder"
             :disabled="!canDownloadExcel">
-            打印配送单
+            {{ batchPrintMode ? `打印并保存本批（${selectedPrintOrders.length}项）` : '打印配送单' }}
           </button>
         </div>
       </div>
@@ -792,6 +836,10 @@ export default {
     selectedCustomerDepPrintName: {
       type: String,
       default: 'ApplyPanel'
+    },
+    batchPrintMode: {
+      type: Boolean,
+      default: false
     }
   },
   emits: ['order-updated', 'order-deleted'],
@@ -851,10 +899,35 @@ export default {
       loadedPrintComponent: null, // 已加载的打印组件（实际组件，非 async 包装器）
       printComponentProps: null, // 传给 Apply 组件的 props
       showPrintValidationModal: false, // 打印前校验弹窗
-      invalidPrintOrders: [] // 校验不通过的订单列表 { goodsName, missed: ['出货数量','单价','小计'] }
+      invalidPrintOrders: [], // 校验不通过的订单列表 { goodsName, missed: ['出货数量','单价','小计'] }
+      selectedPrintOrderIds: [],
+      knownPrintableOrderIds: []
     }
   },
   computed: {
+    allCurrentOrders() {
+      if (this.hasSubDepartments) {
+        return this.filteredTodayOrderDepArr.flatMap(dep => dep.depOrders || []);
+      }
+      return Array.isArray(this.todayOrderList) ? this.todayOrderList : [];
+    },
+    printableOrders() {
+      return this.allCurrentOrders.filter(order => this.isPrintableOrder(order));
+    },
+    selectedPrintOrders() {
+      const selectedIds = new Set(this.selectedPrintOrderIds.map(String));
+      return this.printableOrders.filter(order => selectedIds.has(String(order.nxDepartmentOrdersId)));
+    },
+    selectedPrintTotal() {
+      return this.selectedPrintOrders.reduce(
+        (total, order) => total + (Number.parseFloat(order.nxDoSubtotal) || 0),
+        0
+      );
+    },
+    allPrintableSelected() {
+      return this.printableOrders.length > 0
+        && this.selectedPrintOrders.length === this.printableOrders.length;
+    },
     // 有效的打印组件名（必须是已注册的 6 种之一）
     effectiveDepPrintName() {
       const name = this.selectedCustomerDepPrintName || 'ApplyPanel';
@@ -898,6 +971,10 @@ export default {
     // 检查是否可以下载 Excel（所有订单状态都是 0 或 2）
     // 状态说明：0=已保存，2=已完成/已确认（不能编辑但可以下载），-2=草稿（未保存）
     canDownloadExcel() {
+      if (this.batchPrintMode) {
+        return this.selectedPrintOrders.length > 0
+          && this.selectedPrintOrders.every(order => Number(order.nxDoStatus) === 2);
+      }
       console.log('🔍 [canDownloadExcel] 开始检查下载条件');
       console.log('  - hasSubDepartments:', this.hasSubDepartments);
       console.log('  - todayOrderDepArr:', this.todayOrderDepArr);
@@ -1083,6 +1160,7 @@ export default {
       deep: true,
       handler(val) {
         this.ensureTmpKeys(val);
+        this.$nextTick(() => this.syncPrintSelection());
       }
     },
     todayOrderDepArr: {
@@ -1091,7 +1169,13 @@ export default {
       handler(deps) {
         if (!Array.isArray(deps)) return;
         deps.forEach(d => this.ensureTmpKeys(d?.depOrders));
+        this.$nextTick(() => this.syncPrintSelection());
       }
+    },
+    selectedAllCustomer() {
+      this.selectedPrintOrderIds = [];
+      this.knownPrintableOrderIds = [];
+      this.$nextTick(() => this.syncPrintSelection());
     },
     // 监听修改单价弹窗显示状态，自动聚焦输入框（备用方案）
     showEditPriceModal(newVal) {
@@ -1128,6 +1212,39 @@ export default {
     }
   },
   methods: {
+    isPrintableOrder(order) {
+      return Boolean(order?.nxDepartmentOrdersId) && Number(order?.nxDoStatus) === 2;
+    },
+    isOrderSelected(order) {
+      return this.selectedPrintOrderIds.map(String).includes(String(order?.nxDepartmentOrdersId));
+    },
+    togglePrintOrder(order, checked) {
+      if (!this.isPrintableOrder(order)) return;
+      const id = Number(order.nxDepartmentOrdersId);
+      const next = new Set(this.selectedPrintOrderIds.map(Number));
+      if (checked) next.add(id);
+      else next.delete(id);
+      this.selectedPrintOrderIds = Array.from(next);
+    },
+    toggleAllPrintable(checked) {
+      this.selectedPrintOrderIds = checked
+        ? this.printableOrders.map(order => Number(order.nxDepartmentOrdersId))
+        : [];
+    },
+    syncPrintSelection() {
+      if (!this.batchPrintMode) return;
+      const available = this.printableOrders.map(order => Number(order.nxDepartmentOrdersId));
+      const availableSet = new Set(available);
+      const knownSet = new Set(this.knownPrintableOrderIds.map(Number));
+      const next = new Set(
+        this.selectedPrintOrderIds.map(Number).filter(id => availableSet.has(id))
+      );
+      available.forEach(id => {
+        if (!knownSet.has(id)) next.add(id);
+      });
+      this.selectedPrintOrderIds = Array.from(next);
+      this.knownPrintableOrderIds = available;
+    },
     _preloadPrintComponent() {
       const name = this.effectiveDepPrintName;
       if (name && applyComponentMap[name]) {
@@ -1995,7 +2112,9 @@ export default {
 
     // 校验打印订单：出货数量、单价、小计必须大于 0，返回不通过的订单列表
     validatePrintOrders() {
-      const isDownloadableStatus = (status) => status === 0 || status === 2;
+      const isDownloadableStatus = (status) => this.batchPrintMode
+        ? Number(status) === 2
+        : status === 0 || status === 2;
       const isEmptyOrZero = (v) => v == null || v === '' || parseFloat(v) <= 0 || (typeof v === 'string' && v.trim() === '');
       const checkOrder = (order) => {
         if (!isDownloadableStatus(order?.nxDoStatus)) return null;
@@ -2008,6 +2127,13 @@ export default {
         return { goodsName, missed };
       };
       const result = [];
+      if (this.batchPrintMode) {
+        this.selectedPrintOrders.forEach(order => {
+          const item = checkOrder(order);
+          if (item) result.push(item);
+        });
+        return result;
+      }
       if (this.hasSubDepartments && this.todayOrderDepArr?.length > 0) {
         this.todayOrderDepArr.forEach(dep => {
           (dep.depOrders || []).forEach(order => {
@@ -2027,7 +2153,10 @@ export default {
     // 打印配送单：根据客户打印模板（6 种 Apply 组件）动态挂载并调用其 printOnly
     async handlePrintDeliveryOrder() {
       if (!this.canDownloadExcel) {
-        this.$message?.warning?.('只有所有订单状态都是已保存（状态为0或2）时才能打印配送单') || (await this.$refs.alertDialog.alert('只有所有订单状态都是已保存（状态为0或2）时才能打印配送单', 'warning'));
+        const message = this.batchPrintMode
+          ? '请至少选择一条状态为2的订单加入本次配送批次'
+          : '只有所有订单状态都是已保存（状态为0或2）时才能打印配送单';
+        this.$message?.warning?.(message) || (await this.$refs.alertDialog.alert(message, 'warning'));
         return;
       }
       // 打印前校验：出货数量、单价、小计必须大于 0
@@ -2077,8 +2206,27 @@ export default {
       const resFatherId = this.selectedCustomerEntity?.resFatherId != null ? toIntOrMinusOne(this.selectedCustomerEntity.resFatherId) : -1;
 
       // 今日订单打印：必须传入已有数据，避免 Apply 组件再次请求 API 导致空数据或超时
-      const list = Array.isArray(this.todayOrderList) ? [...this.todayOrderList] : [];
-      const depArr = Array.isArray(this.todayOrderDepArr) ? this.todayOrderDepArr.map(d => ({ ...d, depOrders: d.depOrders || [] })) : [];
+      const selectedIds = new Set(this.selectedPrintOrderIds.map(String));
+      const list = Array.isArray(this.todayOrderList)
+        ? this.todayOrderList.filter(order => !this.batchPrintMode || selectedIds.has(String(order.nxDepartmentOrdersId)))
+        : [];
+      const depArr = Array.isArray(this.todayOrderDepArr)
+        ? this.todayOrderDepArr
+          .map(d => {
+            const depOrders = (d.depOrders || []).filter(
+              order => !this.batchPrintMode || selectedIds.has(String(order.nxDepartmentOrdersId))
+            );
+            return {
+              ...d,
+              depOrders,
+              depSubtotal: depOrders.reduce(
+                (total, order) => total + (Number.parseFloat(order.nxDoSubtotal) || 0),
+                0
+              ).toFixed(1),
+            };
+          })
+          .filter(d => !this.batchPrintMode || d.depOrders.length > 0)
+        : [];
       console.log('🖨️ [handlePrintDeliveryOrder] 传入打印组件的数据:', {
         todayOrderListLength: list.length,
         todayOrderDepArrLength: depArr.length,
@@ -2100,6 +2248,7 @@ export default {
         gbDisId: '',
         gbBatchId: -1,
         printAllOrders: true, // 今日订单打印：不按 nxDoSubtotal 过滤，打印全部订单
+        orderIds: this.batchPrintMode ? this.selectedPrintOrderIds.map(Number) : undefined,
         todayOrderList: list,
         todayOrderDepArr: depArr,
         todayOrderTradeNo: this.todayOrderTradeNo || '',
@@ -2532,6 +2681,48 @@ export default {
 </script>
 
 <style scoped>
+.batch-print-bar {
+  display: flex;
+  min-height: 50px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #cfe8da;
+  color: #315b47;
+  background: #f1faf5;
+}
+
+.batch-print-bar strong,
+.batch-print-bar span { display: block; }
+.batch-print-bar strong { font-size: 13px; }
+.batch-print-bar span { margin-top: 2px; color: #728279; font-size: 10px; }
+
+.batch-print-bar label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #15734a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.order-batch-cell {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.order-batch-cell input,
+.batch-print-bar input {
+  width: 15px;
+  height: 15px;
+  accent-color: #119b5d;
+}
+
 .order-edit-overlay {
   position: fixed;
   top: 0;

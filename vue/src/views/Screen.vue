@@ -217,10 +217,12 @@ import { REMEMBER_PRINTER_USER_KEY } from '../utils/rememberPrinterUser';
         }
       };
 
-      /** 主菜单「文件 → 取消自动登录」通过 executeJavaScript 派发该事件，同步取消勾选（不再次 persist，避免重复写日志） */
+      /** 主菜单「文件 → 取消自动登录」通过 preload 白名单事件同步取消勾选。 */
       const onMenuClearAutoLogin = () => {
         rememberUser.value = false;
+        localStorage.removeItem(REMEMBER_PRINTER_USER_KEY);
       };
+      let clearRememberUserCleanup = null;
 
       // 广告图片数组
       const ads = [ad1, ad2, ad3, ad4, ad5];
@@ -500,7 +502,8 @@ import { REMEMBER_PRINTER_USER_KEY } from '../utils/rememberPrinterUser';
   
       // 生命周期钩子
       onMounted(async () => {
-        window.addEventListener('grain-clear-remember-printer-user', onMenuClearAutoLogin);
+        clearRememberUserCleanup =
+          window.electronAPI?.onClearRememberPrinterUser?.(onMenuClearAutoLogin) || null;
 
         if (rememberUser.value) {
           persistRememberUser();
@@ -561,7 +564,10 @@ import { REMEMBER_PRINTER_USER_KEY } from '../utils/rememberPrinterUser';
       });
   
       onBeforeUnmount(() => {
-        window.removeEventListener('grain-clear-remember-printer-user', onMenuClearAutoLogin);
+        if (typeof clearRememberUserCleanup === 'function') {
+          clearRememberUserCleanup();
+          clearRememberUserCleanup = null;
+        }
         stopAdRotation();
         // 清理点击计时器
         if (clickTimer.value) {

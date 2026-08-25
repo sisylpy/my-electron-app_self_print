@@ -386,7 +386,7 @@
         },
         props: ['nxDepFatherId', 'nxDepId', 'depName', 'depPrintName',
             'updateTime', 'disId', 'disName', 'gbDepFatherId', 'gbDepId', 'gbDepName', 'gbDisId', 'gbBatchId', 'orderData', 'isHistoryOrder', 'printAllOrders',
-            'todayOrderList', 'todayOrderDepArr', 'todayOrderTradeNo', 'hasSubDepartments'],
+            'todayOrderList', 'todayOrderDepArr', 'todayOrderTradeNo', 'hasSubDepartments', 'orderIds'],
         computed: {
             // 统一过滤后的数据源（只保留有小计的行，如果有子部门则插入部门名称行）
             _filteredRows() {
@@ -2741,7 +2741,8 @@
                                     this.disUser.nxDistributerUserId,
                                     paperCount,  // 传入总页数
                                     shouldSave,  // 只在最后一页为true
-                                    !!this.isHistoryOrder  // 历史订单打印时跳过保存接口和刷新客户列表
+                                    !!this.isHistoryOrder,  // 历史订单打印时跳过保存接口和刷新客户列表
+                                    this.orderIds
                                 );
                             } else if (this.gbDepFatherId !== -1) {
                                 console.log(`📤 [printOnly] 调用 sendPrintRequestGbWithCallback，参数:`, {
@@ -3435,5 +3436,4 @@
 
 
 </style>
-
 
