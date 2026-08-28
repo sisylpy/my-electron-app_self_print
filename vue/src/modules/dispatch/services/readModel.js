@@ -1,3 +1,8 @@
+import {
+  decorateRoutesWithPlanningLocks,
+  decorateStopsWithPlanningLocks,
+} from './planningLocks.js';
+
 export const PHASE_PRESENTATION = Object.freeze({
   dispatch: { label: '分派中', orderLabel: '待派' },
   loading: { label: '装车中', orderLabel: '装车中' },
@@ -150,12 +155,19 @@ function businessStopKey(stop) {
 
 export function buildOrderCollections(snapshots, customerPayload) {
   const customerIndex = buildCustomerIndex(customerPayload);
-  const dispatchRoutes = buildRoutes(snapshots?.dispatch?.pageViewModel, 'dispatch', customerIndex);
+  const dispatchPageViewModel = snapshots?.dispatch?.pageViewModel;
+  const dispatchRoutes = decorateRoutesWithPlanningLocks(
+    buildRoutes(dispatchPageViewModel, 'dispatch', customerIndex),
+    dispatchPageViewModel
+  );
   const loadingRoutes = buildRoutes(snapshots?.loading?.pageViewModel, 'loading', customerIndex);
   const deliveryRoutes = buildRoutes(snapshots?.delivery?.pageViewModel, 'delivery', customerIndex);
   const pending = [
     ...dispatchRoutes.flatMap((route) => route._stops),
-    ...buildUnassigned(snapshots?.dispatch?.pageViewModel, customerIndex),
+    ...decorateStopsWithPlanningLocks(
+      buildUnassigned(dispatchPageViewModel, customerIndex),
+      dispatchPageViewModel
+    ),
   ];
   const loading = loadingRoutes.flatMap((route) => route._stops);
   const delivery = deliveryRoutes.flatMap((route) => route._stops);

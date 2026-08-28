@@ -75,12 +75,15 @@
         <li
           v-for="(stop, index) in selectedRoute._stops"
           :key="stop._stopKey"
-          :class="{ active: selectedStopKey === stop._stopKey }"
+          :class="{ active: selectedStopKey === stop._stopKey, 'is-driver-locked': stop.driverLocked }"
         >
           <button type="button" @click="$emit('select-stop', stop)">
             <span class="stop-list__sequence">{{ stop.seq || index + 1 }}</span>
             <span class="stop-list__copy">
               <strong>{{ stop.customerName || stop.name || '未命名客户' }}</strong>
+              <span v-if="stop.driverLocked" class="driver-lock-badge">
+                🔒 {{ stop.driverLockLabel || '已锁定司机' }}
+              </span>
               <small>{{ stop.goodsSummary || stop._customerAddress }}</small>
               <em v-if="stop.legText || stop.legDistanceLabel">
                 {{ stop.legText || stop.legDistanceLabel }}
@@ -109,12 +112,15 @@
         v-for="stop in unassignedStops"
         :key="stop._stopKey"
         type="button"
-        :class="{ active: selectedStopKey === stop._stopKey }"
+        :class="{ active: selectedStopKey === stop._stopKey, 'is-driver-locked': stop.driverLocked }"
         @click="$emit('select-stop', stop)"
       >
         <span>?</span>
         <span>
           <strong>{{ stop.customerName || '未命名客户' }}</strong>
+          <span v-if="stop.driverLocked" class="driver-lock-badge">
+            🔒 {{ stop.driverLockLabel || '已锁定司机' }}
+          </span>
           <small>{{ stop.goodsSummary || stop._customerAddress }}</small>
         </span>
       </button>
@@ -215,6 +221,35 @@ function displayStatus(stop) {
 </script>
 
 <style scoped>
+.stop-list li.is-driver-locked,
+.unassigned-list button.is-driver-locked {
+  overflow: hidden;
+  border: 1px solid #e08a00;
+  border-left: 5px solid #f0a020;
+  border-radius: 9px;
+  background: #fffaf0;
+  box-shadow: 0 4px 14px rgba(211, 126, 0, .14);
+}
+
+.driver-lock-badge {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  margin-top: 4px;
+  padding: 3px 8px;
+  overflow: hidden;
+  border: 1px solid #e08a00;
+  border-radius: 999px;
+  color: #9d5100;
+  background: #fff0c7;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .control-panel {
   box-sizing: border-box;
   display: flex;
