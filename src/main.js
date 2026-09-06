@@ -480,22 +480,6 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().adoptLoginSession(auth, options);
   });
-  ipcMain.handle('dispatch-auth-begin-login', async (event, options) => {
-    assertTrustedRendererEvent(event);
-    return getDispatchGateway().beginLogin(options);
-  });
-  ipcMain.handle('dispatch-auth-poll-login', async (event) => {
-    assertTrustedRendererEvent(event);
-    return getDispatchGateway().pollLogin();
-  });
-  ipcMain.handle('dispatch-auth-cancel-login', async (event) => {
-    assertTrustedRendererEvent(event);
-    return getDispatchGateway().cancelLogin();
-  });
-  ipcMain.handle('dispatch-auth-logout', async (event) => {
-    assertTrustedRendererEvent(event);
-    return getDispatchGateway().logout();
-  });
   ipcMain.handle('user-session-logout', async (event) => {
     assertTrustedRendererEvent(event);
     const cleanupWarnings = [];
@@ -565,6 +549,10 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().previewRouteExpansion(command);
   });
+  ipcMain.handle('dispatch-release-route-preview', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().releaseRoutePreview(command);
+  });
   ipcMain.handle('dispatch-load-route-edit-page', async (event, command) => {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().loadRouteEditPage(command);
@@ -585,6 +573,46 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().updateDriverEmployment(command);
   });
+  ipcMain.handle('dispatch-driver-duty-on', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().checkInDriver(command);
+  });
+  ipcMain.handle('dispatch-driver-duty-off', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().checkOutDriver(command);
+  });
+  ipcMain.handle('dispatch-update-stop-time-window', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().updateStopTimeWindow(command);
+  });
+  ipcMain.handle('dispatch-return-stop-to-sandbox', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().returnStopToSandbox(command);
+  });
+  ipcMain.handle('dispatch-load-manual-driver-panorama', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadManualDispatchPanorama(command);
+  });
+  ipcMain.handle('dispatch-depart-driver', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().departDriver(command);
+  });
+  ipcMain.handle('dispatch-complete-delivery-stop', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().completeDeliveryStop(command);
+  });
+  ipcMain.handle('dispatch-return-delivery-stop-to-sandbox', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().returnDeliveryStopToSandbox(command);
+  });
+  ipcMain.handle('dispatch-preview-route-reassignment', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().previewRouteReassignment(command);
+  });
+  ipcMain.handle('dispatch-confirm-route-reassignment', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().confirmRouteReassignment(command);
+  });
   ipcMain.handle('dispatch-map-load-tile', async (event, tile) => {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().loadMapTile(tile);
@@ -592,6 +620,22 @@ function setupIpcHandlers() {
   ipcMain.handle('dispatch-map-load-config', async (event) => {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().loadMapConfig();
+  });
+  ipcMain.handle('customer-history-load-months', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadCustomerHistory(command);
+  });
+  ipcMain.handle('sales-analysis-load-overview', async (event, range) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadSalesAnalysisOverview(range);
+  });
+  ipcMain.handle('sales-analysis-load-category', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadSalesAnalysisCategory(command);
+  });
+  ipcMain.handle('sales-analysis-load-product-customers', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadSalesAnalysisProductCustomers(command);
   });
 
   // MCP 打印请求：只接受主窗口通过白名单 preload 发起的请求。
@@ -798,6 +842,88 @@ function setupIpcHandlers() {
       printWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
         printWindow.destroy();
         reject({ success: false, error: `加载失败: ${errorDescription}`, errorCode });
+      });
+    });
+  });
+
+  // 退货交接单/收货单预览：由主进程创建受控窗口，不放开主页面的通用弹窗权限。
+  ipcMain.handle('preview-return-document', async (event, htmlContent) => {
+    assertTrustedRendererEvent(event);
+    assertPrintHtml(htmlContent);
+    const previewWindow = new BrowserWindow({
+      width: 1000,
+      height: 760,
+      minWidth: 720,
+      minHeight: 560,
+      show: false,
+      autoHideMenuBar: true,
+      parent: mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined,
+      title: '退货单预览',
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true
+      }
+    });
+    previewWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    previewWindow.webContents.on('will-navigate', (navigationEvent, navigationUrl) => {
+      if (!navigationUrl.startsWith('data:text/html;charset=utf-8,')) {
+        navigationEvent.preventDefault();
+      }
+    });
+
+    try {
+      await previewWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
+      if (previewWindow.isDestroyed()) {
+        return { success: false, error: '预览窗口已关闭' };
+      }
+      previewWindow.show();
+      previewWindow.focus();
+      return { success: true };
+    } catch (error) {
+      if (!previewWindow.isDestroyed()) previewWindow.destroy();
+      return { success: false, error: `预览页面加载失败: ${serializePrintError(error)}` };
+    }
+  });
+
+  // 退货交接单/收货单：使用桌面端默认打印机静默打印，并把真实打印回执返回页面。
+  ipcMain.handle('print-return-document', async (event, htmlContent) => {
+    assertTrustedRendererEvent(event);
+    assertPrintHtml(htmlContent);
+    return new Promise((resolve) => {
+      const printWindow = new BrowserWindow({
+        show: false,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true
+        }
+      });
+      let settled = false;
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        if (!printWindow.isDestroyed()) printWindow.destroy();
+        resolve(result);
+      };
+
+      printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
+      printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
+      printWindow.webContents.on('did-finish-load', () => {
+        printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
+        const printerName = getDefaultPrinterName();
+        setTimeout(() => {
+          printWindow.webContents.print(
+            createSilentPrintOptions(printerName, { includeLegacyMargins: true }),
+            (success, error) => finish({
+              success: Boolean(success),
+              printerName: printerName || '',
+              error: success ? '' : serializePrintError(error || '打印失败')
+            })
+          );
+        }, PRINT_RUNTIME_CONFIG.renderDelayMs);
+      });
+      printWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+        finish({ success: false, error: `打印页面加载失败: ${errorDescription}`, errorCode });
       });
     });
   });

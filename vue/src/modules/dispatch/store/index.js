@@ -59,12 +59,47 @@ function errorMessage(error) {
     || '读取失败';
 }
 
+async function executeDispatchCommand(commit, {
+  method,
+  action,
+  args = {},
+  errorMessage: fallbackMessage,
+  idempotent = true,
+}) {
+  const commands = window.electronAPI?.dispatchCommands;
+  const command = commands?.[method];
+  if (!command) {
+    return { ok: false, status: 0, message: fallbackMessage || '当前环境不支持该调度操作' };
+  }
+  commit('BEGIN_COMMAND', action);
+  try {
+    const commandArgs = { ...args };
+    if (idempotent) {
+      if (!commands.createIdempotencyKey) {
+        throw new Error('当前环境无法生成调度幂等键');
+      }
+      commandArgs.idempotencyKey = await commands.createIdempotencyKey();
+    }
+    const result = await command(commandArgs);
+    if (result?.ok) commit('COMPLETE_COMMAND', { action, result: result.data });
+    else commit('FAIL_COMMAND', { action, error: result });
+    if (result?.status === 401) commit('SET_AUTH', { status: 'anonymous' });
+    return result;
+  } catch (error) {
+    const result = {
+      ok: false,
+      status: 0,
+      message: error?.message || fallbackMessage || '调度操作失败',
+    };
+    commit('FAIL_COMMAND', { action, error: result });
+    return result;
+  }
+}
+
 /**
- * Slice 1 只读状态边界：
- * - 所有远程 action 仅调用明确的 GET 白名单；
- * - 不持久化服务端 pageViewModel；
- * - 不在客户端推进派单、装车或配送状态；
- * - 服务端失败时保留最后一次成功快照，并标记为 stale/error。
+ * 调度状态边界：读取快照与写命令分离。远程 pageViewModel 不落盘，
+ * 所有写操作只经 preload 的逐项白名单进入主进程，业务状态仍由服务端推进。
+ * 服务端失败时保留最后一次成功快照，并标记为 stale/error。
  */
 const dispatchStore = {
   namespaced: true,
@@ -270,7 +305,7 @@ const dispatchStore = {
     async restoreAuth({ commit }) {
       const api = window.electronAPI?.dispatchAuth;
       if (!api?.getSession) {
-        const error = '当前环境不支持桌面调度登录';
+        const error = '当前环境无法读取桌面登录状态';
         commit('SET_AUTH', { status: 'error', error });
         return { ok: false, status: 0, message: error };
       }
@@ -279,7 +314,7 @@ const dispatchStore = {
       if (!result?.ok) {
         commit('SET_AUTH', {
           status: result?.status === 401 ? 'anonymous' : 'error',
-          error: result?.message || '无法校验调度登录状态',
+          error: result?.message || '无法校验桌面登录状态',
         });
         return result;
       }
@@ -287,52 +322,6 @@ const dispatchStore = {
       commit('SET_AUTH', {
         status: session.authenticated ? 'authenticated' : 'anonymous',
         session,
-      });
-      return result;
-    },
-    async beginQrLogin({ commit }, options = {}) {
-      const api = window.electronAPI?.dispatchAuth;
-      if (!api?.beginLogin) {
-        return { ok: false, status: 0, message: '当前环境不支持桌面调度登录' };
-      }
-      commit('SET_AUTH', { status: 'waiting-scan' });
-      const result = await api.beginLogin({
-        persistSession: Boolean(options.persistSession),
-      });
-      if (!result?.ok) {
-        commit('SET_AUTH', { status: 'error', error: result?.message || '二维码生成失败' });
-      }
-      return result;
-    },
-    async pollQrLogin({ commit }) {
-      const result = await window.electronAPI?.dispatchAuth?.pollLogin?.();
-      if (!result?.ok) {
-        commit('SET_AUTH', {
-          status: result?.status === 401 ? 'anonymous' : 'error',
-          error: result?.message || '扫码登录失败',
-        });
-        return result;
-      }
-      if (result.data?.status === 'authenticated') {
-        commit('SET_AUTH', {
-          status: 'authenticated',
-          session: result.data.session,
-        });
-      } else {
-        commit('SET_AUTH', { status: 'waiting-scan' });
-      }
-      return result;
-    },
-    async cancelQrLogin({ commit }) {
-      await window.electronAPI?.dispatchAuth?.cancelLogin?.();
-      commit('SET_AUTH', { status: 'anonymous' });
-    },
-    async logoutDispatch({ commit }) {
-      const result = await window.electronAPI?.dispatchAuth?.logout?.();
-      commit('SET_AUTH', {
-        status: 'anonymous',
-        session: result?.data || null,
-        error: result?.ok ? null : result?.message,
       });
       return result;
     },
@@ -398,6 +387,17 @@ const dispatchStore = {
         const result = { ok: false, status: 0, message: error?.message || 'AI 路线增补失败' };
         commit('FAIL_COMMAND', { action: 'preview-route-expansion', error: result });
         return result;
+      }
+    },
+    async releaseRoutePreview(context, payload) {
+      const command = window.electronAPI?.dispatchCommands?.releaseRoutePreview;
+      if (!command) {
+        return { ok: false, status: 0, message: '当前环境不支持结束路线编辑' };
+      }
+      try {
+        return await command({ payload });
+      } catch (error) {
+        return { ok: false, status: 0, message: error?.message || '结束路线编辑失败' };
       }
     },
     async loadRouteEditPage({ commit }, payload) {
@@ -512,6 +512,88 @@ const dispatchStore = {
         commit('FAIL_COMMAND', { action: 'driver-employment', error: result });
         return result;
       }
+    },
+    checkInDriver({ commit }, { driverUserId, payload }) {
+      return executeDispatchCommand(commit, {
+        method: 'checkInDriver',
+        action: 'driver-duty-on',
+        args: { driverUserId, payload },
+        errorMessage: '开启司机可派状态失败',
+      });
+    },
+    checkOutDriver({ commit }, { driverUserId, payload }) {
+      return executeDispatchCommand(commit, {
+        method: 'checkOutDriver',
+        action: 'driver-duty-off',
+        args: { driverUserId, payload },
+        errorMessage: '关闭司机可派状态失败',
+      });
+    },
+    updateStopTimeWindow({ commit }, payload) {
+      return executeDispatchCommand(commit, {
+        method: 'updateStopTimeWindow',
+        action: 'update-stop-time-window',
+        args: { payload },
+        errorMessage: '更新送达时间失败',
+      });
+    },
+    returnStopToSandbox({ commit }, { deliveryStopId, payload }) {
+      return executeDispatchCommand(commit, {
+        method: 'returnStopToSandbox',
+        action: 'return-stop-to-sandbox',
+        args: { deliveryStopId, payload },
+        errorMessage: '客户退回待分配失败',
+      });
+    },
+    loadManualDispatchPanorama({ commit }, payload) {
+      return executeDispatchCommand(commit, {
+        method: 'loadManualDispatchPanorama',
+        action: 'load-manual-driver-panorama',
+        args: { payload },
+        errorMessage: '读取人工调度司机列表失败',
+        idempotent: false,
+      });
+    },
+    departDriver({ commit }, { driverUserId, payload }) {
+      return executeDispatchCommand(commit, {
+        method: 'departDriver',
+        action: 'depart-driver',
+        args: { driverUserId, payload },
+        errorMessage: '确认发车失败',
+      });
+    },
+    completeDeliveryStop({ commit }, { deliveryStopId, payload }) {
+      return executeDispatchCommand(commit, {
+        method: 'completeDeliveryStop',
+        action: 'complete-delivery-stop',
+        args: { deliveryStopId, payload },
+        errorMessage: '确认送达失败',
+      });
+    },
+    returnDeliveryStopToSandbox({ commit }, { deliveryStopId, payload }) {
+      return executeDispatchCommand(commit, {
+        method: 'returnDeliveryStopToSandbox',
+        action: 'return-delivery-stop-to-sandbox',
+        args: { deliveryStopId, payload },
+        errorMessage: '配送客户退回待分配失败',
+      });
+    },
+    previewRouteReassignment({ commit }, payload) {
+      return executeDispatchCommand(commit, {
+        method: 'previewRouteReassignment',
+        action: 'preview-route-reassignment',
+        args: { payload },
+        errorMessage: '校验目标司机失败',
+        idempotent: false,
+      });
+    },
+    confirmRouteReassignment({ commit }, payload) {
+      return executeDispatchCommand(commit, {
+        method: 'confirmRouteReassignment',
+        action: 'confirm-route-reassignment',
+        args: { payload },
+        errorMessage: '更换路线司机失败',
+      });
     },
   },
 };

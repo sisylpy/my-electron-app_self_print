@@ -323,7 +323,6 @@
   box-shadow: none;
 }
 
-.product-shell .dispatch-workbench__header-actions .login-button,
 .product-shell .dispatch-workbench__command-bar button.primary {
   border-color: var(--product-primary);
   background: var(--product-primary);

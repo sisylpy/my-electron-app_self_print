@@ -38,7 +38,7 @@
             stroke="transparent"
             stroke-linecap="round"
             stroke-linejoin="round"
-            stroke-width="24"
+            stroke-width="16"
           />
           <polyline
             :points="line.points"
@@ -47,7 +47,7 @@
             :stroke-dasharray="line.dashed ? '13 10' : null"
             stroke-linecap="round"
             stroke-linejoin="round"
-            :stroke-width="isSelectedLine(line) ? 11 : 7"
+            :stroke-width="isSelectedLine(line) ? 8 : 5"
             :opacity="lineOpacity(line)"
           />
         </g>

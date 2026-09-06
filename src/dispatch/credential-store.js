@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 
 function writePrivateJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -14,7 +13,6 @@ function writePrivateJson(filePath, value) {
 
 function createCredentialStore({ app, safeStorage }) {
   const sessionPath = path.join(app.getPath('userData'), 'desktop-dispatch-session.json');
-  const devicePath = path.join(app.getPath('userData'), 'desktop-dispatch-device.json');
 
   function encryptionAvailable() {
     return Boolean(
@@ -74,29 +72,11 @@ function createCredentialStore({ app, safeStorage }) {
     }
   }
 
-  function getDeviceId() {
-    try {
-      if (fs.existsSync(devicePath)) {
-        const record = JSON.parse(fs.readFileSync(devicePath, 'utf8'));
-        if (record && typeof record.deviceId === 'string'
-            && /^[A-Za-z0-9._:-]{16,128}$/.test(record.deviceId)) {
-          return record.deviceId;
-        }
-      }
-    } catch {
-      // 损坏的设备标识将被安全地重新生成。
-    }
-    const deviceId = `electron-${crypto.randomBytes(24).toString('hex')}`;
-    writePrivateJson(devicePath, { version: 1, deviceId });
-    return deviceId;
-  }
-
   return {
     encryptionAvailable,
     loadSession,
     saveSession,
     clearSession,
-    getDeviceId,
   };
 }
 

@@ -61,6 +61,8 @@ const electronAPI = Object.freeze({
   sendPrintRequestGbBatchWithCallback: (printData, gbBatchId, paperCount, shouldSave) =>
     ipcRenderer.invoke('print-request-gb-batch-with-callback', printData, gbBatchId, paperCount, shouldSave),
   sendPrintCalibrationPage: (htmlContent) => ipcRenderer.invoke('print-calibration-page', htmlContent),
+  previewReturnDocument: (htmlContent) => ipcRenderer.invoke('preview-return-document', htmlContent),
+  printReturnDocument: (htmlContent) => ipcRenderer.invoke('print-return-document', htmlContent),
   triggerEnterKey: () => ipcRenderer.send('trigger-enter-key'),
 
   // 打印设备配置。
@@ -147,6 +149,21 @@ const electronAPI = Object.freeze({
   onClearRememberPrinterUser: (callback) =>
     listen('clear-remember-printer-user', callback),
 
+  // 客户历史订单由主进程携带安全会话查询，令牌不进入页面。
+  customerHistory: Object.freeze({
+    loadMonths: (departmentId) =>
+      ipcRenderer.invoke('customer-history-load-months', { departmentId }),
+  }),
+
+  // 销售分析只开放三个只读查询，配送商身份由主进程安全会话提供。
+  salesAnalysis: Object.freeze({
+    loadOverview: (range) => ipcRenderer.invoke('sales-analysis-load-overview', range),
+    loadCategory: (categoryId, range) =>
+      ipcRenderer.invoke('sales-analysis-load-category', { categoryId, range }),
+    loadProductCustomers: (goodsId, range, limit) =>
+      ipcRenderer.invoke('sales-analysis-load-product-customers', { goodsId, range, limit }),
+  }),
+
   // 订单写入只暴露逐项白名单，不向页面提供任意网络请求能力。
   orderWrite: Object.freeze({
     savePasteOrders: (payload) =>
@@ -158,10 +175,6 @@ const electronAPI = Object.freeze({
     getSession: () => ipcRenderer.invoke('dispatch-auth-get-session'),
     adoptLoginSession: (auth, options) =>
       ipcRenderer.invoke('dispatch-auth-adopt-login-session', auth, options),
-    beginLogin: (options) => ipcRenderer.invoke('dispatch-auth-begin-login', options),
-    pollLogin: () => ipcRenderer.invoke('dispatch-auth-poll-login'),
-    cancelLogin: () => ipcRenderer.invoke('dispatch-auth-cancel-login'),
-    logout: () => ipcRenderer.invoke('dispatch-auth-logout'),
   }),
 
   // 用户退出：由主进程清除安全会话、Cookie、网络缓存和自动登录标志。
@@ -178,10 +191,25 @@ const electronAPI = Object.freeze({
     loadRouteEditPage: (command) => ipcRenderer.invoke('dispatch-load-route-edit-page', command),
     previewRoute: (command) => ipcRenderer.invoke('dispatch-preview-route', command),
     previewRouteExpansion: (command) => ipcRenderer.invoke('dispatch-preview-route-expansion', command),
+    releaseRoutePreview: (command) => ipcRenderer.invoke('dispatch-release-route-preview', command),
     confirmDispatch: (command) => ipcRenderer.invoke('dispatch-confirm-route', command),
     lockPlanningStop: (command) => ipcRenderer.invoke('dispatch-lock-planning-stop', command),
     unlockPlanningStop: (command) => ipcRenderer.invoke('dispatch-unlock-planning-stop', command),
     updateDriverEmployment: (command) => ipcRenderer.invoke('dispatch-update-driver-employment', command),
+    checkInDriver: (command) => ipcRenderer.invoke('dispatch-driver-duty-on', command),
+    checkOutDriver: (command) => ipcRenderer.invoke('dispatch-driver-duty-off', command),
+    updateStopTimeWindow: (command) => ipcRenderer.invoke('dispatch-update-stop-time-window', command),
+    returnStopToSandbox: (command) => ipcRenderer.invoke('dispatch-return-stop-to-sandbox', command),
+    loadManualDispatchPanorama: (command) =>
+      ipcRenderer.invoke('dispatch-load-manual-driver-panorama', command),
+    departDriver: (command) => ipcRenderer.invoke('dispatch-depart-driver', command),
+    completeDeliveryStop: (command) => ipcRenderer.invoke('dispatch-complete-delivery-stop', command),
+    returnDeliveryStopToSandbox: (command) =>
+      ipcRenderer.invoke('dispatch-return-delivery-stop-to-sandbox', command),
+    previewRouteReassignment: (command) =>
+      ipcRenderer.invoke('dispatch-preview-route-reassignment', command),
+    confirmRouteReassignment: (command) =>
+      ipcRenderer.invoke('dispatch-confirm-route-reassignment', command),
   }),
 
   // Huawei JS SDK 按产品要求在客户端使用项目 API Key；Key 不固化在桌面包源码中。

@@ -39,6 +39,27 @@ import ReadOnlyDispatchMap from './ReadOnlyDispatchMap.vue';
 
 const HUAWEI_TILE_PROTOCOL = 'nxl-huawei';
 let huaweiProtocolInstalled = false;
+const tileFailureHandlers = new Set();
+const TRANSPARENT_TILE_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL5WQAAAABJRU5ErkJggg==';
+
+function transparentTileBuffer() {
+  const binary = window.atob(TRANSPARENT_TILE_B64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer;
+}
+
+function reportTileFailure(result, fallbackMessage) {
+  const error = new Error(result?.message || fallbackMessage);
+  error.status = result?.status ?? null;
+  error.errorCode = result?.errorCode || null;
+  tileFailureHandlers.forEach((handler) => handler(error));
+  // MapLibre 会同时拉取多张瓦片。返回透明瓦片并由组件统一切换坐标图，
+  // 避免同一个登录错误被每张瓦片重复抛到控制台。
+  return { data: transparentTileBuffer(), cacheControl: 'no-store' };
+}
 
 function huaweiMapStyle() {
   return {
@@ -77,16 +98,16 @@ function installHuaweiTileProtocol() {
   if (huaweiProtocolInstalled) return;
   maplibregl.addProtocol(HUAWEI_TILE_PROTOCOL, async (params) => {
     const matched = String(params?.url || '').match(/\/(\d+)\/(\d+)\/(\d+)(?:\.png)?(?:\?.*)?$/);
-    if (!matched) throw new Error('Huawei 地图瓦片地址无效');
+    if (!matched) return reportTileFailure(null, 'Huawei 地图瓦片地址无效');
     const loadTile = window.electronAPI?.dispatchMap?.loadTile;
-    if (!loadTile) throw new Error('当前环境不支持 Huawei 地图瓦片');
+    if (!loadTile) return reportTileFailure(null, '当前环境不支持 Huawei 地图瓦片');
     const result = await loadTile({
       z: Number(matched[1]),
       x: Number(matched[2]),
       y: Number(matched[3]),
     });
     if (!result?.ok || !result.data) {
-      throw new Error(result?.message || 'Huawei 地图瓦片读取失败');
+      return reportTileFailure(result, 'Huawei 地图瓦片读取失败');
     }
     const binary = window.atob(result.data);
     const bytes = new Uint8Array(binary.length);
@@ -104,7 +125,7 @@ const props = defineProps({
   selectedDriverUserId: { type: [String, Number], default: null },
 });
 
-const emit = defineEmits(['select-marker', 'select-line']);
+const emit = defineEmits(['select-marker', 'select-line', 'unavailable']);
 const mapElement = ref(null);
 const loading = ref(true);
 const ready = ref(false);
@@ -116,6 +137,7 @@ let renderedMarkers = [];
 let renderedLayers = [];
 let renderedSources = [];
 let layerListeners = [];
+let tileFailureHandled = false;
 
 const markers = computed(() => (
   Array.isArray(props.mapOverview?.markers) ? props.mapOverview.markers : []
@@ -228,7 +250,7 @@ function addRoute(line, index) {
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': '#ffffff',
-      'line-width': selected ? 9 : 6,
+      'line-width': selected ? 7 : 5,
       'line-opacity': selected ? 0.96 : 0.62,
     },
   });
@@ -239,7 +261,7 @@ function addRoute(line, index) {
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': color,
-      'line-width': selected ? 6 : 4,
+      'line-width': selected ? 4 : 3,
       'line-opacity': selected ? 1 : 0.68,
       ...(String(line.lineStyle || '').toUpperCase() === 'DASHED'
         ? { 'line-dasharray': [2, 1.6] }
@@ -336,7 +358,7 @@ function fitViewport() {
   }
   const bounds = new maplibregl.LngLatBounds(points[0], points[0]);
   points.slice(1).forEach((point) => bounds.extend(point));
-  map.fitBounds(bounds, { padding: 72, maxZoom: 15, duration: 0 });
+  map.fitBounds(bounds, { padding: 116, maxZoom: 14.5, duration: 0 });
 }
 
 async function waitForMapContainer(sequence) {
@@ -417,6 +439,19 @@ async function initialize() {
   }
 }
 
+function handleTileFailure(error) {
+  if (tileFailureHandled) return;
+  tileFailureHandled = true;
+  loading.value = false;
+  ready.value = false;
+  failed.value = true;
+  resizeObserver?.disconnect?.();
+  map?.remove?.();
+  map = null;
+  emit('unavailable', error);
+  console.warn('[dispatch-map] Huawei 瓦片不可用，已切换坐标图:', error?.message || error);
+}
+
 watch(
   () => [props.mapOverview, props.selectedStop, props.selectedDriverUserId],
   () => {
@@ -433,10 +468,15 @@ watch(
   { deep: true }
 );
 
-onMounted(initialize);
+onMounted(() => {
+  tileFailureHandled = false;
+  tileFailureHandlers.add(handleTileFailure);
+  initialize();
+});
 
 onBeforeUnmount(() => {
   renderSequence += 1;
+  tileFailureHandlers.delete(handleTileFailure);
   resizeObserver?.disconnect?.();
   removeDynamicContent();
   map?.remove?.();

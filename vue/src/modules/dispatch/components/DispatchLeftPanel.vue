@@ -55,6 +55,7 @@
           <span class="order-card__sequence">{{ order.seq || '•' }}</span>
           <span class="order-card__main">
             <strong>{{ order.customerName || order.name || '未命名客户' }}</strong>
+            <b v-if="order.isReturnPickup" class="return-pickup-badge">退货取货</b>
             <small>{{ order.goodsSummary || '服务端未返回商品摘要' }}</small>
             <em>{{ order._driverName }} · {{ order._phaseLabel }}</em>
           </span>
@@ -440,5 +441,17 @@ function sameId(left, right) {
 .left-panel__empty span {
   margin-top: 6px;
   font-size: 10px;
+}
+
+.return-pickup-badge {
+  display: inline-block;
+  width: fit-content;
+  margin-top: 3px;
+  padding: 2px 6px;
+  border-radius: 9px;
+  color: #a04c25;
+  background: #fff0e7;
+  font-size: 9px;
+  font-weight: 800;
 }
 </style>

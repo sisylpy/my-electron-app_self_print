@@ -23,7 +23,9 @@ const mcpServer = read('src/mcp-server.js');
 const mcpCli = read('src/mcp-server-cli.js');
 const mcpPush = read('src/mcp-print-push.js');
 const orderWriteGateway = read('src/order/order-write-gateway.js');
+const dispatchGateway = read('src/dispatch/dispatch-gateway.js');
 const placeOrder = read('vue/src/components/PlaceOrder.vue');
+const historyOrders = read('vue/src/components/HistoryOrders.vue');
 const publicConfig = read('vue/src/config/index.js');
 const packageJson = JSON.parse(read('package.json'));
 const mcpConfig = JSON.parse(read('src/mcp-config.json'));
@@ -39,6 +41,17 @@ check(preload.includes('orderWrite: Object.freeze')
   && !preload.includes('orderApiRequest'), 'preload 只暴露订单写入白名单');
 check(orderWriteGateway.includes("http.post('ocr/pasteSearchGoods'")
   && !orderWriteGateway.includes('input.url'), '订单写网关不能请求任意 URL');
+check(preload.includes('customerHistory: Object.freeze')
+  && main.includes("ipcMain.handle('customer-history-load-months'")
+  && dispatchGateway.includes("request('GET', 'customer-history/months'")
+  && historyOrders.includes('window.electronAPI?.customerHistory?.loadMonths'),
+  '客户历史订单通过主进程白名单网关读取');
+check(!historyOrders.includes('Authorization'), '客户历史订单页面不接触登录令牌');
+check(preload.includes('salesAnalysis: Object.freeze')
+  && main.includes("ipcMain.handle('sales-analysis-load-overview'")
+  && dispatchGateway.includes("request('GET', 'sales-analysis/overview'")
+  && !preload.includes('salesAnalysisRequest:'),
+  '销售分析通过主进程只读白名单网关查询');
 check(!main.includes("'mcp-call-api'"), '主进程没有任意 MCP API IPC');
 check(!main.includes("'get-login-info-for-mcp'"), 'MCP 不通过脚本读取 localStorage');
 check(!mcpServer.includes("Access-Control-Allow-Origin"), '内嵌 MCP 不开放 CORS');

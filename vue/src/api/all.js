@@ -111,10 +111,18 @@ const apiMethods = {
     });
   },
 
-  // 获取客户历史订单
+  // 获取记账客户历史订单
   sellerAndBuyerGetAccountBills(data) {
-    // 使用POST请求，尝试不同的参数格式
     return axiosInstance.post('nxdepartmentbill/sellerAndBuyerGetAccountBills', data, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+  },
+
+  // 获取现金客户历史订单
+  sellerAndBuyerGetSalesBills(data) {
+    return axiosInstance.post('nxdepartmentbill/sellerAndBuyerGetSalesBills', data, {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       }

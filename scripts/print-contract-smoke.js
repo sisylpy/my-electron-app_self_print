@@ -89,6 +89,8 @@ for (const methodName of [
   'sendPrintRequestGbWithCallback',
   'sendPrintRequestGbBatchWithCallback',
   'sendPrintCalibrationPage',
+  'previewReturnDocument',
+  'printReturnDocument',
   'getDefaultPrinter',
   'savePrinterProfile',
   'loadPrinterProfile'
@@ -98,12 +100,23 @@ for (const methodName of [
 
 const main = read('src/main.js');
 const printConfig = read('src/print/config.js');
+const returnTemplate = read('vue/src/modules/returns/services/returnDocumentTemplate.js');
 checkPattern(printConfig, /function\s+getDriverManagedDpiOptions\(\)\s*\{[\s\S]*?return\s+\{\};\s*\}/,
   '正式打印继续由驱动决定 DPI');
 checkPattern(printConfig, /silentMarginsType:\s*0/, '正式打印保留系统默认边距策略');
 checkPattern(printConfig, /hiddenWindowZoomFactor:\s*1\.0/, '隐藏打印窗口缩放保持 1.0');
 checkPattern(main, /createSilentPrintOptions\(/, '主进程统一使用打印参数工厂');
 checkPattern(main, /shouldSave/, '多页打印保留最后一页保存语义');
+checkPattern(main, /ipcMain\.handle\('preview-return-document'/, '退货单预览使用桌面主进程受控窗口');
+checkPattern(main, /previewWindow\.webContents\.setWindowOpenHandler\(\(\) => \(\{ action: 'deny' \}\)\)/,
+  '退货单预览窗口继续禁止派生弹窗');
+checkPattern(returnTemplate, /PAPER_PROFILES\.FULL_STANDARD/, '退货单复用全张纸型合同');
+checkPattern(returnTemplate, /PAPER_PROFILES\.HALF_WHOLE/, '退货单复用半张纸型合同');
+checkPattern(returnTemplate, /PAPER_PROFILES\.THIRD_WHOLE/, '退货单复用三分之一张纸型合同');
+checkPattern(returnTemplate, /columns:\s*1/, '退货单保留客户一列布局');
+checkPattern(returnTemplate, /columns:\s*2/, '退货单保留客户两列布局');
+checkPattern(returnTemplate, /customerPrintName/, '退货单按客户打印格式选择纸型');
+checkPattern(returnTemplate, /@page\{size:\$\{profile\.widthMm\}mm \$\{profile\.heightMm\}mm/, '退货单不再写死 A4');
 
 if (failures > 0) {
   console.error(`Print contract smoke failed: ${failures}`);

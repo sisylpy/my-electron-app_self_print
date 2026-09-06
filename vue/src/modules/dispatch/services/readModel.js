@@ -114,7 +114,8 @@ export function buildCustomerIndex(customerPayload) {
 export function buildRoutes(pageViewModel, phase, customerIndex = {}) {
   return routeCards(pageViewModel).map((card, index) => {
     const key = routeKey(card, phase, index);
-    const stops = asArray(card.timeline)
+    const timeline = asArray(card.timeline);
+    const stops = timeline
       .filter((node) => node?.type === 'stop')
       .map((stop, stopIndex) => decorateStop(stop, {
         customerIndex,
@@ -124,12 +125,35 @@ export function buildRoutes(pageViewModel, phase, customerIndex = {}) {
         driverUserId: card.driverUserId,
         driverName: card.driverName,
       }));
+    const editAction = card.routeEditAction && typeof card.routeEditAction === 'object'
+      ? card.routeEditAction
+      : null;
+    const editPayload = editAction?.payload && typeof editAction.payload === 'object'
+      ? editAction.payload
+      : null;
+    const endNode = timeline.find((node) => node?.type === 'end') || null;
     return {
       ...card,
       _routeKey: key,
       _phase: phase,
       _phaseLabel: PHASE_PRESENTATION[phase]?.label || phase,
+      _timeline: timeline,
+      _endNode: endNode,
       _stops: stops,
+      _routeEditPayload: editPayload,
+      canEditRoute: editAction?.canEditRoute ?? card.canEditRoute,
+      editDisabledReasonCode: editAction?.editDisabledReasonCode ?? card.editDisabledReasonCode,
+      editDisabledMessage: editAction?.editDisabledMessage ?? card.editDisabledMessage,
+      routeResourceType: editAction?.routeResourceType
+        ?? editPayload?.routeResourceType
+        ?? card.routeResourceType,
+      canExpandRoute: editAction?.canExpandRoute ?? card.canExpandRoute,
+      expandDisabledReasonCode: editAction?.expandDisabledReasonCode
+        ?? card.expandDisabledReasonCode,
+      expandDisabledMessage: editAction?.expandDisabledMessage ?? card.expandDisabledMessage,
+      candidatePolicy: editAction?.candidatePolicy ?? card.candidatePolicy,
+      expansionConstraintDefaults: editAction?.expansionConstraintDefaults
+        ?? card.expansionConstraintDefaults,
     };
   });
 }
@@ -254,4 +278,3 @@ export function findStopForMarker(collections, marker, phase) {
     || (marker.customerName && asText(stop.customerName) === asText(marker.customerName))
   )) || null;
 }
-

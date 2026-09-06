@@ -213,20 +213,25 @@ mounted() {
 
       this.stopPolling();
 
-      // 原扫码登录同时完成调度授权。老板的短期令牌交给 Electron
-      // 主进程校验和保存；文员登录时主动清除之前可能残留的老板授权。
+      // 原桌面登录同时建立内部调度会话，不再要求用户进入派单页后二次扫码。
+      // 老板的短期令牌只交给 Electron 主进程校验并安全保存。
       const dispatchApi = window.electronAPI?.dispatchAuth;
-      if (!dispatchSessionAlreadyStored && dispatchApi) {
-        if (Number(user.nxDiuAdmin) === 0 && dispatchAuth?.accessToken) {
-          const authResult = await dispatchApi.adoptLoginSession?.(dispatchAuth, {
-            persistSession: false,
-          });
-          if (!authResult?.ok) {
-            console.warn('[desktop-login] 调度授权保存失败:', authResult?.message);
-            await dispatchApi.logout?.();
-          }
-        } else {
-          await dispatchApi.logout?.();
+      const isOwner = Number(user.nxDiuAdmin) === 0;
+      if (!dispatchSessionAlreadyStored && isOwner) {
+        if (!dispatchAuth?.accessToken || typeof dispatchApi?.adoptLoginSession !== 'function') {
+          this.testLoginError = '桌面登录信息不完整，请重新登录';
+          await window.electronAPI?.userSession?.logout?.();
+          return false;
+        }
+        const authResult = await dispatchApi.adoptLoginSession(dispatchAuth, {
+          // 令牌由 Electron safeStorage 加密保存，重启后仍可自动恢复地图与调度能力。
+          persistSession: true,
+        });
+        if (!authResult?.ok) {
+          console.warn('[desktop-login] 内部调度会话保存失败:', authResult?.message);
+          this.testLoginError = authResult?.message || '桌面登录状态保存失败，请重新登录';
+          await window.electronAPI?.userSession?.logout?.();
+          return false;
         }
       }
 

@@ -112,6 +112,7 @@
             <HistoryOrders
               :key="customer.nxDepartmentId"
               :selected-all-customer="customer.nxDepartmentId"
+              :settle-type="customer.nxDepartmentSettleType"
               @open-order-detail="openOrderDetail"
             />
           </div>

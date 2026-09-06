@@ -18,6 +18,14 @@ export const PRODUCT_NAVIGATION = Object.freeze([
         routeName: 'Bills',
         module: 'print',
       }),
+      Object.freeze({
+        key: 'return-print',
+        label: '退货单打印',
+        description: '客户退货交接单与仓库收货单',
+        icon: '退',
+        routeName: 'ReturnPrintWorkbench',
+        module: 'returns',
+      }),
     ]),
   }),
   Object.freeze({
@@ -43,6 +51,19 @@ export const PRODUCT_NAVIGATION = Object.freeze([
         icon: '备',
         routeName: 'PurchasePredictionLab',
         module: 'predictionLab',
+      }),
+    ]),
+  }),
+  Object.freeze({
+    label: '经营分析',
+    items: Object.freeze([
+      Object.freeze({
+        key: 'sales-analysis',
+        label: '销售分析',
+        description: '商品分布、客户结构与重要客户',
+        icon: '析',
+        routeName: 'SalesAnalysis',
+        module: 'salesAnalysis',
       }),
     ]),
   }),

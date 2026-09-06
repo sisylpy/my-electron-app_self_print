@@ -140,14 +140,14 @@ function addRoute(line) {
     map,
     path,
     strokeColor: selected ? 'rgba(255,255,255,.98)' : 'rgba(255,255,255,.72)',
-    strokeWeight: selected ? 10 : 7,
+    strokeWeight: selected ? 7 : 5,
     zIndex: selected ? 20 : 10,
   });
   const route = new sdk.HWPolyline({
     map,
     path,
     strokeColor: color,
-    strokeWeight: selected ? 6 : 4,
+    strokeWeight: selected ? 4 : 3,
     strokeLineDash: String(line.lineStyle || '').toUpperCase() === 'DASHED' ? [8, 6] : undefined,
     zIndex: selected ? 21 : 11,
   });
@@ -230,7 +230,7 @@ function fitViewport() {
     map.setFitView(points);
     window.setTimeout(() => {
       const zoom = Number(map?.getZoom?.());
-      if (Number.isFinite(zoom) && zoom > 15) map.setZoom?.(15);
+      if (Number.isFinite(zoom)) map.setZoom?.(Math.min(14.25, Math.max(1, zoom - 0.8)));
     }, 0);
   }
 }

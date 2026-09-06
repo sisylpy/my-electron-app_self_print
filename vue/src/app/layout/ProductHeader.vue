@@ -1,5 +1,5 @@
 <template>
-  <header class="product-header">
+  <header class="product-header" :class="{ 'is-dispatch': route.meta?.module === 'dispatch' }">
     <div class="product-header__page">
       <div>
         <h1>{{ pageTitle }}</h1>
@@ -125,6 +125,25 @@ const mcpStatus = computed(() => {
   gap: 0;
 }
 
+.product-header.is-dispatch {
+  grid-template-columns: 270px minmax(0, 1fr);
+  gap: 16px;
+  padding: 9px 22px;
+}
+
+.product-header.is-dispatch .product-header__page h1 {
+  font-size: 22px;
+}
+
+.product-header.is-dispatch .product-header__page p {
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.product-header.is-dispatch .product-header__runtime {
+  display: none;
+}
+
 .runtime-chip {
   display: flex;
   min-width: 112px;
@@ -190,6 +209,12 @@ const mcpStatus = computed(() => {
 
   .product-header__runtime {
     display: none;
+  }
+
+  .product-header.is-dispatch {
+    grid-template-columns: 235px minmax(0, 1fr);
+    padding-right: 16px;
+    padding-left: 18px;
   }
 }
 </style>

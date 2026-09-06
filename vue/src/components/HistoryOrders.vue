@@ -102,13 +102,18 @@ export default {
     selectedAllCustomer: {
       type: [Number, String],
       default: null
+    },
+    settleType: {
+      type: [Number, String],
+      default: 1
     }
   },
   data() {
     return {
       accountBillData: [], // 客户历史订单数据
       activeMonthIndex: 0, // 当前激活的月份索引
-      downloadExcelLoading: null // 正在下载的账单ID
+      downloadExcelLoading: null, // 正在下载的账单ID
+      historyRequestId: 0
     };
   },
   computed: {
@@ -127,14 +132,20 @@ export default {
           subDeps: monthData.subDeps || []
         };
       }).filter(month => month.arr && month.arr.length > 0);
+    },
+    historyRequestKey() {
+      if (!this.selectedAllCustomer) return '';
+      const normalizedSettleType = Number(this.settleType) === 0 ? 0 : 1;
+      return `${this.selectedAllCustomer}:${normalizedSettleType}`;
     }
   },
   watch: {
-    selectedAllCustomer: {
-      handler(newVal) {
-        if (newVal) {
-          this.fetchCustomerHistoryOrders(newVal);
+    historyRequestKey: {
+      handler(newKey) {
+        if (newKey) {
+          this.fetchCustomerHistoryOrders(this.selectedAllCustomer);
         } else {
+          this.historyRequestId += 1;
           this.accountBillData = [];
           this.activeMonthIndex = 0;
         }
@@ -234,6 +245,7 @@ export default {
     },
     // 获取客户历史订单
     async fetchCustomerHistoryOrders(customerId) {
+      const requestId = ++this.historyRequestId;
       try {
         // 检查disUser是否存在
         if (!this.disUser || !this.disUser.nxDiuDistributerId) {
@@ -248,20 +260,34 @@ export default {
         
         console.log('请求历史订单参数:', requestData);
 
-        const res = await api.sellerAndBuyerGetAccountBills(requestData);
-        
-        if (res && res.data && res.data.code === 0) {
-          // 数据结构：直接在 data.arr 中
-          this.accountBillData = res.data.data.arr || [];
+        const secureLoader = window.electronAPI?.customerHistory?.loadMonths;
+        let monthList;
+        if (typeof secureLoader === 'function') {
+          const result = await secureLoader(customerId);
+          if (!result?.ok) {
+            throw new Error(result?.message || '历史订单加载失败');
+          }
+          monthList = result.data?.months;
+        } else {
+          const isCashCustomer = Number(this.settleType) === 0;
+          const res = isCashCustomer
+            ? await api.sellerAndBuyerGetSalesBills(requestData)
+            : await api.sellerAndBuyerGetAccountBills(requestData);
+          if (!res || !res.data || res.data.code !== 0) {
+            throw new Error(res?.data?.msg || '历史订单加载失败');
+          }
+          const payload = res.data.data;
+          monthList = isCashCustomer ? payload : payload?.arr;
+        }
+
+        if (requestId === this.historyRequestId) {
+          this.accountBillData = Array.isArray(monthList) ? monthList : [];
           this.activeMonthIndex = 0; // 重置到第一个月份
           console.log('成功获取历史订单数据:', this.accountBillData);
-        } else {
-          console.error('获取历史订单失败:', res);
-          this.accountBillData = [];
         }
       } catch (error) {
         console.error('获取历史订单API请求失败:', error);
-        this.accountBillData = [];
+        if (requestId === this.historyRequestId) this.accountBillData = [];
       }
     }
   }

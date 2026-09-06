@@ -7,7 +7,9 @@ import { dispatchRoutes } from '@/modules/dispatch';
 import { orderRoutes } from '@/modules/order';
 import { printRoutes } from '@/modules/print';
 import { settingRoutes } from '@/modules/setting';
+import { returnRoutes } from '@/modules/returns';
 import { predictionLabRoutes } from '@/modules/predictionLab';
+import { salesAnalysisRoutes } from '@/modules/salesAnalysis';
 import { writeAppLog } from '@/utils/appLog';
 import { canAccessModule, defaultRouteNameForUser } from '@/utils/disUserRole';
 import {
@@ -44,9 +46,11 @@ export const routes = [
   ...coreRoutes,
   ...orderRoutes,
   ...printRoutes,
+  ...returnRoutes,
   ...dispatchRoutes,
   ...customerRoutes,
   ...predictionLabRoutes,
+  ...salesAnalysisRoutes,
   ...settingRoutes,
 ];
 

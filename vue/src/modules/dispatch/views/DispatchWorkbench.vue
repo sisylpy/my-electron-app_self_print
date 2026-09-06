@@ -1,77 +1,65 @@
 <template>
   <main class="dispatch-workbench" aria-label="桌面调度工作台">
     <Teleport to="#product-header-context">
-      <nav class="dispatch-phase-tabs" aria-label="配送阶段">
-        <button
-          v-for="phase in phaseOptions"
-          :key="phase.key"
-          type="button"
-          :class="{ active: activePhase === phase.key }"
-          @click="selectPhase(phase.key)"
-        >
-          <span>{{ phase.short }}</span>
-          <strong>{{ phase.label }}</strong>
-          <em>{{ phase.count }}</em>
-        </button>
-      </nav>
+      <div class="dispatch-header-row">
+        <header class="dispatch-toolbar">
+          <div class="dispatch-toolbar__summary">
+            <span>{{ historicalPlan ? '历史运营总览' : '今日运营总览' }}</span>
+          </div>
+
+          <dl class="dispatch-toolbar__metrics">
+            <div>
+              <dd>{{ activeMetrics?.driverCount ?? activeRoutes.length }}</dd>
+              <dt>条路线</dt>
+            </div>
+            <div>
+              <dd>{{ activeMetrics?.customerStopCount ?? activeStopCount }}</dd>
+              <dt>个饭店部门</dt>
+            </div>
+            <div>
+              <dd>{{ activeMetrics?.totalDistanceText || '—' }}</dd>
+              <dt>总里程</dt>
+            </div>
+            <div>
+              <dd>{{ activeMetrics?.totalDurationText || '—' }}</dd>
+              <dt>预计时长</dt>
+            </div>
+          </dl>
+
+          <div class="dispatch-toolbar__actions">
+            <button
+              v-if="canManageDuty"
+              type="button"
+              title="管理司机可派状态"
+              @click="dutyDialogVisible = true"
+            >司机管理</button>
+            <button
+              type="button"
+              :disabled="isReading"
+              title="只重新读取服务端数据"
+              @click="refresh"
+            >
+              <span :class="{ spinning: isReading }">↻</span>
+              刷新
+            </button>
+          </div>
+        </header>
+      </div>
     </Teleport>
 
-    <header class="dispatch-toolbar">
-      <div class="dispatch-toolbar__summary">
-        <span>{{ historicalPlan ? '历史计划' : '今日路线' }}</span>
-        <strong>{{ activeRouteDateLabel }}</strong>
-        <small>{{ activeRoutes.length }} 条路线 · {{ activeStopCount }} 个客户</small>
-      </div>
-
-      <dl class="dispatch-toolbar__metrics">
-        <div>
-          <dt>司机</dt>
-          <dd>{{ activeMetrics?.driverCount ?? activeRoutes.length }}</dd>
-        </div>
-        <div>
-          <dt>客户</dt>
-          <dd>{{ activeMetrics?.customerStopCount ?? activeStopCount }}</dd>
-        </div>
-        <div>
-          <dt>里程</dt>
-          <dd>{{ activeMetrics?.totalDistanceText || '—' }}</dd>
-        </div>
-        <div>
-          <dt>时长</dt>
-          <dd>{{ activeMetrics?.totalDurationText || '—' }}</dd>
-        </div>
-      </dl>
-
-      <div class="dispatch-toolbar__actions">
-        <span :class="refreshTone"><i></i>{{ refreshLabel }} · {{ updatedLabel }}</span>
-        <button
-          v-if="authSession?.authenticated"
-          type="button"
-          class="session-button"
-          title="退出桌面调度登录"
-          @click="logoutDispatch"
-        >
-          {{ sessionRoleLabel }}
-        </button>
-        <button
-          v-else
-          type="button"
-          class="login-button"
-          @click="goToOriginalLogin"
-        >
-          扫码登录
-        </button>
-        <button
-          type="button"
-          :disabled="isReading"
-          title="只重新读取服务端数据"
-          @click="refresh"
-        >
-          <span :class="{ spinning: isReading }">↻</span>
-          刷新
-        </button>
-      </div>
-    </header>
+    <nav class="dispatch-phase-tabs" aria-label="配送阶段">
+      <button
+        v-for="phase in phaseOptions"
+        :key="phase.key"
+        type="button"
+        :class="[{ active: activePhase === phase.key }, `is-${phase.key}`]"
+        @click="selectPhase(phase.key)"
+      >
+        <span>{{ phase.short }}</span>
+        <strong>{{ phase.label }}</strong>
+        <em>{{ phase.count }}</em>
+      </button>
+    </nav>
 
     <section
       v-if="feedback.message"
@@ -99,11 +87,14 @@
         <div class="dispatch-map-panel__header">
           <div>
             <h2>路线地图</h2>
-            <p>{{ historicalPlan ? '当前显示历史计划，迟到时间不再按今天计算。' : activePhaseCopy.mapHint }}</p>
+            <p v-if="selectedRoute">
+              当前路线 · {{ selectedRoute._stops.length }} 站 ·
+              {{ selectedRoute.totalRoundTripDistanceText || selectedRoute.totalDistanceText || '路线已生成' }} ·
+              {{ selectedRoute.totalRoundTripDurationText || selectedRoute.totalDurationText || '等待时长' }}
+            </p>
+            <p v-else>{{ historicalPlan ? '当前显示历史计划，迟到时间不再按今天计算。' : activePhaseCopy.mapHint }}</p>
           </div>
-          <strong v-if="selectedRoute">
-            {{ selectedRoute.driverName || '当前司机' }} · {{ selectedRoute._stops.length }} 站
-          </strong>
+          <button type="button" @click="showAllRoutesOnMap">⌗ 显示全部路线</button>
         </div>
 
         <div v-if="activeSnapshot.status === 'loading' && !activeMapOverview.markers" class="dispatch-map-panel__state">
@@ -112,12 +103,16 @@
         </div>
         <HuaweiDispatchMap
           v-else
+          :key="`dispatch-map-${mapViewNonce}`"
           prominent
           :map-overview="activeMapOverview"
           :selected-stop="selectedStop"
           :selected-driver-user-id="selectedDriverUserId"
+          :authenticated="authSession?.authenticated === true"
+          :auth-checking="['unknown', 'checking'].includes(dispatchState.auth.status)"
           @select-marker="selectMarker"
           @select-line="selectMapLine"
+          @session-expired="handleDesktopSessionExpired"
         />
       </section>
 
@@ -140,6 +135,7 @@
         @assign-driver="openDriverDialog"
         @edit-route="openRouteEditor"
         @confirm-dispatch="openConfirmDialog"
+        @execute-action="executePageAction"
       />
     </section>
 
@@ -156,12 +152,39 @@
       v-if="routeEditorRoute"
       :route="routeEditorRoute"
       :route-date="routeDateForWrite()"
-      :batch-code="snapshots.dispatch?.pageViewModel?.batchCode || dispatchState.context.batchCode"
+      :batch-code="activeSnapshot.pageViewModel?.batchCode || dispatchState.context.batchCode"
       :initial-map-overview="activeMapOverview"
       :planning="planning"
       @close="routeEditorRoute = null"
       @saved="handleRouteSaved"
       @changed="refresh"
+      @stale="handleRouteEditorStale"
+    />
+
+    <DispatchDutyDialog
+      v-if="dutyDialogVisible"
+      :drivers="driverRows"
+      :submitting="isSubmitting"
+      @close="dutyDialogVisible = false"
+      @toggle-duty="submitDutyChange"
+      @employment="submitEmploymentChange"
+    />
+
+    <DispatchTimeWindowDialog
+      v-if="timeWindowAction"
+      :payload="timeWindowAction.payload"
+      :submitting="isSubmitting"
+      @close="timeWindowAction = null"
+      @confirm="submitTimeWindow"
+    />
+
+    <ManualDispatchDialog
+      v-if="manualDispatchVisible"
+      :page-data="manualDispatchPage"
+      :loading="manualDispatchLoading"
+      :error="manualDispatchError"
+      @close="closeManualDispatch"
+      @select-driver="openManualDriverRoute"
     />
 
     <div
@@ -202,8 +225,11 @@ import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 import HuaweiDispatchMap from '@/modules/map/components/HuaweiStyledDispatchMap.vue';
 import DispatchControlPanel from '../components/DispatchControlPanel.vue';
+import DispatchDutyDialog from '../components/DispatchDutyDialog.vue';
 import DispatchRouteEditDialog from '../components/DispatchRouteEditDialog.vue';
+import DispatchTimeWindowDialog from '../components/DispatchTimeWindowDialog.vue';
 import DriverSelectDialog from '../components/DriverSelectDialog.vue';
+import ManualDispatchDialog from '../components/ManualDispatchDialog.vue';
 import {
   buildDriverRows,
   buildOrderCollections,
@@ -214,6 +240,13 @@ import {
   DISPATCH_PERMISSIONS,
   buildAssignDriverPayload,
   buildConfirmDispatchPayload,
+  buildDeliveryStopCommand,
+  buildDepartDriverCommand,
+  buildDriverDutyPayload,
+  buildDriverEmploymentPayload,
+  buildManualDispatchPayload,
+  buildReturnStopToSandboxCommand,
+  buildStopTimeWindowPayload,
   dispatchErrorPresentation,
   hasDispatchPermission,
 } from '../services/writeContract';
@@ -224,6 +257,13 @@ let refreshTimer = null;
 const driverDialogVisible = ref(false);
 const confirmDialogRoute = ref(null);
 const routeEditorRoute = ref(null);
+const dutyDialogVisible = ref(false);
+const timeWindowAction = ref(null);
+const manualDispatchVisible = ref(false);
+const manualDispatchLoading = ref(false);
+const manualDispatchPage = ref(null);
+const manualDispatchError = ref('');
+const mapViewNonce = ref(0);
 const feedback = reactive({
   title: '',
   message: '',
@@ -370,33 +410,44 @@ const sessionMatchesDistributer = computed(() => {
 });
 const canAssignDriver = computed(() => (
   activePhase.value === 'dispatch'
+  && !historicalPlan.value
   && Boolean(selectedStop.value)
+  && !selectedStop.value?._driverUserId
   && sessionMatchesDistributer.value
   && hasDispatchPermission(authSession.value, DISPATCH_PERMISSIONS.assignDriver)
 ));
 const canConfirmDispatch = computed(() => (
   activePhase.value === 'dispatch'
+  && !historicalPlan.value
   && Boolean(selectedRoute.value?._stops?.length)
   && sessionMatchesDistributer.value
   && hasDispatchPermission(authSession.value, DISPATCH_PERMISSIONS.confirmDispatch)
 ));
 const canEditRoute = computed(() => (
-  activePhase.value === 'dispatch'
-  && Boolean(selectedRoute.value?._stops?.length)
+  ['dispatch', 'loading'].includes(activePhase.value)
+  && !historicalPlan.value
+  && Boolean(selectedRoute.value)
   && sessionMatchesDistributer.value
   && hasDispatchPermission(authSession.value, DISPATCH_PERMISSIONS.routeEdit)
   && hasDispatchPermission(authSession.value, DISPATCH_PERMISSIONS.confirmDispatch)
+  && selectedRoute.value?.canEditRoute === true
+  && selectedRoute.value?.routeEditAction?.enabled !== false
+));
+const canManageDuty = computed(() => (
+  sessionMatchesDistributer.value
+  && hasDispatchPermission(authSession.value, DISPATCH_PERMISSIONS.dutyManage)
 ));
 const dispatchActionHint = computed(() => {
-  if (activePhase.value !== 'dispatch') return '';
-  if (!authSession.value?.authenticated) return '扫码登录后可以调整路线、更换司机和确认派单。';
-  if (!sessionMatchesDistributer.value) return '当前扫码账号与配送商不一致，请重新登录。';
+  if (!['dispatch', 'loading'].includes(activePhase.value)) return '';
+  if (!authSession.value?.authenticated) return '桌面登录已失效，请重新登录。';
+  if (!sessionMatchesDistributer.value) return '当前登录账号与配送商不一致，请重新登录桌面端。';
   if (!hasDispatchPermission(authSession.value, DISPATCH_PERMISSIONS.confirmDispatch)) {
     return '当前账号没有确认派单权限。';
   }
   if (!hasDispatchPermission(authSession.value, DISPATCH_PERMISSIONS.routeEdit)) {
     return '当前账号没有调整路线权限。';
   }
+  if (activePhase.value === 'loading') return '装车中路线可调整客户，也可按服务端候选更换整条路线司机。';
   return '';
 });
 
@@ -464,6 +515,10 @@ function selectMapLine(line) {
   if (route) selectRoute(route);
 }
 
+function showAllRoutesOnMap() {
+  mapViewNonce.value += 1;
+}
+
 function ensureSelection() {
   if (selectedStop.value) return;
   const firstRouteStop = activeRoutes.value.find((route) => route._stops?.length)?._stops?.[0];
@@ -493,12 +548,12 @@ function showFeedback(title, message, tone = 'success') {
 
 function requireLoginOrPermission(permission, actionLabel) {
   if (!authSession.value?.authenticated) {
-    goToOriginalLogin();
-    showFeedback('需要登录', `请先手机扫码登录，再${actionLabel}`, 'warning');
+    goToDesktopLogin();
+    showFeedback('桌面登录已失效', `请重新登录桌面端，再${actionLabel}`, 'warning');
     return false;
   }
   if (!sessionMatchesDistributer.value) {
-    showFeedback('账号不匹配', '扫码账号不属于当前配送商，请退出后重新扫码', 'error');
+    showFeedback('账号不匹配', '当前登录账号不属于该配送商，请退出后重新登录桌面端', 'error');
     return false;
   }
   if (!hasDispatchPermission(authSession.value, permission)) {
@@ -509,15 +564,32 @@ function requireLoginOrPermission(permission, actionLabel) {
 }
 
 function openDriverDialog() {
+  if (historicalPlan.value) {
+    showFeedback('历史计划只读', 'Boss 派单动作只允许操作今日路线', 'warning');
+    return;
+  }
   if (!selectedStop.value) {
     showFeedback('请选择订单', '请先在左侧选择需要分配司机的待派订单', 'warning');
     return;
   }
   if (!requireLoginOrPermission(DISPATCH_PERMISSIONS.assignDriver, '分配司机')) return;
+  const actionType = String(
+    selectedStop.value?.primaryAction?.actionType
+      || selectedStop.value?.primaryAction?.action
+      || ''
+  ).toUpperCase();
+  if (actionType === 'START_MANUAL_DISPATCH') {
+    openManualDispatch(selectedStop.value.primaryAction);
+    return;
+  }
   driverDialogVisible.value = true;
 }
 
 function openConfirmDialog() {
+  if (historicalPlan.value) {
+    showFeedback('历史计划只读', '不能确认历史派单路线', 'warning');
+    return;
+  }
   if (!selectedRoute.value) {
     showFeedback('请选择路线', '请先在中间工作区选择需要确认的司机路线', 'warning');
     return;
@@ -527,6 +599,10 @@ function openConfirmDialog() {
 }
 
 function openRouteEditor(route) {
+  if (historicalPlan.value) {
+    showFeedback('历史计划只读', '不能调整历史路线', 'warning');
+    return;
+  }
   if (!route) {
     showFeedback('请选择路线', '请先选择需要调整的司机路线', 'warning');
     return;
@@ -536,18 +612,44 @@ function openRouteEditor(route) {
     showFeedback('权限不足', '当前账号可以预览路线，但没有保存路线的权限', 'error');
     return;
   }
-  routeEditorRoute.value = route;
+  if (route.routeEditAction?.enabled === false) {
+    showFeedback('当前不可调整', route.routeEditAction.disabledReason || '服务端已锁定这条路线', 'warning');
+    return;
+  }
+  const trustedPayload = route._routeEditPayload || route.routeEditAction?.payload;
+  if (!trustedPayload?.routeResourceType) {
+    showFeedback('无法打开路线编辑', '服务端未返回可信路线编辑资源，请刷新列表后重试', 'error');
+    return;
+  }
+  routeEditorRoute.value = {
+    ...route,
+    _routeEditPayload: trustedPayload,
+  };
 }
 
-async function handleRouteSaved() {
+async function handleRouteSaved(result) {
   const driverName = routeEditorRoute.value?.driverName || '所选司机';
   routeEditorRoute.value = null;
-  showFeedback('路线调整成功', `${driverName}的客户顺序已经保存`, 'success');
+  const data = result?.data || {};
+  if (data.routeReassigned) {
+    showFeedback('路线司机已更换', '整条装车路线已交给新司机，客户顺序和路线数据保持不变', 'success');
+  } else if (data.routeDeleted || data.exitedLoading) {
+    showFeedback('空路线已删除', '最后一家客户已回到待分配区域，空路线不再显示', 'success');
+  } else {
+    showFeedback('路线调整成功', `${driverName}的客户顺序已经保存`, 'success');
+  }
+  await refresh();
+}
+
+async function handleRouteEditorStale(message) {
+  routeEditorRoute.value = null;
+  showFeedback('路线状态已更新', message || '路线状态已经变化，请从最新列表重新打开', 'warning');
   await refresh();
 }
 
 function routeDateForWrite() {
-  const value = snapshots.value.dispatch?.pageViewModel?.routeDate;
+  const value = activeSnapshot.value.pageViewModel?.routeDate
+    || snapshots.value.dispatch?.pageViewModel?.routeDate;
   if (value) return value;
   const today = new Date();
   const year = today.getFullYear();
@@ -570,7 +672,7 @@ async function handleCommandResult(result, successTitle, successMessage) {
   }
   const presentation = dispatchErrorPresentation(result);
   showFeedback('操作未完成', presentation.message, presentation.tone);
-  if (presentation.loginRequired) goToOriginalLogin();
+  if (presentation.loginRequired) goToDesktopLogin();
   if (presentation.refresh) await refresh();
   return false;
 }
@@ -622,16 +724,309 @@ async function submitDispatchConfirmation() {
   }
 }
 
-function goToOriginalLogin() {
+function actionType(action) {
+  return String(action?.actionType || action?.action || '').trim().toUpperCase();
+}
+
+function actionPayload(action) {
+  return action?.payload && typeof action.payload === 'object' ? action.payload : {};
+}
+
+async function openManualDispatch(action) {
+  if (!action || action.enabled === false) {
+    showFeedback('当前不可人工调度', action?.disabledReason || '服务端未开放该操作', 'warning');
+    return;
+  }
+  if (!requireLoginOrPermission(DISPATCH_PERMISSIONS.assignDriver, '人工调度')) return;
+  manualDispatchVisible.value = true;
+  manualDispatchLoading.value = true;
+  manualDispatchPage.value = null;
+  manualDispatchError.value = '';
+  try {
+    const payload = buildManualDispatchPayload(
+      action,
+      routeDateForWrite(),
+      dispatchState.value.context.batchCode
+    );
+    const result = await store.dispatch('dispatch/loadManualDispatchPanorama', payload);
+    if (!result?.ok) {
+      const presentation = dispatchErrorPresentation(result);
+      manualDispatchError.value = presentation.message;
+      if (presentation.loginRequired) goToDesktopLogin();
+      return;
+    }
+    manualDispatchPage.value = result.data || {};
+  } catch (error) {
+    manualDispatchError.value = error?.message || '读取人工调度司机列表失败';
+  } finally {
+    manualDispatchLoading.value = false;
+  }
+}
+
+function closeManualDispatch() {
+  if (manualDispatchLoading.value) return;
+  manualDispatchVisible.value = false;
+  manualDispatchPage.value = null;
+  manualDispatchError.value = '';
+}
+
+function openManualDriverRoute(driver) {
+  const action = driver?.primaryAction || {};
+  if (driver?.canSimulate === false || action.enabled === false) {
+    showFeedback('当前不可试算', driver?.blockedReason || action.disabledReason || '目标司机不可用', 'warning');
+    return;
+  }
+  const payload = actionPayload(action);
+  if (!payload.driverUserId || !Array.isArray(payload.stopKeys)) {
+    showFeedback('请求数据不完整', '服务端未返回司机路线试算参数，请刷新后重试', 'error');
+    return;
+  }
+  const stopByKey = new Map(orderCollections.value.pending.map((stop) => [
+    String(stop.sandboxStopKey || stop.stopKey || ''),
+    stop,
+  ]));
+  const routeStops = payload.stopKeys.map((key, index) => {
+    const normalizedKey = String(key || '').trim();
+    return stopByKey.get(normalizedKey) || {
+      sandboxStopKey: normalizedKey,
+      stopKey: normalizedKey,
+      _stopKey: normalizedKey || `manual-stop-${index}`,
+      customerName: `客户${index + 1}`,
+      liveOrderIds: [],
+    };
+  });
+  routeEditorRoute.value = {
+    ...driver,
+    driverUserId: payload.driverUserId,
+    driverName: driver.driverName,
+    driverRouteId: driver.driverRouteId ?? null,
+    routeVersion: driver.routeVersion ?? 0,
+    _phase: 'dispatch',
+    _routeKey: `dispatch:manual:${payload.driverUserId}`,
+    _stops: routeStops,
+    _routeEditPayload: payload,
+  };
+  manualDispatchVisible.value = false;
+}
+
+async function submitTimeWindow(form) {
+  if (!timeWindowAction.value) return;
+  try {
+    const payload = buildStopTimeWindowPayload({
+      action: timeWindowAction.value.action,
+      form,
+      routeDate: routeDateForWrite(),
+      batchCode: activeSnapshot.value.pageViewModel?.batchCode || dispatchState.value.context.batchCode,
+      phase: activePhase.value,
+    });
+    const result = await store.dispatch('dispatch/updateStopTimeWindow', payload);
+    const success = await handleCommandResult(
+      result,
+      '送达时间已更新',
+      `${timeWindowAction.value.payload?.customerName || '所选客户'}的当日送达时间已保存`
+    );
+    if (success) timeWindowAction.value = null;
+  } catch (error) {
+    showFeedback('无法保存', error?.message || '送达时间参数不完整', 'error');
+  }
+}
+
+async function submitDutyChange({ driver, dutyOn }) {
+  if (!requireLoginOrPermission(DISPATCH_PERMISSIONS.dutyManage, '管理司机可派状态')) return;
+  if (driver.canToggleDuty === false) {
+    showFeedback('当前不可操作', driver.toggleDisabledReason || '服务端已锁定司机状态', 'warning');
+    return;
+  }
+  const verb = dutyOn ? '开启' : '关闭';
+  const content = dutyOn
+    ? `${verb}后，“${driver.driverName || '该司机'}”会持续保持可派，直到手动关闭。确认开启？`
+    : `${verb}后，系统不会再给“${driver.driverName || '该司机'}”派单。确认关闭？`;
+  if (!window.confirm(content)) return;
+  const payload = buildDriverDutyPayload();
+  const result = await store.dispatch(
+    dutyOn ? 'dispatch/checkInDriver' : 'dispatch/checkOutDriver',
+    { driverUserId: driver.driverUserId, payload }
+  );
+  await handleCommandResult(result, dutyOn ? '已开启可派' : '已关闭可派', `${driver.driverName || '司机'}状态已更新`);
+}
+
+async function submitEmploymentChange({ driver, employmentType }) {
+  if (!requireLoginOrPermission(DISPATCH_PERMISSIONS.dutyManage, '设置司机类型')) return;
+  const label = employmentType === 'PART_TIME' ? '兼职' : '专职';
+  const message = employmentType === 'PART_TIME'
+    ? '兼职司机送完最后一个客户后结束，不计算返回仓库。确认修改？'
+    : '专职司机送完后返回仓库，路线会计算返程。确认修改？';
+  if (!window.confirm(message)) return;
+  try {
+    const payload = buildDriverEmploymentPayload(employmentType);
+    const result = await store.dispatch('dispatch/updateDriverEmployment', {
+      driverUserId: driver.driverUserId,
+      payload,
+    });
+    await handleCommandResult(result, '司机类型已更新', `${driver.driverName || '司机'}已设为${label}`);
+  } catch (error) {
+    showFeedback('无法保存', error?.message || '司机类型无效', 'error');
+  }
+}
+
+async function submitLoadingReturn(stop, action) {
+  if (!window.confirm(action?.payload?.removeConfirmMessage || '确认将该客户从装车路线移除并退回待分配区域？')) return;
+  try {
+    const command = buildReturnStopToSandboxCommand({
+      stop,
+      action,
+      routeDate: routeDateForWrite(),
+      batchCode: activeSnapshot.value.pageViewModel?.batchCode || dispatchState.value.context.batchCode,
+    });
+    const result = await store.dispatch('dispatch/returnStopToSandbox', command);
+    await handleCommandResult(
+      result,
+      result?.data?.exitedLoading ? '空路线已删除' : '客户已退回待分配',
+      result?.data?.exitedLoading ? '最后一家客户已移除，空路线不再显示' : '客户已从装车路线移除'
+    );
+  } catch (error) {
+    showFeedback('无法提交', error?.message || '客户站点参数不完整', 'error');
+  }
+}
+
+async function submitDeparture(route, action) {
+  const allowed = hasDispatchPermission(authSession.value, DISPATCH_PERMISSIONS.loadingConfirm)
+    || hasDispatchPermission(authSession.value, DISPATCH_PERMISSIONS.deliveryConfirm)
+    || hasDispatchPermission(authSession.value, DISPATCH_PERMISSIONS.deliverySelf);
+  if (!authSession.value?.authenticated || !sessionMatchesDistributer.value || !allowed) {
+    showFeedback('权限不足', '当前账号没有确认发车权限', 'error');
+    return;
+  }
+  if (!window.confirm(`确认${route?.driverName || '该司机'}整条路线现在出发？`)) return;
+  try {
+    const command = buildDepartDriverCommand({
+      route,
+      action,
+      routeDate: routeDateForWrite(),
+      batchCode: activeSnapshot.value.pageViewModel?.batchCode || dispatchState.value.context.batchCode,
+    });
+    const result = await store.dispatch('dispatch/departDriver', command);
+    await handleCommandResult(result, '已确认发车', `${route?.driverName || '司机'}的路线已进入配送中`);
+  } catch (error) {
+    showFeedback('无法发车', error?.message || '路线参数不完整', 'error');
+  }
+}
+
+async function submitDeliveryAction(stop, action, returnToSandbox) {
+  const allowed = hasDispatchPermission(authSession.value, DISPATCH_PERMISSIONS.deliveryConfirm)
+    || hasDispatchPermission(authSession.value, DISPATCH_PERMISSIONS.deliverySelf);
+  if (!authSession.value?.authenticated || !sessionMatchesDistributer.value || !allowed) {
+    showFeedback('权限不足', '当前账号没有配送确认权限', 'error');
+    return;
+  }
+  let reason = '';
+  if (returnToSandbox) {
+    reason = window.prompt('请输入退回待分配的原因：', '') || '';
+    if (!reason.trim()) {
+      showFeedback('未执行退回', '配送中退回必须填写原因', 'warning');
+      return;
+    }
+  } else if (!window.confirm(`确认“${stop?.customerName || '该客户'}”已经送达？`)) {
+    return;
+  }
+  try {
+    const command = buildDeliveryStopCommand({
+      stop,
+      action,
+      routeDate: routeDateForWrite(),
+      batchCode: activeSnapshot.value.pageViewModel?.batchCode || dispatchState.value.context.batchCode,
+      reason,
+    });
+    const result = await store.dispatch(
+      returnToSandbox ? 'dispatch/returnDeliveryStopToSandbox' : 'dispatch/completeDeliveryStop',
+      command
+    );
+    await handleCommandResult(
+      result,
+      returnToSandbox ? '已退回待分配' : '已确认送达',
+      `${stop?.customerName || '客户'}状态已由服务端更新`
+    );
+  } catch (error) {
+    showFeedback('无法提交', error?.message || '配送任务参数不完整', 'error');
+  }
+}
+
+async function executePageAction({ action, route, stop } = {}) {
+  const type = actionType(action);
+  if (!type || [
+    'STATUS_ONLY',
+    'VIEW_ROUTE',
+    'CONFIRM_SANDBOX_STOP',
+    'CONFIRM_ASSIGN',
+  ].includes(type)) return;
+  if (historicalPlan.value) {
+    showFeedback('历史计划只读', 'Boss 派单动作只允许操作今日路线', 'warning');
+    return;
+  }
+  if (action?.enabled === false) {
+    showFeedback('当前不可操作', action.disabledReason || '服务端已禁用该操作', 'warning');
+    return;
+  }
+  if (type === 'GO_LOADING') {
+    await selectPhase('loading');
+    return;
+  }
+  if (type === 'START_MANUAL_DISPATCH') {
+    await openManualDispatch(action);
+    return;
+  }
+  if (['OPEN_DRIVER_ROUTE_EDIT', 'SIMULATE_MANUAL_DISPATCH'].includes(type)) {
+    openRouteEditor(route || selectedRoute.value);
+    return;
+  }
+  if (type === 'RETURN_TO_DISPATCH') {
+    showFeedback('请至分派中调整路线', '装车路线不能在当前列表直接退回，已为你切换到分派中', 'warning');
+    await selectPhase('dispatch');
+    return;
+  }
+  if (type === 'EDIT_TODAY_TIME_WINDOW') {
+    if (!requireLoginOrPermission(DISPATCH_PERMISSIONS.routeEdit, '编辑送达时间')) return;
+    timeWindowAction.value = { action, payload: actionPayload(action), route, stop };
+    return;
+  }
+  if (type === 'DEPART_NOW') {
+    await submitDeparture(route || selectedRoute.value, action);
+    return;
+  }
+  if (['COMPLETE_NOW', 'COMPLETE_DELIVERY', 'CONFIRM_DELIVERY'].includes(type)) {
+    await submitDeliveryAction(stop || selectedStop.value, action, false);
+    return;
+  }
+  if (type === 'RETURN_TO_SANDBOX_NOW') {
+    await submitDeliveryAction(stop || selectedStop.value, action, true);
+    return;
+  }
+  if (type === 'RETURN_TO_SANDBOX') {
+    if (activePhase.value === 'loading') {
+      await submitLoadingReturn(stop || selectedStop.value, action);
+    }
+    return;
+  }
+  if (type === 'MARK_DELIVERY_EXCEPTION') {
+    showFeedback('功能未接入', '与 Boss 小程序一致：通用配送异常尚无正式后端合同', 'warning');
+    return;
+  }
+  showFeedback('暂不支持该动作', `服务端返回了未识别的 actionType：${type}`, 'warning');
+}
+
+function goToDesktopLogin() {
   router.push({
     name: 'Home',
     query: { returnTo: 'DispatchWorkbench' },
   });
 }
 
-async function logoutDispatch() {
-  await store.dispatch('dispatch/logoutDispatch');
-  showFeedback('已退出调度登录', '只读调度信息仍可继续查看', 'success');
+async function handleDesktopSessionExpired(error = null) {
+  if (error) await store.dispatch('dispatch/restoreAuth');
+  if (!authSession.value?.authenticated) {
+    showFeedback('桌面登录已失效', '请重新登录桌面端，登录后地图和调度权限会自动恢复。', 'warning');
+    goToDesktopLogin();
+  }
 }
 
 function refreshWhenVisible() {
@@ -650,10 +1045,12 @@ watch(
 );
 
 onMounted(async () => {
-  await Promise.all([
-    store.dispatch('dispatch/restoreAuth'),
-    refresh(),
-  ]);
+  const authResult = await store.dispatch('dispatch/restoreAuth');
+  if (!authResult?.data?.authenticated) {
+    goToDesktopLogin();
+    return;
+  }
+  await refresh();
   refreshTimer = window.setInterval(refreshWhenVisible, 60_000);
   window.addEventListener('focus', refreshWhenVisible);
 });
@@ -804,12 +1201,6 @@ onBeforeUnmount(() => {
   border-color: #2b65b4;
   color: #fff;
   background: #2b65b4;
-}
-
-.dispatch-workbench__header-actions .login-button {
-  border-color: #277255;
-  color: #fff;
-  background: #277255;
 }
 
 .dispatch-workbench__header-actions .session-button {
@@ -1259,12 +1650,6 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.dispatch-toolbar__actions .login-button {
-  border-color: #13875f;
-  color: #fff;
-  background: #13875f;
-}
-
 .dispatch-toolbar__actions .session-button {
   color: #187556;
   background: #eef8f4;
@@ -1384,6 +1769,471 @@ onBeforeUnmount(() => {
 
   .dispatch-workbench__layout {
     grid-template-columns: minmax(560px, 1.5fr) minmax(340px, .9fr);
+  }
+}
+
+/* Desktop control-room typography: keep the map spacious while making operational text readable. */
+.dispatch-workbench { padding: 8px 12px 12px; }
+.dispatch-phase-tabs { gap: 24px; }
+.dispatch-phase-tabs button { min-width: 140px; grid-template-columns: 34px auto auto; gap: 9px; }
+.dispatch-phase-tabs button > span { width: 33px; height: 33px; font-size: 13px; }
+.dispatch-phase-tabs strong { font-size: 14px; }
+.dispatch-phase-tabs em { min-width: 25px; height: 22px; font-size: 11px; }
+.dispatch-toolbar { min-height: 58px; padding: 9px 16px; border-radius: 14px; }
+.dispatch-toolbar__summary span { font-size: 11px; }
+.dispatch-toolbar__summary strong { font-size: 19px; }
+.dispatch-toolbar__summary small { font-size: 12px; }
+.dispatch-toolbar__metrics dt { font-size: 10px; }
+.dispatch-toolbar__metrics dd { margin-top: 5px; font-size: 15px; }
+.dispatch-toolbar__actions > span { font-size: 10px; }
+.dispatch-toolbar__actions button { min-height: 38px; padding: 8px 11px; font-size: 11px; }
+.dispatch-workbench__feedback,
+.dispatch-workbench__warning { padding-top: 10px; padding-bottom: 10px; font-size: 12px; }
+.dispatch-workbench__warning strong,
+.dispatch-workbench__warning span { font-size: 11px; }
+.dispatch-workbench__warning button { font-size: 11px; }
+.dispatch-workbench__layout {
+  grid-template-columns: minmax(540px, 1.03fr) minmax(540px, .97fr);
+  gap: 0;
+  margin-top: 0;
+  overflow: hidden;
+  border: 1px solid #d8e4de;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 34px rgba(36, 71, 58, .06);
+}
+.dispatch-map-panel {
+  align-self: stretch;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 18px;
+  border: 0;
+  border-right: 1px solid #dfe8e3;
+  border-radius: 0;
+  box-shadow: none;
+}
+.dispatch-map-panel__header { margin-bottom: 9px; }
+.dispatch-map-panel__header h2 { font-size: 20px; }
+.dispatch-map-panel__header p { margin-top: 3px; font-size: 10px; }
+.dispatch-map-panel__header > strong { padding: 8px 11px; font-size: 11px; }
+.confirm-dialog > span { font-size: 12px; }
+.confirm-dialog h2 { font-size: 23px; }
+.confirm-dialog p { font-size: 13px; }
+.confirm-dialog button { font-size: 13px; }
+
+@media (min-width: 1500px) {
+  .dispatch-workbench__layout {
+    grid-template-columns: minmax(650px, 1.03fr) minmax(640px, .97fr);
+    gap: 0;
+  }
+}
+
+@media (max-width: 1260px) {
+  .dispatch-workbench__layout {
+    grid-template-columns: minmax(490px, 1fr) minmax(475px, 1fr);
+    gap: 0;
+  }
+
+  .dispatch-map-panel {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 18px;
+  }
+}
+
+/* Dispatch owns one compact product-header row: phase, scope, metrics and actions stay together. */
+:global(#product-header-context) {
+  height: 100%;
+}
+
+.dispatch-header-row {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.dispatch-header-row .dispatch-phase-tabs {
+  flex: none;
+  gap: 5px;
+}
+
+.dispatch-header-row .dispatch-phase-tabs button {
+  min-width: 88px;
+  grid-template-columns: 27px auto auto;
+  gap: 5px;
+  padding: 0 2px;
+}
+
+.dispatch-header-row .dispatch-phase-tabs button::after {
+  bottom: -13px;
+}
+
+.dispatch-header-row .dispatch-phase-tabs button > span {
+  width: 27px;
+  height: 27px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+.dispatch-header-row .dispatch-phase-tabs strong {
+  font-size: 12px;
+}
+
+.dispatch-header-row .dispatch-phase-tabs em {
+  min-width: 21px;
+  height: 19px;
+  padding: 0 4px;
+  font-size: 9px;
+}
+
+.dispatch-header-row .dispatch-toolbar {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  gap: 10px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.dispatch-header-row .dispatch-toolbar__summary {
+  flex: none;
+  gap: 5px;
+  padding-left: 10px;
+  border-left: 1px solid #e0e9e5;
+}
+
+.dispatch-header-row .dispatch-toolbar__summary span {
+  font-size: 9px;
+}
+
+.dispatch-header-row .dispatch-toolbar__summary strong {
+  font-size: 15px;
+}
+
+.dispatch-header-row .dispatch-toolbar__summary small {
+  max-width: 104px;
+  font-size: 10px;
+}
+
+.dispatch-header-row .dispatch-toolbar__metrics {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+}
+
+.dispatch-header-row .dispatch-toolbar__metrics > div:nth-child(-n + 2) {
+  display: none;
+}
+
+.dispatch-header-row .dispatch-toolbar__metrics > div {
+  min-width: 82px;
+  padding: 0 9px;
+}
+
+.dispatch-header-row .dispatch-toolbar__metrics dt {
+  font-size: 8px;
+}
+
+.dispatch-header-row .dispatch-toolbar__metrics dd {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.dispatch-header-row .dispatch-toolbar__actions {
+  flex: none;
+  gap: 5px;
+}
+
+.dispatch-header-row .dispatch-toolbar__actions > span {
+  max-width: 118px;
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+}
+
+.dispatch-header-row .dispatch-toolbar__actions button {
+  min-height: 31px;
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+@media (max-width: 1320px) {
+  .dispatch-header-row .dispatch-toolbar__metrics {
+    display: none;
+  }
+
+  .dispatch-header-row .dispatch-toolbar__actions > span {
+    display: none;
+  }
+}
+
+/* Reference layout: overview header, full-width phase rail and a map/table split. */
+.dispatch-workbench {
+  padding: 14px 18px 18px;
+  background: #f6f8f7;
+}
+
+.dispatch-header-row {
+  width: 100%;
+  height: 100%;
+}
+
+.dispatch-header-row .dispatch-toolbar {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  grid-template-columns: 116px minmax(430px, 1fr) auto;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.dispatch-header-row .dispatch-toolbar__summary {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 14px 0 0;
+  border: 0;
+  border-right: 1px solid #e0e7e3;
+}
+
+.dispatch-header-row .dispatch-toolbar__summary span {
+  color: #263a33;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dispatch-header-row .dispatch-toolbar__metrics {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(4, minmax(92px, 1fr));
+  align-self: stretch;
+}
+
+.dispatch-header-row .dispatch-toolbar__metrics > div,
+.dispatch-header-row .dispatch-toolbar__metrics > div:nth-child(-n + 2) {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 0 13px;
+  border-left: 1px solid #e4e9e6;
+  text-align: center;
+}
+
+.dispatch-header-row .dispatch-toolbar__metrics > div:first-child {
+  border-left: 0;
+}
+
+.dispatch-header-row .dispatch-toolbar__metrics dd {
+  order: 1;
+  margin: 0;
+  color: #111a17;
+  font-size: 20px;
+  line-height: 1.1;
+  font-weight: 900;
+}
+
+.dispatch-header-row .dispatch-toolbar__metrics dt {
+  order: 2;
+  margin-top: 4px;
+  color: #65736e;
+  font-size: 10px;
+}
+
+.dispatch-header-row .dispatch-toolbar__actions {
+  gap: 10px;
+}
+
+.dispatch-header-row .dispatch-toolbar__actions button {
+  min-height: 42px;
+  padding: 8px 15px;
+  border-color: #b9d2c7;
+  border-radius: 8px;
+  color: #087847;
+  font-size: 12px;
+  background: #fff;
+}
+
+.dispatch-header-row .dispatch-toolbar__actions button:last-child {
+  min-width: 44px;
+  color: #52615c;
+  border-color: #d9e0dd;
+}
+
+.dispatch-phase-tabs {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.dispatch-phase-tabs button {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 18px;
+  border: 1px solid #dce3e0;
+  border-radius: 7px;
+  color: #16875a;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(28, 60, 47, .03);
+}
+
+.dispatch-phase-tabs button::after {
+  display: none;
+}
+
+.dispatch-phase-tabs button > span {
+  display: inline-flex;
+  width: auto;
+  height: auto;
+  color: inherit;
+  background: transparent;
+  font-size: 13px;
+}
+
+.dispatch-phase-tabs strong {
+  font-size: 17px;
+}
+
+.dispatch-phase-tabs em {
+  min-width: 27px;
+  height: 27px;
+  padding: 0 7px;
+  color: inherit;
+  background: #eef6f2;
+  font-size: 12px;
+}
+
+.dispatch-phase-tabs button.is-loading {
+  color: #ed6f07;
+}
+
+.dispatch-phase-tabs button.is-loading em {
+  background: #fff1df;
+}
+
+.dispatch-phase-tabs button.is-delivery {
+  color: #1767df;
+}
+
+.dispatch-phase-tabs button.is-delivery em {
+  background: #eaf2ff;
+}
+
+.dispatch-phase-tabs button.active {
+  color: #fff;
+  border-color: #087f49;
+  background: linear-gradient(135deg, #078049, #00945a);
+}
+
+.dispatch-phase-tabs button.active > span,
+.dispatch-phase-tabs button.active em {
+  color: inherit;
+  background: rgba(255, 255, 255, .18);
+}
+
+.dispatch-phase-tabs button.active::before {
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  border-top: 8px solid #078a51;
+  border-right: 10px solid transparent;
+  border-left: 10px solid transparent;
+  content: '';
+  transform: translateX(-50%);
+}
+
+@media (min-width: 1500px) {
+  .dispatch-workbench__layout {
+    grid-template-columns: minmax(460px, .9fr) minmax(650px, 1.1fr);
+  }
+}
+
+.dispatch-workbench__layout {
+  grid-template-columns: minmax(460px, .9fr) minmax(650px, 1.1fr);
+  gap: 12px;
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dispatch-map-panel {
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #dce5e1;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.dispatch-map-panel__header {
+  min-height: 68px;
+  margin: 0;
+  padding: 12px 15px;
+  border-bottom: 1px solid #e7ece9;
+}
+
+.dispatch-map-panel__header h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.dispatch-map-panel__header p {
+  margin-top: 5px;
+  font-size: 11px;
+}
+
+.dispatch-map-panel__header > button {
+  flex: none;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 1px solid #d8e1dd;
+  border-radius: 7px;
+  color: #526860;
+  background: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 1320px) {
+  .dispatch-header-row .dispatch-toolbar {
+    grid-template-columns: 92px minmax(360px, 1fr) auto;
+  }
+
+  .dispatch-header-row .dispatch-toolbar__metrics {
+    display: grid;
+  }
+
+  .dispatch-header-row .dispatch-toolbar__metrics dd {
+    font-size: 16px;
+  }
+
+  .dispatch-workbench__layout {
+    grid-template-columns: minmax(430px, .86fr) minmax(590px, 1.14fr);
   }
 }
 </style>

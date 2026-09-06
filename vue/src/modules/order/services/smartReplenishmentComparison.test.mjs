@@ -9,7 +9,7 @@ import {
   selectDepartmentForecast,
 } from './smartReplenishmentComparison.js';
 
-test('customer reminder directory only brings in A-level forecast departments', () => {
+test('customer reminder directory only brings in reminder-eligible A-level departments', () => {
   const ids = activeForecastDepartmentIds({
     items: [
       {
@@ -24,10 +24,17 @@ test('customer reminder directory only brings in A-level forecast departments', 
           { departmentId: null, policy: { level: 'LEVEL_A' } },
         ],
       },
+      {
+        departmentForecasts: [
+          { departmentId: 400, policy: { level: 'LEVEL_A' }, replenishmentLifecycleStatus: 'NOT_DUE' },
+          { departmentId: 500, policy: { level: 'LEVEL_A' }, replenishmentLifecycleStatus: 'ANOMALOUS' },
+          { departmentId: 600, policy: { level: 'LEVEL_A' }, replenishmentLifecycleStatus: 'NORMAL_DUE' },
+        ],
+      },
     ],
   });
 
-  assert.deepEqual(ids, new Set(['100']));
+  assert.deepEqual(ids, new Set(['100', '600']));
 });
 
 test('actual-order customers remain visible when forecast directory loading fails', () => {
@@ -54,6 +61,7 @@ test('smart replenishment uses the complete backend A/B forecast and ignores act
         goodsName: '大葱',
         predictedQuantity: 30,
         predictedUnit: '斤',
+        channelEvidence: { REPLENISHMENT_LIFECYCLE: { status: 'ANOMALOUS' } },
         policy: { level: 'LEVEL_A', trustScorePercent: 97.8, supportingReasons: ['订货节奏稳定'] },
       },
       {
@@ -61,6 +69,7 @@ test('smart replenishment uses the complete backend A/B forecast and ignores act
         goodsName: '姜',
         predictedQuantity: 10,
         predictedUnit: '斤',
+        channelEvidence: { REPLENISHMENT_LIFECYCLE: { status: 'NOT_DUE' } },
         policy: { level: 'LEVEL_B', trustScorePercent: 82.4 },
       },
       {
@@ -82,6 +91,61 @@ test('smart replenishment uses the complete backend A/B forecast and ignores act
   assert.equal(result.rows[0].action, 'PREPARE');
   assert.equal(result.rows[1].action, 'CONFIRM');
   assert.equal(Object.hasOwn(result.rows[0], 'actualQuantity'), false);
+});
+
+test('lifecycle only suppresses un-ordered A reminders and never hides matched predictions', () => {
+  const reconciliation = buildOrderForecastReconciliation({
+    items: [
+      {
+        goodsId: 1,
+        goodsName: '昨天刚订',
+        predictedQuantity: 3,
+        predictedUnit: '斤',
+        channelEvidence: { REPLENISHMENT_LIFECYCLE: { status: 'NOT_DUE' } },
+        policy: { level: 'LEVEL_A', trustScorePercent: 90 },
+      },
+      {
+        goodsId: 2,
+        goodsName: '大葱',
+        predictedQuantity: 30,
+        predictedUnit: '斤',
+        channelEvidence: { REPLENISHMENT_LIFECYCLE: { status: 'ANOMALOUS' } },
+        policy: { level: 'LEVEL_A', trustScorePercent: 98 },
+      },
+      {
+        goodsId: 3,
+        goodsName: '正常到期',
+        predictedQuantity: 5,
+        predictedUnit: '斤',
+        channelEvidence: { REPLENISHMENT_LIFECYCLE: { status: 'NORMAL_DUE' } },
+        policy: { level: 'LEVEL_A', trustScorePercent: 95 },
+      },
+      {
+        goodsId: 4,
+        goodsName: '证据不足但保留旧行为',
+        predictedQuantity: 1,
+        predictedUnit: '包',
+        channelEvidence: { REPLENISHMENT_LIFECYCLE: { status: 'INSUFFICIENT_DATA' } },
+        policy: { level: 'LEVEL_A', trustScorePercent: 88 },
+      },
+    ],
+  }, {
+    orders: [
+      { nxDoDisGoodsId: 2, nxDoGoodsName: '大葱', nxDoQuantity: '25', nxDoStandard: '斤' },
+    ],
+    departments: [],
+  });
+
+  const presentation = buildOrderReminderPresentation(reconciliation);
+
+  assert.deepEqual(
+    presentation.sections[0].rows.map(row => row.goodsName),
+    ['正常到期', '证据不足但保留旧行为']
+  );
+  assert.deepEqual(presentation.sections[1].rows.map(row => row.goodsName), ['大葱']);
+  assert.equal(reconciliation.rows.find(row => row.goodsName === '昨天刚订').hasPrediction, true);
+  assert.equal(presentation.sections.flatMap(section => section.rows)
+    .some(row => row.goodsName === '昨天刚订'), false);
 });
 
 test('department projection keeps only that customer forecast', () => {
@@ -284,6 +348,41 @@ test('order reminder rows use customer goods profile cadence and last order date
 
   assert.equal(result.rows[0].averageOrderIntervalDays, 6.9);
   assert.equal(result.rows[0].lastOrderDate, '2026-08-20');
+});
+
+test('today current order does not replace the last completed historical order date', () => {
+  const result = buildOrderForecastReconciliation({
+    items: [
+      {
+        goodsId: 19,
+        goodsName: '花椒',
+        predictedQuantity: 2,
+        predictedUnit: '斤',
+        policy: { level: 'LEVEL_A', trustScorePercent: 91 },
+      },
+    ],
+  }, {
+    orders: [
+      {
+        nxDoDisGoodsId: 19,
+        nxDoGoodsName: '花椒',
+        nxDoQuantity: '1',
+        nxDoStandard: '斤',
+        nxDoApplyDate: '2026-08-30',
+      },
+    ],
+    departments: [],
+  }, [
+    {
+      goodsId: 19,
+      goodsName: '花椒',
+      averageOrderIntervalDays: '2.5',
+      lastOrderDate: '2026-08-27',
+    },
+  ]);
+
+  assert.equal(result.rows[0].outcome, 'MATCHED');
+  assert.equal(result.rows[0].lastOrderDate, '2026-08-27');
 });
 
 test('duplicate customer goods relations do not let a stale first relation hide recent orders', () => {

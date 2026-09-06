@@ -72,6 +72,13 @@ export default {
       { ...quiet, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
     );
   },
+  updateCustomerGoodsOrderPrice(relationId, sellingPrice) {
+    return axiosInstance.post(
+      'nxdepartmentdisgoods/updateDepGoodsSellingPrice',
+      formData({ depGoodsId: relationId, sellingPrice }),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+    );
+  },
   deleteCustomerGoods(relationId) {
     return axiosInstance.get(`nxdepartmentdisgoods/deleteDepGoods/${relationId}`);
   },

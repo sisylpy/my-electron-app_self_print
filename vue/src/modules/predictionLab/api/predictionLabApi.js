@@ -104,6 +104,32 @@ export async function comparePurchasePredictions(payload, signal) {
   }
 }
 
+export async function getSmartReplenishmentProcurementContexts(payload, signal) {
+  try {
+    const response = await axiosInstance.post('purchase-prediction-lab/procurement-contexts', payload, {
+      ...quiet,
+      signal,
+      timeout: 30000,
+    });
+    return unwrap(response, '库存和采购状态读取失败');
+  } catch (error) {
+    if (error?.name === 'CanceledError' || error?.name === 'AbortError') throw error;
+    throw normalizeApiError(error, '库存和采购状态读取失败');
+  }
+}
+
+export async function createSmartReplenishmentProcurementItem(payload) {
+  try {
+    const response = await axiosInstance.post('purchase-prediction-lab/procurement-items', payload, {
+      ...quiet,
+      timeout: 30000,
+    });
+    return unwrap(response, '加入采购失败');
+  } catch (error) {
+    throw normalizeApiError(error, '加入采购失败');
+  }
+}
+
 export default {
   getCatalog: getPredictionLabCatalog,
   getGoodsDetail: getPredictionGoodsDetail,
@@ -111,4 +137,6 @@ export default {
   forecast: forecastPurchasePrediction,
   reconciliationForecast: forecastReconciliationBaseline,
   compare: comparePurchasePredictions,
+  getProcurementContexts: getSmartReplenishmentProcurementContexts,
+  createProcurementItem: createSmartReplenishmentProcurementItem,
 };

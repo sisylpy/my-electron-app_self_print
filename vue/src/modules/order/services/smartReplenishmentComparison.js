@@ -1,14 +1,27 @@
 const ACTIVE_POLICY_LEVELS = new Set(['LEVEL_A', 'LEVEL_B']);
 const REMINDER_POLICY_LEVEL = 'LEVEL_A';
+const INELIGIBLE_REMINDER_LIFECYCLE_STATUSES = new Set(['NOT_DUE', 'ANOMALOUS']);
 
-/** 订单提醒目录只主动带出具有 A 级预测的客户；已有订单客户由订单链路补齐。 */
+function replenishmentLifecycleStatus(item) {
+  return cleanText(
+    item?.replenishmentLifecycleStatus
+      || item?.channelEvidence?.REPLENISHMENT_LIFECYCLE?.status
+  );
+}
+
+function pendingReminderEligible(item) {
+  return !INELIGIBLE_REMINDER_LIFECYCLE_STATUSES.has(replenishmentLifecycleStatus(item));
+}
+
+/** 订单提醒目录只主动带出至少一个“到期且正常”的 A 级预测客户；已有订单客户由订单链路补齐。 */
 export function activeForecastDepartmentIds(run) {
   const ids = new Set();
   (Array.isArray(run?.items) ? run.items : []).forEach((item) => {
     (Array.isArray(item?.departmentForecasts) ? item.departmentForecasts : []).forEach((forecast) => {
       const level = String(forecast?.policy?.level || '').trim();
       const departmentId = forecast?.departmentId;
-      if (departmentId !== null && departmentId !== undefined && level === REMINDER_POLICY_LEVEL) {
+      if (departmentId !== null && departmentId !== undefined
+        && level === REMINDER_POLICY_LEVEL && pendingReminderEligible(forecast)) {
         ids.add(String(departmentId));
       }
     });
@@ -118,6 +131,8 @@ export function selectDepartmentForecast(run, departmentId) {
       predictedUnit: department.unit || item.predictedUnit || item.unit,
       unit: department.unit || item.unit || item.predictedUnit,
       policy: department.policy || item.policy,
+      replenishmentLifecycleStatus: department.replenishmentLifecycleStatus
+        || item.replenishmentLifecycleStatus,
       dateForecasts: Array.isArray(department.dateForecasts)
         ? department.dateForecasts : item.dateForecasts,
       departmentForecasts: [department],
@@ -161,12 +176,19 @@ function groupPredicted(run) {
       trustPercent: predictionTrust(item),
       reasons: [],
       explanation: cleanText(item?.explanation),
+      replenishmentLifecycleStatus: replenishmentLifecycleStatus(item),
+      pendingReminderEligible: pendingReminderEligible(item),
     };
     if (quantity !== null) {
       current.quantity += quantity;
       current.validQuantityCount += 1;
     }
     if (level === 'LEVEL_A') current.level = level;
+    current.pendingReminderEligible = current.pendingReminderEligible
+      && pendingReminderEligible(item);
+    if (!current.replenishmentLifecycleStatus) {
+      current.replenishmentLifecycleStatus = replenishmentLifecycleStatus(item);
+    }
     const trust = predictionTrust(item);
     if (trust !== null) current.trustPercent = Math.max(current.trustPercent ?? 0, trust);
     current.reasons.push(...(item?.policy?.supportingReasons || []));
@@ -295,6 +317,8 @@ export function buildOrderForecastReconciliation(forecastRun, snapshot, profileS
       departmentNames: actual?.departmentNames || [],
       reasons: predicted?.reasons || [],
       explanation: predicted?.explanation || '',
+      replenishmentLifecycleStatus: predicted?.replenishmentLifecycleStatus || '',
+      pendingReminderEligible: predicted?.pendingReminderEligible ?? true,
       averageOrderIntervalDays: positiveNumberValue(profile?.averageOrderIntervalDays),
       lastOrderDate: cleanText(profile?.lastOrderDate) || null,
     };
@@ -328,6 +352,7 @@ export function buildOrderReminderPresentation(reconciliation) {
   const rows = Array.isArray(reconciliation?.rows) ? reconciliation.rows : [];
   const needsReminder = rows.filter(row => (
     row.outcome === 'NOT_ORDERED' && row.policyLevel === REMINDER_POLICY_LEVEL
+      && row.pendingReminderEligible !== false
   ));
   const predictedAndOrdered = rows.filter(row => row.outcome === 'MATCHED');
   const customerOrdered = rows.filter(row => row.outcome === 'MISSED');

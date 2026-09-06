@@ -78,7 +78,7 @@
 
             <div class="product-table">
               <div class="product-table__head">
-                <span>序号</span><span>商品名称 / 规格</span><span>预估数量</span><span>订货单位</span><span>操作</span><span>可信度</span><span>需求门店</span><span>依据</span>
+                <span>序号</span><span>商品名称 / 规格</span><span>预估数量</span><span>订货单位</span><span>库存数量</span><span>可信度</span><span>需求门店</span><span>采购订货</span>
               </div>
               <div v-if="!visibleProducts.length" class="empty-products">当前分类下没有符合条件的商品</div>
               <template v-for="(product, productIndex) in visibleProducts" :key="`${product.level}-${product.goodsId}-${product.predictedUnit}`">
@@ -98,21 +98,25 @@
                     <span v-if="product.predictedQuantity !== null"><strong>{{ number(product.predictedQuantity) }}</strong></span>
                   </div>
                   <div class="unit-cell">{{ product.predictedUnit }}</div>
-                  <div><span class="row-level">{{ product.statusLabel }}</span></div>
+                  <div class="stock-cell">
+                    <span v-if="productContextLoading(product)">查询中</span>
+                    <template v-else><strong>{{ number(productContext(product).stockQuantity) }}</strong><small>{{ productContext(product).stockUnit || product.predictedUnit }}</small></template>
+                  </div>
                   <div class="trust-cell"><strong>{{ percent(product.trustPercent) }}</strong></div>
                   <div class="department-cell" :title="departmentForecastText(product)">
                     <span v-for="line in departmentForecastLines(product)" :key="line.key" class="department-order-line">
                       <strong>{{ line.departmentName }}</strong><small>{{ line.text }}</small>
                     </span>
                   </div>
-                  <button class="detail-button" type="button" :aria-expanded="String(expandedProductKey === productKey(product))" @click="toggleProduct(product)">
-                    {{ expandedProductKey === productKey(product) ? '收起' : '依据' }}
-                  </button>
+                  <div class="procurement-cell">
+                    <span v-if="productContextLoading(product)" class="procurement-pending">查询中</span>
+                    <span v-else-if="productContext(product).error" class="procurement-unknown">状态未知</span>
+                    <span v-else-if="productContext(product).hasActivePurchase" class="procurement-active">采购中<small v-if="Number(productContext(product).activePurchaseCount) > 1">{{ productContext(product).activePurchaseCount }}笔</small></span>
+                    <button v-else type="button" :disabled="Boolean(creatingPurchases[Number(product.goodsId)])" @click="addProcurement(product)">
+                      {{ creatingPurchases[Number(product.goodsId)] ? '添加中' : '+ 添加采购' }}
+                    </button>
+                  </div>
                 </article>
-                <div v-if="expandedProductKey === productKey(product)" class="product-evidence">
-                  <div><strong>备货依据</strong><ul><li v-for="reason in product.reasons" :key="reason">{{ reason }}</li><li v-if="!product.reasons.length">该商品已通过当前可信等级判断</li></ul></div>
-                  <div><strong>数量说明</strong><p>{{ product.quantityMethod || '预计数量根据历史订货记录计算，仅作为备货参考。' }}</p><span>商品需求和数量是两个判断层次，数量请结合库存与门店确认。</span></div>
-                </div>
               </template>
             </div>
             <footer class="product-detail__footer"><span>共 {{ categories.length }} 个大类，{{ visibleProducts.length }} 种商品</span></footer>
@@ -124,6 +128,7 @@
         </section>
       </section>
     </section>
+    <div v-if="purchaseFeedback.text" class="procurement-toast" :class="`is-${purchaseFeedback.type}`">{{ purchaseFeedback.text }}</div>
   </main>
 </template>
 
@@ -156,9 +161,13 @@ const dateMode = ref('TODAY');
 const activeLevelFilter = ref('');
 const activeCategory = ref('');
 const searchText = ref('');
-const expandedProductKey = ref('');
+const procurementContexts = reactive({});
+const creatingPurchases = reactive({});
+const purchaseFeedback = reactive({ type: 'success', text: '' });
 let catalogController = null;
 let runController = null;
+let contextController = null;
+let feedbackTimer = null;
 
 const form = reactive({ departmentId: '', startDate: forecastToday(), endDate: forecastToday(), historyWindowDays: 30, algorithmVersion: STABLE_BASELINE_CODE });
 const levelOptions = Object.values(LEVEL_META);
@@ -235,7 +244,7 @@ const emptyResult = computed(() => {
 });
 
 onMounted(loadCatalog);
-onBeforeUnmount(() => { catalogController?.abort(); runController?.abort(); });
+onBeforeUnmount(() => { catalogController?.abort(); runController?.abort(); contextController?.abort(); if (feedbackTimer) clearTimeout(feedbackTimer); });
 
 async function loadCatalog(options = {}) {
   if (!currentDisId.value) { catalogError.value = '当前账号缺少配送商信息，请重新登录后再试。'; return; }
@@ -311,6 +320,7 @@ async function refreshProcurement() {
     loadingCompleted.value = 1;
     runResult.value = aggregateProcurementRuns([result], { startDate: form.startDate, endDate: form.endDate, departmentId: form.departmentId ? Number(form.departmentId) : null, departmentName: selectedDepartmentName.value });
     void loadGoodsDetails(runResult.value?.items || []);
+    void loadProcurementContexts(runResult.value?.items || []);
     resetProductFilters();
   } catch (error) {
     if (error?.name !== 'CanceledError' && error?.name !== 'AbortError') actionError.value = error?.message || '智能备货数据生成失败。';
@@ -318,12 +328,10 @@ async function refreshProcurement() {
 }
 
 function resetProductFilters() {
-  activeLevelFilter.value = ''; searchText.value = ''; expandedProductKey.value = ''; activeCategory.value = '';
+  activeLevelFilter.value = ''; searchText.value = ''; activeCategory.value = '';
 }
-function selectLevel(level) { activeLevelFilter.value = activeLevelFilter.value === level ? '' : level; activeCategory.value = ''; searchText.value = ''; expandedProductKey.value = ''; }
-function selectCategory(category) { activeCategory.value = category; expandedProductKey.value = ''; }
-function productKey(product) { return `${product.goodsId}-${product.predictedUnit}-${product.level}`; }
-function toggleProduct(product) { const key = productKey(product); expandedProductKey.value = expandedProductKey.value === key ? '' : key; }
+function selectLevel(level) { activeLevelFilter.value = activeLevelFilter.value === level ? '' : level; activeCategory.value = ''; searchText.value = ''; }
+function selectCategory(category) { activeCategory.value = category; }
 
 async function loadGoodsDetails(items) {
   const goodsIds = Array.from(new Set((items || [])
@@ -337,6 +345,59 @@ async function loadGoodsDetails(items) {
       if (result.status === 'fulfilled' && result.value) goodsDetails[batch[resultIndex]] = result.value;
     });
   }
+}
+
+async function loadProcurementContexts(items) {
+  const goodsIds = Array.from(new Set((items || []).map((item) => Number(item?.goodsId))
+    .filter((goodsId) => Number.isFinite(goodsId) && goodsId > 0)));
+  contextController?.abort();
+  if (!goodsIds.length || !currentDisId.value) return;
+  contextController = new AbortController();
+  goodsIds.forEach((goodsId) => { procurementContexts[goodsId] = { goodsId, loading: true, stockQuantity: null, stockUnit: '', activePurchaseCount: 0, hasActivePurchase: false }; });
+  try {
+    const contexts = await predictionLabApi.getProcurementContexts({ distributerId: Number(currentDisId.value), goodsIds }, contextController.signal);
+    (contexts || []).forEach((context) => { procurementContexts[Number(context.goodsId)] = { ...context, loading: false }; });
+    goodsIds.forEach((goodsId) => {
+      if (procurementContexts[goodsId]?.loading) procurementContexts[goodsId] = { goodsId, loading: false, stockQuantity: 0, stockUnit: '', activePurchaseCount: 0, hasActivePurchase: false };
+    });
+  } catch (error) {
+    if (error?.name === 'CanceledError' || error?.name === 'AbortError') return;
+    goodsIds.forEach((goodsId) => { procurementContexts[goodsId] = { goodsId, loading: false, stockQuantity: null, stockUnit: '', activePurchaseCount: 0, hasActivePurchase: false, error: true }; });
+    showPurchaseFeedback(error?.message || '库存和采购状态读取失败', 'error');
+  }
+}
+
+function productContext(product) {
+  return procurementContexts[Number(product?.goodsId)] || { stockQuantity: null, stockUnit: '', activePurchaseCount: 0, hasActivePurchase: false, loading: true };
+}
+function productContextLoading(product) { return productContext(product).loading === true; }
+
+async function addProcurement(product) {
+  const goodsId = Number(product?.goodsId);
+  const quantity = Number(product?.predictedQuantity);
+  const unit = String(product?.predictedUnit || '').trim();
+  if (!Number.isFinite(goodsId) || goodsId <= 0 || !Number.isFinite(quantity) || quantity <= 0 || !unit) {
+    showPurchaseFeedback('商品的预估数量或订货单位不完整，暂时不能加入采购', 'error');
+    return;
+  }
+  if (!window.confirm(`确认将“${product.goodsName}” ${number(quantity)}${unit}加入采购吗？\n入库时再选择实际货架。`)) return;
+  creatingPurchases[goodsId] = true;
+  try {
+    const result = await predictionLabApi.createProcurementItem({ distributerId: Number(currentDisId.value), goodsId, quantity, unit });
+    procurementContexts[goodsId] = { ...(result?.context || productContext(product)), loading: false };
+    showPurchaseFeedback(result?.created ? `${product.goodsName}已加入采购` : `${product.goodsName}已有采购任务，未重复添加`, 'success');
+  } catch (error) {
+    showPurchaseFeedback(error?.message || '加入采购失败', 'error');
+  } finally {
+    delete creatingPurchases[goodsId];
+  }
+}
+
+function showPurchaseFeedback(text, type) {
+  purchaseFeedback.text = text;
+  purchaseFeedback.type = type || 'success';
+  if (feedbackTimer) clearTimeout(feedbackTimer);
+  feedbackTimer = setTimeout(() => { purchaseFeedback.text = ''; }, 3500);
 }
 
 function cleanCatalogValue(value) {
@@ -483,10 +544,11 @@ button{cursor:pointer}
 .prediction-header-controls{gap:6px;overflow:hidden}.header-date-range{height:36px;display:flex;align-items:center;gap:8px;padding:3px 8px 3px 10px;border:1px solid #d7e1db;border-radius:8px;background:#fff}.header-date-range>span{color:#6f7d75;font-size:9px;font-weight:900;white-space:nowrap}.header-date-range label{height:28px;display:flex;align-items:center;gap:5px}.header-date-range input{width:116px;border:0;outline:0;background:transparent;color:#28352e;font-size:11px;font-weight:700}.header-date-range label>i{color:#9aa69f;font-size:11px;font-style:normal}.header-date-range.is-custom{border-color:#a9d4bc}.header-range-presets button{height:36px}.header-refresh{height:36px}.header-level-tabs{height:36px;display:flex;align-items:center;gap:2px;padding:0 5px}.header-level-tabs>span{display:flex;align-items:center;gap:4px;padding:0 4px}.header-level-tabs>span i{width:18px;height:18px;display:grid;place-items:center;border-radius:99px;background:#e8f6ee;color:#087747;font-size:9px;font-style:normal;font-weight:900}.header-level-tabs>span.is-level_b i{background:#fff0d7;color:#ad6b0a}.header-level-tabs>span b{color:#5f6e66;font-size:10px}
 .overview-panel{gap:0}.product-board{flex:1;min-height:0;display:flex;border-radius:12px}.product-detail{width:100%;padding:9px 12px 0}.product-detail__header{min-height:40px;padding:0 4px 6px}.product-detail__header h2{font-size:17px}.detail-level-filter{display:flex;align-items:center;gap:5px;margin-left:3px}.detail-level-filter button{height:27px;display:flex;align-items:center;gap:5px;padding:0 8px;border:1px solid #dbe5df;border-radius:7px;background:#fff;color:#617068}.detail-level-filter button i{width:18px;height:18px;display:grid;place-items:center;border-radius:50%;background:#e9f6ef;color:#087b48;font-size:9px;font-style:normal;font-weight:900}.detail-level-filter button b{font-size:10px}.detail-level-filter button.active{border-color:#9fd3b8;background:#edf8f2;color:#087b48;box-shadow:0 3px 8px rgba(17,145,86,.1)}.detail-level-filter button.is-level_b i{background:#fff0d6;color:#a96a0e}.detail-level-filter button.is-level_b.active{border-color:#edca8d;background:#fff6e7;color:#a5680c}.goods-search{width:260px;height:32px}.category-tabs{flex:none;display:flex;align-items:center;align-content:flex-start;flex-wrap:wrap;gap:7px;min-width:0;overflow:visible;padding:2px 4px 8px}.category-tabs button{height:32px;display:flex;align-items:center;gap:9px;padding:0 13px;border:1px solid #dfe7e2;border-radius:7px;background:#fff;color:#536159;font-size:13px;font-weight:900;white-space:nowrap}.category-tabs button b{min-width:21px;padding:2px 5px;border-radius:99px;background:#f0f4f2;color:#718078;font-size:11px}.category-tabs button.active{border-color:#15965a;background:#15965a;color:#fff;box-shadow:0 4px 10px rgba(21,150,90,.13)}.category-tabs button.active b{background:rgba(255,255,255,.18);color:#fff}
 .detail-level-filter button>span{font-size:10px;font-weight:800;white-space:nowrap}
-.product-table{border:1px solid #e1e8e4;border-radius:9px;background:#fff;overflow-x:hidden}.product-table__head,.product-row{grid-template-columns:34px minmax(170px,240px) 110px 100px 74px 110px minmax(120px,1fr) 60px;gap:10px}.product-table__head{min-height:38px;padding:0 14px;border-radius:8px 8px 0 0;background:#f7f9f8}.product-row{min-height:49px;padding:4px 14px}.goods-sequence{display:block;color:#75847c;font-size:12px;font-style:normal;font-weight:800;text-align:center}.product-row.is-level_b>.goods-sequence{color:#a66d17}.goods-name{gap:0}.goods-name strong,.quantity-cell strong,.unit-cell{color:#1f2b25;font-size:13px;font-weight:800;line-height:1.15}.goods-specification{margin-top:2px}.goods-specification:empty{display:none}.goods-specification small{padding:0;border-radius:0;background:transparent;color:#68776f;font-size:11px;line-height:1.15}.goods-specification small+small::before{content:'·';margin-right:4px;color:#a8b2ac}.goods-specification small.is-standard,.goods-specification small.is-carton{background:transparent}.goods-specification small.is-standard{color:#50675b}.goods-specification small.is-carton{color:#946111}.row-level{padding:4px 7px}.department-cell strong{font-size:12px}.department-cell small.department-estimate{display:block;margin-top:2px;color:#087b48;font-size:10px;font-weight:800}.trust-cell strong{font-size:13px}.trust-cell>span{margin-top:3px}.detail-button{position:relative;padding-right:16px;text-align:left}.detail-button::after{content:'›';position:absolute;right:2px;top:50%;transform:translateY(-50%);color:#829088;font-size:18px}.product-detail__footer{justify-content:space-between;min-height:34px;padding:5px 6px}.product-detail__footer small{color:#7d8a83;font-size:10px}:global(.product-header__page p){display:none}
+.product-table{border:1px solid #e1e8e4;border-radius:9px;background:#fff;overflow-x:hidden}.product-table__head,.product-row{grid-template-columns:34px minmax(170px,240px) 100px 86px 105px 100px minmax(120px,1fr) 112px;gap:10px}.product-table__head{min-height:38px;padding:0 14px;border-radius:8px 8px 0 0;background:#f7f9f8}.product-row{min-height:49px;padding:4px 14px}.goods-sequence{display:block;color:#75847c;font-size:12px;font-style:normal;font-weight:800;text-align:center}.product-row.is-level_b>.goods-sequence{color:#a66d17}.goods-name{gap:0}.goods-name strong,.quantity-cell strong,.unit-cell{color:#1f2b25;font-size:13px;font-weight:800;line-height:1.15}.goods-specification{margin-top:2px}.goods-specification:empty{display:none}.goods-specification small{padding:0;border-radius:0;background:transparent;color:#68776f;font-size:11px;line-height:1.15}.goods-specification small+small::before{content:'·';margin-right:4px;color:#a8b2ac}.goods-specification small.is-standard,.goods-specification small.is-carton{background:transparent}.goods-specification small.is-standard{color:#50675b}.goods-specification small.is-carton{color:#946111}.row-level{padding:4px 7px}.department-cell strong{font-size:12px}.department-cell small.department-estimate{display:block;margin-top:2px;color:#087b48;font-size:10px;font-weight:800}.trust-cell strong{font-size:13px}.trust-cell>span{margin-top:3px}.product-detail__footer{justify-content:space-between;min-height:34px;padding:5px 6px}.product-detail__footer small{color:#7d8a83;font-size:10px}:global(.product-header__page p){display:none}
 .row-level,.is-level_b .row-level{padding:0;border-radius:0;background:transparent}.row-level{color:#087747}.is-level_b .row-level{color:#a5680c}.department-cell{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:3px 7px;min-width:0;white-space:normal}.department-cell strong{line-height:1.35}.department-cell small.department-estimate{display:flex;min-width:0;flex-wrap:wrap;gap:2px 8px;margin:0;color:#1f2b25;font-size:12px;font-weight:400;line-height:1.35;white-space:normal}.department-cell small.department-estimate span{display:inline-block;white-space:nowrap}
 .department-cell{display:flex;flex-direction:column;align-items:stretch;gap:3px;min-width:0}.department-order-line{display:flex;align-items:flex-start;gap:7px;min-width:0;white-space:normal}.department-order-line strong{flex:none;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.department-order-line small{display:block;min-width:0;margin:0;color:#1f2b25;font-size:11px;line-height:1.35;white-space:normal;overflow-wrap:anywhere}.product-row:has(.department-order-line:nth-child(2)){min-height:58px}
-@media(max-width:1480px){.header-date-range>span{display:none}.header-date-range{gap:3px;padding-left:5px}.header-date-range input{width:104px}.product-table__head,.product-row{grid-template-columns:30px minmax(160px,210px) 94px 78px 64px 92px minmax(90px,1fr) 54px}.goods-specification small.is-detail{display:none}}
-@media(max-width:1180px){.header-date-range{display:none}.workspace-top{grid-template-columns:205px minmax(0,1fr)}.product-table__head,.product-row{grid-template-columns:26px minmax(150px,210px) 82px 68px 60px 82px}.product-table__head span:nth-child(7),.product-table__head span:nth-child(8),.department-cell,.detail-button{display:none}.product-evidence{grid-template-columns:1fr}}
+@media(max-width:1480px){.header-date-range>span{display:none}.header-date-range{gap:3px;padding-left:5px}.header-date-range input{width:104px}.product-table__head,.product-row{grid-template-columns:30px minmax(150px,200px) 88px 72px 86px 86px minmax(90px,1fr) 98px}.goods-specification small.is-detail{display:none}}
+@media(max-width:1180px){.header-date-range{display:none}.workspace-top{grid-template-columns:205px minmax(0,1fr)}.product-table__head,.product-row{grid-template-columns:26px minmax(150px,210px) 82px 68px 60px 82px}.product-table__head span:nth-child(7),.product-table__head span:nth-child(8),.department-cell,.procurement-cell{display:none}}
 .quantity-cell{display:flex;align-items:center;gap:8px}.quantity-cell>span{min-width:0}
+.stock-cell{display:flex;align-items:baseline;gap:4px;color:#69766f;font-size:11px}.stock-cell strong{color:#24342b;font-size:13px}.stock-cell small{color:#7d8982;font-size:10px}.procurement-cell{display:flex;align-items:center}.procurement-cell>button{min-width:84px;height:28px;padding:0 9px;border:1px solid #15965a;border-radius:7px;background:#fff;color:#087b48;font-size:11px;font-weight:900}.procurement-cell>button:hover{background:#edf8f2}.procurement-cell>button:disabled{cursor:default;opacity:.55}.procurement-active{display:flex;align-items:center;gap:5px;color:#087b48;font-size:11px;font-weight:900}.procurement-active::before{content:'✓';width:16px;height:16px;display:grid;place-items:center;border-radius:50%;background:#e6f5ed;font-size:9px}.procurement-active small{color:#738078;font-size:9px;font-weight:700}.procurement-pending,.procurement-unknown{color:#87938c;font-size:11px}.procurement-unknown{color:#a0691a}.procurement-toast{position:fixed;right:28px;bottom:26px;z-index:20;max-width:420px;padding:11px 15px;border-radius:9px;background:#177d50;color:#fff;box-shadow:0 8px 24px rgba(25,60,43,.22);font-size:12px;font-weight:800}.procurement-toast.is-error{background:#a63c47}
 </style>

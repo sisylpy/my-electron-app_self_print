@@ -12,6 +12,7 @@
 - 支持今天、明天、未来 7 天和最长 31 天的自定义范围；多日结果只在“商品 ID + 真实订货单位”同时一致时汇总；
 - 商品大类和商品明细使用同一个主从工作区，不通过独立卡片或中间分隔线拆成两个模块；
 - 产品页面只展示服务端 `/forecasts` 返回的真实只读建议，不读取冻结样本、不自行运行研究模型；
+- 明细固定展示“库存数量”和“采购订货”：库存与未完成的配送商主动库存备货采购来自独立运营事实接口，不参与预测；客户订单产生的采购不能显示为“采购中”；只有用户点击并确认后才调用专用采购命令；
 - 展示 V8 商品候选与服务端冻结 Prediction Policy Engine 给出的 A/B 级、可信度、理由和数量；
 - C 级和 abstain 不进入主动建议；没有 A/B 时明确展示“当前没有达到可信门槛的商品”，不补假数据；
 - 所有数量继续人工确认。
@@ -20,9 +21,11 @@
 
 实验目录、单次结果和筛选条件只保存在 `PredictionLab.vue` 内存状态中。历史比较服务与 API 适配器仍作为复现资产保留，但组件不再包含算法切换、比较页或“一键比较全部算法”。
 
-本模块不建立 Vuex 全局订单副本，不写 `localStorage`，不读取或修改 `mcpPrintQueue`，不调用订单、采购、派单或打印写接口。
+本模块不建立 Vuex 全局订单副本，不写 `localStorage`，不读取或修改 `mcpPrintQueue`，不调用订单、派单或打印写接口。唯一采购写入是用户点击并二次确认后的`/procurement-items`专用命令；页面加载、刷新和预测完成不得自动调用该命令。
 
 日常单日与多日建议统一调用服务端 `/forecasts`。D64 的 2026-08-22 现场 Shadow 快照仅作为验收复现资产保留，产品页面不再按配送商、门店或日期旁路到该固定数据。
+
+库存与采购状态统一批量调用`/procurement-contexts`。只有未完成的`SHELF_REPLENISHMENT`或`SMART_REPLENISHMENT`存在时才显示“采购中”；`ORDER_GENERATED`属于客户订单采购，必须排除，不能阻止配送商主动备货。Server仍负责最终去重。桌面端没有货架上下文，因此新增采购固定使用`SMART_REPLENISHMENT`来源且不带货架号，实际入库时再由精彩订货选择真实货架。详细边界见Server `docs/ai/purchase-prediction/smart-replenishment-procurement-boundary.md`。
 
 ## 服务端主权
 
@@ -58,6 +61,7 @@ Shadow 的归档复现资产。它们不得被 `PredictionLab.vue`、产品路�
 - `policy/policyReplayAdapter.js`：历史验收复现适配器，禁止接入产品页面；
 - `scripts/generate-prediction-policy-fixture.mjs`：带源哈希与样本结构校验的生成脚本；
 - `scripts/prediction-policy-ui-smoke.mjs`：只读边界与 A/B/C 展示冒烟验证。
+- `scripts/smart-replenishment-procurement-ui-smoke.mjs`：库存列、采购列、专用接口和无假货架提示的静态合同验证；
 - `docs/PredictionPolicyEngine桌面端展示字段说明.md`：展示字段、来源与交互口径；
 - `docs/PredictionPolicyEngine桌面端用户体验问题记录.md`：按 A/B/C 分层记录业务体验问题；
 - `docs/PredictionPolicyEngine桌面端不修改算法验证报告.md`：冻结样本验收结论与截图证据。

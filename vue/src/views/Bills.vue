@@ -352,6 +352,7 @@
                             <div v-if="allCustomerTabIndex === 2" class="tab-pane fade show active" role="tabpanel">
                                 <HistoryOrders
                                         :selectedAllCustomer="selectedAllCustomer"
+                                        :settle-type="customerType === 'cash' ? 0 : 1"
                                         @open-order-detail="openOrderDetail"
                                 />
                             </div>
@@ -2619,7 +2620,6 @@
     }
 
 </style>
-
 
 
 

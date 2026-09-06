@@ -1,6 +1,4 @@
 const crypto = require('crypto');
-const os = require('os');
-const QRCode = require('qrcode');
 const { createCredentialStore } = require('./credential-store');
 const {
   PRODUCTION_API_BASE_URL,
@@ -8,6 +6,7 @@ const {
 } = require('../api-runtime');
 
 const API_PREFIX = 'desktop-dispatch/v1/';
+const LEGACY_DISPATCH_API_PREFIX = 'nxdisroutedispatch/';
 const DEFAULT_API_BASE_URL = PRODUCTION_API_BASE_URL;
 const FORBIDDEN_IDENTITY_FIELDS = new Set([
   'disId',
@@ -58,7 +57,6 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     withCredentials: false,
   });
   let session = credentialStore.loadSession();
-  let loginChallenge = null;
 
   function clearSession() {
     session = null;
@@ -66,8 +64,13 @@ function createDispatchGateway({ app, safeStorage, axios }) {
   }
 
   function normalizeError(response, fallbackMessage) {
-    const status = Number(response?.status) || 0;
     const body = response?.data && typeof response.data === 'object' ? response.data : {};
+    const httpStatus = Number(response?.status) || 0;
+    const businessStatus = Number(body.code);
+    const status = httpStatus >= 200 && httpStatus < 300
+      && Number.isInteger(businessStatus) && businessStatus >= 400
+      ? businessStatus
+      : httpStatus;
     if (status === 401) clearSession();
     return {
       ok: false,
@@ -89,7 +92,7 @@ function createDispatchGateway({ app, safeStorage, axios }) {
       if (!session?.accessToken) {
         return normalizeError({ status: 401, data: {
           errorCode: 'UNAUTHENTICATED',
-          msg: '请先扫码登录后再操作',
+          msg: '桌面登录已失效，请重新登录',
         } });
       }
       headers.Authorization = `Bearer ${session.accessToken}`;
@@ -101,8 +104,9 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     try {
       const response = await http.request({
         method,
-        url: `${API_PREFIX}${relativePath}`,
+        url: `${options.apiPrefix || API_PREFIX}${relativePath}`,
         data: options.data,
+        params: options.params,
         headers,
       });
       const body = response.data && typeof response.data === 'object' ? response.data : {};
@@ -167,7 +171,6 @@ function createDispatchGateway({ app, safeStorage, axios }) {
       clearSession();
       return verified;
     }
-    loginChallenge = null;
     return verified;
   }
 
@@ -191,107 +194,6 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     return {
       ok: true,
       data: publicSession(session, credentialStore.encryptionAvailable()),
-    };
-  }
-
-  async function beginLogin(options = {}) {
-    const verifier = crypto.randomBytes(48).toString('base64url');
-    const codeChallenge = crypto.createHash('sha256').update(verifier).digest('hex');
-    const deviceId = credentialStore.getDeviceId();
-    const deviceName = String(os.hostname() || 'Electron 桌面端').slice(0, 80);
-    const result = await request('POST', 'auth/challenges', {
-      auth: false,
-      data: { deviceId, codeChallenge },
-    });
-    if (!result.ok) return result;
-    const challengeId = result.data?.challengeId;
-    if (typeof challengeId !== 'string' || !/^[0-9a-fA-F]{32}$/.test(challengeId)) {
-      return {
-        ok: false,
-        status: 502,
-        errorCode: 'INVALID_SERVER_RESPONSE',
-        message: '服务端未返回有效登录挑战',
-      };
-    }
-    // 继续复用服务器的一次性挑战和 PKCE 校验，但二维码本身使用
-    // 已上线小程序长期支持的 printerLogin 普通链接。微信扫码后会直接
-    // 打开原登录页，避免依赖尚未发布的“电脑登录”页面或自定义 JSON 扫码器。
-    const loginUrl = new URL('nxdistributer/printerLogin', apiBaseUrl);
-    loginUrl.searchParams.set('scene', challengeId);
-    const qrDataUrl = await QRCode.toDataURL(loginUrl.toString(), {
-      errorCorrectionLevel: 'M',
-      margin: 2,
-      width: 320,
-    });
-    loginChallenge = {
-      challengeId,
-      verifier,
-      deviceName,
-      expiresAt: result.data?.expiresAt || null,
-      persistSession: Boolean(options.persistSession),
-    };
-    return {
-      ok: true,
-      data: {
-        status: 'pending',
-        challengeId,
-        deviceName,
-        expiresAt: loginChallenge.expiresAt,
-        loginMethod: 'printer-login-link',
-        qrDataUrl,
-        secureStorageAvailable: credentialStore.encryptionAvailable(),
-      },
-    };
-  }
-
-  async function pollLogin() {
-    if (!loginChallenge) {
-      return {
-        ok: false,
-        status: 400,
-        errorCode: 'LOGIN_CHALLENGE_MISSING',
-        message: '请重新生成登录二维码',
-      };
-    }
-    const result = await request(
-      'POST',
-      `auth/challenges/${loginChallenge.challengeId}/exchange`,
-      {
-        auth: false,
-        data: { codeVerifier: loginChallenge.verifier },
-      }
-    );
-    if (!result.ok && result.status === 409
-        && result.errorCode === 'LOGIN_CHALLENGE_PENDING') {
-      return {
-        ok: true,
-        data: {
-          status: 'pending',
-          expiresAt: loginChallenge.expiresAt,
-        },
-      };
-    }
-    if (!result.ok) {
-      if (result.status === 401 || result.errorCode === 'LOGIN_CHALLENGE_CONSUMED') {
-        loginChallenge = null;
-      }
-      return result;
-    }
-    const accepted = acceptAuthSession(
-      result.data || {},
-      loginChallenge.persistSession
-    );
-    if (!accepted.ok) {
-      loginChallenge = null;
-      return accepted;
-    }
-    loginChallenge = null;
-    return {
-      ok: true,
-      data: {
-        status: 'authenticated',
-        session: accepted.session,
-      },
     };
   }
 
@@ -338,7 +240,6 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     }
     const accepted = acceptAuthSession(payload.dispatchAuth, false);
     if (!accepted.ok) return accepted;
-    loginChallenge = null;
     return {
       ok: true,
       data: {
@@ -348,17 +249,11 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     };
   }
 
-  function cancelLogin() {
-    loginChallenge = null;
-    return { ok: true, data: { status: 'cancelled' } };
-  }
-
   async function logout() {
     if (session?.accessToken) {
       await request('POST', 'auth/logout');
     }
     clearSession();
-    loginChallenge = null;
     return {
       ok: true,
       data: publicSession(null, credentialStore.encryptionAvailable()),
@@ -405,6 +300,27 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     return value;
   }
 
+  function validateSalesRange(input) {
+    const params = strictPayload(input || {}, ['startDate', 'endDate']);
+    ['startDate', 'endDate'].forEach((key) => {
+      if (params[key] !== undefined
+          && (typeof params[key] !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(params[key]))) {
+        throw new Error(`${key} 日期格式无效`);
+      }
+    });
+    return params;
+  }
+
+  function requireReportId(value, field, allowZero = false) {
+    const normalized = Number(value);
+    if (!Number.isSafeInteger(normalized)
+        || normalized > 2147483647
+        || (allowZero ? normalized < 0 : normalized <= 0)) {
+      throw new Error(`${field} 无效`);
+    }
+    return normalized;
+  }
+
   async function capabilities() {
     return request('GET', 'capabilities');
   }
@@ -445,7 +361,17 @@ function createDispatchGateway({ app, safeStorage, axios }) {
         'routeDate',
         'batchCode',
         'driverUserId',
+        'routeResourceType',
+        'driverRouteId',
+        'routeVersion',
+        'sandboxEditCredential',
+        'canonicalSandboxVersion',
+        'sandboxStateFingerprint',
+        'sandboxCredentialExpiresAt',
         'stopKeys',
+        'removedStopKeys',
+        'removalCommandId',
+        'initialAddStopKeys',
         'sourcePage',
         'manualDispatch',
         'departmentId',
@@ -470,7 +396,17 @@ function createDispatchGateway({ app, safeStorage, axios }) {
         'routeDate',
         'batchCode',
         'driverUserId',
+        'routeResourceType',
+        'driverRouteId',
+        'routeVersion',
+        'sandboxEditCredential',
+        'canonicalSandboxVersion',
+        'sandboxStateFingerprint',
+        'sandboxCredentialExpiresAt',
         'stopKeys',
+        'removedStopKeys',
+        'removalCommandId',
+        'initialAddStopKeys',
         'sourcePage',
         'manualDispatch',
         'departmentId',
@@ -494,11 +430,43 @@ function createDispatchGateway({ app, safeStorage, axios }) {
         'batchCode',
         'driverUserId',
         'previewToken',
+        'routeResourceType',
+        'driverRouteId',
+        'routeVersion',
+        'sandboxEditCredential',
+        'canonicalSandboxVersion',
+        'sandboxStateFingerprint',
         'maxAddedStops',
         'maxActiveRouteDurationS',
+        'latestRouteFinishAt',
         'maxRoadDistanceM',
       ]);
       return request('POST', 'route-edits/expansion/preview', { data });
+    } catch (error) {
+      return {
+        ok: false,
+        status: 400,
+        errorCode: 'INVALID_REQUEST',
+        message: error.message,
+      };
+    }
+  }
+
+  async function releaseRoutePreview(input) {
+    try {
+      const data = strictPayload(input?.payload, [
+        'routeDate',
+        'batchCode',
+        'driverUserId',
+        'previewToken',
+        'routeResourceType',
+        'driverRouteId',
+        'routeVersion',
+        'sandboxEditCredential',
+        'canonicalSandboxVersion',
+        'sandboxStateFingerprint',
+      ]);
+      return request('POST', 'route-edits/preview/release', { data });
     } catch (error) {
       return {
         ok: false,
@@ -516,6 +484,10 @@ function createDispatchGateway({ app, safeStorage, axios }) {
         'batchCode',
         'driverUserId',
         'driverRouteId',
+        'routeResourceType',
+        'sandboxEditCredential',
+        'canonicalSandboxVersion',
+        'sandboxStateFingerprint',
         'stopKeys',
         'liveOrderIds',
         'previewToken',
@@ -568,8 +540,236 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     }
   }
 
+  function requirePositiveId(value, field) {
+    const normalized = Number(value);
+    if (!Number.isSafeInteger(normalized) || normalized <= 0) {
+      throw new Error(`${field} 无效`);
+    }
+    return normalized;
+  }
+
+  function legacyDispatchRequest(method, relativePath, options = {}) {
+    return request(method, relativePath, {
+      ...options,
+      apiPrefix: LEGACY_DISPATCH_API_PREFIX,
+    });
+  }
+
+  async function setDriverDuty(input, dutyOn) {
+    try {
+      const driverUserId = requirePositiveId(input?.driverUserId, 'driverUserId');
+      const data = strictPayload(input?.payload || {}, ['dutyDate']);
+      return legacyDispatchRequest(
+        'POST',
+        `drivers/${driverUserId}/duty/${dutyOn ? 'on' : 'off'}`,
+        {
+          command: true,
+          idempotencyKey: validateIdempotencyKey(input?.idempotencyKey),
+          data,
+        }
+      );
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function updateStopTimeWindow(input) {
+    try {
+      const data = strictPayload(input?.payload, [
+        'routeDate',
+        'batchCode',
+        'departmentId',
+        'depFatherId',
+        'sandboxStopKey',
+        'deliveryStopId',
+        'earliestDeliveryTimeS',
+        'latestDeliveryTimeS',
+        'serviceMinutes',
+        'reason',
+        'responsePage',
+      ]);
+      return legacyDispatchRequest('POST', 'dispatch/sandbox/stops/time-window', {
+        command: true,
+        idempotencyKey: validateIdempotencyKey(input?.idempotencyKey),
+        data,
+      });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function returnStopToSandbox(input) {
+    try {
+      const deliveryStopId = requirePositiveId(input?.deliveryStopId, 'deliveryStopId');
+      const data = strictPayload(input?.payload, [
+        'routeDate',
+        'batchCode',
+        'reason',
+        'suppressTodayResponse',
+      ]);
+      return legacyDispatchRequest(
+        'POST',
+        `sandbox/stops/${deliveryStopId}/return-to-sandbox`,
+        {
+          command: true,
+          idempotencyKey: validateIdempotencyKey(input?.idempotencyKey),
+          data,
+        }
+      );
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function loadManualDispatchPanorama(input) {
+    try {
+      const data = strictPayload(input?.payload, [
+        'routeDate',
+        'batchCode',
+        'departmentId',
+        'depFatherId',
+        'sandboxStopKey',
+        'liveOrderIds',
+      ]);
+      return legacyDispatchRequest('POST', 'sandbox/manual-dispatch/driver-panorama', { data });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function departDriver(input) {
+    try {
+      const driverUserId = requirePositiveId(input?.driverUserId, 'driverUserId');
+      const data = strictPayload(input?.payload, [
+        'planId',
+        'routeDate',
+        'batchCode',
+        'driverRouteId',
+        'departAt',
+        'remark',
+      ]);
+      return legacyDispatchRequest('POST', `drivers/${driverUserId}/depart-now`, {
+        command: true,
+        idempotencyKey: validateIdempotencyKey(input?.idempotencyKey),
+        data,
+      });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function deliveryStopCommand(input, returnToSandbox) {
+    try {
+      const deliveryStopId = requirePositiveId(input?.deliveryStopId, 'deliveryStopId');
+      const data = strictPayload(input?.payload, ['routeDate', 'batchCode', 'reason']);
+      const relativePath = returnToSandbox
+        ? `sandbox/stops/${deliveryStopId}/return-to-sandbox-now`
+        : `delivery/stops/${deliveryStopId}/complete-now`;
+      return legacyDispatchRequest('POST', relativePath, {
+        command: true,
+        idempotencyKey: validateIdempotencyKey(input?.idempotencyKey),
+        data,
+      });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function previewRouteReassignment(input) {
+    try {
+      const data = strictPayload(input?.payload, [
+        'routeDate',
+        'batchCode',
+        'driverUserId',
+        'driverRouteId',
+        'routeVersion',
+        'targetDriverUserId',
+        'stopKeys',
+        'sourcePage',
+        'previewToken',
+      ]);
+      return legacyDispatchRequest('POST', 'sandbox/driver-route-edit/preview', { data });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function confirmRouteReassignment(input) {
+    try {
+      const data = strictPayload(input?.payload, [
+        'routeDate',
+        'batchCode',
+        'driverUserId',
+        'driverRouteId',
+        'routeVersion',
+        'targetDriverUserId',
+        'stopKeys',
+        'sourcePage',
+        'previewToken',
+      ]);
+      return legacyDispatchRequest('POST', 'sandbox/driver-route-edit/confirm', {
+        command: true,
+        idempotencyKey: validateIdempotencyKey(input?.idempotencyKey),
+        data,
+      });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
   async function loadMapConfig() {
     return request('GET', 'map/config');
+  }
+
+  async function loadCustomerHistory(input) {
+    const departmentId = Number(input?.departmentId);
+    if (!Number.isSafeInteger(departmentId) || departmentId <= 0) {
+      return {
+        ok: false,
+        status: 400,
+        errorCode: 'INVALID_CUSTOMER_ID',
+        message: '客户编号无效',
+      };
+    }
+    return request('GET', 'customer-history/months', {
+      params: { departmentId },
+    });
+  }
+
+  async function loadSalesAnalysisOverview(input) {
+    try {
+      return request('GET', 'sales-analysis/overview', {
+        params: validateSalesRange(input),
+      });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function loadSalesAnalysisCategory(input) {
+    try {
+      const categoryId = requireReportId(input?.categoryId, 'categoryId', true);
+      return request('GET', `sales-analysis/categories/${categoryId}`, {
+        params: validateSalesRange(input?.range),
+      });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function loadSalesAnalysisProductCustomers(input) {
+    try {
+      const goodsId = requireReportId(input?.goodsId, 'goodsId');
+      const params = validateSalesRange(input?.range);
+      const limit = input?.limit === undefined ? 5 : Number(input.limit);
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) {
+        throw new Error('limit 无效');
+      }
+      params.limit = limit;
+      return request('GET', `sales-analysis/products/${goodsId}/customers`, { params });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
   }
 
   async function loadMapTile(input) {
@@ -584,7 +784,7 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     if (!session?.accessToken) {
       return normalizeError({ status: 401, data: {
         errorCode: 'UNAUTHENTICATED',
-        msg: '请先扫码登录后再查看调度地图',
+        msg: '桌面登录已失效，请重新登录',
       } });
     }
     try {
@@ -623,26 +823,36 @@ function createDispatchGateway({ app, safeStorage, axios }) {
   return {
     getSession,
     adoptLoginSession,
-    beginLogin,
-    pollLogin,
     testLogin,
-    cancelLogin,
     logout,
     capabilities,
     confirmStop,
     loadRouteEditPage,
     previewRoute,
     previewRouteExpansion,
+    releaseRoutePreview,
     confirmRoute,
     lockPlanningStop: (input) => setPlanningStopLock(input, true),
     unlockPlanningStop: (input) => setPlanningStopLock(input, false),
     updateDriverEmployment,
+    checkInDriver: (input) => setDriverDuty(input, true),
+    checkOutDriver: (input) => setDriverDuty(input, false),
+    updateStopTimeWindow,
+    returnStopToSandbox,
+    loadManualDispatchPanorama,
+    departDriver,
+    completeDeliveryStop: (input) => deliveryStopCommand(input, false),
+    returnDeliveryStopToSandbox: (input) => deliveryStopCommand(input, true),
+    previewRouteReassignment,
+    confirmRouteReassignment,
+    loadCustomerHistory,
+    loadSalesAnalysisOverview,
+    loadSalesAnalysisCategory,
+    loadSalesAnalysisProductCustomers,
     loadMapConfig,
     loadMapTile,
     createId,
-    dispose() {
-      loginChallenge = null;
-    },
+    dispose() {},
   };
 }
 
