@@ -60,9 +60,18 @@ const {
   getMcpCliBridgeTokenPath,
   readOrCreateMcpCliBridgeToken
 } = require('./mcp-auth');
+
+// ===== 3010 本地安全桥客户端（grain-print-mcp 连接器）=====
+// 只做「连接/查询/订单预览」拉取与执行端防重复；真实出纸仍由既有渲染链路完成。
+// 3002（mcp-server-cli.js 轮询）与 3001（mcp-server.js）本轮保留不删，待 3010 替代链路本机验证后另议退出。
+const mcpBridgeClient = require('./mcp-bridge-client');
+const taskRunner = require('./mcp-task-runner');
+
 let mainWindowRef = null; // 保存 mainWindow 引用供 MCP 使用
 /** Stdio MCP（mcp-server-cli.js）打印任务轮询定时器，需在 will-quit 中清理 */
 let mcpCliPollingInterval = null;
+/** 3010 桥轮询定时器，需在 will-quit 中清理 */
+let bridgePollingInterval = null;
 
 // 注意：当前使用 HTTP API（一句话识别），不需要 WebSocket
 // 如果需要实时流式识别，可以后续添加 WebSocket 支持
@@ -651,6 +660,33 @@ function setupIpcHandlers() {
   ipcMain.on('mcp-print-ack', (event, taskId) => {
     assertTrustedRendererEvent(event);
     acknowledgeMcpPrintTask(event.sender.id, taskId);
+  });
+
+  // R2 结果回传（main 侧）：渲染端 OrderPrint 组件实际出纸完成后，由 Bills 经此 IPC 回传 3010 taskId + success。
+  // 注意：仅回传「真实出纸结果」；受理(accept)≠完成，执行结果未知时不自动重打。
+  // 渲染端→main 的 taskId 透传（Bills.vue runMcpDeliveryPrint → OrderPrint.printOnly 完成后发送）为后续打印验证步骤，
+  // 本轮连接/查询/预览测试不触发打印，故该 handler 不会在本轮被实际调用。
+  ipcMain.on('mcp-print-result', (event, payload) => {
+    assertTrustedRendererEvent(event);
+    let taskId = null;
+    let success = false;
+    let message = '';
+    try {
+      const p = typeof payload === 'string' ? JSON.parse(payload) : (payload || {});
+      taskId = p.taskId != null ? String(p.taskId) : null;
+      success = !!p.success;
+      message = p.message || '';
+    } catch (e) { /* ignore parse error */ }
+    if (!taskId) {
+      console.warn('[MCP-3010] mcp-print-result 缺少 taskId，忽略');
+      return;
+    }
+    try {
+      mcpBridgeClient.reportResult(taskId, success, message);
+      console.log(`[MCP-3010] 已回传打印结果 taskId=${taskId} success=${success}`);
+    } catch (e) {
+      console.warn('[MCP-3010] 回传打印结果失败:', e && e.message);
+    }
   });
 
   ipcMain.on('mcp-session-user', (event, user) => {
@@ -3807,6 +3843,50 @@ app.whenReady().then(async () => {
   pollMcpCliPrintTasks();
   mcpCliPollingInterval = setInterval(pollMcpCliPrintTasks, 2000);
 
+  // ===== 3010 本地安全桥轮询（grain-print-mcp 连接器）=====
+  // 与 3002 链路并行存在，但消费不同任务源（3010 桥任务）；3002 队列当前无写入源，不会双打。
+  // 同一任务靠 mcp-bridge-client 的持久化 markExecuted 去重，严守「同一条打印任务只走一条有效路径」。
+  // 字段映射（R1）：3010 任务仅含 {id,taskId,disId,departmentId,printMode,subDepartmentId,purpose,orderVersion}，
+  //   渲染端 triggerPrintDeliveryOrder 要求 task.type==='nx_delivery' 才触发（App.vue:221），
+  //   并自行按 departmentId/printMode/subDepartmentId 调 phoneGetToFillDepOrders 拉明细（Bills.vue 行为），
+  //   故仅补 type 常量，禁止填假值/空串/默认 0。
+  async function bridgePollTick() {
+    const deps = {
+      getLoggedInDisId: () => mcpBridgeClient.getLoggedInDisId(),
+      markExecuted: (taskId) => mcpBridgeClient.markExecuted(taskId),
+      acceptTask: (taskId) => mcpBridgeClient.acceptTask(taskId),
+      reportIdentity: (disId, printerAvailable) => mcpBridgeClient.reportIdentity(disId, printerAvailable),
+      reportHeartbeat: () => mcpBridgeClient.reportHeartbeat(),
+      fetchTasks: (disId) => mcpBridgeClient.fetchTasks(disId),
+      getDefaultPrinterName: () => {
+        try { return getDefaultPrinterName(); } catch (e) { return null; }
+      },
+      // R2 结果回传的 main 侧钩子已就绪（见 ipcMain.on('mcp-print-result')）；
+      // 渲染端 OrderPrint 组件出纸完成后再经 IPC 回传 taskId+success，本函数只负责「受理→下发」。
+      pushToRenderer: (task) => {
+        const target = (mainWindow && !mainWindow.isDestroyed())
+          ? mainWindow
+          : (BrowserWindow.getAllWindows() || [])[0];
+        if (!target || target.isDestroyed()) return { ok: false, error: 'no-window' };
+        const enriched = Object.assign({}, task, {
+          type: 'nx_delivery',
+          taskId: task.taskId || task.id,
+          id: task.id
+        });
+        pushMcpPrintTaskToRenderer(target.webContents, enriched);
+        return { ok: true };
+      }
+    };
+    try {
+      const r = await taskRunner.pollOnce(deps);
+      if (r && r.fetched) console.log('[MCP-3010] 本轮:', JSON.stringify(r));
+    } catch (e) {
+      console.warn('[MCP-3010] 轮询异常:', e && e.message);
+    }
+  }
+  bridgePollTick();
+  bridgePollingInterval = setInterval(bridgePollTick, 2000);
+
   // 对于 macOS，当所有窗口关闭时重新激活应用的处理
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -3823,6 +3903,10 @@ app.on('will-quit', () => {
   if (mcpCliPollingInterval) {
     clearInterval(mcpCliPollingInterval);
     console.log('[MCP] 轮询已停止');
+  }
+  if (bridgePollingInterval) {
+    clearInterval(bridgePollingInterval);
+    console.log('[MCP-3010] 桥轮询已停止');
   }
   if (mcpServer) {
     mcpServer.close();

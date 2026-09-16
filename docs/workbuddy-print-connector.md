@@ -4,6 +4,7 @@
 > 不要新增「最终版 / 最终修正版」等平行文档。
 > 最后核查：2026-09-16（基线 `main` / `480da2dcc69967ba93c7bbc9609402e7c42ece7a`）。
 > 目录名按实际磁盘名记录：**ai-priter-electic**（非 electric）。
+> **2026-09-16 进度更新**：3010 桥的 Electron 侧（`mcp-bridge-client.js` / `mcp-task-runner.js` / `main.js` 接线）已落地正式工程，并通过隔离 smoke 测试（12/12）。详见第二节「哪些已实现」与第五节的遗留项更新。
 
 ---
 
@@ -30,8 +31,9 @@
 ## 二、当前代码落点与整合进度
 
 ### 关键事实（本轮已核实）
-- 本轮桌面端修改**曾误落在安装包及临时副本**，尚未进入正式工程 `ai-priter-electric`。
-- 正式工程当前仍是 **3002 CLI 桥设计**（见第三节「当前实现」）；已发布的连接器用的是 **3010 本地安全桥设计**，二者**当前不联通**——这是整合的核心缺口。
+- 3010 桥的 Electron 侧已于 **2026-09-16 落地正式工程 `ai-priter-electic`**（`src/mcp-bridge-client.js`、`src/mcp-task-runner.js`、`src/main.js` 接线），并经隔离 smoke 测试（12/12）验证；不再仅存于临时副本 / 安装包。
+- 正式工程当前**并行保留** 3002 轮询（`mcp-server-cli.js` + `main.js` 的 `pollMcpCliPrintTasks`）与 3010 桥轮询；两者消费不同任务源（3002 队列当前无写入方，连接器走 3010），且 3010 路径有 `markExecuted` 持久去重，**不会双打**。3002/3001 按用户要求**本轮不删**，待 3010 替代链路本机验证通过、确认相关调用已迁移后再退出。
+- 整合核心缺口（3010 桥不联通）**已闭合**：正式工程现可经 3010 桥拉取连接器任务。
 
 ### Git 状态（核查 2026-09-16，分支 / 提交号 / 远端保存情况）
 
@@ -53,11 +55,18 @@
 - ✅ 后端连接器鉴权：`nongxinle-server` `b9eafd0`（强制双身份校验）+ 两个测试类共 14 例 Maven 离线测试通过。
 - ✅ 连接器文档修正：`grain-print-connector` `a673b38`（删除虚构的「开放平台→连接器凭证」菜单）。
 - ✅ 连接器 npm 包：`grain-print-mcp-1.0.0.tgz` 经 `npm pack` + 干净环境 `npm install` 验证通过（bin 软链、index.js 语法校验通过）。
+- ✅ **【2026-09-16 新增】3010 桥 Electron 侧落地 `ai-priter-electic`**：
+  - `src/mcp-bridge-client.js`：身份上报 / 心跳 / 领取任务 / 结果回传 / 执行端防重复（`markExecuted` 持久化 `~/.grain-print-mcp` 或 userData）；`getLoggedInDisId` 读渲染端 `localStorage.disUser.nxDiuDistributerId`，支持 `GRAIN_LOCAL_DIS_ID` 注入；惰性 `require('electron')`。
+  - `src/mcp-task-runner.js`：`processTask`（disId 一致性 → markExecuted → acceptTask → pushToRenderer，受理≠完成）、`pollOnce`（身份/心跳 → 拉任务 → 逐个受理下发，不在轮询中自动重打）。
+  - `src/main.js` 接线：顶部 `require` 两文件；`ready` 回调中 3002 轮询后新增 `bridgePollTick()` + `setInterval(…, 2000)`；`will-quit` 清理 `bridgePollingInterval`；`pushToRenderer` 仅补 `type:'nx_delivery'` 常量（R1 字段映射，禁填假值）；新增 `ipcMain.on('mcp-print-result')` 调 `reportResult`（R2 main 侧钩子已就绪）。
+  - 新增文件已确认被 `package.json` `build.files`（`src/**/*` + `asar:false`）自动打包，无需改打包配置。
+  - 隔离 smoke 测试 12/12 通过（见第四节 4.3）。
 
 ### 哪些仍待整合（桌面端）
-- ❌ 3010 桥接的 Electron 侧（`mcp-bridge-client.js`、`mcp-task-runner.js`、改造后的 `main.js` 轮询）**仅存在于临时副本 / 安装包**，未进入 `ai-priter-electic`。
-- ❌ 正式工程仍跑 3002 轮询（`mcp-server-cli.js` + `main.js` 中的 `pollMcpCliPrintTasks`），与已发布连接器的 3010 桥不联通。
-- ❌ 正式工程内尚无桌面端集成测试（临时副本里的 19/19 Node 测试不属于正式工程，不计入正式验证）。
+- ⏳ **3002 / 3001 退役**：本轮按用户要求**保留不删**；待 3010 替代链路本机验证完成、确认 3002 相关调用已迁移后再退出（不得仅因 USAGE 写「不兼容」就删旧入口）。
+- ⏳ **R2 渲染端→main 的结果回传链路**：`main.js` 侧 `mcp-print-result` handler 已就绪，但「Bills.vue `runMcpDeliveryPrint` / `waitAndTriggerOrderViewPrint` → OrderPrint 组件 `printOnly()` 出纸完成 → 经 IPC 回传 `taskId+success`」这一段需改渲染/打印组件，**本轮未做**（避免改动既有出纸业务、且需真实出纸才能验证）。留待「打印验证步骤」与用户配合时实施。
+- ⏳ **桥接层部门级校验**：`processTask` 目前仅 disId 一致性；NX 部门归属主要靠后端端点拦截（见 3.4），桥接层是否叠加部门级比对仍待确认。
+- ⏳ 正式工程内的桌面端**真实构建产物**（`dist:mac` / `dist:win`，含 3010 桥）尚未产出；本轮仅做了 Node 层隔离测试，未构建 `.app`。
 
 ---
 
@@ -90,7 +99,7 @@ main.js：ipcMain.handle('print-request-with-callback', …) → 实际出纸
 - 无**身份一致性二次校验**：桥只校验共享 `mcpCliBridgeToken`，未核对「任务 disId == 当前登录会话 disId」。
 - 与已发布连接器的 **3010 桥不联通**（见 3.2）。
 
-### 3.2 计划实现（单链，3010 设计；当前仅在临时副本 / 安装包中验证过）
+### 3.2 计划实现（单链，3010 设计；**已于 2026-09-16 落地正式工程 `ai-priter-electic`**）
 
 ```
 WorkBuddy/Cursor
@@ -135,8 +144,12 @@ mcp-task-runner.js：processTask(task, deps)
 - **明确补打**：走 `purpose:'reprint'` 分支 → 不同 fingerprint → 新 `taskId` → 重新打印。
 
 ### 3.6 关键约束：不能形成两条同时消费同一任务的执行链
-- 3002 轮询（`mcp-server-cli.js`）与 3010 桥（`mcp-bridge-client.js`）**不能同时启用**，否则同一任务会被两条链重复消费。
-- **整合方向**：以正式工程为基线，把 3010 桥的 Electron 侧（`mcp-bridge-client.js` / `mcp-task-runner.js` 及 `main.js` 接线）按真实源码结构移植进 `ai-priter-electric`，**退役 3002 轮询**（`mcp-server-cli.js` 的轮询部分或整体收敛），确保只有一条消费链。
+- **当前落地状态（2026-09-16）**：正式工程 `main.js` 同时启用了 3002 轮询（`pollMcpCliPrintTasks`）与 3010 桥轮询（`bridgePollTick`）。
+  - 二者**消费不同任务源**：3002 队列仅由 `mcp-server-cli.js` 填充（当前连接器已改走 3010，故 3002 队列实际无写入方）；3010 桥任务来自连接器 `store`。
+  - 3010 路径有 `markExecuted` 持久去重，**同一任务不会重复出纸**；服务端 `/bridge/tasks` 还按 `disId` 过滤，进一步隔离。
+  - **未启用 3001 链**（进程内 HTTP MCP，`mcp-server.js`）执行打印，保持现状。
+- **3002 / 3001 本轮保留不删**：按用户明确要求，不得仅因连接器 USAGE 写「不兼容」就直接删旧入口；待 3010 替代链路**本机验证完成、确认 3002 相关调用已迁移**后再退出，确保只有一条有效消费链。
+- **退役条件（后续）**：确认无客户端仍依赖 3002 队列、且 3010 链路在生产环境实测稳定后，移除 `pollMcpCliPrintTasks` 及其定时器与 `mcp-server-cli.js` 轮询相关代码。
 
 ---
 
@@ -157,10 +170,12 @@ mcp-task-runner.js：processTask(task, deps)
 - ✅ 已完成（代码/测试）：
   - 后端 `ConnectorAuthInterceptor` 强制双身份（14 例 Maven 离线测试通过）。
   - 连接器文档修正、npm 包 `npm pack` + 干净安装验证。
-  - 临时副本中 3010 桥的 19/19 Node 测试（仅限临时副本，**尚未迁入正式工程**）。
+  - **【2026-09-16】3010 桥 Electron 侧代码落地正式工程 `ai-priter-electic`**（见第二节），`node --check` 三文件语法通过。
+  - **【2026-09-16】隔离 smoke 测试 12/12 通过**：在临时目录用**真实连接器 `bridge.js`+`store.js`** 驱动已落地的 `mcp-bridge-client.js` / `mcp-task-runner.js`，覆盖身份上报、心跳、fetch、accept、`markExecuted` 去重、`reportResult`、`pollOnce` 受理下发、二次 poll 不再下发（防双打）、服务端按 disId 过滤、runner disId-mismatch 兜底。**不调用未发布 npm 包、不启动 Electron、不触发打印、不触碰 `~/.grain-print-mcp`**。`smoke-3010.js` 留存于工作区 `/Users/lpy/WorkBuddy/2026-09-16-17-38-55/smoke-3010.js` 以备复跑。
 - ⏳ 尚未完成（联调 / 打包 / 普通用户接入）：
-  - 桌面端 3010 桥接入正式工程（代码落地 + 退役 3002 轮询）。
-  - 正式工程内的桌面端集成测试与 `dist:mac` / `dist:win` **真实构建产物**。
+  - 桌面端 3010 桥接入正式工程（**代码已落地 2026-09-16**；仅剩 3002/3001 退役 + R2 渲染端回传链路待办，见下）。
+  - 正式工程内的桌面端集成测试与 `dist:mac` / `dist:win` **真实构建产物**（本轮仅做了 Node 层隔离 smoke 测试 12/12，未构建 `.app`）。
+  - R2 渲染端→main 的结果回传链路（Bills/OrderPrint 组件改动），需真实出纸验证，留待打印验证步骤。
   - 普通用户凭证获取/查看有效期/撤销的真实 UI 入口（目前仅有后端 `/api/connector/credential/*`，依赖现有登录会话；文档中曾误写的「开放平台→连接器凭证」菜单已删除）。
 - 🚫 尚未授权 / 尚未执行（不得写为已验收）：
   - **真实出纸**（仅在用户授权并在生产环境实测后验收）。
@@ -173,11 +188,14 @@ mcp-task-runner.js：processTask(task, deps)
 > 只列当前实际遗留项，不扩展新功能。
 
 ### 实际遗留项（待办）
-1. **桌面端整合**：将 3010 桥 Electron 侧（`mcp-bridge-client.js` / `mcp-task-runner.js` / `main.js` 接线）按 `ai-priter-electric` 真实结构移植，退役 3002 轮询，确保单链消费。— *待实施*
+1. **桌面端整合（代码落地已完成，剩余收尾）**：3010 桥 Electron 侧（`mcp-bridge-client.js` / `mcp-task-runner.js` / `main.js` 接线）**已于 2026-09-16 按 `ai-priter-electic` 真实结构落地并通过隔离测试**。剩余：
+   - **3002 / 3001 退役**：待 3010 替代链路本机验证完成、确认 3002 调用已迁移后再退出（本轮保留，不删）。
+   - **R2 渲染端→main 结果回传链路**：`main.js` 侧 `mcp-print-result` handler 已就绪；需在 Bills.vue `runMcpDeliveryPrint`/`waitAndTriggerOrderViewPrint` 与 OrderPrint 组件 `printOnly()` 出纸完成后经 IPC 回传 `taskId+success`。**本轮未做**（避免改动既有出纸业务，且需真实出纸验证），留待打印验证步骤与用户配合。
+   - — *代码落地：已完成；收尾：待打印验证步骤*
 2. **桥接层部门级校验**：确认并在 `processTask` 补 `departmentId` 归属比对（需先明确登录会话可打印部门集合）。— *待确认+实施*
-3. **正式工程构建与测试**：在干净检出上跑 `dist:mac`，产出真实 `.app`；补桌面端集成测试。— *待实施*
+3. **正式工程构建与测试**：在干净检出上跑 `dist:mac`，产出真实 `.app`；补桌面端集成测试（本轮仅 Node 层隔离测试，未构建 `.app`）。— *待实施*
 4. **普通用户接入 UI**：凭证获取/撤销的可视化入口（后端接口已具备）。— *待实施*
-5. **远端保存**：`grain-print-connector` 无 remote；`nongxinle-server` 9 个本地提交未 push；`ai-priter-electric` 当前已与远端一致。— *待你确认远端归属后再 push*
+5. **远端保存**：`grain-print-connector` 无 remote；`nongxinle-server` 9 个本地提交未 push；`ai-priter-electric` 当前已与远端一致（本轮 3010 落地将产生新本地提交，按用户要求**本轮不 push**）。— *待你确认远端归属后再 push*
 
 ### 操作边界（硬约束）
 - **不用临时副本或安装包覆盖正式工程**：整合时对照真实源码结构重写/适配，不整体拷贝。
