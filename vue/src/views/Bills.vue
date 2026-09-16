@@ -825,6 +825,7 @@
                             continue;
                         }
                         const params = {
+                            taskId: task.taskId,
                             departmentId: task.departmentId,
                             subDepartmentId: task.subDepartmentId != null ? task.subDepartmentId : -1,
                             printMode: task.printMode === 'sub' ? 'sub' : 'all'
@@ -1328,14 +1329,26 @@
              */
             async runMcpDeliveryPrint(params) {
                 this.mcpTeeLog(`runMcpDeliveryPrint 开始 ${JSON.stringify(params)}`);
+                // R2 结果回传：把 3010 taskId 透传到出纸完成边界，向主进程回传成功/失败。
+                // 仅当 taskId 存在（来自 3010 桥的任务）才回传；旧 3002 任务 taskId 为空，不回传，避免污染。
+                const _mcpTaskId = params && params.taskId != null ? String(params.taskId) : null;
+                const _mcpReport = (success, message) => {
+                    try {
+                        if (_mcpTaskId && window.electronAPI && typeof window.electronAPI.reportPrintResult === 'function') {
+                            window.electronAPI.reportPrintResult(_mcpTaskId, success, message || '');
+                        }
+                    } catch (e) { /* 回传失败不影响出纸 */ }
+                };
                 const fatherId = Number(params.departmentId);
                 const subId = Number(params.subDepartmentId);
                 const printMode = params.printMode === 'sub' ? 'sub' : 'all';
                 if (!fatherId || Number.isNaN(fatherId)) {
                     this.mcpTeeLog('departmentId 无效，中止');
                     console.error('[MCP] departmentId 无效', params);
+                    _mcpReport(false, 'departmentId 无效');
                     return;
                 }
+                try {
 
                 this.currentView = 'order';
                 this.mcpTeeLog('currentView=order，fetchCustomerList skipAutoSelect…');
@@ -1353,6 +1366,7 @@
                         `✗ 父部门下未找到 subDepartmentId=${sel.expectedSub}（父 nxDepartmentId=${sel.parent.nxDepartmentId}）`
                     );
                     console.warn('[MCP] 子部门不在列表中', sel.expectedSub, sel.parent);
+                    _mcpReport(false, 'sub-not-found');
                     return;
                 }
                 if (!sel) {
@@ -1362,6 +1376,7 @@
                     console.warn(
                         '[MCP] 今日配送单列表中未找到该部门，可能是父/子 id 与 webNxDisGetTodayOrderCustomer 不一致，或暂无待打单'
                     );
+                    _mcpReport(false, 'department-not-found');
                     return;
                 }
 
@@ -1412,7 +1427,11 @@
                 await this.waitAndTriggerOrderViewPrint({
                     nxDepFatherId: expectNxDepFatherId,
                     nxDepId: expectNxDepId
-                });
+                }, _mcpTaskId);
+                } catch (e) {
+                    this.mcpTeeLog('runMcpDeliveryPrint 异常(已回传失败): ' + (e && e.message ? e.message : e));
+                    _mcpReport(false, e && e.message ? e.message : 'error');
+                }
             },
 
             /**
@@ -1421,7 +1440,15 @@
              * 尚未清空上一档（父级全店）数据前就触发 printOnly，导致第一张打成全店、第二张才正确。
              * 因此：depMatch 后须至少见到一次「当前部门下 applyArrPrint 被清空」，再接受「有行项目 + 有页」才打印。
              */
-            async waitAndTriggerOrderViewPrint(expected) {
+            async waitAndTriggerOrderViewPrint(expected, mcpTaskId) {
+                // R2 打印结果回传：出纸成功/失败/超时都在此向主进程回传，结果未知绝不自动重打（markExecuted 已防重）。
+                const _mcpReport = (success, message) => {
+                    try {
+                        if (mcpTaskId != null && window.electronAPI && typeof window.electronAPI.reportPrintResult === 'function') {
+                            window.electronAPI.reportPrintResult(String(mcpTaskId), success, message || '');
+                        }
+                    } catch (e) { /* 不影响出纸 */ }
+                };
                 this.mcpTeeLog('waitAndTriggerOrderViewPrint：开始等待 Apply 与 printPagesData（最多约 20s）');
                 await this.$nextTick();
                 await this.$nextTick();
@@ -1455,6 +1482,7 @@
                             );
                             await comp.printOnly();
                             this.mcpTeeLog('★ printOnly 已完成');
+                            _mcpReport(true, 'printed');
                             return;
                         }
                     }
@@ -1476,6 +1504,7 @@
                     waited += step;
                 }
                 this.mcpTeeLog('✗ 超时：未等到 printPagesData 或未挂载 orderPrintComponentRef');
+                _mcpReport(false, 'timeout');
                 console.warn('[MCP] ✗ 配送单打印超时：未等到打印数据（printPagesData）或组件未挂载');
                 console.warn('[MCP] 超时时组件状态: ref=', this.$refs.orderPrintComponentRef);
             },

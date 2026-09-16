@@ -238,7 +238,12 @@ const electronAPI = Object.freeze({
         mcpPrintTriggerCleanup = null;
       }
     };
-  }
+  },
+
+  // R2 打印结果回传：OrderPrint 组件实际出纸（或失败/超时）后，由 Bills 经此 IPC 通知主进程，
+  // 主进程再上报 3010 桥。仅透传「真实出纸结果」；受理(accept)≠完成。
+  reportPrintResult: (taskId, success, message) =>
+    ipcRenderer.send('mcp-print-result', { taskId, success: !!success, message: message || '' }),
 });
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

@@ -5,6 +5,7 @@
 > 最后核查：2026-09-16（基线 `main` / `480da2dcc69967ba93c7bbc9609402e7c42ece7a`）。
 > 目录名按实际磁盘名记录：**ai-priter-electic**（非 electric）。
 > **2026-09-16 进度更新**：3010 桥的 Electron 侧（`mcp-bridge-client.js` / `mcp-task-runner.js` / `main.js` 接线）已落地正式工程，并通过隔离 smoke 测试（12/12）。详见第二节「哪些已实现」与第五节的遗留项更新。
+> **2026-09-16 晚 · 本机联调轮**：R2 渲染端结果回传链路已落地（`preload.js` 新增 `reportPrintResult` + `Bills.vue` 透传 `taskId` 并在成功/失败/超时回传）；修复连接器 `backend.js` URL 拼接丢上下文 Bug；新增 `local-test/` 持久化隔离测试体系；`~/.workbuddy/mcp.json` 备份后新增 `grain-print-local-test` 测试 server（Node 路径纠正为 `22.22.2-3`）。**真实后台 `/connector/credential/resolve` 仍 404（未部署），真实授权与订单查询暂不可达**，详见第四节 4.3 与第五节。
 
 ---
 
@@ -61,10 +62,14 @@
   - `src/main.js` 接线：顶部 `require` 两文件；`ready` 回调中 3002 轮询后新增 `bridgePollTick()` + `setInterval(…, 2000)`；`will-quit` 清理 `bridgePollingInterval`；`pushToRenderer` 仅补 `type:'nx_delivery'` 常量（R1 字段映射，禁填假值）；新增 `ipcMain.on('mcp-print-result')` 调 `reportResult`（R2 main 侧钩子已就绪）。
   - 新增文件已确认被 `package.json` `build.files`（`src/**/*` + `asar:false`）自动打包，无需改打包配置。
   - 隔离 smoke 测试 12/12 通过（见第四节 4.3）。
+  - **【2026-09-16 晚 · 本机联调轮】R2 渲染端→main 结果回传链路落地 `ai-priter-electic`**：
+    - `src/preload.js`：在 `electronAPI` 内新增 `reportPrintResult(taskId, success, message)` → `ipcRenderer.send('mcp-print-result', …)`；主进程 `ipcMain.on('mcp-print-result')`（上一轮已落 `main.js`）再经 `mcpBridgeClient.reportResult` 上报 3010 桥。
+    - `vue/src/views/Bills.vue`：`processMcpPrintQueue` 的 `params` 透传 `taskId`；`runMcpDeliveryPrint` 取 `_mcpTaskId`、`departmentId` 无效 / `sub-not-found` / `department-not-found` / 异常均回传失败，`waitAndTriggerOrderViewPrint` 出纸成功后回传 `printed`、超时回传 `timeout`；**仅当 `_mcpTaskId` 存在（3010 桥任务）才回传**，旧 3002 任务（taskId 空）不污染。
+    - 正式业务代码完整（受理≠完成、失败/超时回传、结果未知绝不自动重打，与 `mcp-task-runner` 的 `markExecuted` 一致）；出纸验证留待用户授权真实打印时实施。详见第四节 4.3。
 
 ### 哪些仍待整合（桌面端）
 - ⏳ **3002 / 3001 退役**：本轮按用户要求**保留不删**；待 3010 替代链路本机验证完成、确认 3002 相关调用已迁移后再退出（不得仅因 USAGE 写「不兼容」就删旧入口）。
-- ⏳ **R2 渲染端→main 的结果回传链路**：`main.js` 侧 `mcp-print-result` handler 已就绪，但「Bills.vue `runMcpDeliveryPrint` / `waitAndTriggerOrderViewPrint` → OrderPrint 组件 `printOnly()` 出纸完成 → 经 IPC 回传 `taskId+success`」这一段需改渲染/打印组件，**本轮未做**（避免改动既有出纸业务、且需真实出纸才能验证）。留待「打印验证步骤」与用户配合时实施。
+- ✅ **R2 渲染端→main 的结果回传链路（代码已完成，待真实出纸验证）**：`main.js` 侧 `mcp-print-result` handler（上一轮）+ `preload.js` 的 `reportPrintResult`（本轮）+ `Bills.vue` 的 `taskId` 透传与成功/失败/超时回传（本轮）已闭合。**仅剩真实出纸时的端到端验证**（需用户授权选定订单/打印机/份数）。出纸业务本身未改动逻辑，仅新增结果回传钩子。
 - ⏳ **桥接层部门级校验**：`processTask` 目前仅 disId 一致性；NX 部门归属主要靠后端端点拦截（见 3.4），桥接层是否叠加部门级比对仍待确认。
 - ⏳ 正式工程内的桌面端**真实构建产物**（`dist:mac` / `dist:win`，含 3010 桥）尚未产出；本轮仅做了 Node 层隔离测试，未构建 `.app`。
 
@@ -172,10 +177,15 @@ mcp-task-runner.js：processTask(task, deps)
   - 连接器文档修正、npm 包 `npm pack` + 干净安装验证。
   - **【2026-09-16】3010 桥 Electron 侧代码落地正式工程 `ai-priter-electic`**（见第二节），`node --check` 三文件语法通过。
   - **【2026-09-16】隔离 smoke 测试 12/12 通过**：在临时目录用**真实连接器 `bridge.js`+`store.js`** 驱动已落地的 `mcp-bridge-client.js` / `mcp-task-runner.js`，覆盖身份上报、心跳、fetch、accept、`markExecuted` 去重、`reportResult`、`pollOnce` 受理下发、二次 poll 不再下发（防双打）、服务端按 disId 过滤、runner disId-mismatch 兜底。**不调用未发布 npm 包、不启动 Electron、不触发打印、不触碰 `~/.grain-print-mcp`**。`smoke-3010.js` 留存于工作区 `/Users/lpy/WorkBuddy/2026-09-16-17-38-55/smoke-3010.js` 以备复跑。
+  - **【2026-09-16 晚 · 本机联调轮】R2 渲染端结果回传代码落地 `ai-priter-electic`**：`preload.js` 新增 `reportPrintResult`、`Bills.vue` 透传 `taskId` 并在成功(`printed`)/失败/超时(`timeout`)回传；`node --check` 两文件语法通过（见第二节）。
+  - **【2026-09-16 晚 · 本机联调轮】连接器 `backend.js` URL 拼接 Bug 修复**：原 `new URL(p, targetUrl)` 在 `p` 为绝对路径时会替换 base 的 path 上下文，丢失 `/nongxinle/api` 前缀，导致所有端点（resolve/customers/orders）落到 `http://host/<path>` 而 404。改为先剥掉前导 `/` 再拼 base，已用 Node 复刻验证修复。
+  - **【2026-09-16 晚 · 本机联调轮】新增 `local-test/` 持久化隔离测试体系**（`grain-print-connector/local-test/`）：`run-connector-live.js`（指向真实后台 `https://grainservice.club:8443/nongxinle/api/`、`GRAIN_TLS_INSECURE=0`、桥端口 3011、独立密钥/任务/执行记录/token 文件）、`run-connector-stub.js` + `stub-backend.js`（合成后台，resolve 从 `Authorization: Bearer` 取 token 返回 `disId=160`，customers 返回 1 客户含 2 子部门，orders 校验 disId 一致）、`verify-chain.js`（spawn 连接器 + 跑 initialize/tools/list/get_delivery_customers/preview_delivery_order/桥握手；默认 stub，`--live` 切真实后台）。`token`(0600) / `bridge-secret` / `tasks.json` / `executed.json` 经 `.gitignore` 忽略，不进 Git。
+  - **【2026-09-16 晚 · 本机联调轮】stub 链路端到端验证通过（实际运行结果）**：`verify-chain.js` 默认 stub 模式输出——`get_delivery_customers` 返回客户「测试客户·鲜丰果蔬」含 2 子部门（31 朝阳店 / 32 海淀店）；`preview_delivery_order(30)` 返回 `orderCount:3, totalAmount:245.5, orderVersion:6d89b64802c3db1f`；桥 `/identity` `/heartbeat` `/tasks?disId=160` 均 200。证明连接/查询/预览/桥握手全链路在合成环境下完全跑通。
 - ⏳ 尚未完成（联调 / 打包 / 普通用户接入）：
-  - 桌面端 3010 桥接入正式工程（**代码已落地 2026-09-16**；仅剩 3002/3001 退役 + R2 渲染端回传链路待办，见下）。
-  - 正式工程内的桌面端集成测试与 `dist:mac` / `dist:win` **真实构建产物**（本轮仅做了 Node 层隔离 smoke 测试 12/12，未构建 `.app`）。
-  - R2 渲染端→main 的结果回传链路（Bills/OrderPrint 组件改动），需真实出纸验证，留待打印验证步骤。
+  - 桌面端 3010 桥接入正式工程（**代码已落地 2026-09-16**；仅剩 3002/3001 退役，见下）。
+  - 正式工程内的桌面端集成测试与 `dist:mac` / `dist:win` **真实构建产物**（本轮仅做了 Node 层隔离 smoke 测试 12/12 + stub 链路验证，未构建 `.app`）。
+  - R2 渲染端→main 的结果回传链路（Bills/OrderPrint 组件改动）**代码已完成**（见上），仅剩真实出纸端到端验证，留待打印验证步骤。
+  - **【当前真实阻塞】真实后台连接器凭证解析接口未部署**：`https://grainservice.club:8443/nongxinle/api/connector/credential/resolve` 返回 **404**（`ConnectorCredentialController` 源码在 `nongxinle-server` 但**未部署到该服务器**）；而同环境 `webNxDisGetTodayOrderCustomer` 返回 200。后果：连接器 `--live` 模式在 `get_delivery_customers` 即报 `连接器凭证无效或已失效: HTTP 404`，**真实授权配送商识别与订单预览暂不可达**。最小解法见第五节第 6 项。本地 `localhost:8080` 当前未运行（连接被拒），也非可用后台。
   - 普通用户凭证获取/查看有效期/撤销的真实 UI 入口（目前仅有后端 `/api/connector/credential/*`，依赖现有登录会话；文档中曾误写的「开放平台→连接器凭证」菜单已删除）。
 - 🚫 尚未授权 / 尚未执行（不得写为已验收）：
   - **真实出纸**（仅在用户授权并在生产环境实测后验收）。
@@ -188,14 +198,21 @@ mcp-task-runner.js：processTask(task, deps)
 > 只列当前实际遗留项，不扩展新功能。
 
 ### 实际遗留项（待办）
-1. **桌面端整合（代码落地已完成，剩余收尾）**：3010 桥 Electron 侧（`mcp-bridge-client.js` / `mcp-task-runner.js` / `main.js` 接线）**已于 2026-09-16 按 `ai-priter-electic` 真实结构落地并通过隔离测试**。剩余：
+1. **桌面端整合（代码落地已完成，剩余收尾）**：3010 桥 Electron 侧（`mcp-bridge-client.js` / `mcp-task-runner.js` / `main.js` 接线）**已于 2026-09-16 按 `ai-priter-electic` 真实结构落地并通过隔离测试**。R2 渲染端结果回传（`preload.js` + `Bills.vue`）**已于 2026-09-16 晚本机联调轮落地，代码完整、仅待真实出纸验证**。剩余：
    - **3002 / 3001 退役**：待 3010 替代链路本机验证完成、确认 3002 调用已迁移后再退出（本轮保留，不删）。
-   - **R2 渲染端→main 结果回传链路**：`main.js` 侧 `mcp-print-result` handler 已就绪；需在 Bills.vue `runMcpDeliveryPrint`/`waitAndTriggerOrderViewPrint` 与 OrderPrint 组件 `printOnly()` 出纸完成后经 IPC 回传 `taskId+success`。**本轮未做**（避免改动既有出纸业务，且需真实出纸验证），留待打印验证步骤与用户配合。
-   - — *代码落地：已完成；收尾：待打印验证步骤*
+   - R2 真实出纸端到端验证：需用户在 GrainPrint 内登录并授权选定订单/打印机/份数后实测（受理≠完成、成功/失败/超时回传、结果未知不自动重打）。— *代码：已完成；验证：待用户授权*
 2. **桥接层部门级校验**：确认并在 `processTask` 补 `departmentId` 归属比对（需先明确登录会话可打印部门集合）。— *待确认+实施*
-3. **正式工程构建与测试**：在干净检出上跑 `dist:mac`，产出真实 `.app`；补桌面端集成测试（本轮仅 Node 层隔离测试，未构建 `.app`）。— *待实施*
+3. **正式工程构建与测试**：在干净检出上跑 `dist:mac`，产出真实 `.app`；补桌面端集成测试（本轮仅 Node 层隔离 smoke 12/12 + stub 链路验证，未构建 `.app`）。— *待实施*
 4. **普通用户接入 UI**：凭证获取/撤销的可视化入口（后端接口已具备）。— *待实施*
-5. **远端保存**：`grain-print-connector` 无 remote；`nongxinle-server` 9 个本地提交未 push；`ai-priter-electric` 当前已与远端一致（本轮 3010 落地将产生新本地提交，按用户要求**本轮不 push**）。— *待你确认远端归属后再 push*
+5. **远端保存**：`grain-print-connector` 无 remote；`nongxinle-server` 9 个本地提交未 push；`ai-priter-electric` 当前已与远端一致（本轮 3010 落地 + R2 + 文档更新将产生新本地提交，按用户要求**本轮不 push**）。— *待你确认远端归属后再 push*
+6. **【本机联调轮新增】测试接入与配置修正**：
+   - `~/.workbuddy/mcp.json` 已备份为 `~/.workbuddy/mcp.json.bak-20260916`，新增测试 server `grain-print-local-test`（command 指向 managed Node `/Users/lpy/.workbuddy/binaries/node/versions/22.22.2-3/bin/node`，args 指向 `grain-print-connector/local-test/run-connector-live.js`），仅加测试连接、保留其余 server 不动。
+   - **Node 路径纠正**：managed Node 真实目录为 `22.22.2-3`（非 `22.22.2`）。本轮测试 server 已用正确路径。**提示**：现有 `mcp.json` 中 `grain-print` / `bwl-*` / `ibook` 四 server 仍误指不存在的 `22.22.2`，按用户「保留其他 server」要求本轮未改，建议后续一并修正。
+   - 隔离：测试用 3011 端口、独立 `bridge-secret`/`tasks.json`/`executed.json`/`token`（0600），不触碰 `~/.grain-print-mcp`、不消费在用任务、不触发打印。
+7. **【当前真实阻塞 · 需用户操作】真实后台连接器凭证解析接口未部署**：`/nongxinle/api/connector/credential/resolve` 在 `grainservice.club:8443` 返回 404，`--live` 验证在 `get_delivery_customers` 即报 `连接器凭证无效或已失效: HTTP 404`。当前 `local-test/token` 文件存在但为**空（0 字节）**。需用户二选一：
+   - **(A) 部署凭证接口**：将 `nongxinle-server` 的 `ConnectorCredentialController`（含 `credential/resolve`）部署到 `grainservice.club:8443`；或本地起 dev 后端（`localhost:8080`，当前未运行）。
+   - **(B) 提供真实 token**：把真实连接器 token 写入 `grain-print-connector/local-test/token`（0600，**绝不进聊天/Git/日志**），再跑 `verify-chain.js --live` 即可看到真实连接/查询/预览。
+   - 在此之前，真实授权链路不可达；可用 `verify-chain.js`（默认 stub）先完整看到连接/查询/预览/桥握手效果。
 
 ### 操作边界（硬约束）
 - **不用临时副本或安装包覆盖正式工程**：整合时对照真实源码结构重写/适配，不整体拷贝。
