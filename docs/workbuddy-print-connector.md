@@ -212,7 +212,7 @@ mcp-task-runner.js：processTask(task, deps)
    - `~/.workbuddy/mcp.json` 已备份为 `~/.workbuddy/mcp.json.bak-20260916`，新增测试 server `grain-print-local-test`（command 指向 managed Node `/Users/lpy/.workbuddy/binaries/node/versions/22.22.2-3/bin/node`，args 指向 `grain-print-connector/local-test/run-connector-live.js`），仅加测试连接、保留其余 server 不动。
    - **Node 路径纠正**：managed Node 真实目录为 `22.22.2-3`（非 `22.22.2`）。本轮测试 server 已用正确路径。**提示**：现有 `mcp.json` 中 `grain-print` / `bwl-*` / `ibook` 四 server 仍误指不存在的 `22.22.2`，按用户「保留其他 server」要求本轮未改，建议后续一并修正。
    - 隔离：测试用 3011 端口、独立 `bridge-secret`/`tasks.json`/`executed.json`/`token`（0600），不触碰 `~/.grain-print-mcp`、不消费在用任务、不触发打印。
-7. **【当前真实阻塞 · 需用户操作】真实后台连接器凭证解析接口未部署**：`/nongxinle/api/connector/credential/resolve` 在 `grainservice.club:8443` 返回 404，`--live` 验证在 `get_delivery_customers` 即报 `连接器凭证无效或已失效: HTTP 404`。当前 `local-test/token` 文件存在但为**空（0 字节）**。需用户二选一：
+7. ~~**【当前真实阻塞 · 需用户操作】真实后台连接器凭证解析接口未部署**~~ —— **已于第七节解决**（本机后台 8081 具备 `connector/credential/resolve`，凭证已正规签发；下方 A/B 二选一不再适用，仅作历史记录）：`/nongxinle/api/connector/credential/resolve` 在 `grainservice.club:8443` 返回 404，`--live` 验证在 `get_delivery_customers` 即报 `连接器凭证无效或已失效: HTTP 404`。当前 `local-test/token` 文件存在但为**空（0 字节）**。需用户二选一：
    - **(A) 部署凭证接口**：将 `nongxinle-server` 的 `ConnectorCredentialController`（含 `credential/resolve`）部署到 `grainservice.club:8443`；或本地起 dev 后端（`localhost:8080`，当前未运行）。
    - **(B) 提供真实 token**：把真实连接器 token 写入 `grain-print-connector/local-test/token`（0600，**绝不进聊天/Git/日志**），再跑 `verify-chain.js --live` 即可看到真实连接/查询/预览。
    - 在此之前，真实授权链路不可达；可用 `verify-chain.js`（默认 stub）先完整看到连接/查询/预览/桥握手效果。
@@ -370,3 +370,113 @@ mcp-task-runner.js：processTask(task, deps)
 2. 信任后我会在本会话直接调用 `get_delivery_customers` / `preview_delivery_order` / `get_app_status` 复现上面的结果。
 3. 等你说「可以出纸」并**指定订单、打印机、份数**后，才进入 `confirm_print_delivery_order`；届时需先按 7.5 对齐主进程地址与桥接端口。
 4. 仍未做：push、npm 发布、平台审核、生产部署、替换 `/Applications`、真实出纸。
+
+---
+
+## 八、连接器已信任 + 桌面端接入 3011 桥（2026-09-17 凌晨第二轮）
+
+> 第七节的两项「需你操作」已完成：① 在 WorkBuddy 连接器管理页信任测试连接器 ② 桌面端连本机后台。
+> 本节所有状态均为**实调结果**（WorkBuddy 侧调 MCP 工具 + 桥端口实测），无模拟数据。
+
+### 8.1 连接器已信任，工具在本会话可用
+
+WorkBuddy「连接器 → MCP 服务管理」中 `grain-print-local-test` 已开启（5 个 MCP 均启用）。本会话可直接调用该连接器暴露的
+**6 个工具**：`get_app_status`、`get_delivery_customers`、`preview_delivery_order`、`confirm_print_delivery_order`、
+`print_each_subdepartment_delivery_order`、`get_print_task_status`。**第七节 7.6 第 1 步的阻塞已消除。**
+
+### 8.2 WorkBuddy 侧真实复现结果（全部实调）
+
+```
+=== get_delivery_customers ===
+{ "success": true, "disId": 160,
+  "customers": [ { "id": 1417, "name": "米线李", "subDepartmentCount": 0,
+                   "subDepartments": [], "requiresPrintModeChoice": false } ], "total": 1 }
+
+=== preview_delivery_order(1417) ===
+{ "success": true, "disId": 160, "departmentId": 1417, "printMode": "all",
+  "orderCount": 2, "totalAmount": 32, "totalAmountHanzi": "叁拾貳元整",
+  "items": [
+    { "orderId": 204803, "goodsName": "油菜",       "standard": "斤", "quantity": "5", "weight": "5", "price": "2",  "subtotal": "10.0" },
+    { "orderId": 204804, "goodsName": "红黄彩椒各", "standard": "个", "quantity": "5", "weight": "2", "price": "11", "subtotal": "22.0" } ],
+  "orderVersion": "0109318fb198fdc5", "message": "预览数据（未入队）" }
+```
+
+与第七节 7.3（直连 `verify-chain.js`）逐项一致 —— 说明「WorkBuddy 内调用」与「脚本直调」走的是**同一条真实链路**。
+
+### 8.3 桌面端接入 3011 桥（本轮实际操作）
+
+- 实况核对：vite 于 `01:20:25` 启动（已加载 `vue/.env.development.local` → 本机 8081）；**Electron 主进程当时未运行**（仅 vite 在 3000）。
+- 启动命令（在 `ai-priter-electic/` 下）：
+
+```bash
+env -u ELECTRON_RUN_AS_NODE -u NODE_OPTIONS \
+  GRAIN_BRIDGE_PORT=3011 \
+  GRAIN_BRIDGE_SECRET_PATH=<grain-print-connector>/local-test/bridge-secret \
+  GRAIN_EXECUTED_STORE_PATH=<grain-print-connector>/local-test/executed.json \
+  NXL_DISPATCH_API_BASE_URL=http://127.0.0.1:8081/nongxinle_server_war_exploded/api/ \
+  ./node_modules/.bin/electron .
+```
+
+- **两个必须先清掉的环境变量**（否则桌面端根本起不来）：见 8.5 坑 1。
+
+### 8.4 桥侧最终状态（`get_app_status` 实调）
+
+```json
+{ "backend":    { "ok": true, "disId": 160, "scope": "print:delivery" },
+  "grainPrint": { "connected": true, "disId": "160", "printerAvailable": true,
+                  "version": "1.0.0", "freshHeartbeat": true },
+  "pendingTasks": 0,
+  "identityMatch": true }
+```
+
+| 字段 | 含义与结论 |
+|---|---|
+| `backend.ok` | 连接器凭证在本机后台有效（`resolve` 通过），scope 为 `print:delivery` |
+| `grainPrint.connected` + `freshHeartbeat` | 桌面端**真的**在轮询 3011 桥（心跳 < 30s） |
+| `identityMatch: true` | 连接器授权配送商（160）= 桌面端登录会话配送商（160）—— **越权打印防线成立** |
+| `printerAvailable: true` | 桌面端已读到默认打印机 `EPSON_LQ_730K`（`~/Library/Application Support/粒子/printer-config.json`） |
+| `pendingTasks: 0` | 3011 队列空，**未消费正在使用程序里的待打印任务** |
+
+### 8.5 本轮踩到的坑（重要，避免重复踩）
+
+| # | 坑 | 现象 | 正解 |
+|---|---|---|---|
+| 1 | 宿主环境变量污染 Electron 启动 | `ELECTRON_RUN_AS_NODE=1` 使 Electron 以纯 Node 运行，`require('electron').app` 为 `undefined` → `main.js:86 TypeError: Cannot read properties of undefined (reading 'isPackaged')` 秒退 | 启动前 `env -u ELECTRON_RUN_AS_NODE`；同理清 `NODE_OPTIONS`（WorkBuddy 注入的语言 shim） |
+| 2 | 用 `curl -X POST /bridge/identity -d '{}'` 探活 | 该端点是**写**接口，把身份记录覆盖成 `disId: undefined` → 状态出现 `connected: true` 但 `identityMatch: false` 的**假状态** | 探活只用 `GET /bridge/tasks?disId=160`（只读）；identity 交给桌面端自己上报 |
+| 3 | 用 GET 打 `/bridge/identity`、`/bridge/heartbeat` | 返回 `not found`（路由只挂 POST） | 不要手工打这两个端点 |
+| 4 | 桌面端刚启动就查状态 | 首启 ~10s 内可能仍是 `connected: false`（轮询 tick 未跑/窗口未就绪） | 等至少一个轮询周期（2s）再查；必要时重启桌面端 |
+
+### 8.6 只读诊断技巧：用 CDP 读渲染端真实登录态
+
+```bash
+./node_modules/.bin/electron . --remote-debugging-port=9222
+curl -s http://127.0.0.1:9222/json/list      # 取 webSocketDebuggerUrl
+# 再经 CDP Runtime.evaluate 读取：
+#   JSON.parse(localStorage.getItem('disUser')).nxDiuDistributerId
+```
+
+实测 `nxDiuDistributerId = 160`，与连接器凭证 disId **同源同值**。
+即「身份一致性」来自**真实登录会话**，不是靠环境变量硬塞：`GRAIN_LOCAL_DIS_ID`（文档中的测试注入点）**本轮未使用**。
+
+### 8.7 第七节 7.5「出纸前必须对齐的两项」——本轮已对齐
+
+| 环节 | 7.5 状态 | 本轮结果 |
+|---|---|---|
+| Electron 主进程调度网关 | ⚠️ 默认仍指**生产** | ✅ 以 `NXL_DISPATCH_API_BASE_URL` 指本机 8081 启动 |
+| 桥接端口 | ⚠️ 连接器 3011 / 桌面端默认 3010 | ✅ 桌面端以 `GRAIN_BRIDGE_PORT=3011` 启动，两端一致 |
+| 身份一致性 | ✅ | ✅ `identityMatch: true`（实调） |
+| Electron 渲染端 | ✅ 本机 8081 | ✅ 未改 |
+
+### 8.8 未做 / 待你确认（含风险提示）
+
+- **真实打印未触发**：3011 队列保持空，`confirm_print_delivery_order` / `print_each_subdepartment_delivery_order` **均未调用**。
+- ⚠️ **当前环境已「热」**：桌面端已连 3011 桥并每 2s 轮询，**任何一次入队都会在 2s 内下发渲染端出纸**。
+  要出纸请明确给出**订单（部门）/ 打印机 / 份数**三项后再动手。
+- **疑似小问题（未改代码，待你定）**：渲染端挂载时 `vue/src/main.js:65` 的
+  `window.electronAPI?.setMcpSessionUser?.(store.state.disUser)` 传入了 Vue 响应式 Proxy，
+  Electron 结构化克隆失败 → 应用日志出现 `Uncaught Error: An object could not be cloned.`。
+  修法是传纯对象（如 `JSON.parse(JSON.stringify(obj))`）。当前不影响桥链路（桥走 `localStorage` 直读）。
+- 未做：push、npm 发布、平台审核、生产部署、替换 `/Applications`。
+- 沿用第五节遗留：3002/3001 退役、桥接层 `departmentId` 归属校验、正式 `.app` 构建、普通用户接入 UI。
+- 参考（无需处理）：`src/main-bf.js` 有 5 处 `localhost:8080/nongxinle_war_exploded`（旧上下文/端口），
+  但 `main.js` **不引用** `main-bf.js`，不在运行时链路，本轮未改。
