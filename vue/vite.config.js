@@ -37,6 +37,9 @@ export default defineConfig(({ mode }) => {
       '/api': {
         target: apiTarget,
         changeOrigin: true,
+        // 本地代理把后端 context path 隐藏为 /api；扫码登录的会话 Cookie
+        // 也必须改到浏览器实际访问的路径，订单明细请求才能携带它。
+        cookiePathRewrite: '/api',
         rewrite: (path) => path.replace(/^\/api/, ''),
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq) => {

@@ -188,6 +188,9 @@ export async function loadCustomerTodayOrders(disUser, customer) {
 }
 
 export function orderWorkbenchError(error, fallback = '读取失败，请稍后重试') {
+  if (Number(error?.response?.status) === 401) {
+    return '订单登录会话已失效，请退出后重新扫码登录';
+  }
   return error?.response?.data?.msg
     || error?.response?.data?.message
     || error?.message

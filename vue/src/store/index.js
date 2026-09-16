@@ -138,8 +138,21 @@ const store = createStore({  // 使用 createStore 替代 Vuex.Store
     },
     async logoutUserSession({ commit, dispatch }) {
       let desktopResult = { ok: true };
+      let orderSessionError = null;
+      let readCancelError = null;
       try {
         await dispatch('dispatch/cancelRead');
+      } catch (error) {
+        readCancelError = error?.message || '调度读取取消失败';
+      }
+      try {
+        await axiosInstance.post('nxdistributeruser/logoutDesktopOrderSession', null, {
+          showLoading: false,
+        });
+      } catch (error) {
+        orderSessionError = error?.message || '订单网页会话清理失败';
+      }
+      try {
         desktopResult = await window.electronAPI?.userSession?.logout?.() || { ok: true };
       } catch (error) {
         desktopResult = {
@@ -149,6 +162,13 @@ const store = createStore({  // 使用 createStore 替代 Vuex.Store
       } finally {
         commit('dispatch/RESET_RUNTIME_STATE');
         commit('CLEAR_USER_SESSION_CACHE');
+      }
+      if (orderSessionError || readCancelError) {
+        return {
+          ok: false,
+          message: [desktopResult.message, orderSessionError, readCancelError]
+            .filter(Boolean).join('；'),
+        };
       }
       return desktopResult;
     },

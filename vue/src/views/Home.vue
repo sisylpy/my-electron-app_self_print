@@ -57,6 +57,7 @@
 <script>
 
 import api from '../api/all.js'
+import axiosInstance from '../api/axios.js'
 import QRCode from 'qrcode'
 import { defaultRouteNameForUser } from '@/utils/disUserRole'
 import config from '@/config'
@@ -137,7 +138,9 @@ mounted() {
     api.checkLoginStatus(sessionId,{ showLoading: false }).then(async (response) => {
       const data = response.data;
       if (data.loggedIn) {
-        await this.completeLogin(data.user, data.dispatchAuth);
+        if (!await this.completeLogin(data.user, data.dispatchAuth)) {
+          await this.clearOrderSession();
+        }
       } else {
         console.log('用户未登录，继续轮询...');
       }
@@ -155,26 +158,46 @@ mounted() {
         return;
       }
       const testLogin = window.electronAPI?.userSession?.testLogin;
-      if (typeof testLogin !== 'function') {
-        this.testLoginError = '请在 Electron 桌面端使用测试登录';
-        return;
-      }
-
       this.testLoggingIn = true;
       try {
-        const result = await testLogin(userId);
-        if (!result?.ok || !result.data?.user) {
-          this.testLoginError = result?.message || '测试登录失败';
-          return;
+        let desktopSessionStored = false;
+        if (typeof testLogin === 'function') {
+          const result = await testLogin(userId);
+          if (!result?.ok || !result.data?.user) {
+            this.testLoginError = result?.message || '测试登录失败';
+            return;
+          }
+          desktopSessionStored = true;
         }
-        const accepted = await this.completeLogin(result.data.user, null, true);
+        // 测试开关只由服务器决定。网页会话由同源响应设置 HttpOnly Cookie；
+        // 不把 Electron 主进程保存的调度令牌交给页面。
+        const response = await axiosInstance.post('desktop-test-login/v1/browser-session',
+          { userId }, { showLoading: false });
+        const user = response?.data?.data;
+        if (Number(response?.data?.code) !== 0 || !user) {
+          throw new Error(response?.data?.msg || '测试订单会话建立失败');
+        }
+        const accepted = await this.completeLogin(user, null, desktopSessionStored);
         if (!accepted) {
+          await this.clearOrderSession();
           await window.electronAPI?.userSession?.logout?.();
         }
       } catch (error) {
-        this.testLoginError = error?.message || '测试登录失败，请检查测试服务器';
+        await this.clearOrderSession();
+        await window.electronAPI?.userSession?.logout?.();
+        this.testLoginError = error?.response?.data?.msg || error?.message
+          || '测试登录失败，请检查测试服务器及测试登录开关';
       } finally {
         this.testLoggingIn = false;
+      }
+    },
+
+    async clearOrderSession() {
+      try {
+        await axiosInstance.post('nxdistributeruser/logoutDesktopOrderSession', null,
+          { showLoading: false });
+      } catch (error) {
+        console.warn('[desktop-login] 订单网页会话清理失败:', error?.message);
       }
     },
 
@@ -217,7 +240,7 @@ mounted() {
       // 老板的短期令牌只交给 Electron 主进程校验并安全保存。
       const dispatchApi = window.electronAPI?.dispatchAuth;
       const isOwner = Number(user.nxDiuAdmin) === 0;
-      if (!dispatchSessionAlreadyStored && isOwner) {
+      if (!dispatchSessionAlreadyStored && isOwner && window.electronAPI) {
         if (!dispatchAuth?.accessToken || typeof dispatchApi?.adoptLoginSession !== 'function') {
           this.testLoginError = '桌面登录信息不完整，请重新登录';
           await window.electronAPI?.userSession?.logout?.();
@@ -234,6 +257,8 @@ mounted() {
           return false;
         }
       }
+      // 浏览器预览没有 Electron 主进程；扫码轮询已在服务端绑定只读订单会话，
+      // 不把调度 Bearer 交给浏览器或存进 localStorage。
 
       this.$store.commit('SET_DISUSER', user);
       const requestedRoute = this.$route.query?.returnTo;
@@ -264,7 +289,9 @@ mounted() {
         api.checkLoginStatus(sessionId).then(async (response) => {
           const data = response.data;
           if (data.loggedIn) {
-            await this.completeLogin(data.user, data.dispatchAuth);
+            if (!await this.completeLogin(data.user, data.dispatchAuth)) {
+              await this.clearOrderSession();
+            }
           } else {
             console.log('用户未登录，继续轮询...');
           }
