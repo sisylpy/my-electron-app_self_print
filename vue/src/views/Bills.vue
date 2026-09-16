@@ -1480,9 +1480,16 @@
                             this.mcpTeeLog(
                                 `★ 就绪，调用 printOnly（${pages.length} 页） dep=${expected.nxDepId}（已确认清空后再拉单）`
                             );
-                            await comp.printOnly();
-                            this.mcpTeeLog('★ printOnly 已完成');
-                            _mcpReport(true, 'printed');
+                            const printOutcome = await comp.printOnly();
+                            this.mcpTeeLog('★ printOnly 返回: ' + JSON.stringify(printOutcome));
+                            // R2：不能因为「调用返回」就报告打印成功。按可确认结果回传：
+                            // success=true 表示每一页都收到成功回执（语义＝打印任务已进入系统打印队列）；
+                            // 物理出纸完成由软件无法确认，故失败/未知一律如实回传失败，绝不自动重打。
+                            if (printOutcome && printOutcome.success) {
+                                _mcpReport(true, 'printed');
+                            } else {
+                                _mcpReport(false, (printOutcome && printOutcome.reason) || 'print-failed');
+                            }
                             return;
                         }
                     }

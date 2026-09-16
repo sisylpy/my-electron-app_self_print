@@ -1951,7 +1951,14 @@ let res = await api.phoneGetToFillDepOrders(requestData);
             
             // 显示打印蒙版
             this.isPrinting = true;
-            
+
+            // R2 结果回传：统计真实打印结果，供调用方（Bills.vue）判定成功/失败。
+            // 注意：printOnly 历史上会吞掉单页错误（catch 内 continue）并正常 resolve，
+            // 因此「调用返回」不等于打印成功，必须由这里给出可判定的结果。
+            let printedPages = 0;
+            let failedPages = 0;
+            let lastError = null;
+
             try {
                 // 打印前重新加载打印机配置，确保使用最新的设置
                 console.log("📊 [printOnly] 打印前组件字体大小:", {
@@ -1983,12 +1990,12 @@ let res = await api.phoneGetToFillDepOrders(requestData);
 
             if (!this.printPagesData || this.printPagesData.length === 0) {
                 console.error("❌ [printOnly] printPagesData为空，无法打印");
-                return;
+                return { success: false, reason: 'no-pages', totalPages: 0, printedPages, failedPages };
             }
 
             if (typeof window.electronAPI === 'undefined') {
                 console.warn("⚠️ [printOnly] 警告：不在Electron环境中，无法调用打印功能");
-                return;
+                return { success: false, reason: 'not-electron', totalPages: this.printPagesData.length, printedPages, failedPages };
             }
 
             for (let i = 0; i < this.printPagesData.length; i++) {
@@ -2066,10 +2073,11 @@ let res = await api.phoneGetToFillDepOrders(requestData);
                         );
                     } else {
                         console.error("❌ [printOnly] 错误：所有ID都为-1，无法确定调用哪个打印接口！");
-                        return;
+                        return { success: false, reason: 'no-target', totalPages: this.printPagesData.length, printedPages, failedPages };
                     }
 
                     console.log(`✅ [printOnly] 第${pageIndex}页打印任务已提交（收到IPC回执）`, printResult);
+                    printedPages += 1;
 
                     if (i < this.printPagesData.length - 1) {
                         const physicalPrintTime = 1500;
@@ -2080,6 +2088,8 @@ let res = await api.phoneGetToFillDepOrders(requestData);
 
                 } catch (error) {
                     console.error(`❌ [printOnly] 打印第${pageIndex}页时出错:`, error);
+                    failedPages += 1;
+                    lastError = error;
                     continue;
                 }
             }
@@ -2087,8 +2097,20 @@ let res = await api.phoneGetToFillDepOrders(requestData);
             const totalOrderCount = this._filteredRows.filter(r => !r.isDepartmentHeader).length;
             console.log("\n✅ [printOnly] ========== 所有页面打印完成 ==========");
             console.log(`✅ [printOnly] 总计打印 ${this.printPagesData.length} 页，${totalOrderCount} 条订单`);
+
+            // R2：仅当每一页都收到成功回执且至少打印一页，才算可确认的成功。
+            // 语义边界：success = 打印任务已进入系统打印队列；物理出纸完成软件无法确认。
+            const allOk = failedPages === 0 && printedPages > 0;
+            return {
+                success: allOk,
+                totalPages: this.printPagesData.length,
+                printedPages,
+                failedPages,
+                reason: allOk ? null : (lastError ? String(lastError.message || lastError) : 'page-failed')
+            };
             } catch (error) {
                 console.error("❌ [printOnly] 打印过程中出错:", error);
+                return { success: false, totalPages: (this.printPagesData || []).length, printedPages, failedPages, reason: String(error && error.message ? error.message : error) };
             } finally {
                 // 无论成功还是失败，都隐藏打印蒙版
                 this.isPrinting = false;
