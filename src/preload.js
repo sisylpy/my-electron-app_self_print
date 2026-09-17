@@ -177,6 +177,13 @@ const electronAPI = Object.freeze({
       ipcRenderer.invoke('dispatch-auth-adopt-login-session', auth, options),
   }),
 
+  // 连接器凭证：渲染进程只收到必要结果（列表不含明文）；token 不跨 preload。
+  connectorCredential: Object.freeze({
+    issue: (input) => ipcRenderer.invoke('connector-credential-issue', input),
+    list: () => ipcRenderer.invoke('connector-credential-list'),
+    revokeAll: () => ipcRenderer.invoke('connector-credential-revoke-all'),
+  }),
+
   // 用户退出：由主进程清除安全会话、Cookie、网络缓存和自动登录标志。
   userSession: Object.freeze({
     logout: () => ipcRenderer.invoke('user-session-logout'),

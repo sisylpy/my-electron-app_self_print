@@ -647,6 +647,22 @@ function setupIpcHandlers() {
     return getDispatchGateway().loadSalesAnalysisProductCustomers(command);
   });
 
+  // 连接器凭证：仅暴露生成、查询本人授权、撤销本人全部授权。
+  // 配送商/用户归属完全由主进程持有的 dispatch Bearer 会话及后台决定，
+  // 渲染进程不可传入 disId/userId 或任意 token。
+  ipcMain.handle('connector-credential-issue', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().issueConnectorCredential(input);
+  });
+  ipcMain.handle('connector-credential-list', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().listConnectorCredentials();
+  });
+  ipcMain.handle('connector-credential-revoke-all', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().revokeConnectorCredential();
+  });
+
   // MCP 打印请求：只接受主窗口通过白名单 preload 发起的请求。
   ipcMain.on('mcp-print-request', (event, printParams) => {
     assertTrustedRendererEvent(event);

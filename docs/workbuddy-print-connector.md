@@ -206,7 +206,7 @@ mcp-task-runner.js：processTask(task, deps)
    - R2 真实出纸端到端验证：需用户在 GrainPrint 内登录并授权选定订单/打印机/份数后实测（受理≠完成、成功/失败/超时回传、结果未知不自动重打）。— *代码：已完成；验证：待用户授权*
 2. **桥接层部门级校验**：确认并在 `processTask` 补 `departmentId` 归属比对（需先明确登录会话可打印部门集合）。— *待确认+实施*
 3. **正式工程构建与测试**：在干净检出上跑 `dist:mac`，产出真实 `.app`；补桌面端集成测试（本轮仅 Node 层隔离 smoke 12/12 + stub 链路验证，未构建 `.app`）。— *待实施*
-4. **普通用户接入 UI**：凭证获取/撤销的可视化入口（后端接口已具备）。— *待实施*
+4. **普通用户接入 UI（代码已完成，待真机登录验证）**：在「设备与设置」页新增「WorkBuddy 连接」卡片，复用主进程 dispatch Bearer 会话调用 `issue/list/revoke`，仅暴露本人范围操作；老板账号本轮先跑通。详见第九节。— *代码：已完成；验证：待用户以正常登录在桌面客户端实测*
 5. **远端保存**：`grain-print-connector` 无 remote；`nongxinle-server` 9 个本地提交未 push；`ai-priter-electric` 当前已与远端一致（本轮 3010 落地 + R2 + 文档更新将产生新本地提交，按用户要求**本轮不 push**）。— *待你确认远端归属后再 push*
 6. **【本机联调轮新增】测试接入与配置修正**：
    - `~/.workbuddy/mcp.json` 已备份为 `~/.workbuddy/mcp.json.bak-20260916`，新增测试 server `grain-print-local-test`（command 指向 managed Node `/Users/lpy/.workbuddy/binaries/node/versions/22.22.2-3/bin/node`，args 指向 `grain-print-connector/local-test/run-connector-live.js`），仅加测试连接、保留其余 server 不动。
@@ -477,6 +477,41 @@ curl -s http://127.0.0.1:9222/json/list      # 取 webSocketDebuggerUrl
   Electron 结构化克隆失败 → 应用日志出现 `Uncaught Error: An object could not be cloned.`。
   修法是传纯对象（如 `JSON.parse(JSON.stringify(obj))`）。当前不影响桥链路（桥走 `localStorage` 直读）。
 - 未做：push、npm 发布、平台审核、生产部署、替换 `/Applications`。
-- 沿用第五节遗留：3002/3001 退役、桥接层 `departmentId` 归属校验、正式 `.app` 构建、普通用户接入 UI。
+- 沿用第五节遗留：3002/3001 退役、桥接层 `departmentId` 归属校验、正式 `.app` 构建。（普通用户接入 UI 已于第九节完成，移出本遗留。）
 - 参考（无需处理）：`src/main-bf.js` 有 5 处 `localhost:8080/nongxinle_war_exploded`（旧上下文/端口），
   但 `main.js` **不引用** `main-bf.js`，不在运行时链路，本轮未改。
+
+---
+
+## 九、WorkBuddy 连接授权 UI 接入（2026-09-17 实施轮）
+
+> 目标：在「设备与设置」页补「WorkBuddy 连接」入口，让用户用**正常登录**自取、复制、查看、撤销自己的连接器凭证。
+> 不重做登录体系，不改打印业务，不自动修改 WorkBuddy 配置。
+
+### 9.1 边界与决策（按用户确认）
+- 本轮只支持**已能建立主进程 dispatch 会话的账号**（现状：仅 `nxDiuAdmin===0` 老板账号在 `Home.vue` 走 `adoptLoginSession`）。员工账号暂不放开 `Home.vue`，首轮支持范围 ≠ 永久禁止。
+- **身份防借用**：生成前先用 `dispatchAuth.getSession()` 取主进程会话摘要，要求 `session.disId` 与 `session.userId` **同时**等于当前登录 `store.state.disUser` 的 `nxDiuDistributerId` / `nxDistributerUserId`；不匹配（含上一个账号残留会话）一律禁止生成并提示。归属最终以服务端 `ConnectorCredentialController.requireDispatchUser` 解析的 Bearer 为准，页面角色不替代服务端授权。
+
+### 9.2 改动清单（仅桌面端，后台复用）
+1. `src/dispatch/dispatch-gateway.js`：新增 `issueConnectorCredential` / `listConnectorCredentials` / `revokeConnectorCredential`，复用既有 `request()`（自动带 `Authorization: Bearer`）。`apiPrefix='connector/credential/'`（`.../nongxinle/api/` 已由网关 base 提供，不再拼 `/api`）。
+   - `issue` 仅把 `scope` 经 query 传（`@RequestParam` 绑定，不放 JSON body）；默认 `ttlHours=2160`、`scope=print:delivery`。
+   - `revoke` **不接收渲染端 token，只走「撤销本人全部」**（`revokeAllForUser`）—— 因 `list` 不返回明文 token、无法按 token 精确撤销；这也契合 `revokeOwned` 的越权隔离设计（token 不离开后台）。
+   - `strictPayload` 仍校验无 `disId/userId` 等身份字段，渲染端无法伪造归属。
+2. `src/preload.js`：新增 `connectorCredential` 命名空间（`issue/list/revokeAll`），token 不跨 preload。
+3. `src/main.js`：新增 `connector-credential-issue` / `connector-credential-list` / `connector-credential-revoke-all` 三个 IPC 处理，均 `assertTrustedRendererEvent`。
+4. `vue/src/modules/setting/views/SettingsCenter.vue`：在「设备与设置」卡片网格新增「WorkBuddy 连接」卡片（沿用现有样式）：
+   - 展示配送商 / 操作账号 / 授权用途（print:delivery）。
+   - 「生成连接器凭证」按钮：主动点击才签发（`onMounted` / 登录不自动签发）；防重复点击；请求中账号切换则丢弃该异步结果，不显示到新账号。
+   - 生成后**仅展示一次**明文（只读 textarea + 复制），不进 localStorage / Git / 日志 / URL；`onUnmounted` 与 disUser 切换 `watch` 均清空明文与旧账号列表。
+   - 「已有授权」列表（`list`，不含明文）+「撤销全部本人授权」二次确认，明确提示会影响对应连接器。
+   - 浏览器预览（无 `window.electronAPI`）仅展示布局并提示「请在桌面客户端中完成授权」；「凭证已生成」与「WorkBuddy 已连接」分开展示，不虚报连接状态。
+
+### 9.3 验证状态（如实区分）
+- ✅ 编译/语法：主进程三文件 `node --check` 通过；新卡片 `@vue/compiler-sfc` 解析 + 编译通过；ESLint 0 错误。
+- ✅ 路径/方法核实（读源码）：`issue/list/revoke` 路径、参数（`@RequestParam`）、返回结构、`list` 无明文、`revoke` 无 token 走全量、归属来自 Bearer 会话 —— 与实现一致。
+- ⏳ **真机签发/撤销验证**：须用户在**已确认隔离**的测试环境、用**正常登录**（非 `desktop-test-login` 的 userId 入口）在桌面客户端实测；未确认数据库隔离前不创建/撤销任何凭证。
+- 未做：push、npm 发布、平台审核、生产部署、替换 `/Applications`、真实打印。
+
+### 9.4 仍须用户确认/留意
+- **员工账号支持**：若「普通配送商」含非老板员工，需把 `Home.vue` 的 `adoptLoginSession` 放开到目标用户（不在本轮，且不能在页面侧伪造会话）。
+- 复用既有「本机后台 8081 + `NXL_DISPATCH_API_BASE_URL`」环境；签发与登录会话须同源同后台。

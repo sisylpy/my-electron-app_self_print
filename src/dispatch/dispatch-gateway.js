@@ -7,6 +7,7 @@ const {
 
 const API_PREFIX = 'desktop-dispatch/v1/';
 const LEGACY_DISPATCH_API_PREFIX = 'nxdisroutedispatch/';
+const CONNECTOR_CREDENTIAL_API_PREFIX = 'connector/credential/';
 const DEFAULT_API_BASE_URL = PRODUCTION_API_BASE_URL;
 const FORBIDDEN_IDENTITY_FIELDS = new Set([
   'disId',
@@ -851,6 +852,9 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     loadSalesAnalysisProductCustomers,
     loadMapConfig,
     loadMapTile,
+    issueConnectorCredential,
+    listConnectorCredentials,
+    revokeConnectorCredential,
     createId,
     dispose() {},
   };
