@@ -2,13 +2,15 @@
 
 > 本文档是持续更新的交接入口。整合完成、构建完成或发布状态变化时，更新**同一份**文件，
 > 不要新增「最终版 / 最终修正版」等平行文档。
-> 最后核查：2026-09-16（基线 `main` / `480da2dcc69967ba93c7bbc9609402e7c42ece7a`）。
+> 最后核查：2026-09-17（基线 `main` / `480da2dcc69967ba93c7bbc9609402e7c42ece7a`）。
 > 目录名按实际磁盘名记录：**ai-priter-electic**（非 electric）。
 > **2026-09-16 进度更新**：3010 桥的 Electron 侧（`mcp-bridge-client.js` / `mcp-task-runner.js` / `main.js` 接线）已落地正式工程，并通过隔离 smoke 测试（12/12）。详见第二节「哪些已实现」与第五节的遗留项更新。
 > **2026-09-16 晚 · 本机联调轮**：R2 渲染端结果回传链路已落地（`preload.js` 新增 `reportPrintResult` + `Bills.vue` 透传 `taskId` 并在成功/失败/超时回传）；修复连接器 `backend.js` URL 拼接丢上下文 Bug；新增 `local-test/` 持久化隔离测试体系；`~/.workbuddy/mcp.json` 备份后新增 `grain-print-local-test` 测试 server（Node 路径纠正为 `22.22.2-3`）。**真实后台 `/connector/credential/resolve` 仍 404（未部署），真实授权与订单查询暂不可达**，详见第四节 4.3 与第五节。
 > **2026-09-16 深夜 · 正式服务器数据库核实轮**：按用户要求改为查**正式服务器**数据库（不再折腾本机）。已确认 404 的**真正根因**是「生产库无 connector 表 + 生产 Tomcat 未部署 Controller」，而非凭证无效；并确定以服务器上**隔离测试库 `nongxinletest`**（含 disId=160 真实数据）作为联调环境，凭证表已迁移到该库。同时收尾两项：TLS 默认改为严格校验、printOnly 按可判定结果回传。详见第六节。
 
 > **2026-09-17 凌晨 · 本地真实后台联调轮**：按用户最终口径改为「**本地服务端 + 正式数据库 `nongxinle`**」。凭证表建在正式库；凭证经项目自带、仅测试环境开放的登录入口（`api/desktop-test-login/v1/session`，生产固定 404）取得真实调度会话后由 `/api/connector/credential/issue` 正式签发。**连接器 → 本机后台 → 正式库**真实链路已跑通：`get_delivery_customers` 返回 disId=160「米线李」、`preview_delivery_order(1417)` 返回 2 单 32 元（与桌面端打印中心一致）。同时修复预览字段名失真（金额恒 0、版本号恒定）。**剩下一步：在 WorkBuddy 连接器管理页信任 `grain-print-local-test`**，之后即可在本会话直接调用。详见第七节。
+
+> **2026-09-17 · 连接器凭证桌面端修复与验收**：`dispatch-gateway.js` 此前在返回对象里登记了 `issueConnectorCredential` / `listConnectorCredentials` / `revokeConnectorCredential` 却未定义，会导致网关加载即崩溃、连接器卡片不可用；该缺陷已在提交 `bbb52a2` 补齐，并通过实机验证——桌面端「设备与设置 → WorkBuddy 连接」卡片可正常签发 / 列出 / 撤销授权。`SettingsCenter.vue` 同步修正卡片会话字段的读取来源（从 `res.data` 取 `authenticated / userId / disId`）。验收报告单独放在连接器仓库 `grain-print-connector/ACCEPTANCE-20260917.md`（本文件不复制整篇）。生产 `resolve` 接口实测：带有效凭证返回 `active`、无凭证返回 `invalid`、撤销授权后立即失效，凭证生命周期安全闭环成立。
 
 ---
 

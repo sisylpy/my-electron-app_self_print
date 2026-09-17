@@ -359,9 +359,11 @@ async function loadDispatchSession() {
   }
   try {
     const res = await window.electronAPI.dispatchAuth.getSession();
-    dispatchSession.authenticated = Boolean(res?.authenticated);
-    dispatchSession.userId = res?.userId ?? null;
-    dispatchSession.disId = res?.disId ?? null;
+    // 网关返回 { ok, data: { authenticated, userId, disId, ... } }，会话字段在 data 里。
+    const sessionData = res && res.ok === false ? {} : (res?.data ?? {});
+    dispatchSession.authenticated = Boolean(sessionData.authenticated);
+    dispatchSession.userId = sessionData.userId ?? null;
+    dispatchSession.disId = sessionData.disId ?? null;
   } catch (error) {
     dispatchSession.authenticated = false;
   } finally {
