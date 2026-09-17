@@ -821,6 +821,37 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     }
   }
 
+  async function issueConnectorCredential(input = {}) {
+    const params = {};
+    if (input && input.ttlHours !== undefined) {
+      const ttl = Number(input.ttlHours);
+      if (!Number.isSafeInteger(ttl) || ttl <= 0 || ttl > 8760) {
+        return { ok: false, status: 400, errorCode: 'INVALID_TTL', message: '有效期小时数无效' };
+      }
+      params.ttlHours = ttl;
+    }
+    if (input && typeof input.scope === 'string' && input.scope.trim()) {
+      params.scope = input.scope.trim();
+    }
+    return request('POST', 'issue', {
+      apiPrefix: CONNECTOR_CREDENTIAL_API_PREFIX,
+      params,
+    });
+  }
+
+  async function listConnectorCredentials() {
+    return request('GET', 'list', {
+      apiPrefix: CONNECTOR_CREDENTIAL_API_PREFIX,
+    });
+  }
+
+  async function revokeConnectorCredential() {
+    // 不传 token：后端按 revokeAllForUser 处理，撤销当前用户全部凭证。
+    return request('POST', 'revoke', {
+      apiPrefix: CONNECTOR_CREDENTIAL_API_PREFIX,
+    });
+  }
+
   return {
     getSession,
     adoptLoginSession,
