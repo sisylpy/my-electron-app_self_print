@@ -1,6 +1,6 @@
-# ai-priter-electric 工作约定
+# ai-priter-electic 工作约定
 
-正式目录：`/Users/lpy/Documents/javaWeb/imJava/nongxinle/app/nxl-distributer/ai-priter-electric`
+正式目录：`/Users/lpy/Documents/javaWeb/imJava/nongxinle/app/nxl-distributer/ai-priter-electic`
 正式主线：`main`
 
 适用于本项目正式仓库；继承适用的上级 AGENTS.md 中的业务边界、Git 交付与密钥安全要求，不套用其他项目专属的构建和发布流程。
