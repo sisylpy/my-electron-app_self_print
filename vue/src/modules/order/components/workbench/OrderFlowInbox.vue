@@ -308,19 +308,19 @@ function handleTaskChanged() {
   min-height: 0;
   grid-template-columns: 238px minmax(0, 1fr);
   overflow: hidden;
-  border: 1px solid var(--product-border);
-  border-radius: var(--product-radius-lg);
+  border: 0;
+  border-radius: 0;
   background: var(--product-surface);
-  box-shadow: var(--product-shadow);
+  box-shadow: none;
 }
 
 .order-flow__queue {
   display: grid;
   min-height: 0;
   grid-template-rows: minmax(0, 1fr);
-  padding: 14px 11px 11px;
-  border-right: 1px solid var(--product-border);
-  background: #fbfcfb;
+  padding: 4px 11px 11px;
+  border-right: 0;
+  background: #fff;
 }
 
 .order-flow__detail-header {
@@ -413,7 +413,7 @@ function handleTaskChanged() {
 .order-flow__detail-header {
   min-height: 62px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--product-border);
+  border-bottom: 0;
 }
 .order-flow__customer-title {
   width: 150px;
@@ -473,7 +473,7 @@ function handleTaskChanged() {
 .order-flow__stage-page.is-progress {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
-  padding: 12px;
+  padding: 0;
   overflow: hidden;
 }
 .order-flow__stage-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -491,9 +491,20 @@ function handleTaskChanged() {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--product-border);
-  border-radius: 7px;
+  border: 0;
+  border-radius: 0;
   background: #fff;
+}
+
+.order-flow__progress-orders :deep(.order-list-scroll > .mb-3),
+.order-flow__workspace.is-orders :deep(.order-list-scroll > .mb-3) {
+  margin-bottom: 0 !important;
+}
+.order-flow__progress-orders :deep(.order-list-scroll > .mb-3 > .bg-light),
+.order-flow__workspace.is-orders :deep(.order-list-scroll > .mb-3 > .bg-light) {
+  padding: 6px 10px !important;
+  border-bottom: 0 !important;
+  background: #fff !important;
 }
 
 /* TodayOrders 的旧列宽总和大于工作台右侧可用宽度。

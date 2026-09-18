@@ -92,6 +92,7 @@ const mcpStatus = computed(() => {
 .product-header.is-order-workbench {
   grid-template-columns: minmax(0, 1fr);
   padding-left: 11px;
+  border-bottom: 0;
 }
 
 .product-header.is-order-workbench .product-header__context {
