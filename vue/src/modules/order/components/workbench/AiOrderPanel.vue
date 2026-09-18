@@ -38,10 +38,11 @@
         :selected-customer-entity="selectedCustomer"
         :selected-customer-name="selectedCustomerName"
         initial-upload-type="paste"
+        new-task-only
         :show-mode-selector="false"
         @upload-type-change="selectedMode = $event"
         @order-saved="$emit('order-saved', $event)"
-        @task-added="$emit('task-added', $event)"
+        @task-added="handleTaskAdded"
         @switch-to-today-orders="$emit('show-today-orders')"
       />
     </div>
@@ -71,7 +72,7 @@ const props = defineProps({
   customerError: { type: String, default: '' },
 });
 
-defineEmits([
+const emit = defineEmits([
   'select-customer',
   'select-department',
   'retry-customers',
@@ -80,15 +81,22 @@ defineEmits([
   'show-today-orders',
 ]);
 
+const newTaskSequence = ref(0);
 const workspaceKey = computed(() => (
-  `${props.selectedCustomerId || 'none'}:${props.selectedDepartmentId || 'root'}`
+  `${props.selectedCustomerId || 'none'}:${props.selectedDepartmentId || 'root'}:${newTaskSequence.value}`
 ));
 const placeOrderRef = ref(null);
 const selectedMode = ref('paste');
 
-watch(workspaceKey, () => {
+watch(() => [props.selectedCustomerId, props.selectedDepartmentId], () => {
   selectedMode.value = 'paste';
 });
+
+function handleTaskAdded(event) {
+  selectedMode.value = 'paste';
+  newTaskSequence.value += 1;
+  emit('task-added', event);
+}
 
 async function handleModeChange(mode) {
   if (mode === selectedMode.value) return;

@@ -5,7 +5,7 @@
             <div class="col-md-4">
                 <div class="card h-100">
                     <!-- 任务：添加新内容 + 部门任务列表 同一行 -->
-                    <div v-if="depId  && source === 'placeOrder' && taskList.length > 0"
+                    <div v-if="!newTaskOnly && depId && source === 'placeOrder' && taskList.length > 0"
                          class="card-header py-2 px-2 d-flex align-items-center flex-wrap gap-1"
                          style="flex-shrink: 0;">
                         <button
@@ -231,6 +231,10 @@
                 default: 'placeOrder',
                 validator: (v) => !v || v === 'placeOrder' || v === 'taskOrder'
             },
+            newTaskOnly: {
+                type: Boolean,
+                default: false
+            },
             depId: {
                 type: Number,
                 default: null
@@ -381,7 +385,7 @@
             },
             depId: {
                 handler(val) {
-                    if (val != null) this.loadTaskList();
+                    if (val != null && !this.newTaskOnly) this.loadTaskList();
                     else this.taskList = [];
                 },
                 immediate: true
@@ -423,6 +427,7 @@
              * @param {number|null} [selectTaskId] - 刷新后要选中的任务 ID，不传则选中第一个并 emit select-task
              */
             async loadTaskList(selectTaskId) {
+                if (this.newTaskOnly) return [];
                 this.loadingTaskList = true;
                 console.log("loadTaskListloadTaskList")
                 try {
@@ -484,6 +489,7 @@
             },
             /** 将接口返回的 task 追加/更新到任务列表并选中，避免重复请求 loadTaskList */
             addOrUpdateTaskAndSelect(task) {
+                if (this.newTaskOnly) return;
                 if (!task) return;
                 const taskId = task.nxOcrTaskId != null ? task.nxOcrTaskId : task.id;
                 if (taskId == null) return;

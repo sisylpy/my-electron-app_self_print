@@ -64,6 +64,10 @@ import api from '../services/orderApi';
             showModeSelector: {
                 type: Boolean,
                 default: true
+            },
+            newTaskOnly: {
+                type: Boolean,
+                default: false
             }
         },
         data() {
@@ -1850,6 +1854,7 @@ import api from '../services/orderApi';
                 this.currentTask = null;
                 // 清空当前任务的订单数据
                 this.clearLocalByUploadType(sourceType);
+                if (this.newTaskOnly) return;
                 // 刷新任务列表
                 let taskList = [];
                 try {
@@ -1899,6 +1904,7 @@ import api from '../services/orderApi';
                 this.$emit('task-added');
                 // 清空当前任务的订单数据，避免任务完成后仍显示旧数据（特别是只剩一个任务时）
                 this.clearLocalByUploadType(sourceType);
+                if (this.newTaskOnly) return;
                 let taskList = [];
                 try {
                     if (sourceType === 'paste' && this.$refs.pasteUploadRef?.loadTaskList) {

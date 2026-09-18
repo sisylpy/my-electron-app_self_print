@@ -6,7 +6,7 @@
                 <div class="card h-100">
                     <slot name="task-selector"></slot>
                     <!-- 任务：添加新内容 + 部门任务列表（仅 placeOrder 显示；TaskOrder 中不显示此块） -->
-                    <div v-if="source === 'placeOrder' && depId && taskList.length > 0"
+                    <div v-if="!newTaskOnly && source === 'placeOrder' && depId && taskList.length > 0"
                          class="card-header py-2 px-2 d-flex align-items-center flex-wrap gap-1 image-task-header"
                          :class="{ 'image-task-header--flash': headerFlash }"
                          style="flex-shrink: 0;">
@@ -336,6 +336,10 @@
                 default: 'placeOrder',
                 validator: (v) => !v || v === 'placeOrder' || v === 'taskOrder'
             },
+            newTaskOnly: {
+                type: Boolean,
+                default: false
+            },
             depId: {
                 type: [Number, String],
                 default: null
@@ -467,7 +471,7 @@
         watch: {
             depId: {
                 handler(val) {
-                    if (val != null) this.loadTaskList();
+                    if (val != null && !this.newTaskOnly) this.loadTaskList();
                     else this.taskList = [];
                 },
                 immediate: true
@@ -486,6 +490,7 @@
             },
 
             async loadTaskList(selectTaskId, opts) {
+                if (this.newTaskOnly) return [];
                 this.loadingTaskList = true;
                 try {
                     // 支持单次请求使用返回任务的类型（如 pasteSearchGoods 返回的 task 可能是 type=3）

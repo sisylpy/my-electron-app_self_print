@@ -2,7 +2,7 @@
     <div class="upload-section" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
        
         <!-- 任务栏：添加新表格 + 任务列表（仅 placeOrder 且 depId 有值时显示，保存订单后 loadTaskList 会刷新） -->
-        <div v-if="depId && source === 'placeOrder' && (taskList.length > 0 || loadingTaskList)" class="card-header py-2 px-2 d-flex align-items-center flex-wrap gap-1 mb-2" style="flex-shrink: 0;">
+        <div v-if="!newTaskOnly && depId && source === 'placeOrder' && (taskList.length > 0 || loadingTaskList)" class="card-header py-2 px-2 d-flex align-items-center flex-wrap gap-1 mb-2" style="flex-shrink: 0;">
             <button
                 type="button"
                 class="btn btn-sm flex-shrink-0"
@@ -393,6 +393,10 @@ export default {
             default: 'placeOrder',
             validator: (v) => !v || v === 'placeOrder' || v === 'taskOrder'
         },
+        newTaskOnly: {
+            type: Boolean,
+            default: false
+        },
         depId: {
             type: Number,
             default: null
@@ -482,7 +486,7 @@ export default {
                 this.cancelScheduledTaskListLoad();
                 this.taskList = [];
                 this.activeTaskId = null;
-                if (val != null) {
+                if (val != null && !this.newTaskOnly) {
                     // 先渲染可编辑表格；历史任务在浏览器空闲时静默读取。
                     this.scheduleTaskListLoad();
                 }
@@ -503,7 +507,7 @@ export default {
         }
     },
     mounted() {
-        if (this.depId != null) this.scheduleTaskListLoad();
+        if (this.depId != null && !this.newTaskOnly) this.scheduleTaskListLoad();
         this.$nextTick(() => {
             this.updateTableScrollState();
             this.bindTableScrollListener();
@@ -532,6 +536,7 @@ export default {
             this._taskListLoadTimer = null;
         },
         scheduleTaskListLoad() {
+            if (this.newTaskOnly) return;
             this.cancelScheduledTaskListLoad();
             const loadInBackground = () => {
                 this._taskListIdleId = null;
@@ -637,6 +642,7 @@ export default {
          * @param {{selectFirst?: boolean, silent?: boolean}} [options]
          */
         async loadTaskList(selectTaskId, options = {}) {
+            if (this.newTaskOnly) return [];
             const requestDepId = this.depId;
             const selectFirst = options.selectFirst !== false;
             if (!options.silent) this.loadingTaskList = true;
@@ -716,6 +722,7 @@ export default {
             return names.join(',') + '...';
         },
         addOrUpdateTaskAndSelect(task) {
+            if (this.newTaskOnly) return;
             if (!task) return;
             const taskId = task.nxOcrTaskId != null ? task.nxOcrTaskId : task.id;
             if (taskId == null) return;
