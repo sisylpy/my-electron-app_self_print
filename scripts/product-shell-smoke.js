@@ -42,7 +42,14 @@ const main = read('vue/src/main.js');
 const router = read('vue/src/router/index.js');
 const navigation = read('vue/src/app/navigation/productNavigation.js');
 const bills = read('vue/src/views/Bills.vue');
+const applyPanel = read('vue/src/components/Applys/ApplyPanel.vue');
 const shell = read('vue/src/app/layout/ProductShell.vue');
+
+const printActions = applyPanel.indexOf('order-preview-actions');
+check(printActions > 0
+  && printActions < applyPanel.indexOf('class=" card  shadow-lg p-20"')
+  && applyPanel.indexOf('order-preview-actions', printActions + 'order-preview-actions'.length) === -1,
+  '打印操作栏只出现一次，且位于长订单预览之前');
 
 check(
   app.includes('<ProductShell') && app.includes('$route.meta.shell !== false'),

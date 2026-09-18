@@ -2569,7 +2569,7 @@
         min-height: 0;
     }
 
-    /* 屏幕预览只让订单表格滚动，底部下载、打印操作始终留在窗口内。 */
+    /* 屏幕预览只让订单表格滚动，上方操作栏不随长订单移出窗口。 */
     @media screen {
         .main-content-container > :deep(.applyBodyPage) {
             overflow: hidden;
@@ -2588,17 +2588,18 @@
             overflow-y: auto;
         }
 
-        .main-content-container > :deep(.applyBodyPage > .order-preview-actions) {
+        .main-content-container > :deep(.applyBodyPage > .d-flex.justify-content-between.p-20) {
+            order: -1;
             flex: 0 0 auto;
             flex-wrap: wrap;
             gap: 12px;
             align-items: center;
             padding: 12px 16px;
-            border-top: 1px solid #dde5e0;
+            border-bottom: 1px solid #dde5e0;
             background: #fff;
         }
 
-        .main-content-container > :deep(.applyBodyPage > .order-preview-actions .pagination) {
+        .main-content-container > :deep(.applyBodyPage > .d-flex.justify-content-between.p-20 .pagination) {
             margin-bottom: 0;
         }
     }
@@ -2707,7 +2708,5 @@
     }
 
 </style>
-
-
 
 
