@@ -350,7 +350,7 @@ export default {
 }
 
 .analysis-toolbar .summary-grid {
-  flex: 1;
+  flex: 0 1 660px;
   min-width: 0;
   gap: 0;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -358,7 +358,7 @@ export default {
 
 .analysis-toolbar .summary-grid article {
   min-width: 0;
-  padding: 3px 12px;
+  padding: 3px 8px;
   border: 0;
   border-right: 1px solid #dce7e1;
   border-radius: 0;
@@ -370,7 +370,7 @@ export default {
 .analysis-toolbar .summary-grid strong { font-size: 20px; }
 .analysis-toolbar .analysis-filters { flex-shrink: 0; }
 
-@media (max-width: 1450px) {
+@media (max-width: 1150px) {
   .analysis-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }
   .analysis-toolbar .summary-grid { flex-basis: 100%; }
 }
