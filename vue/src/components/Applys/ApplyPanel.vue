@@ -131,7 +131,7 @@
 
                 </div>
 
-        <div class="d-flex justify-content-between p-20">
+        <div class="d-flex justify-content-between p-20 order-preview-actions">
             
             <div>
                 <ul class="pagination pagination-sm">
@@ -2713,4 +2713,3 @@ let res = await api.phoneGetToFillDepOrders(requestData);
 }
 
 </style>
-

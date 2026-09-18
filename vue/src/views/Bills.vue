@@ -2530,9 +2530,9 @@
         color: white; /* 选中时文字颜色 */
     }
 
-    /* 当父部门被选中时，子部门显示为白色 */
+    /* 父部门选中时仍是浅色底，子部门文字与父部门保持同一深绿色。 */
     .nav-pills .tab-item.active .tab-item-sub {
-        color: white;
+        color: #086d42;
     }
 
     .nav-pills .tab-item:hover {
@@ -2567,6 +2567,40 @@
         flex-direction: column;
         height: 100%;
         min-height: 0;
+    }
+
+    /* 屏幕预览只让订单表格滚动，底部下载、打印操作始终留在窗口内。 */
+    @media screen {
+        .main-content-container > :deep(.applyBodyPage) {
+            overflow: hidden;
+        }
+
+        .main-content-container > :deep(.applyBodyPage > .card) {
+            flex: 1 1 auto;
+            min-height: 0 !important;
+            overflow: hidden;
+        }
+
+        .main-content-container > :deep(.applyBodyPage > .card > .content-bill) {
+            flex: 1 1 auto;
+            min-height: 0;
+            max-height: none;
+            overflow-y: auto;
+        }
+
+        .main-content-container > :deep(.applyBodyPage > .order-preview-actions) {
+            flex: 0 0 auto;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            padding: 12px 16px;
+            border-top: 1px solid #dde5e0;
+            background: #fff;
+        }
+
+        .main-content-container > :deep(.applyBodyPage > .order-preview-actions .pagination) {
+            margin-bottom: 0;
+        }
     }
 
     .main-content-container .card {
@@ -2673,7 +2707,6 @@
     }
 
 </style>
-
 
 
 
