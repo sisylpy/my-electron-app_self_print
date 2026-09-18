@@ -1,6 +1,6 @@
 <template>
-  <header class="product-header" :class="{ 'is-dispatch': route.meta?.module === 'dispatch' }">
-    <div class="product-header__page">
+  <header class="product-header" :class="{ 'is-dispatch': route.meta?.module === 'dispatch', 'is-order-workbench': route.name === 'OrderWorkbenchV2' }">
+    <div v-if="route.name !== 'OrderWorkbenchV2'" class="product-header__page">
       <div>
         <h1>{{ pageTitle }}</h1>
         <p>{{ pageDescription }}</p>
@@ -87,6 +87,21 @@ const mcpStatus = computed(() => {
 
 .product-header__context {
   min-width: 0;
+}
+
+.product-header.is-order-workbench {
+  grid-template-columns: minmax(0, 1fr);
+  padding-left: 11px;
+}
+
+.product-header.is-order-workbench .product-header__context {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.product-header.is-order-workbench .product-header__runtime {
+  display: none;
 }
 
 .product-header__page {

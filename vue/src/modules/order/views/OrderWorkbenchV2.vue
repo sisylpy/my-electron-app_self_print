@@ -298,7 +298,7 @@ async function returnToOverview() {
 .order-workbench__header-stages {
   display: flex;
   min-width: 0;
-  width: 100%;
+  flex: 1;
   align-items: center;
   justify-content: flex-end;
   gap: 20px;

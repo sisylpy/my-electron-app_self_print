@@ -1,20 +1,15 @@
 <template>
   <section class="order-flow" aria-label="进行中订单工作台">
+    <Teleport to="#product-header-context">
+      <div class="order-flow__header-tools" aria-label="客户操作">
+        <label class="order-flow__search">
+          <span aria-hidden="true">⌕</span>
+          <input v-model="query" type="search" placeholder="搜索客户" aria-label="搜索客户">
+        </label>
+        <button type="button" class="order-flow__new-order" title="新建订单" aria-label="新建订单" @click="$emit('new-order')">＋</button>
+      </div>
+    </Teleport>
     <aside class="order-flow__queue">
-      <header>
-        <button type="button" class="order-flow__new-order" @click="$emit('new-order')">
-          <span>＋</span> 新建订单
-        </button>
-        <button type="button" class="order-flow__refresh" :disabled="listLoading" title="刷新工作台" @click="$emit('refresh-list')">
-          <span :class="{ 'is-spinning': listLoading }">↻</span>
-        </button>
-      </header>
-
-      <label class="order-flow__search">
-        <span aria-hidden="true">⌕</span>
-        <input v-model="query" type="search" placeholder="搜索客户">
-      </label>
-
       <div v-if="activeListError" class="order-flow__notice is-error">
         <span>{{ activeListError }}</span>
         <button type="button" @click="$emit('refresh-list')">重新读取</button>
@@ -39,7 +34,6 @@
             <span v-if="!smartMode && stats(customer).needsReview > 0" class="order-flow__pending">
               ({{ stats(customer).needsReview }}个待处理)
             </span>
-            <span v-else-if="!smartMode && stats(customer).allDone" class="order-flow__done">✓ 已全部完成</span>
           </span>
           <span v-if="!smartMode" class="order-flow__queue-metrics">
             <span>商品: {{ stats(customer).total }}个</span>
@@ -48,9 +42,6 @@
             <span>已出库: <em :class="{ 'is-incomplete': stats(customer).weighted < stats(customer).total }">{{ stats(customer).weighted }}个</em></span>
           </span>
           <span v-if="smartMode" class="order-flow__queue-state">查看提醒</span>
-          <span v-else :class="['order-flow__queue-state', `is-${stageFilter}`]">
-            <em>{{ stageCount(customer) }}</em>{{ currentStageShortLabel }}
-          </span>
         </button>
       </div>
     </aside>
@@ -59,7 +50,6 @@
       <template v-if="selectedCustomer">
         <header class="order-flow__detail-header">
           <div class="order-flow__customer-title">
-            <span>{{ currentStageLabel }}</span>
             <h2>{{ customerName(selectedCustomer) }}</h2>
           </div>
           <div
@@ -132,12 +122,12 @@
         <div v-else-if="stageFilter === 'all' || stageFilter === 'progress' || stageFilter === 'price'" class="order-flow__stage-page is-progress">
           <div class="order-flow__progress-orders">
             <TodayOrders
-              :today-order-list="snapshot.orders"
-              :today-order-dep-arr="snapshot.departments"
+              :today-order-list="stageOrders"
+              :today-order-dep-arr="stageDepartments"
               :today-order-trade-no="snapshot.tradeNo"
               :has-sub-departments="snapshot.hasSubDepartments"
               :selected-sub-department="null"
-              :today-order-total="snapshot.total"
+              :today-order-total="stageTotal"
               :selected-all-customer="customerId(selectedCustomer)"
               :selected-customer-name="customerName(selectedCustomer)"
               :selected-customer-entity="selectedCustomer"
@@ -151,12 +141,12 @@
         <div v-else class="order-flow__workspace is-orders">
           <TodayOrders
             batch-print-mode
-            :today-order-list="snapshot.orders"
-            :today-order-dep-arr="snapshot.departments"
+            :today-order-list="stageOrders"
+            :today-order-dep-arr="stageDepartments"
             :today-order-trade-no="snapshot.tradeNo"
             :has-sub-departments="snapshot.hasSubDepartments"
             :selected-sub-department="null"
-            :today-order-total="snapshot.total"
+            :today-order-total="stageTotal"
             :selected-all-customer="customerId(selectedCustomer)"
             :selected-customer-name="customerName(selectedCustomer)"
             :selected-customer-entity="selectedCustomer"
@@ -184,7 +174,7 @@ import TodayOrders from '@/components/TodayOrders.vue';
 import TaskOrderWorkspace from '../TaskOrderWorkspace.vue';
 import SmartReplenishmentComparison from './SmartReplenishmentComparison.vue';
 import { customerId, customerName } from '../../services/orderWorkbenchService';
-import { customerStageCount, customerVisibleInStage } from '../../services/orderWorkbenchStage';
+import { customerVisibleInStage, ordersVisibleInStage } from '../../services/orderWorkbenchStage';
 
 const props = defineProps({
   customers: { type: Array, default: () => [] },
@@ -235,29 +225,33 @@ const filteredCustomers = computed(() => smartMode.value ? props.allCustomers : 
 const activeListLoading = computed(() => smartMode.value ? props.allCustomersLoading : props.listLoading);
 const activeListError = computed(() => smartMode.value ? props.allCustomersError : props.listError);
 
+const stageOrders = computed(() => ordersVisibleInStage(props.snapshot.orders, props.stageFilter));
+const stageDepartments = computed(() => {
+  const departments = Array.isArray(props.snapshot.departments) ? props.snapshot.departments : [];
+  if (!['ready', 'progress', 'price'].includes(props.stageFilter)) return departments;
+  return departments.map(department => {
+    const depOrders = ordersVisibleInStage(department.depOrders, props.stageFilter);
+    return {
+      ...department,
+      depOrders,
+      depSubtotal: depOrders.reduce((total, order) => total + (Number(order.nxDoSubtotal) || 0), 0),
+    };
+  }).filter(department => department.depOrders.length > 0);
+});
+const stageTotal = computed(() => {
+  if (!['ready', 'progress', 'price'].includes(props.stageFilter)) return props.snapshot.total;
+  const orders = props.snapshot.hasSubDepartments
+    ? stageDepartments.value.flatMap(department => department.depOrders)
+    : stageOrders.value;
+  return orders.reduce((total, order) => total + (Number(order.nxDoSubtotal) || 0), 0);
+});
+
 const visibleCustomers = computed(() => {
   const keyword = query.value.trim().toLocaleLowerCase();
   return filteredCustomers.value.filter(
     customer => (smartMode.value || customerVisibleInStage(customer, props.stageFilter))
       && (!keyword || customerName(customer).toLocaleLowerCase().includes(keyword))
   );
-});
-
-const currentStageLabel = computed(() => {
-  if (smartMode.value) return '订单提醒';
-  if (props.stageFilter === 'all') return '全部订单';
-  if (props.stageFilter === 'review') return '识别待确认';
-  if (props.stageFilter === 'price') return '待写单价';
-  if (props.stageFilter === 'ready') return '可打印订单';
-  return '出货处理中';
-});
-
-const currentStageShortLabel = computed(() => {
-  if (props.stageFilter === 'all') return '项订单';
-  if (props.stageFilter === 'review') return '项待确认';
-  if (props.stageFilter === 'price') return '项待写单价';
-  if (props.stageFilter === 'ready') return '项可打印';
-  return '项处理中';
 });
 
 const emptyMessage = computed(() => {
@@ -271,10 +265,6 @@ const emptyMessage = computed(() => {
 
 function isSelected(customer) {
   return String(customerId(customer)) === String(customerId(props.selectedCustomer));
-}
-
-function stageCount(customer) {
-  return customerStageCount(customer, props.stageFilter);
 }
 
 function toggleSmartMode() {
@@ -319,13 +309,12 @@ function handleTaskChanged() {
 .order-flow__queue {
   display: grid;
   min-height: 0;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   padding: 14px 11px 11px;
   border-right: 1px solid var(--product-border);
   background: #fbfcfb;
 }
 
-.order-flow__queue > header,
 .order-flow__detail-header {
   display: flex;
   align-items: center;
@@ -333,38 +322,36 @@ function handleTaskChanged() {
   gap: 12px;
 }
 
-.order-flow__queue > header { padding: 0 2px 10px; }
-.order-flow__queue > header .order-flow__new-order {
+.order-flow__header-tools {
   display: flex;
-  height: 34px;
+  width: 216px;
+  min-width: 216px;
+  flex: none;
   align-items: center;
-  gap: 5px;
-  padding: 0 12px;
+  gap: 8px;
+  order: -1;
+}
+.order-flow__header-tools .order-flow__new-order {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  place-items: center;
+  padding: 0;
   border: 1px solid var(--product-primary);
   border-radius: 6px;
   color: #fff;
   background: var(--product-primary);
-  font-size: 10px;
+  font-size: 21px;
   font-weight: 900;
 }
-.order-flow__new-order > span { font-size: 15px; line-height: 1; }
-.order-flow__queue > header .order-flow__refresh {
-  display: grid;
-  width: 31px;
-  height: 31px;
-  place-items: center;
-  border: 1px solid var(--product-border);
-  border-radius: 5px;
-  color: var(--product-text-secondary);
-  background: #fff;
-}
-
 .order-flow__search {
   display: flex;
   height: 35px;
+  min-width: 0;
+  flex: 1;
   align-items: center;
   gap: 7px;
-  margin-bottom: 9px;
   padding: 0 9px;
   border: 1px solid var(--product-border);
   border-radius: 5px;
@@ -398,18 +385,14 @@ function handleTaskChanged() {
 .order-flow__list > button:hover { background: #f3f7f5; }
 .order-flow__list > button.is-active { border-color: #b9dfca; background: #eaf7f0; }
 .order-flow__queue-head { display: flex; min-width: 0; align-items: center; gap: 4px; }
-.order-flow__queue-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.order-flow__pending { flex: none; color: #cb3b3b; font-size: 9px; }
-.order-flow__done { flex: none; color: #08794b; font-size: 9px; }
-.order-flow__queue-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 4px; color: var(--product-text-secondary); font-size: 9px; }
+.order-flow__queue-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.order-flow__pending { flex: none; color: #cb3b3b; font-size: 10px; }
+.order-flow__queue-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; color: var(--product-text-secondary); font-size: 11px; }
 .order-flow__queue-metrics > span { white-space: nowrap; }
+.order-flow__queue-metrics > span:nth-child(-n + 2) { font-size: 12px; font-weight: 700; }
 .order-flow__queue-metrics em { color: #08794b; font-style: normal; font-weight: 800; }
 .order-flow__queue-metrics em.is-incomplete { color: #087f73; }
-.order-flow__queue-state { flex: 0 0 auto; color: var(--product-text-muted); font-size: 8px; white-space: nowrap; }
-.order-flow__queue-state em { margin-right: 2px; font-size: 10px; font-style: normal; font-weight: 900; }
-.order-flow__queue-state.is-review em { color: #a55319; }
-.order-flow__queue-state.is-price em { color: #a46017; }
-.order-flow__queue-state.is-ready em { color: #08794b; }
+.order-flow__queue-state { flex: 0 0 auto; color: var(--product-text-muted); font-size: 10px; white-space: nowrap; }
 
 .order-flow__detail {
   display: grid;
@@ -427,11 +410,8 @@ function handleTaskChanged() {
 .order-flow__customer-title {
   width: 150px;
   flex: none;
-  padding-left: 10px;
-  border-left: 3px solid var(--product-primary);
 }
-.order-flow__customer-title span { color: var(--product-primary-strong); font-size: 8px; font-weight: 900; }
-.order-flow__customer-title h2 { overflow: hidden; margin: 2px 0 0; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.order-flow__customer-title h2 { overflow: hidden; margin: 0; font-size: 18px; text-overflow: ellipsis; white-space: nowrap; }
 .order-flow__reminder-summary {
   display: flex;
   min-width: 0;

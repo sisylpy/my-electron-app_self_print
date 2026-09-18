@@ -45,3 +45,11 @@ export function isPrintableOrder(order) {
     && Number(order.nxDoPrice) > 0.1
     && Number(order.nxDoSubtotal) > 0;
 }
+
+export function ordersVisibleInStage(orders, stage) {
+  const rows = Array.isArray(orders) ? orders : [];
+  if (stage === 'ready') return rows.filter(isPrintableOrder);
+  if (stage === 'progress') return rows.filter(order => !isPrintableOrder(order));
+  if (stage === 'price') return rows.filter(order => !(Number(order?.nxDoPrice) > 0.1));
+  return rows;
+}
