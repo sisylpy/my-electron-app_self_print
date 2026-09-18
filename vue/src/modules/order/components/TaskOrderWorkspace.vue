@@ -5,11 +5,10 @@
         <!-- 内容区域 -->
         <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
             <TaskSelector
-                    v-if="isTaskOrderFromBills"
+                    v-if="isTaskOrderFromBills && uploadType !== 'image'"
                     :loading="loadingTaskListFromParent"
                     :tasks="taskListFromParent"
                     :selected-task-id="selectedTaskFromList?.nxOcrTaskId"
-                    :teleport-to="taskSelectorTeleportTo"
                     @select="onSelectTaskFromList"
             />
 
@@ -145,6 +144,15 @@
                     @select-task="handleSelectImageTask"
                     @add-new-image="handleImageAddNew"
                     @close-new-image="handleImageCloseNewContent">
+                <template #task-selector>
+                    <TaskSelector
+                            v-if="isTaskOrderFromBills"
+                            :loading="loadingTaskListFromParent"
+                            :tasks="taskListFromParent"
+                            :selected-task-id="selectedTaskFromList?.nxOcrTaskId"
+                            @select="onSelectTaskFromList"
+                    />
+                </template>
                 <template #order-list>
                     <OrderList
                             ref="imageOrderListRef"

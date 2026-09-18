@@ -63,12 +63,6 @@
             <h2>{{ customerName(selectedCustomer) }}</h2>
           </div>
           <div
-            v-if="stageFilter === 'review' && !smartMode"
-            id="order-flow-task-context"
-            class="order-flow__task-context"
-            aria-label="当前客户识别任务"
-          ></div>
-          <div
             v-if="smartMode && reminderSummary"
             class="order-flow__reminder-summary"
             aria-label="今日订单提醒统计"
@@ -128,7 +122,6 @@
             :key="`task:${customerId(selectedCustomer)}`"
             :selected-all-customer="customerId(selectedCustomer)"
             :selected-sub-department="null"
-            task-selector-teleport-to="#order-flow-task-context"
             @order-saved="handleTaskChanged"
             @order-updated="handleTaskChanged"
             @task-list-changed="handleTaskChanged"
@@ -439,13 +432,6 @@ function handleTaskChanged() {
 }
 .order-flow__customer-title span { color: var(--product-primary-strong); font-size: 8px; font-weight: 900; }
 .order-flow__customer-title h2 { overflow: hidden; margin: 2px 0 0; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
-.order-flow__task-context {
-  min-width: 0;
-  flex: 1;
-  padding: 0 12px;
-  border-right: 1px solid var(--product-border);
-  border-left: 1px solid var(--product-border);
-}
 .order-flow__reminder-summary {
   display: flex;
   min-width: 0;

@@ -4,6 +4,7 @@
             <!-- 左侧：图片上传和预览 -->
             <div class="col-md-5">
                 <div class="card h-100">
+                    <slot name="task-selector"></slot>
                     <!-- 任务：添加新内容 + 部门任务列表（仅 placeOrder 显示；TaskOrder 中不显示此块） -->
                     <div v-if="source === 'placeOrder' && depId && taskList.length > 0"
                          class="card-header py-2 px-2 d-flex align-items-center flex-wrap gap-1 image-task-header"

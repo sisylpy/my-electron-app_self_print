@@ -35,8 +35,7 @@ import api from '../services/orderApi';
             initialTask: { type: Object, default: null },
             /** 今日任务客户：选中的父级部门 id（Bills 传入） */
             selectedAllCustomer: { type: [Number, String], default: null },
-            selectedSubDepartment: { type: [Number, String], default: null },
-            taskSelectorTeleportTo: { type: String, default: '' }
+            selectedSubDepartment: { type: [Number, String], default: null }
         },
         data() {
             return createTaskOrderState();
