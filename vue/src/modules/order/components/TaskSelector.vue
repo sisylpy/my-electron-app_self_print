@@ -4,15 +4,25 @@
       <span>任务</span>
       <small v-if="loading">加载中...</small>
       <div v-else class="task-selector__items">
-        <button
+        <div
           v-for="task in tasks"
           :key="task.nxOcrTaskId"
-          type="button"
+          class="task-selector__item"
           :class="{ active: String(selectedTaskId) === String(task.nxOcrTaskId) }"
-          @click="$emit('select', task)"
         >
-          {{ task.nxOcrTaskFileName }}
-        </button>
+          <button type="button" class="task-selector__name" :title="task.nxOcrTaskFileName" @click="$emit('select', task)">
+            {{ task.nxOcrTaskFileName }}
+          </button>
+          <button
+            v-if="deletable && String(selectedTaskId) === String(task.nxOcrTaskId)"
+            type="button"
+            class="task-selector__delete"
+            :disabled="deleteDisabled"
+            :aria-label="`删除任务：${task.nxOcrTaskFileName}`"
+            title="删除当前任务"
+            @click.stop="$emit('delete-selected')"
+          >×</button>
+        </div>
       </div>
     </div>
   </Teleport>
@@ -32,26 +42,34 @@ defineProps({
     type: [Number, String],
     default: null,
   },
+  deletable: {
+    type: Boolean,
+    default: false,
+  },
+  deleteDisabled: {
+    type: Boolean,
+    default: false,
+  },
   teleportTo: {
     type: String,
     default: '',
   },
 });
 
-defineEmits(['select']);
+defineEmits(['select', 'delete-selected']);
 </script>
 
 <style scoped>
 .task-selector {
   display: flex;
-  min-height: 42px;
+  min-height: 48px;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
   flex: none;
   flex-wrap: wrap;
-  padding: 7px 10px;
+  padding: 7px 12px;
   border-bottom: 1px solid var(--product-border, #dde5e0);
-  background: #f8faf9;
+  background: #fff;
 }
 
 .task-selector > span,
@@ -65,26 +83,62 @@ defineEmits(['select']);
   font-weight: 750;
 }
 
-.task-selector button {
-  padding: 5px 9px;
-  border: 1px solid var(--product-border-strong, #cbd7d0);
-  border-radius: 3px;
-  color: var(--product-text-secondary, #5f6f67);
-  background: #fff;
-  font-size: 11px;
+.task-selector__item {
+  position: relative;
+  min-width: 0;
+  max-width: 260px;
 }
 
-.task-selector button.active {
-  border-color: var(--product-primary, #119b5d);
-  color: #fff;
-  background: var(--product-primary, #119b5d);
+.task-selector__name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 7px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: #316d9d;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+.task-selector__item.active .task-selector__name {
+  padding-right: 27px;
+  border-bottom-color: #1673b8;
+  color: #1265a8;
+}
+
+.task-selector__delete {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #a83c42;
+  background: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.task-selector__delete:disabled { opacity: .4; cursor: not-allowed; }
+.task-selector__delete:not(:disabled):hover { color: #fff; background: #c23d46; }
+.task-selector__name:focus-visible,
+.task-selector__delete:focus-visible { outline: 2px solid #1673b8; outline-offset: 2px; }
 
 .task-selector__items {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -115,13 +169,11 @@ defineEmits(['select']);
   padding: 2px 0;
 }
 
-.task-selector.is-context button {
+.task-selector.is-context .task-selector__name {
   flex: none;
   max-width: 190px;
   overflow: hidden;
   padding: 6px 9px;
-  border-radius: 5px;
-  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

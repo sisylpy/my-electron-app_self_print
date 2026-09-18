@@ -262,7 +262,7 @@
                         <template v-else>
 
                             <button
-                                    v-if="excelPasteHasCache"
+                                    v-if="excelPasteHasCache && source !== 'taskOrder'"
                                     class="btn btn-danger btn-sm"
                                     @click="$emit('re-upload')">
                                 删除

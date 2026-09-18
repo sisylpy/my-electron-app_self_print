@@ -5,11 +5,14 @@
         <!-- 内容区域 -->
         <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
             <TaskSelector
-                    v-if="isTaskOrderFromBills && uploadType !== 'image'"
+                    v-if="isTaskOrderFromBills"
                     :loading="loadingTaskListFromParent"
                     :tasks="taskListFromParent"
                     :selected-task-id="selectedTaskFromList?.nxOcrTaskId"
+                    deletable
+                    :delete-disabled="taskLoading || savingOrder || String(selectedTaskFromList?.nxOcrTaskId) !== String(currentTaskId)"
                     @select="onSelectTaskFromList"
+                    @delete-selected="reUpload"
             />
 
             <!-- 复制粘贴模式 -->
@@ -144,15 +147,6 @@
                     @select-task="handleSelectImageTask"
                     @add-new-image="handleImageAddNew"
                     @close-new-image="handleImageCloseNewContent">
-                <template #task-selector>
-                    <TaskSelector
-                            v-if="isTaskOrderFromBills"
-                            :loading="loadingTaskListFromParent"
-                            :tasks="taskListFromParent"
-                            :selected-task-id="selectedTaskFromList?.nxOcrTaskId"
-                            @select="onSelectTaskFromList"
-                    />
-                </template>
                 <template #order-list>
                     <OrderList
                             ref="imageOrderListRef"

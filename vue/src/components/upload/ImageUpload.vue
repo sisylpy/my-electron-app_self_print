@@ -242,6 +242,7 @@
                             <div class="d-flex gap-2" v-if="currentTask && currentTask.nxOcrTaskTotalOrders != null">
 
                                 <button
+                                        v-if="source !== 'taskOrder'"
                                         class="btn btn-danger btn-sm"
                                         @click="$emit('re-upload')">
                                     删除
