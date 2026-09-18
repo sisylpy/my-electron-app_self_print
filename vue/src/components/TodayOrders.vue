@@ -2,19 +2,30 @@
   <div class="saved-orders-tab"
        style="height: 100%; overflow: hidden; display: flex; flex-direction: column;">
     <div v-if="batchPrintMode" class="batch-print-bar">
-      <div>
-        <strong>可打印 {{ printableOrders.length }} 项</strong>
+      <div class="batch-print-bar__summary">
+        <div class="batch-print-bar__heading">
+          <strong>可打印 {{ printableOrders.length }} 项</strong>
+          <span class="batch-print-bar__selection">
+            本批已选: <strong>{{ selectedPrintOrders.length }} 项</strong>
+            <b>¥{{ selectedPrintTotal.toFixed(2) }}</b>
+          </span>
+        </div>
         <span>仅已完成出库、已有单价和小计的商品可加入本次配送批次</span>
       </div>
-      <label>
-        <input
-          type="checkbox"
-          :checked="allPrintableSelected"
-          :disabled="!printableOrders.length"
-          @change="toggleAllPrintable($event.target.checked)"
-        >
-        全选可打印商品
-      </label>
+      <div class="batch-print-bar__actions">
+        <label>
+          <input
+            type="checkbox"
+            :checked="allPrintableSelected"
+            :disabled="!printableOrders.length"
+            @change="toggleAllPrintable($event.target.checked)"
+          >
+          全选可打印商品
+        </label>
+        <button class="btn btn-primary btn-sm" :disabled="!canDownloadExcel" @click="handlePrintDeliveryOrder">
+          打印并保存本批（{{ selectedPrintOrders.length }}项）
+        </button>
+      </div>
     </div>
     <!-- 订单列表显示区域 -->
     <div class="order-list-container" style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
@@ -685,65 +696,26 @@
       </div>
     </div>
 
-    <!-- 底部总计和下载按钮 -->
-    <div class="border-top p-3 bg-light">
+    <!-- 独立订单页保留底部操作；工作台在顶部显示状态和打印操作。 -->
+    <div v-if="!statusHeaderTarget && !batchPrintMode" class="border-top p-3 bg-light">
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div class="d-flex flex-column gap-1">
           <div class="d-flex align-items-center gap-2">
-            <template v-if="batchPrintMode">
-              <span>本批已选:</span>
-              <span class="fw-bold fs-5">{{ selectedPrintOrders.length }} 项</span>
-              <span class="text-success fw-bold">¥{{ selectedPrintTotal.toFixed(2) }}</span>
-            </template>
-            <template v-else>
-              <span>总计:</span>
-              <span class="fw-bold fs-5">{{ todayOrderTotal }}元</span>
-            </template>
+            <span>总计:</span>
+            <span class="fw-bold fs-5">{{ todayOrderTotal }}元</span>
           </div>
           <!-- 订单状态统计 -->
-          <Teleport :to="statusHeaderTarget || 'body'" :disabled="!statusHeaderTarget">
-            <div class="d-flex align-items-center gap-3 text-muted small" @click="handleStatsAreaClick">
-              <span>{{ batchPrintMode ? '可打印' : '完成' }}: <span class="text-success fw-bold">{{ batchPrintMode ? printableOrders.length : (orderStatusStats.completed || 0) }}</span></span>
-              <span>处理中: <span class="text-warning fw-bold">{{ orderStatusStats.pending || 0 }}</span></span>
-              <span>待确认: <span class="text-danger fw-bold">{{ orderStatusStats.temp || 0 }}</span></span>
-
-              <!-- 隐藏按钮，连续点击3次后显示 -->
-              <div v-if="showSaveTrainingDataButton" class="d-flex align-items-center gap-3">
-                <button class="btn btn-primary btn-sm"
-                        @click.stop="handleShowDatePicker">
-                  保存训练数据
-                </button>
-              </div>
-            </div>
-          </Teleport>
-          
-          <!-- 日期选择器模态框 -->
-          <div v-if="showDatePicker" class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" @click.self="showDatePicker = false">
-            <div class="modal-dialog modal-dialog-centered">
-              <div class="modal-content" @click.stop>
-                <div class="modal-header">
-                  <h5 class="modal-title">选择日期</h5>
-                  <button type="button" class="btn-close" @click="showDatePicker = false"></button>
-                </div>
-                <div class="modal-body">
-                  <div class="mb-3">
-                    <label for="dateInput" class="form-label">日期 (格式: YYYY-MM-DD)</label>
-                    <input 
-                      type="date" 
-                      id="dateInput" 
-                      class="form-control" 
-                      v-model="selectedDate"
-                      :max="maxDate"
-                      :min="minDate">
-                  </div>
-                </div>
-                <div class="modal-footer">
-                  <button type="button" class="btn btn-secondary" @click="showDatePicker = false">取消</button>
-                  <button type="button" class="btn btn-primary" @click="handleSaveTrainingData" :disabled="!selectedDate">保存</button>
-                </div>
-              </div>
+          <div class="d-flex align-items-center gap-3 text-muted small" @click="handleStatsAreaClick">
+            <span>完成: <span class="text-success fw-bold">{{ orderStatusStats.completed || 0 }}</span></span>
+            <span>处理中: <span class="text-warning fw-bold">{{ orderStatusStats.pending || 0 }}</span></span>
+            <span>待确认: <span class="text-danger fw-bold">{{ orderStatusStats.temp || 0 }}</span></span>
+            <div v-if="showSaveTrainingDataButton" class="d-flex align-items-center gap-3">
+              <button class="btn btn-primary btn-sm" @click.stop="handleShowDatePicker">
+                保存训练数据
+              </button>
             </div>
           </div>
+
         </div>
         <div class="d-flex align-items-center gap-3">
           <!-- <button
@@ -756,8 +728,49 @@
             class="btn btn-primary btn-sm"
             @click="handlePrintDeliveryOrder"
             :disabled="!canDownloadExcel">
-            {{ batchPrintMode ? `打印并保存本批（${selectedPrintOrders.length}项）` : '打印配送单' }}
+            打印配送单
           </button>
+        </div>
+      </div>
+    </div>
+
+    <Teleport v-if="statusHeaderTarget" :to="statusHeaderTarget">
+      <div class="d-flex align-items-center gap-3 text-muted small" @click="handleStatsAreaClick">
+        <span>{{ batchPrintMode ? '可打印' : '完成' }}: <span class="text-success fw-bold">{{ batchPrintMode ? printableOrders.length : (orderStatusStats.completed || 0) }}</span></span>
+        <span>处理中: <span class="text-warning fw-bold">{{ orderStatusStats.pending || 0 }}</span></span>
+        <span>待确认: <span class="text-danger fw-bold">{{ orderStatusStats.temp || 0 }}</span></span>
+        <div v-if="showSaveTrainingDataButton" class="d-flex align-items-center gap-3">
+          <button class="btn btn-primary btn-sm" @click.stop="handleShowDatePicker">
+            保存训练数据
+          </button>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 状态统计会传送到工作台顶部；模态框留在底部操作栏外，避免被隐藏。 -->
+    <div v-if="showDatePicker" class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" @click.self="showDatePicker = false">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h5 class="modal-title">选择日期</h5>
+            <button type="button" class="btn-close" @click="showDatePicker = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label for="dateInput" class="form-label">日期 (格式: YYYY-MM-DD)</label>
+              <input
+                type="date"
+                id="dateInput"
+                class="form-control"
+                v-model="selectedDate"
+                :max="maxDate"
+                :min="minDate">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" @click="showDatePicker = false">取消</button>
+            <button type="button" class="btn btn-primary" @click="handleSaveTrainingData" :disabled="!selectedDate">保存</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2693,17 +2706,24 @@ export default {
   min-height: 50px;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 8px 18px;
   padding: 8px 14px;
   border-bottom: 1px solid #cfe8da;
   color: #315b47;
   background: #f1faf5;
 }
 
-.batch-print-bar strong,
-.batch-print-bar span { display: block; }
-.batch-print-bar strong { font-size: 13px; }
-.batch-print-bar span { margin-top: 2px; color: #728279; font-size: 10px; }
+.batch-print-bar__summary { min-width: 0; flex: 1; }
+.batch-print-bar__heading { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px; }
+.batch-print-bar__heading > strong { font-size: 13px; }
+.batch-print-bar__summary > span { display: block; margin-top: 2px; color: #728279; font-size: 10px; }
+
+.batch-print-bar__selection { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 12px; }
+.batch-print-bar__selection strong { font-size: 14px; }
+.batch-print-bar__selection b { color: #08794b; font-size: 14px; }
+.batch-print-bar__actions { display: flex; align-items: center; gap: 12px; }
+.batch-print-bar__actions button { white-space: nowrap; }
 
 .batch-print-bar label {
   display: flex;
