@@ -18,7 +18,7 @@
           <span>AI预估</span>
           <span>客户实订</span>
           <span>订货习惯</span>
-          <span>状态</span>
+          <span>上次订单时间</span>
         </div>
 
         <div v-if="!hasReminderRows" class="forecast-check__empty">
@@ -53,11 +53,9 @@
                 </div>
                 <div class="forecast-check__cadence">
                   <strong>{{ intervalText(row) }}</strong>
-                  <span>{{ lastOrderText(row) }}</span>
                 </div>
-                <div class="forecast-check__outcome">
-                  <strong>{{ actionText(section.key) }}</strong>
-                  <span v-if="section.key === 'REMINDER'">A级</span>
+                <div class="forecast-check__last-order">
+                  <strong>{{ lastOrderText(row) }}</strong>
                 </div>
               </div>
             </template>
@@ -204,7 +202,7 @@ function predictedQuantityText(row) {
 }
 
 function actualQuantityText(row) {
-  if (!row.hasActual) return '未下单';
+  if (!row.hasActual) return '—';
   if (row.actualQuantity === null) return '数量待确认';
   return quantityText(row.actualQuantity, row.actualUnit);
 }
@@ -217,36 +215,28 @@ function intervalText(row) {
 function lastOrderText(row) {
   const value = String(row.lastOrderDate || '').trim();
   const match = value.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
-  if (!match) return '上次订货 暂无记录';
-  return `上次订货 ${Number(match[2])}月${Number(match[3])}日`;
-}
-
-function actionText(sectionKey) {
-  if (sectionKey === 'REMINDER') return '提醒客户';
-  if (sectionKey === 'MATCHED') return '已下单';
-  return '客户自订';
+  if (!match) return '—';
+  return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
 }
 </script>
 
 <style scoped>
 .forecast-check{display:grid;height:100%;min-width:0;min-height:0;grid-template-rows:minmax(0,1fr);padding:12px;overflow:hidden;background:#f6f9f7;color:var(--product-text)}
 .forecast-check__table{min-width:0;min-height:0;overflow:auto;border:1px solid var(--product-border);border-radius:9px;background:#fff}
-.forecast-check__table-head,.forecast-check__row{display:grid;min-width:820px;grid-template-columns:minmax(220px,1.4fr) minmax(145px,.8fr) minmax(145px,.8fr) minmax(145px,.8fr) minmax(150px,.8fr);align-items:center}
-.forecast-check__table-head{position:sticky;z-index:3;top:0;min-height:48px;border-bottom:1px solid var(--product-border);color:var(--product-text-secondary);background:#f5f8f6;font-size:11px;font-weight:900}
-.forecast-check__table-head span,.forecast-check__row>div{min-width:0;padding:10px 16px}
-.forecast-check__group-title{position:sticky;z-index:2;top:48px;display:flex;min-height:43px;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid #e8eeeb;font-size:13px}
+.forecast-check__table-head,.forecast-check__row{display:grid;min-width:680px;grid-template-columns:minmax(160px,1.5fr) minmax(95px,.8fr) minmax(95px,.8fr) minmax(130px,1fr) minmax(125px,.9fr);align-items:center}
+.forecast-check__table-head{position:sticky;z-index:3;top:0;min-height:40px;border-bottom:1px solid var(--product-border);color:var(--product-text-secondary);background:#f5f8f6;font-size:11px;font-weight:900}
+.forecast-check__table-head span,.forecast-check__row>div{min-width:0;padding:7px 12px}
+.forecast-check__group-title{position:sticky;z-index:2;top:40px;display:flex;min-height:34px;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid #e8eeeb;font-size:12px}
 .forecast-check__group-title span{padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.75);font-size:10px;font-weight:800}
 .forecast-check__group.is-reminder .forecast-check__group-title{color:#a64b18;background:#fff1e7}
 .forecast-check__group.is-matched .forecast-check__group-title{color:#08794b;background:#edf8f2}
 .forecast-check__group.is-customer_ordered .forecast-check__group-title{color:#41637f;background:#f0f5f8}
-.forecast-check__row{min-height:76px;border-bottom:1px solid #edf1ef;background:#fff}
+.forecast-check__row{min-height:54px;border-bottom:1px solid #edf1ef;background:#fff}
 .forecast-check__group.is-reminder .forecast-check__row{background:#fffaf6}
 .forecast-check__row:last-child{border-bottom:0}
-.forecast-check__goods strong,.forecast-check__quantity strong,.forecast-check__cadence strong,.forecast-check__outcome strong{display:block;font-size:15px;line-height:1.25}
-.forecast-check__goods span,.forecast-check__cadence span,.forecast-check__outcome span{display:block;margin-top:4px;color:var(--product-text-muted);font-size:11px}
-.forecast-check__group.is-reminder .forecast-check__outcome strong{color:#bb4d1d}
-.forecast-check__group.is-matched .forecast-check__outcome strong{color:#08794b}
-.forecast-check__group.is-customer_ordered .forecast-check__outcome strong{color:#41637f}
+.forecast-check__goods strong,.forecast-check__quantity strong,.forecast-check__cadence strong,.forecast-check__last-order strong{display:block;font-size:14px;line-height:1.25}
+.forecast-check__goods span{display:block;margin-top:3px;color:var(--product-text-muted);font-size:11px}
+.forecast-check__last-order strong{font-variant-numeric:tabular-nums;color:var(--product-text-secondary)}
 .forecast-check__empty{display:flex;min-height:220px;align-items:center;justify-content:center;color:var(--product-text-muted)}
 .forecast-check__empty strong{color:var(--product-text);font-size:17px}
 .forecast-check__state{display:flex;height:100%;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--product-text-muted);font-size:12px}
