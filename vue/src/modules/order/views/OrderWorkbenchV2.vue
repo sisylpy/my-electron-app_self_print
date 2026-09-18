@@ -80,7 +80,7 @@ const disUser = computed(() => store.state.disUser);
 const customerContext = useOrderCustomerContext(disUser);
 const todayInbox = useTodayOrderInbox(disUser);
 const activeView = ref('overview');
-const stageFilter = ref('review');
+const stageFilter = ref('all');
 const overviewLoading = ref(false);
 const overviewError = ref('');
 const smartCustomers = ref([]);
@@ -89,7 +89,7 @@ const smartCustomersError = ref('');
 const smartModeActive = ref(false);
 const overview = reactive({
   customers: [],
-  totals: { needsReview: 0, needsPrice: 0, inProgress: 0, readyToPrint: 0 },
+  totals: { all: 0, needsReview: 0, needsPrice: 0, inProgress: 0, readyToPrint: 0 },
 });
 // 订单提醒同时覆盖“有实际订单”和“有 A 级提醒基线”的客户。
 const smartModeCustomers = computed(() => {
@@ -120,9 +120,13 @@ const smartModeCustomersError = computed(() => blockingCustomerDirectoryError(
 ));
 let overviewRequestId = 0;
 let smartCustomersRequestId = 0;
-let stageInitialized = false;
 
 const stageOptions = computed(() => [
+  {
+    key: 'all',
+    label: '全部',
+    count: overview.totals.all,
+  },
   {
     key: 'review',
     label: '待确认',
@@ -152,7 +156,7 @@ watch(
     if (previousDisId && String(disId) !== String(previousDisId)) {
       customerContext.selectCustomer(null);
       todayInbox.selectCustomer(null);
-      stageInitialized = false;
+      stageFilter.value = 'all';
     }
     await Promise.all([
       customerContext.reload(),
@@ -172,14 +176,6 @@ async function refreshOverview(options = {}) {
     if (requestId !== overviewRequestId) return;
     overview.customers = result.customers;
     overview.totals = result.totals;
-
-    if (!stageInitialized) {
-      const firstAvailable = ['review', 'price', 'progress', 'ready'].find(
-        stage => Number(result.totals[stage === 'review' ? 'needsReview' : stage === 'price' ? 'needsPrice' : stage === 'ready' ? 'readyToPrint' : 'inProgress']) > 0
-      );
-      stageFilter.value = firstAvailable || 'review';
-      stageInitialized = true;
-    }
 
     const selectedId = customerId(todayInbox.selectedCustomer.value);
     const refreshed = selectedId

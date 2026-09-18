@@ -136,7 +136,7 @@
           />
         </div>
 
-        <div v-else-if="stageFilter === 'progress' || stageFilter === 'price'" class="order-flow__stage-page is-progress">
+        <div v-else-if="stageFilter === 'all' || stageFilter === 'progress' || stageFilter === 'price'" class="order-flow__stage-page is-progress">
           <div class="order-flow__progress-orders">
             <TodayOrders
               :today-order-list="snapshot.orders"
@@ -226,6 +226,7 @@ function stats(customer) {
   return customer?._workbenchStats || {
     needsReview: 0,
     total: 0,
+    all: 0,
     weighted: 0,
     priced: 0,
     needsPrice: 0,
@@ -251,6 +252,7 @@ const visibleCustomers = computed(() => {
 
 const currentStageLabel = computed(() => {
   if (smartMode.value) return '订单提醒';
+  if (props.stageFilter === 'all') return '全部订单';
   if (props.stageFilter === 'review') return '识别待确认';
   if (props.stageFilter === 'price') return '待写单价';
   if (props.stageFilter === 'ready') return '可打印订单';
@@ -258,6 +260,7 @@ const currentStageLabel = computed(() => {
 });
 
 const currentStageShortLabel = computed(() => {
+  if (props.stageFilter === 'all') return '项订单';
   if (props.stageFilter === 'review') return '项待确认';
   if (props.stageFilter === 'price') return '项待写单价';
   if (props.stageFilter === 'ready') return '项可打印';
@@ -266,6 +269,7 @@ const currentStageShortLabel = computed(() => {
 
 const emptyMessage = computed(() => {
   if (smartMode.value) return '当前没有需要提醒的客户';
+  if (props.stageFilter === 'all') return '当前没有订单';
   if (props.stageFilter === 'review') return '当前没有待确认任务';
   if (props.stageFilter === 'price') return '当前没有待写单价的订单';
   if (props.stageFilter === 'ready') return '当前没有可打印订单';

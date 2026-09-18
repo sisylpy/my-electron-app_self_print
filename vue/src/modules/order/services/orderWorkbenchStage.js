@@ -12,6 +12,7 @@ export function customerOrderStats(entry) {
   return {
     needsReview,
     total,
+    all: total + needsReview,
     weighted: count(entry?.hasWeight),
     priced,
     needsPrice: Math.max(0, total - priced),
@@ -25,6 +26,7 @@ export function customerOrderStats(entry) {
 
 export function customerStageCount(customer, stage) {
   const stats = customer?._workbenchStats || {};
+  if (stage === 'all') return count(stats.all);
   if (stage === 'review') return count(stats.needsReview);
   if (stage === 'price') return count(stats.needsPrice);
   if (stage === 'ready') return count(stats.readyToPrint);
@@ -32,8 +34,7 @@ export function customerStageCount(customer, stage) {
 }
 
 export function customerVisibleInStage(customer, stage) {
-  // 待确认、出货中保留完整客户概览；待写价、可打印只列出有对应订单的客户。
-  return (stage !== 'price' && stage !== 'ready') || customerStageCount(customer, stage) > 0;
+  return customerStageCount(customer, stage) > 0;
 }
 
 export function isPrintableOrder(order) {

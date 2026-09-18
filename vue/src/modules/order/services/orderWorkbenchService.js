@@ -123,12 +123,13 @@ export async function loadOrderWorkbenchOverview(disUser) {
   const tasks = Array.isArray(payload?.taskArr) ? payload.taskArr : [];
   const totals = customers.reduce((summary, customer) => {
     const stats = customer._workbenchStats;
+    summary.all += stats.all;
     summary.needsReview += stats.needsReview;
     summary.needsPrice += stats.needsPrice;
     summary.inProgress += stats.inProgress;
     summary.readyToPrint += stats.readyToPrint;
     return summary;
-  }, { needsReview: 0, needsPrice: 0, inProgress: 0, readyToPrint: 0 });
+  }, { all: 0, needsReview: 0, needsPrice: 0, inProgress: 0, readyToPrint: 0 });
   return { customers, tasks, totals };
 }
 
