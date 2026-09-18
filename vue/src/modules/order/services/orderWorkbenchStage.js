@@ -46,10 +46,16 @@ export function isPrintableOrder(order) {
     && Number(order.nxDoSubtotal) > 0;
 }
 
+function isConfirmedOrder(order) {
+  if (order?.nxDoStatus == null || order.nxDoStatus === '') return false;
+  const status = Number(order.nxDoStatus);
+  return Number.isInteger(status) && status >= 0 && status < 3;
+}
+
 export function ordersVisibleInStage(orders, stage) {
   const rows = Array.isArray(orders) ? orders : [];
   if (stage === 'ready') return rows.filter(isPrintableOrder);
-  if (stage === 'progress') return rows.filter(order => !isPrintableOrder(order));
-  if (stage === 'price') return rows.filter(order => !(Number(order?.nxDoPrice) > 0.1));
+  if (stage === 'progress') return rows.filter(order => isConfirmedOrder(order) && !isPrintableOrder(order));
+  if (stage === 'price') return rows.filter(order => isConfirmedOrder(order) && !(Number(order.nxDoPrice) > 0.1));
   return rows;
 }

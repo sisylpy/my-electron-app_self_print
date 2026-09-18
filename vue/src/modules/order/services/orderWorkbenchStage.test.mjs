@@ -14,12 +14,15 @@ test('ready, progress, and price show matching rows without changing all orders'
   const missingPrice = { ...ready, nxDepartmentOrdersId: 2, nxDoPrice: 0 };
   const notShipped = { ...ready, nxDepartmentOrdersId: 3, nxDoStatus: 0 };
   const missingPriceAndWeight = { ...ready, nxDepartmentOrdersId: 4, nxDoPrice: null, nxDoWeight: 0 };
-  const rows = [ready, missingPrice, notShipped, missingPriceAndWeight];
+  const awaitingConfirmation = { ...ready, nxDepartmentOrdersId: 5, nxDoStatus: -2, nxDoPrice: null };
+  const cancelled = { ...ready, nxDepartmentOrdersId: 6, nxDoStatus: -1, nxDoPrice: null };
+  const unknownStatus = { ...ready, nxDepartmentOrdersId: 7, nxDoStatus: null, nxDoPrice: null };
+  const rows = [ready, missingPrice, notShipped, missingPriceAndWeight, awaitingConfirmation, cancelled, unknownStatus];
 
   assert.deepEqual(ordersVisibleInStage(rows, 'ready'), [ready]);
   assert.deepEqual(ordersVisibleInStage(rows, 'progress'), [missingPrice, notShipped, missingPriceAndWeight]);
   assert.deepEqual(ordersVisibleInStage(rows, 'price'), [missingPrice, missingPriceAndWeight]);
   assert.equal(ordersVisibleInStage(rows, 'all'), rows);
   assert.deepEqual(ordersVisibleInStage(null, 'ready'), []);
-  assert.equal(rows.length, 4);
+  assert.equal(rows.length, 7);
 });
