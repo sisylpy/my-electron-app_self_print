@@ -1,8 +1,9 @@
 <template>
   <div class="product-shell">
     <ProductSidebar :network-online="networkOnline" />
-    <section class="product-shell__main">
+    <section class="product-shell__main" :class="{ 'has-header': isOrderWorkbench }">
       <ProductHeader
+        v-if="isOrderWorkbench"
         :network-online="networkOnline"
         :printer-name="printerName"
         :mcp-running="mcpRunning"
@@ -17,7 +18,8 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import ProductHeader from './ProductHeader.vue';
 import ProductSidebar from './ProductSidebar.vue';
 import ProductWorkspace from './ProductWorkspace.vue';
@@ -27,6 +29,8 @@ const networkOnline = ref(typeof navigator === 'undefined' ? true : navigator.on
 const printerName = ref('');
 const mcpRunning = ref(false);
 const runtimeAvailable = ref(false);
+const route = useRoute();
+const isOrderWorkbench = computed(() => route.name === 'OrderWorkbenchV2');
 
 function updateOnlineStatus() {
   networkOnline.value = navigator.onLine;
@@ -78,7 +82,11 @@ onBeforeUnmount(() => {
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: var(--product-header-height) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
+}
+
+.product-shell__main.has-header {
+  grid-template-rows: var(--product-header-height) minmax(0, 1fr);
 }
 </style>

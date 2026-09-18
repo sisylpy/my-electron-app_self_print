@@ -1,6 +1,6 @@
 <template>
   <main class="procurement-page" aria-label="智能备货">
-    <Teleport to="#product-header-context">
+    <div class="prediction-page-toolbar">
       <div class="prediction-header-controls" aria-label="智能备货快捷操作">
         <div class="header-date-range" :class="{ 'is-custom': dateMode === 'CUSTOM' }" aria-label="备货日期">
           <span>备货日期</span>
@@ -17,7 +17,7 @@
           <span aria-hidden="true">↻</span><b>{{ loading ? loadingProgress || '汇总中' : '刷新' }}</b>
         </button>
       </div>
-    </Teleport>
+    </div>
 
     <section class="workspace-top">
       <aside class="store-directory" aria-label="采购门店">
@@ -504,8 +504,9 @@ function departmentForecastText(product) {
 <style scoped>
 *{box-sizing:border-box}
 button{cursor:pointer}
-.procurement-page{height:100%;min-width:0;min-height:0;overflow:hidden;padding:10px;background:#f4f7f5;color:#1f2b25}
-.workspace-top{height:100%;min-height:0;display:grid;grid-template-columns:270px minmax(0,1fr);align-items:stretch;gap:10px}
+.procurement-page{height:100%;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:10px;background:#f4f7f5;color:#1f2b25}
+.prediction-page-toolbar{flex:none;display:flex;justify-content:flex-end;min-height:48px;margin-bottom:10px;padding:5px 10px;border:1px solid #dbe5df;border-radius:11px;background:#fff}
+.workspace-top{flex:1;min-height:0;display:grid;grid-template-columns:270px minmax(0,1fr);align-items:stretch;gap:10px}
 .store-directory{height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden;border:1px solid #dbe5df;border-radius:14px;background:#fff;box-shadow:0 7px 22px rgba(39,78,61,.045)}
 .store-directory>header{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 16px}
 .store-directory>header strong{font-size:20px}.store-directory>header span{min-width:33px;height:27px;display:grid;place-items:center;padding:0 8px;border-radius:9px;background:#e8f6ee;color:#087b48;font-size:12px;font-weight:900}
@@ -548,7 +549,7 @@ button{cursor:pointer}
 .row-level,.is-level_b .row-level{padding:0;border-radius:0;background:transparent}.row-level{color:#087747}.is-level_b .row-level{color:#a5680c}.department-cell{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:3px 7px;min-width:0;white-space:normal}.department-cell strong{line-height:1.35}.department-cell small.department-estimate{display:flex;min-width:0;flex-wrap:wrap;gap:2px 8px;margin:0;color:#1f2b25;font-size:12px;font-weight:400;line-height:1.35;white-space:normal}.department-cell small.department-estimate span{display:inline-block;white-space:nowrap}
 .department-cell{display:flex;flex-direction:column;align-items:stretch;gap:3px;min-width:0}.department-order-line{display:flex;align-items:flex-start;gap:7px;min-width:0;white-space:normal}.department-order-line strong{flex:none;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.department-order-line small{display:block;min-width:0;margin:0;color:#1f2b25;font-size:11px;line-height:1.35;white-space:normal;overflow-wrap:anywhere}.product-row:has(.department-order-line:nth-child(2)){min-height:58px}
 @media(max-width:1480px){.header-date-range>span{display:none}.header-date-range{gap:3px;padding-left:5px}.header-date-range input{width:104px}.product-table__head,.product-row{grid-template-columns:30px minmax(150px,200px) 88px 72px 86px 86px minmax(90px,1fr) 98px}.goods-specification small.is-detail{display:none}}
-@media(max-width:1180px){.header-date-range{display:none}.workspace-top{grid-template-columns:205px minmax(0,1fr)}.product-table__head,.product-row{grid-template-columns:26px minmax(150px,210px) 82px 68px 60px 82px}.product-table__head span:nth-child(7),.product-table__head span:nth-child(8),.department-cell,.procurement-cell{display:none}}
+@media(max-width:1180px){.workspace-top{grid-template-columns:205px minmax(0,1fr)}.product-table__head,.product-row{grid-template-columns:26px minmax(150px,210px) 82px 68px 60px 82px}.product-table__head span:nth-child(7),.product-table__head span:nth-child(8),.department-cell,.procurement-cell{display:none}}
 .quantity-cell{display:flex;align-items:center;gap:8px}.quantity-cell>span{min-width:0}
 .stock-cell{display:flex;align-items:baseline;gap:4px;color:#69766f;font-size:11px}.stock-cell strong{color:#24342b;font-size:13px}.stock-cell small{color:#7d8982;font-size:10px}.procurement-cell{display:flex;align-items:center}.procurement-cell>button{min-width:84px;height:28px;padding:0 9px;border:1px solid #15965a;border-radius:7px;background:#fff;color:#087b48;font-size:11px;font-weight:900}.procurement-cell>button:hover{background:#edf8f2}.procurement-cell>button:disabled{cursor:default;opacity:.55}.procurement-active{display:flex;align-items:center;gap:5px;color:#087b48;font-size:11px;font-weight:900}.procurement-active::before{content:'✓';width:16px;height:16px;display:grid;place-items:center;border-radius:50%;background:#e6f5ed;font-size:9px}.procurement-active small{color:#738078;font-size:9px;font-weight:700}.procurement-pending,.procurement-unknown{color:#87938c;font-size:11px}.procurement-unknown{color:#a0691a}.procurement-toast{position:fixed;right:28px;bottom:26px;z-index:20;max-width:420px;padding:11px 15px;border-radius:9px;background:#177d50;color:#fff;box-shadow:0 8px 24px rgba(25,60,43,.22);font-size:12px;font-weight:800}.procurement-toast.is-error{background:#a63c47}
 </style>

@@ -1,8 +1,7 @@
 <template>
   <main class="dispatch-workbench" aria-label="桌面调度工作台">
-    <Teleport to="#product-header-context">
-      <div class="dispatch-header-row">
-        <header class="dispatch-toolbar">
+    <div class="dispatch-header-row">
+      <header class="dispatch-toolbar">
           <div class="dispatch-toolbar__summary">
             <span>{{ historicalPlan ? '历史运营总览' : '今日运营总览' }}</span>
           </div>
@@ -43,9 +42,8 @@
               刷新
             </button>
           </div>
-        </header>
-      </div>
-    </Teleport>
+      </header>
+    </div>
 
     <nav class="dispatch-phase-tabs" aria-label="配送阶段">
       <button
@@ -1844,15 +1842,12 @@ onBeforeUnmount(() => {
   }
 }
 
-/* Dispatch owns one compact product-header row: phase, scope, metrics and actions stay together. */
-:global(#product-header-context) {
-  height: 100%;
-}
-
+/* Keep the dispatch metrics and actions together inside the page after removing the global header. */
 .dispatch-header-row {
   display: flex;
   width: 100%;
-  height: 100%;
+  min-height: 58px;
+  flex: none;
   min-width: 0;
   align-items: center;
   gap: 10px;
@@ -1986,7 +1981,7 @@ onBeforeUnmount(() => {
 
 .dispatch-header-row {
   width: 100%;
-  height: 100%;
+  height: 58px;
 }
 
 .dispatch-header-row .dispatch-toolbar {
