@@ -4,7 +4,7 @@
     <div v-if="batchPrintMode" class="batch-print-bar">
       <div>
         <strong>可打印 {{ printableOrders.length }} 项</strong>
-        <span>只有状态为 2 的商品可以加入本次配送批次</span>
+        <span>仅已完成出库、已有单价和小计的商品可加入本次配送批次</span>
       </div>
       <label>
         <input
@@ -702,7 +702,7 @@
           </div>
           <!-- 订单状态统计 -->
           <div class="d-flex align-items-center gap-3 text-muted small" @click="handleStatsAreaClick">
-            <span>{{ batchPrintMode ? '可打印' : '完成' }}: <span class="text-success fw-bold">{{ orderStatusStats.completed || 0 }}</span></span>
+            <span>{{ batchPrintMode ? '可打印' : '完成' }}: <span class="text-success fw-bold">{{ batchPrintMode ? printableOrders.length : (orderStatusStats.completed || 0) }}</span></span>
             <span>处理中: <span class="text-warning fw-bold">{{ orderStatusStats.pending || 0 }}</span></span>
             <span>待确认: <span class="text-danger fw-bold">{{ orderStatusStats.temp || 0 }}</span></span>
 
@@ -778,6 +778,7 @@
 <script>
 import api from '../api/all';
 import AlertDialog from './AlertDialog.vue';
+import { isPrintableOrder as eligibleForBatchPrint } from '../modules/order/services/orderWorkbenchStage';
 
 const VALID_DEP_PRINT_NAMES = ['ApplyPanel', 'ApplyFiftyPanel', 'ApplyHalfPanel', 'ApplyHalfWholePanel', 'ApplyThirtyPanel', 'ApplyThirtyWholePanel'];
 
@@ -973,7 +974,7 @@ export default {
     canDownloadExcel() {
       if (this.batchPrintMode) {
         return this.selectedPrintOrders.length > 0
-          && this.selectedPrintOrders.every(order => Number(order.nxDoStatus) === 2);
+          && this.selectedPrintOrders.every(order => this.isPrintableOrder(order));
       }
       console.log('🔍 [canDownloadExcel] 开始检查下载条件');
       console.log('  - hasSubDepartments:', this.hasSubDepartments);
@@ -1213,7 +1214,7 @@ export default {
   },
   methods: {
     isPrintableOrder(order) {
-      return Boolean(order?.nxDepartmentOrdersId) && Number(order?.nxDoStatus) === 2;
+      return eligibleForBatchPrint(order);
     },
     isOrderSelected(order) {
       return this.selectedPrintOrderIds.map(String).includes(String(order?.nxDepartmentOrdersId));
@@ -2154,7 +2155,7 @@ export default {
     async handlePrintDeliveryOrder() {
       if (!this.canDownloadExcel) {
         const message = this.batchPrintMode
-          ? '请至少选择一条状态为2的订单加入本次配送批次'
+          ? '请至少选择一条已完成出库、已有单价和小计的订单加入本次配送批次'
           : '只有所有订单状态都是已保存（状态为0或2）时才能打印配送单';
         this.$message?.warning?.(message) || (await this.$refs.alertDialog.alert(message, 'warning'));
         return;

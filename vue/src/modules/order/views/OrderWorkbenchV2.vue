@@ -66,6 +66,7 @@ import AiOrderPanel from '../components/workbench/AiOrderPanel.vue';
 import OrderFlowInbox from '../components/workbench/OrderFlowInbox.vue';
 import { useOrderCustomerContext } from '../composables/useOrderCustomerContext';
 import { useTodayOrderInbox } from '../composables/useTodayOrderInbox';
+import { customerVisibleInStage } from '../services/orderWorkbenchStage';
 import { blockingCustomerDirectoryError } from '../services/smartReplenishmentComparison';
 import {
   customerId,
@@ -88,7 +89,7 @@ const smartCustomersError = ref('');
 const smartModeActive = ref(false);
 const overview = reactive({
   customers: [],
-  totals: { needsReview: 0, inProgress: 0, readyToPrint: 0 },
+  totals: { needsReview: 0, needsPrice: 0, inProgress: 0, readyToPrint: 0 },
 });
 // 订单提醒同时覆盖“有实际订单”和“有 A 级提醒基线”的客户。
 const smartModeCustomers = computed(() => {
@@ -126,6 +127,11 @@ const stageOptions = computed(() => [
     key: 'review',
     label: '待确认',
     count: overview.totals.needsReview,
+  },
+  {
+    key: 'price',
+    label: '待写单价',
+    count: overview.totals.needsPrice,
   },
   {
     key: 'progress',
@@ -168,8 +174,8 @@ async function refreshOverview(options = {}) {
     overview.totals = result.totals;
 
     if (!stageInitialized) {
-      const firstAvailable = ['review', 'ready', 'progress'].find(
-        stage => Number(result.totals[stage === 'review' ? 'needsReview' : stage === 'ready' ? 'readyToPrint' : 'inProgress']) > 0
+      const firstAvailable = ['review', 'price', 'progress', 'ready'].find(
+        stage => Number(result.totals[stage === 'review' ? 'needsReview' : stage === 'price' ? 'needsPrice' : stage === 'ready' ? 'readyToPrint' : 'inProgress']) > 0
       );
       stageFilter.value = firstAvailable || 'review';
       stageInitialized = true;
@@ -179,10 +185,10 @@ async function refreshOverview(options = {}) {
     const refreshed = selectedId
       ? overview.customers.find(customer => String(customerId(customer)) === String(selectedId))
       : null;
-    if (refreshed) {
+    if (refreshed && (smartModeActive.value || customerVisibleInStage(refreshed, stageFilter.value))) {
       todayInbox.selectedCustomer.value = refreshed;
     } else if (!smartModeActive.value && options.selectFirst !== false) {
-      const first = overview.customers[0];
+      const first = overview.customers.find(customer => customerVisibleInStage(customer, stageFilter.value));
       await todayInbox.selectCustomer(first || null);
     }
   } catch (error) {
@@ -212,7 +218,18 @@ async function refreshSmartCustomers() {
 
 async function handleSmartModeChange(active) {
   smartModeActive.value = active;
-  if (!active) return;
+  if (!active) {
+    const selectedId = customerId(todayInbox.selectedCustomer.value);
+    const selectedVisible = overview.customers.some(customer =>
+      String(customerId(customer)) === String(selectedId)
+        && customerVisibleInStage(customer, stageFilter.value)
+    );
+    if (!selectedVisible) {
+      const first = overview.customers.find(customer => customerVisibleInStage(customer, stageFilter.value));
+      await todayInbox.selectCustomer(first || null);
+    }
+    return;
+  }
   if (!smartCustomers.value.length && !smartCustomersLoading.value) {
     await refreshSmartCustomers();
   }
@@ -238,8 +255,10 @@ async function handleOrderChanged() {
 
 async function selectStage(stage) {
   stageFilter.value = stage;
-  if (todayInbox.selectedCustomer.value || !overview.customers.length) return;
-  await todayInbox.selectCustomer(overview.customers[0]);
+  if (customerVisibleInStage(todayInbox.selectedCustomer.value, stage)
+    && todayInbox.selectedCustomer.value) return;
+  const first = overview.customers.find(customer => customerVisibleInStage(customer, stage));
+  await todayInbox.selectCustomer(first || null);
 }
 
 function openCreateOrder(customer) {
@@ -259,7 +278,9 @@ async function returnToOverview() {
   const matchingCustomer = overview.customers.find(
     item => String(customerId(item)) === String(createdForId)
   );
-  if (matchingCustomer) await todayInbox.selectCustomer(matchingCustomer);
+  if (matchingCustomer && customerVisibleInStage(matchingCustomer, stageFilter.value)) {
+    await todayInbox.selectCustomer(matchingCustomer);
+  }
 }
 </script>
 

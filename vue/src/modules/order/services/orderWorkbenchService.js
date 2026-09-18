@@ -1,6 +1,7 @@
 import orderApi from './orderApi';
 import predictionLabApi from '../../predictionLab/api/predictionLabApi';
 import { activeForecastDepartmentIds } from './smartReplenishmentComparison';
+import { customerOrderStats } from './orderWorkbenchStage';
 
 const STABLE_PREDICTION_BASELINE = 'V8_REPLENISHMENT_STATE';
 
@@ -102,26 +103,12 @@ export async function loadPendingOrderCustomers(disUser) {
   };
 }
 
-function numberValue(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function normalizeActiveCustomer(entry) {
   const customer = entry?.dep;
   if (!customer || customerId(customer) === null) return null;
-  const stats = {
-    needsReview: numberValue(entry?.unDo),
-    total: numberValue(entry?.totalCount),
-    weighted: numberValue(entry?.hasWeight),
-    priced: numberValue(entry?.hasPrice),
-    readyToPrint: numberValue(entry?.finishCount),
-    readySubtotal: numberValue(entry?.twoSubtotal),
-  };
-  stats.inProgress = Math.max(0, stats.total - stats.readyToPrint);
   return {
     ...customer,
-    _workbenchStats: stats,
+    _workbenchStats: customerOrderStats(entry),
   };
 }
 
@@ -137,10 +124,11 @@ export async function loadOrderWorkbenchOverview(disUser) {
   const totals = customers.reduce((summary, customer) => {
     const stats = customer._workbenchStats;
     summary.needsReview += stats.needsReview;
+    summary.needsPrice += stats.needsPrice;
     summary.inProgress += stats.inProgress;
     summary.readyToPrint += stats.readyToPrint;
     return summary;
-  }, { needsReview: 0, inProgress: 0, readyToPrint: 0 });
+  }, { needsReview: 0, needsPrice: 0, inProgress: 0, readyToPrint: 0 });
   return { customers, tasks, totals };
 }
 

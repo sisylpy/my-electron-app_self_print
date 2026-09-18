@@ -34,13 +34,22 @@
           :class="{ 'is-active': isSelected(customer) }"
           @click="$emit('select-customer', customer)"
         >
-          <strong>{{ customerName(customer) }}</strong>
-          <span :class="['order-flow__queue-state', `is-${stageFilter}`]">
-            <template v-if="smartMode">查看提醒</template>
-            <template v-else>
-              <em>{{ stageCount(customer) }}</em>
-              {{ currentStageShortLabel }}
-            </template>
+          <span class="order-flow__queue-head">
+            <strong>{{ customerName(customer) }}</strong>
+            <span v-if="!smartMode && stats(customer).needsReview > 0" class="order-flow__pending">
+              ({{ stats(customer).needsReview }}个待处理)
+            </span>
+            <span v-else-if="!smartMode && stats(customer).allDone" class="order-flow__done">✓ 已全部完成</span>
+          </span>
+          <span v-if="!smartMode" class="order-flow__queue-metrics">
+            <span>商品: {{ stats(customer).total }}个</span>
+            <span>金额: {{ stats(customer).subtotalText }}元</span>
+            <span>有单价: <em :class="{ 'is-incomplete': stats(customer).priced < stats(customer).total }">{{ stats(customer).priced }}个</em></span>
+            <span>已出库: <em :class="{ 'is-incomplete': stats(customer).weighted < stats(customer).total }">{{ stats(customer).weighted }}个</em></span>
+          </span>
+          <span v-if="smartMode" class="order-flow__queue-state">查看提醒</span>
+          <span v-else :class="['order-flow__queue-state', `is-${stageFilter}`]">
+            <em>{{ stageCount(customer) }}</em>{{ currentStageShortLabel }}
           </span>
         </button>
       </div>
@@ -127,7 +136,7 @@
           />
         </div>
 
-        <div v-else-if="stageFilter === 'progress'" class="order-flow__stage-page is-progress">
+        <div v-else-if="stageFilter === 'progress' || stageFilter === 'price'" class="order-flow__stage-page is-progress">
           <div class="order-flow__progress-orders">
             <TodayOrders
               :today-order-list="snapshot.orders"
@@ -182,6 +191,7 @@ import TodayOrders from '@/components/TodayOrders.vue';
 import TaskOrderWorkspace from '../TaskOrderWorkspace.vue';
 import SmartReplenishmentComparison from './SmartReplenishmentComparison.vue';
 import { customerId, customerName } from '../../services/orderWorkbenchService';
+import { customerStageCount, customerVisibleInStage } from '../../services/orderWorkbenchStage';
 
 const props = defineProps({
   customers: { type: Array, default: () => [] },
@@ -218,8 +228,11 @@ function stats(customer) {
     total: 0,
     weighted: 0,
     priced: 0,
+    needsPrice: 0,
     readyToPrint: 0,
     inProgress: 0,
+    subtotalText: '0.0',
+    allDone: false,
   };
 }
 
@@ -230,21 +243,23 @@ const activeListError = computed(() => smartMode.value ? props.allCustomersError
 
 const visibleCustomers = computed(() => {
   const keyword = query.value.trim().toLocaleLowerCase();
-  if (!keyword) return filteredCustomers.value;
   return filteredCustomers.value.filter(
-    customer => customerName(customer).toLocaleLowerCase().includes(keyword)
+    customer => (smartMode.value || customerVisibleInStage(customer, props.stageFilter))
+      && (!keyword || customerName(customer).toLocaleLowerCase().includes(keyword))
   );
 });
 
 const currentStageLabel = computed(() => {
   if (smartMode.value) return '订单提醒';
   if (props.stageFilter === 'review') return '识别待确认';
+  if (props.stageFilter === 'price') return '待写单价';
   if (props.stageFilter === 'ready') return '可打印订单';
   return '出货处理中';
 });
 
 const currentStageShortLabel = computed(() => {
   if (props.stageFilter === 'review') return '项待确认';
+  if (props.stageFilter === 'price') return '项待写单价';
   if (props.stageFilter === 'ready') return '项可打印';
   return '项处理中';
 });
@@ -252,6 +267,7 @@ const currentStageShortLabel = computed(() => {
 const emptyMessage = computed(() => {
   if (smartMode.value) return '当前没有需要提醒的客户';
   if (props.stageFilter === 'review') return '当前没有待确认任务';
+  if (props.stageFilter === 'price') return '当前没有待写单价的订单';
   if (props.stageFilter === 'ready') return '当前没有可打印订单';
   return '当前没有出货中的订单';
 });
@@ -261,10 +277,7 @@ function isSelected(customer) {
 }
 
 function stageCount(customer) {
-  const value = stats(customer);
-  if (props.stageFilter === 'review') return value.needsReview;
-  if (props.stageFilter === 'ready') return value.readyToPrint;
-  return value.inProgress;
+  return customerStageCount(customer, props.stageFilter);
 }
 
 function toggleSmartMode() {
@@ -374,9 +387,9 @@ function handleTaskChanged() {
 .order-flow__list > button {
   display: flex;
   width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   margin-bottom: 5px;
   padding: 11px 9px;
   border: 1px solid transparent;
@@ -387,10 +400,18 @@ function handleTaskChanged() {
 }
 .order-flow__list > button:hover { background: #f3f7f5; }
 .order-flow__list > button.is-active { border-color: #b9dfca; background: #eaf7f0; }
-.order-flow__list > button > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.order-flow__queue-head { display: flex; min-width: 0; align-items: center; gap: 4px; }
+.order-flow__queue-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.order-flow__pending { flex: none; color: #cb3b3b; font-size: 9px; }
+.order-flow__done { flex: none; color: #08794b; font-size: 9px; }
+.order-flow__queue-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 4px; color: var(--product-text-secondary); font-size: 9px; }
+.order-flow__queue-metrics > span { white-space: nowrap; }
+.order-flow__queue-metrics em { color: #08794b; font-style: normal; font-weight: 800; }
+.order-flow__queue-metrics em.is-incomplete { color: #087f73; }
 .order-flow__queue-state { flex: 0 0 auto; color: var(--product-text-muted); font-size: 8px; white-space: nowrap; }
 .order-flow__queue-state em { margin-right: 2px; font-size: 10px; font-style: normal; font-weight: 900; }
 .order-flow__queue-state.is-review em { color: #a55319; }
+.order-flow__queue-state.is-price em { color: #a46017; }
 .order-flow__queue-state.is-ready em { color: #08794b; }
 
 .order-flow__detail {
