@@ -134,6 +134,7 @@
               :has-sub-departments="snapshot.hasSubDepartments"
               :selected-sub-department="null"
               :today-order-total="stageTotal"
+              :show-list-end="hasStageOrders"
               :selected-all-customer="customerId(selectedCustomer)"
               :selected-customer-name="customerName(selectedCustomer)"
               :selected-customer-entity="selectedCustomer"
@@ -154,6 +155,7 @@
             :has-sub-departments="snapshot.hasSubDepartments"
             :selected-sub-department="null"
             :today-order-total="stageTotal"
+            :show-list-end="hasStageOrders"
             :selected-all-customer="customerId(selectedCustomer)"
             :selected-customer-name="customerName(selectedCustomer)"
             :selected-customer-entity="selectedCustomer"
@@ -253,6 +255,9 @@ const stageTotal = computed(() => {
     : stageOrders.value;
   return orders.reduce((total, order) => total + (Number(order.nxDoSubtotal) || 0), 0);
 });
+const hasStageOrders = computed(() => props.snapshot.hasSubDepartments
+  ? stageDepartments.value.some(department => (department.depOrders || []).length > 0)
+  : stageOrders.value.length > 0);
 
 const visibleCustomers = computed(() => {
   const keyword = query.value.trim().toLocaleLowerCase();
@@ -319,7 +324,7 @@ function handleTaskChanged() {
   min-height: 0;
   grid-template-rows: minmax(0, 1fr);
   padding: 4px 11px 11px;
-  border-right: 0;
+  border-right: 1px solid var(--product-border);
   background: #fff;
 }
 

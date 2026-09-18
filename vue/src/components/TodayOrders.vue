@@ -202,6 +202,7 @@
         <div v-if="todayOrderList.length === 0" class="text-center p-5 text-muted">
           暂无已保存的订单
         </div>
+        <div v-if="showListEnd" class="order-list-end">订单已显示完</div>
         </div>
       </div>
 
@@ -383,6 +384,7 @@
           <div v-if="filteredTodayOrderDepArr.length === 0" class="text-center p-5 text-muted">
             暂无已保存的订单
           </div>
+          <div v-if="showListEnd" class="order-list-end">订单已显示完</div>
         </div>
       </div>
     </div>
@@ -854,6 +856,10 @@ export default {
       default: 'ApplyPanel'
     },
     batchPrintMode: {
+      type: Boolean,
+      default: false
+    },
+    showListEnd: {
       type: Boolean,
       default: false
     },
@@ -2813,6 +2819,16 @@ export default {
 .order-list-scroll {
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.order-list-end {
+  display: flex;
+  min-height: 120px;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 12px 48px;
+  color: #8b9993;
+  font-size: 12px;
 }
 
 .order-item {
