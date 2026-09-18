@@ -1,6 +1,7 @@
 ﻿// src/api/index.js
 import axiosInstance from './axios'; // 使用配置了拦截器的 Axios 实例
 import config from '../config';
+import { desktopOrderSessionRequest, isPackagedDesktop } from './desktopOrderSession';
 
 const api = '/api';
 if (!api) {
@@ -17,6 +18,9 @@ const apiMethods = {
 
   // 获取今天的订单客户
   webNxDisGetTodayOrderCustomer(disId) {
+    if (isPackagedDesktop()) {
+      return desktopOrderSessionRequest('todayCustomers', disId);
+    }
     return axiosInstance.get(`nxdepartmentorders/webNxDisGetTodayOrderCustomer/${disId}`);
   },
 
@@ -53,6 +57,9 @@ const apiMethods = {
 
   // 获取录入单价和数量订单（手机端接口）
   phoneGetToFillDepOrders(data) {
+    if (isPackagedDesktop()) {
+      return desktopOrderSessionRequest('phoneOrders', data);
+    }
     return axiosInstance.post('nxdepartmentorders/phoneGetToFillDepOrders', data, {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'

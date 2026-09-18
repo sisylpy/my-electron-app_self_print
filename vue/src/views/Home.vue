@@ -26,8 +26,9 @@
         </div>
         </div>
 
-        <div class="test-login-divider"><span>测试服务器临时入口</span></div>
-        <form class="test-login" @submit.prevent="loginWithTestUserId">
+        <p v-if="loginError" class="test-login__error" role="alert">{{ loginError }}</p>
+        <div v-if="showTestLogin" class="test-login-divider"><span>测试服务器临时入口</span></div>
+        <form v-if="showTestLogin" class="test-login" @submit.prevent="loginWithTestUserId">
           <label for="test-distributer-user-id">配送商用户 ID</label>
           <div class="test-login__controls">
             <input
@@ -61,6 +62,7 @@ import axiosInstance from '../api/axios.js'
 import QRCode from 'qrcode'
 import { defaultRouteNameForUser } from '@/utils/disUserRole'
 import config from '@/config'
+import { desktopOrderSessionRequest, isPackagedDesktop } from '@/api/desktopOrderSession'
 
 
 export default {
@@ -77,6 +79,8 @@ export default {
       testUserId: '',
       testLoggingIn: false,
       testLoginError: '',
+      loginError: '',
+      showTestLogin: import.meta.env.DEV,
     }
   },
 
@@ -135,10 +139,15 @@ mounted() {
     }
 
     // 继续检查登录状态
-    api.checkLoginStatus(sessionId,{ showLoading: false }).then(async (response) => {
+    const statusRequest = isPackagedDesktop()
+      ? desktopOrderSessionRequest('pollLogin', sessionId)
+      : api.checkLoginStatus(sessionId, { showLoading: false });
+    statusRequest.then(async (response) => {
       const data = response.data;
+      this.loginError = '';
       if (data.loggedIn) {
         if (!await this.completeLogin(data.user, data.dispatchAuth)) {
+          this.loginError = this.testLoginError || '登录失败，请重新扫码';
           await this.clearOrderSession();
         }
       } else {
@@ -146,11 +155,13 @@ mounted() {
       }
     }).catch(error => {
       console.error('检查登录状态失败:', error);
+      this.loginError = error?.message || '登录服务暂不可用，请稍后重试';
     });
   }, 5000);  // 每 5 秒轮询一次
 },
 
     async loginWithTestUserId() {
+      if (!this.showTestLogin) return;
       this.testLoginError = '';
       const userId = Number(this.testUserId);
       if (!Number.isSafeInteger(userId) || userId <= 0 || userId > 2147483647) {
@@ -194,8 +205,12 @@ mounted() {
 
     async clearOrderSession() {
       try {
-        await axiosInstance.post('nxdistributeruser/logoutDesktopOrderSession', null,
-          { showLoading: false });
+        if (isPackagedDesktop()) {
+          await desktopOrderSessionRequest('logout');
+        } else {
+          await axiosInstance.post('nxdistributeruser/logoutDesktopOrderSession', null,
+            { showLoading: false });
+        }
       } catch (error) {
         console.warn('[desktop-login] 订单网页会话清理失败:', error?.message);
       }
@@ -323,6 +338,7 @@ mounted() {
     // 重新开始登录
     restartLogin() {
       this.showMarketError = false;
+      this.loginError = '';
       this.countdown = 10;
       if (this.countdownTimer) {
         clearInterval(this.countdownTimer);

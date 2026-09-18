@@ -3,6 +3,7 @@ import { createStore } from 'vuex'; // 使用 Vuex 4.x 的创建方法
 import pageHeader from './modules/pageHeader';
 import dispatch from '@/modules/dispatch/store';
 import axiosInstance from '@/api/axios'; // 使用配置好的 Axios 实例
+import { desktopOrderSessionRequest, isPackagedDesktop } from '@/api/desktopOrderSession';
 
 // 从 localStorage 恢复 disUser
 const restoreDisUser = () => {
@@ -146,9 +147,13 @@ const store = createStore({  // 使用 createStore 替代 Vuex.Store
         readCancelError = error?.message || '调度读取取消失败';
       }
       try {
-        await axiosInstance.post('nxdistributeruser/logoutDesktopOrderSession', null, {
-          showLoading: false,
-        });
+        if (isPackagedDesktop()) {
+          await desktopOrderSessionRequest('logout');
+        } else {
+          await axiosInstance.post('nxdistributeruser/logoutDesktopOrderSession', null, {
+            showLoading: false,
+          });
+        }
       } catch (error) {
         orderSessionError = error?.message || '订单网页会话清理失败';
       }

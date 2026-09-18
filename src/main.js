@@ -1,5 +1,5 @@
 // src/main.js
-const { app, BrowserWindow, ipcMain, screen, dialog, shell, Menu, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, dialog, shell, Menu, safeStorage, session: electronSession } = require('electron');
 const path = require('path')
 const fs = require('fs')
 const appLogger = require('./appLogger')
@@ -45,6 +45,7 @@ const execFileAsync = promisify(execFile);
 const axios = require('axios');
 const { createDispatchGateway } = require('./dispatch/dispatch-gateway');
 const { createOrderWriteGateway } = require('./order/order-write-gateway');
+const { createOrderSessionGateway } = require('./order/order-session-gateway');
 const { PRODUCTION_API_BASE_URL } = require('./api-runtime');
 
 // MCP 服务器模块
@@ -88,6 +89,7 @@ let mainWindow;
 let mcpSessionUser = null;
 let dispatchGateway = null;
 let orderWriteGateway = null;
+let orderSessionGateway = null;
 const selectedFolderCapabilities = new Set();
 const saveFileCapabilities = new Set();
 
@@ -190,6 +192,16 @@ function getOrderWriteGateway() {
     orderWriteGateway = createOrderWriteGateway({ axios, appLogger });
   }
   return orderWriteGateway;
+}
+
+function getOrderSessionGateway() {
+  if (!orderSessionGateway) {
+    orderSessionGateway = createOrderSessionGateway({
+      axios,
+      cookieStore: electronSession.defaultSession.cookies,
+    });
+  }
+  return orderSessionGateway;
 }
 
 function sanitizeMcpSessionUser(value) {
@@ -473,6 +485,28 @@ async function clearAutoLoginFromMenu() {
 
 /** 注册 IPC handlers（只执行一次，避免 createWindow 多次调用时重复注册导致报错） */
 function setupIpcHandlers() {
+  // 正式包的 file:// 页面不直接持有跨站订单会话；只暴露扫码轮询和两条固定订单读取接口。
+  ipcMain.handle('order-session-poll-login', async (event, sessionId) => {
+    assertTrustedRendererEvent(event);
+    if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理登录' };
+    return getOrderSessionGateway().pollLogin(sessionId);
+  });
+  ipcMain.handle('order-session-today-customers', async (event, disId) => {
+    assertTrustedRendererEvent(event);
+    if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理读取订单' };
+    return getOrderSessionGateway().todayCustomers(disId);
+  });
+  ipcMain.handle('order-session-phone-orders', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理读取订单' };
+    return getOrderSessionGateway().phoneOrders(input);
+  });
+  ipcMain.handle('order-session-logout', async (event) => {
+    assertTrustedRendererEvent(event);
+    if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理退出登录' };
+    return getOrderSessionGateway().logout();
+  });
+
   // 订单写请求由主进程发送，避免 Electron 渲染层的 file/localhost Origin 被服务端拒绝。
   // 这里只开放经过校验的“保存粘贴订单”，不提供任意 URL 或任意 HTTP 代理。
   ipcMain.handle('order-write-save-paste-orders', async (event, payload) => {
@@ -492,6 +526,14 @@ function setupIpcHandlers() {
   ipcMain.handle('user-session-logout', async (event) => {
     assertTrustedRendererEvent(event);
     const cleanupWarnings = [];
+    if (!isDev) {
+      try {
+        const orderSessionLogout = await getOrderSessionGateway().logout();
+        if (!orderSessionLogout.ok) cleanupWarnings.push(orderSessionLogout.message);
+      } catch (error) {
+        cleanupWarnings.push(error?.message || '订单会话清理失败');
+      }
+    }
     const rememberFlagPath = getRememberPrinterUserFlagPath();
     try {
       if (fs.existsSync(rememberFlagPath)) {
@@ -536,6 +578,7 @@ function setupIpcHandlers() {
   });
   ipcMain.handle('user-session-test-login', async (event, userId) => {
     assertTrustedRendererEvent(event);
+    if (!isDev) return { ok: false, status: 403, message: '测试 ID 登录仅在开发态可用' };
     return getDispatchGateway().testLogin(userId);
   });
   ipcMain.handle('dispatch-get-capabilities', async (event) => {

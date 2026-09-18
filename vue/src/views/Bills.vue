@@ -89,10 +89,19 @@
 
                         <!-- 无数据时显示提示 -->
                         <div v-else class="empty-customer-list text-center p-4">
+                            <div v-if="orderLoadError" class="text-danger" role="alert">
+                                <div class="fw-bold mb-2">{{ orderLoadError }}</div>
+                                <button v-if="orderSessionExpired" type="button" class="btn btn-outline-danger btn-sm"
+                                        @click="$router.push({ name: 'Home' })">重新扫码登录</button>
+                                <button v-else type="button" class="btn btn-outline-secondary btn-sm"
+                                        @click="fetchCustomerList()">重新读取</button>
+                            </div>
                             <div class="text-muted">
-                                <div class="empty-state-mark mb-2">单</div>
-                                <div class="fw-bold mb-1">暂无配送单客户</div>
-                                <div class="small">请等待数据加载或联系管理员</div>
+                                <template v-if="!orderLoadError">
+                                    <div class="empty-state-mark mb-2">单</div>
+                                    <div class="fw-bold mb-1">暂无配送单客户</div>
+                                    <div class="small">请等待数据加载或联系管理员</div>
+                                </template>
                             </div>
                         </div>
                     </div>
@@ -440,6 +449,8 @@
         data() {
             return {
                 depList: [],
+                orderLoadError: '',
+                orderSessionExpired: false,
                 // 注意：gbDepList 已不再使用（模板中只使用 depList 和 gbBatchArr）
                 gbBatchArr: [],
                 isactive: 0,
@@ -1848,6 +1859,8 @@
                     const _disId = this.disUser.nxDiuDistributerId;
                     api.webNxDisGetTodayOrderCustomer(_disId).then((res) => {
                         if (res && res.data) {
+                            this.orderLoadError = '';
+                            this.orderSessionExpired = false;
                             this.isactive = 0;
                             this.issubactive = -1;
                             this.depList = res.data.data.nxArr || [];
@@ -1917,6 +1930,10 @@
                         finish();
                     }).catch((err) => {
                         console.error('fetchCustomerList 请求失败:', err);
+                        this.orderSessionExpired = Number(err?.response?.status) === 401;
+                        this.orderLoadError = this.orderSessionExpired
+                            ? '订单登录会话已失效，请重新扫码登录'
+                            : (err?.response?.data?.msg || err?.message || '配送单读取失败，请重试');
                         this.depList = this.depList || [];
                         this.gbBatchArr = this.gbBatchArr || [];
                         this.isactive = 0;
@@ -2656,7 +2673,6 @@
     }
 
 </style>
-
 
 
 

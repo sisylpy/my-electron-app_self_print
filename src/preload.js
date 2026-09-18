@@ -155,6 +155,14 @@ const electronAPI = Object.freeze({
       ipcRenderer.invoke('customer-history-load-months', { departmentId }),
   }),
 
+  // 正式包只暴露扫码轮询及两个固定订单读取动作；会话 Cookie 留在主进程。
+  orderSession: Object.freeze({
+    pollLogin: (sessionId) => ipcRenderer.invoke('order-session-poll-login', sessionId),
+    todayCustomers: (disId) => ipcRenderer.invoke('order-session-today-customers', disId),
+    phoneOrders: (input) => ipcRenderer.invoke('order-session-phone-orders', input),
+    logout: () => ipcRenderer.invoke('order-session-logout'),
+  }),
+
   // 销售分析只开放三个只读查询，配送商身份由主进程安全会话提供。
   salesAnalysis: Object.freeze({
     loadOverview: (range) => ipcRenderer.invoke('sales-analysis-load-overview', range),
