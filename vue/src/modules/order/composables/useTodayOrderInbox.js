@@ -81,9 +81,27 @@ export function useTodayOrderInbox(disUser) {
     }
   }
 
-  async function refreshSelected() {
-    if (!selectedCustomer.value) return;
-    await selectCustomer(selectedCustomer.value);
+  async function refreshSelected(options = {}) {
+    const customer = selectedCustomer.value;
+    if (!customer) return;
+    if (!options.preserveView) {
+      await selectCustomer(customer);
+      return;
+    }
+    // 审核中的保存不能卸载右侧任务及其完成弹窗，静默更新快照供切换阶段使用。
+    const currentRequest = ++detailRequestId;
+    detailError.value = '';
+    try {
+      const result = await loadCustomerTodayOrders(disUser.value, customer);
+      if (currentRequest === detailRequestId
+        && String(customerId(selectedCustomer.value)) === String(customerId(customer))) {
+        snapshot.value = result;
+      }
+    } catch (loadError) {
+      if (currentRequest === detailRequestId) {
+        detailError.value = orderWorkbenchError(loadError, '订单明细读取失败');
+      }
+    }
   }
 
   return {

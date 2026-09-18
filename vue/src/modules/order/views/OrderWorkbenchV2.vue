@@ -242,10 +242,10 @@ async function refreshAll() {
   if (todayInbox.selectedCustomer.value) await todayInbox.refreshSelected();
 }
 
-async function handleOrderChanged() {
-  await refreshOverview({ selectFirst: true });
+async function handleOrderChanged(change) {
+  await refreshOverview({ selectFirst: change?.preserveSelection !== true });
   if (activeView.value === 'overview' && todayInbox.selectedCustomer.value) {
-    await todayInbox.refreshSelected();
+    await todayInbox.refreshSelected({ preserveView: change?.preserveSelection === true });
   }
 }
 

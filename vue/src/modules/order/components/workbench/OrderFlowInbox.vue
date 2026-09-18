@@ -301,8 +301,8 @@ function handleOrdersChanged() {
   emit('data-changed');
 }
 
-function handleTaskChanged() {
-  emit('data-changed');
+function handleTaskChanged(change) {
+  emit('data-changed', change);
 }
 </script>
 

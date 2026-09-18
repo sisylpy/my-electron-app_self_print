@@ -3923,6 +3923,8 @@ import api from '../services/orderApi';
 
                         // 重置搜索和匹配商品列表状态（选择商品后关闭所有列表）
                         this.resetSearchAndMatchedGoodsState();
+                        // 右侧任务已更新；刷新客户统计时保留当前任务，避免完成弹窗被切走。
+                        this.$emit('order-updated', { preserveSelection: true });
                     } else {
                         await this.$refs.alertDialog.alert(res?.data?.msg || '保存失败', 'error');
                     }
