@@ -701,19 +701,21 @@
             </template>
           </div>
           <!-- 订单状态统计 -->
-          <div class="d-flex align-items-center gap-3 text-muted small" @click="handleStatsAreaClick">
-            <span>{{ batchPrintMode ? '可打印' : '完成' }}: <span class="text-success fw-bold">{{ batchPrintMode ? printableOrders.length : (orderStatusStats.completed || 0) }}</span></span>
-            <span>处理中: <span class="text-warning fw-bold">{{ orderStatusStats.pending || 0 }}</span></span>
-            <span>待确认: <span class="text-danger fw-bold">{{ orderStatusStats.temp || 0 }}</span></span>
+          <Teleport :to="statusHeaderTarget || 'body'" :disabled="!statusHeaderTarget">
+            <div class="d-flex align-items-center gap-3 text-muted small" @click="handleStatsAreaClick">
+              <span>{{ batchPrintMode ? '可打印' : '完成' }}: <span class="text-success fw-bold">{{ batchPrintMode ? printableOrders.length : (orderStatusStats.completed || 0) }}</span></span>
+              <span>处理中: <span class="text-warning fw-bold">{{ orderStatusStats.pending || 0 }}</span></span>
+              <span>待确认: <span class="text-danger fw-bold">{{ orderStatusStats.temp || 0 }}</span></span>
 
-            <!-- 隐藏按钮，连续点击3次后显示 -->
-            <div v-if="showSaveTrainingDataButton" class="d-flex align-items-center gap-3">
-              <button class="btn btn-primary btn-sm"
-                      @click.stop="handleShowDatePicker">
-                保存训练数据
-              </button>
+              <!-- 隐藏按钮，连续点击3次后显示 -->
+              <div v-if="showSaveTrainingDataButton" class="d-flex align-items-center gap-3">
+                <button class="btn btn-primary btn-sm"
+                        @click.stop="handleShowDatePicker">
+                  保存训练数据
+                </button>
+              </div>
             </div>
-          </div>
+          </Teleport>
           
           <!-- 日期选择器模态框 -->
           <div v-if="showDatePicker" class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" @click.self="showDatePicker = false">
@@ -841,6 +843,10 @@ export default {
     batchPrintMode: {
       type: Boolean,
       default: false
+    },
+    statusHeaderTarget: {
+      type: String,
+      default: ''
     }
   },
   emits: ['order-updated', 'order-deleted'],

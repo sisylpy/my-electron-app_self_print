@@ -53,6 +53,12 @@
             <h2>{{ customerName(selectedCustomer) }}</h2>
           </div>
           <div
+            v-if="!smartMode && stageFilter !== 'review'"
+            id="order-flow-customer-status"
+            class="order-flow__customer-status"
+            aria-label="客户订单状态"
+          ></div>
+          <div
             v-if="smartMode && reminderSummary"
             class="order-flow__reminder-summary"
             aria-label="今日订单提醒统计"
@@ -132,6 +138,7 @@
               :selected-customer-name="customerName(selectedCustomer)"
               :selected-customer-entity="selectedCustomer"
               :selected-customer-dep-print-name="selectedCustomer.nxDepartmentPrintName || 'ApplyPanel'"
+              status-header-target="#order-flow-customer-status"
               @order-updated="handleOrdersChanged"
               @order-deleted="handleOrdersChanged"
             />
@@ -151,6 +158,7 @@
             :selected-customer-name="customerName(selectedCustomer)"
             :selected-customer-entity="selectedCustomer"
             :selected-customer-dep-print-name="selectedCustomer.nxDepartmentPrintName || 'ApplyPanel'"
+            status-header-target="#order-flow-customer-status"
             @order-updated="handleOrdersChanged"
             @order-deleted="handleOrdersChanged"
           />
@@ -412,6 +420,7 @@ function handleTaskChanged() {
   flex: none;
 }
 .order-flow__customer-title h2 { overflow: hidden; margin: 0; font-size: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.order-flow__customer-status { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: flex-end; padding-right: 20px; }
 .order-flow__reminder-summary {
   display: flex;
   min-width: 0;
