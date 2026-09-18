@@ -29,6 +29,7 @@ async function run() {
   const gateway = createOrderSessionGateway({
     axios: { create: () => http },
     cookieStore,
+    rememberEnabled: () => true,
   });
 
   assert.equal((await gateway.pollLogin('160')).status, 400);
@@ -52,6 +53,8 @@ async function run() {
   assert.equal((await gateway.pollLogin('session-abcdefghi')).ok, true);
   assert.equal(cookies[0].httpOnly, true);
   assert.equal(cookies[0].sameSite, 'strict');
+  assert(cookies[0].expirationDate > Date.now() / 1000,
+    '扫码会话必须跨应用重启保留，仍由服务端决定实际有效期');
   assert.equal((await gateway.todayCustomers(161)).status, 403);
 
   nextResponse = { status: 200, data: { code: 0, data: { nxArr: [{ id: 1 }] } } };
@@ -60,6 +63,11 @@ async function run() {
   assert.equal(customers.data.data.nxArr.length, 1);
   assert.equal(calls.at(-1).url, 'nxdepartmentorders/webNxDisGetTodayOrderCustomer/160');
   assert.equal(calls.at(-1).config.headers.Cookie, 'JSESSIONID=opaque-session-value');
+  const reopenedGateway = createOrderSessionGateway({
+    axios: { create: () => http }, cookieStore,
+  });
+  assert.equal((await reopenedGateway.todayCustomers(160)).ok, true,
+    '程序重启后应使用持久 Cookie 读取订单，而不是要求再次扫码');
 
   assert.equal((await gateway.phoneOrders({ disId: 161, depFatherId: 12 })).status, 403);
   nextResponse = { status: 200, data: { code: 0, data: { totalCount: 2 } } };
@@ -87,6 +95,19 @@ async function run() {
   assert.equal((await gateway.logout()).ok, false);
   assert.equal(cookies.length, 0, '服务端退出失败也清除本机会话');
 
+  const noRememberGateway = createOrderSessionGateway({
+    axios: { create: () => http }, cookieStore,
+  });
+  nextResponse = {
+    status: 200,
+    data: { code: 0, loggedIn: true,
+      user: { nxDistributerUserId: 312, nxDiuDistributerId: 160 } },
+    headers: { 'set-cookie': ['JSESSIONID=temporary-session; Path=/nongxinle; HttpOnly'] },
+  };
+  await noRememberGateway.pollLogin('session-stuvwxyz0');
+  assert.equal(cookies[0].expirationDate, undefined,
+    '未勾选记住用户时不得持久化订单会话');
+
   const home = fs.readFileSync(path.join(__dirname, '../vue/src/views/Home.vue'), 'utf8');
   const api = fs.readFileSync(path.join(__dirname, '../vue/src/api/all.js'), 'utf8');
   const bills = fs.readFileSync(path.join(__dirname, '../vue/src/views/Bills.vue'), 'utf8');
@@ -102,6 +123,20 @@ async function run() {
   assert(main.includes("if (!isDev) return { ok: false, status: 403, message: '测试 ID 登录仅在开发态可用' }"));
   assert(preload.includes('orderSession: Object.freeze'));
   assert(!preload.includes('JSESSIONID'));
+  const storeSource = fs.readFileSync(path.join(__dirname, '../vue/src/store/index.js'), 'utf8');
+  const rendererMain = fs.readFileSync(path.join(__dirname, '../vue/src/main.js'), 'utf8');
+  assert(storeSource.includes('setMcpSessionUser?.(mcpSessionUserSummary(value))'));
+  assert(rendererMain.includes('setMcpSessionUser?.(mcpSessionUserSummary(store.state.disUser))'));
+  const { mcpSessionUserSummary } = await import('../vue/src/utils/mcpSessionUser.mjs');
+  const reactiveUser = new Proxy({
+    nxDiuDistributerId: 160,
+    nxDistributerEntity: new Proxy({ nxDistributerName: '米线李' }, {}),
+  }, {});
+  assert.throws(() => structuredClone(reactiveUser));
+  assert.deepEqual(structuredClone(mcpSessionUserSummary(reactiveUser)), {
+    nxDiuDistributerId: 160,
+    nxDistributerEntity: { nxDistributerName: '米线李' },
+  });
   console.log('Packaged order session smoke passed.');
 }
 

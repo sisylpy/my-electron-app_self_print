@@ -4,6 +4,7 @@ import pageHeader from './modules/pageHeader';
 import dispatch from '@/modules/dispatch/store';
 import axiosInstance from '@/api/axios'; // 使用配置好的 Axios 实例
 import { desktopOrderSessionRequest, isPackagedDesktop } from '@/api/desktopOrderSession';
+import { mcpSessionUserSummary } from '@/utils/mcpSessionUser.mjs';
 
 // 从 localStorage 恢复 disUser
 const restoreDisUser = () => {
@@ -29,7 +30,8 @@ const state = {
 
 function syncMcpSessionUser(value) {
   try {
-    window.electronAPI?.setMcpSessionUser?.(value || null);
+    // Vuex state 是 Proxy，Electron IPC 不能 structured-clone；仅发送主进程需要的摘要。
+    window.electronAPI?.setMcpSessionUser?.(mcpSessionUserSummary(value));
   } catch (error) {
     console.warn('[MCP] 同步内存会话摘要失败:', error);
   }

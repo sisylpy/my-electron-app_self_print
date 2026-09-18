@@ -199,6 +199,13 @@ function getOrderSessionGateway() {
     orderSessionGateway = createOrderSessionGateway({
       axios,
       cookieStore: electronSession.defaultSession.cookies,
+      rememberEnabled: () => {
+        try {
+          return fs.readFileSync(getRememberPrinterUserFlagPath(), 'utf8').trim() === '1';
+        } catch {
+          return false;
+        }
+      },
     });
   }
   return orderSessionGateway;

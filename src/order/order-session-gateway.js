@@ -30,7 +30,7 @@ function sessionCookieFromHeaders(headers) {
   return null;
 }
 
-function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl }) {
+function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl, rememberEnabled = () => false }) {
   const baseURL = normalizeNongxinleApiBaseUrl(
     apiBaseUrl || PRODUCTION_API_BASE_URL,
     '桌面订单 API'
@@ -81,7 +81,7 @@ function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl }) {
         }
         // 主进程保存 HttpOnly 会话；file:// 页面不能直接依赖跨站 Cookie。
         // Strict 阻止渲染进程跨站请求自动携带它，只在下方白名单接口显式使用。
-        await cookieStore.set({
+        const cookieOptions = {
           url: baseURL,
           name: SESSION_COOKIE,
           value,
@@ -89,7 +89,12 @@ function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl }) {
           secure: baseURL.startsWith('https:'),
           httpOnly: true,
           sameSite: 'strict',
-        });
+        };
+        if (rememberEnabled()) {
+          // 仅勾选「记住用户」时跨重启保留；服务端 HttpSession 过期仍需扫码。
+          cookieOptions.expirationDate = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60;
+        }
+        await cookieStore.set(cookieOptions);
         authenticatedDisId = Number(body.user.nxDiuDistributerId);
       }
       return { ok: true, status: response.status, data: body };
