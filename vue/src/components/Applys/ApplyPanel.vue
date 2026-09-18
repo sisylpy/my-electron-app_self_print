@@ -1,6 +1,6 @@
 ﻿<template>
 
-    <div class="applyBodyPage " style="position: relative;">
+    <div class="applyBodyPage " style="position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0;">
         <!-- 打印蒙版 -->
         <div v-if="isPrinting" class="printing-overlay">
             <div class="printing-content">
@@ -13,7 +13,7 @@
         </div>
 
         <!-- 操作栏放在预览前面，长订单也不会把打印按钮挤出窗口。 -->
-        <div class="d-flex justify-content-between p-20 order-preview-actions">
+        <div class="d-flex justify-content-between p-20 order-preview-actions" style="order: -1; flex-shrink: 0;">
             <div>
                 <ul class="pagination pagination-sm">
                     <li class="page-item">

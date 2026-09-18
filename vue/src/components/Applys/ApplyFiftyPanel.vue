@@ -1,6 +1,6 @@
 ﻿<template>
 
-    <div class="applyBodyPage " style="position: relative;">
+    <div class="applyBodyPage " style="position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0;">
         <!-- 打印蒙版 -->
         <div v-if="isPrinting" class="printing-overlay">
             <div class="printing-content">
@@ -9,6 +9,59 @@
                 </div>
                 <div class="text-white fw-bold" style="font-size: 18px;">正在打印，请稍候...</div>
                 <div class="text-white mt-2" style="font-size: 14px;">打印完成后将自动保存</div>
+            </div>
+        </div>
+
+        <!-- 先显示翻页、下载和打印；长订单预览不得把操作栏挤出窗口。 -->
+        <div class="d-flex justify-content-between p-20 order-preview-actions" style="order: -1; flex-shrink: 0;">
+            <div>
+                <ul class="pagination pagination-sm">
+                    <li class="page-item">
+                        <button class="page-link" @click="changePage(pagesIndex - 1)"
+                                :disabled="pagesIndex <= 1">上一页</button>
+                    </li>
+                    <li class="page-item">
+                        <button class="page-link" @click="changePage(pagesIndex + 1)"
+                                :disabled="pagesIndex >= totalPages">下一页</button>
+                    </li>
+                </ul>
+            </div>
+
+            <div v-if="gbBatchId !== -1">
+                <button class="btn btn-lg btn-primary" @click="printOnly">
+                    <i class="fas fa-print"></i> 打印订货单
+                </button>
+            </div>
+
+            <div v-else>
+                <div v-if="gbDepFatherId == -1 || gbDepFatherId === '' || !gbDepFatherId">
+                    <button class="btn btn-lg btn-secondary" @click="downLoadOnly" v-if="nxDepFatherId == nxDepId ">
+                        <i class="fas fa-download"></i> 全部下载
+                    </button>
+                    <button class="btn btn-lg btn-secondary" v-if="nxDepFatherId !== nxDepId" @click="downLoadOnly">
+                        <i class="fas fa-download"></i> 分部门下载
+                    </button>
+                    <button class="btn btn-lg btn-primary" @click="printOnly" v-if="nxDepFatherId == nxDepId " style="margin-left: 40px;">
+                        <i class="fas fa-print"></i> 全部打印
+                    </button>
+                    <button class="btn btn-lg btn-success" v-if="nxDepFatherId !== nxDepId" @click="printOnly" style="margin-left: 40px;">
+                        <i class="fas fa-print"></i> 分部门打印
+                    </button>
+                </div>
+                <div v-if="gbDepFatherId !== -1 && gbDepFatherId !== '' && gbDepFatherId">
+                    <button class="btn btn-lg btn-secondary" @click="downLoadOnly" v-if="gbDepFatherId == gbDepId ">
+                        <i class="fas fa-download"></i> 全部下载GB
+                    </button>
+                    <button class="btn btn-lg btn-secondary" v-if="gbDepFatherId !== gbDepId" @click="downLoadOnly">
+                        <i class="fas fa-download"></i> 分部门下载GB
+                    </button>
+                    <button class="btn btn-lg btn-primary" @click="printOnly" v-if="gbDepFatherId == gbDepId " style="margin-left: 40px;">
+                        <i class="fas fa-print"></i> 全部打印GB
+                    </button>
+                    <button class="btn btn-lg btn-success" v-if="gbDepFatherId !== gbDepId" @click="printOnly" style="margin-left: 40px;">
+                        <i class="fas fa-print"></i> 分部门打印GB
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -156,75 +209,6 @@
             </div>
 
         </div>
-
-        <div class="d-flex justify-content-between p-20">
-
-            <div>
-                <ul class="pagination pagination-sm">
-                    <li class="page-item">
-                        <button class="page-link" @click="changePage(pagesIndex - 1)"
-                                :disabled="pagesIndex <= 1">上一页
-                        </button>
-                    </li>
-                    <li class="page-item">
-                        <button class="page-link" @click="changePage(pagesIndex + 1)"
-                                :disabled="pagesIndex >= totalPages">下一页
-                        </button>
-                    </li>
-                </ul>
-            </div>
-
-            <div v-if="gbBatchId !== -1">
-                <button class="btn btn-lg btn-primary" @click="printOnly">
-                    <i class="fas fa-print"></i> 打印订货单
-                </button>
-            </div>
-
-            <div v-else>
-
-                <div v-if="gbDepFatherId == -1 || gbDepFatherId === '' || !gbDepFatherId">
-                 <button class="btn btn-lg btn-secondary" @click="downLoadOnly" v-if="nxDepFatherId == nxDepId ">
-                        <i class="fas fa-download"></i> 全部下载
-                    </button>
-                    <button class="btn btn-lg btn-secondary" v-if="nxDepFatherId !== nxDepId" @click="downLoadOnly">
-                        <i class="fas fa-download"></i> 分部门下载
-                    </button>
-
-
-                    <button class="btn btn-lg btn-primary" @click="printOnly" v-if="nxDepFatherId == nxDepId " style="margin-left: 40px;">
-                        <i class="fas fa-print"></i> 全部打印
-                    </button>
-                    <button class="btn btn-lg btn-success" v-if="nxDepFatherId !== nxDepId" @click="printOnly" style="margin-left: 40px;">
-                        <i class="fas fa-print"></i> 分部门打印
-                    </button>
-
-                </div>
-                <div v-if="gbDepFatherId !== -1 && gbDepFatherId !== '' && gbDepFatherId">
-                    <button class="btn btn-lg btn-secondary" @click="downLoadOnly" v-if="gbDepFatherId == gbDepId ">
-                        <i class="fas fa-download"></i> 全部下载GB
-                    </button>
-                    <button class="btn btn-lg btn-secondary" v-if="gbDepFatherId !== gbDepId" @click="downLoadOnly">
-                        <i class="fas fa-download"></i> 分部门下载GB
-                    </button>
-
-
-                    <button class="btn btn-lg btn-primary" @click="printOnly" v-if="gbDepFatherId == gbDepId " style="margin-left: 40px;">
-                        <i class="fas fa-print"></i> 全部打印GB
-                    </button>
-                    <button class="btn btn-lg btn-success" v-if="gbDepFatherId !== gbDepId" @click="printOnly" style="margin-left: 40px;">
-                        <i class="fas fa-print"></i> 分部门打印GB
-                    </button>
-
-                </div>
-
-            </div>
-
-
-
-        </div>
-
-
-
 
         <!-- 打印区域  -->
         <div id="printAreaFifty" class="print-area" ref="printArea"
@@ -3436,4 +3420,3 @@
 
 
 </style>
-
