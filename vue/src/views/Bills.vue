@@ -1,5 +1,5 @@
 ﻿<template>
-    <div class="bills-container">
+    <div class="bills-container" :class="{ 'is-print-center': $route.name === 'Bills' }">
 
         <section class="row justify-content-center bill-body">
             <!-- 侧边栏 -->
@@ -58,6 +58,10 @@
 
                 <!-- 未打印订单客户列表 -->
                 <div v-if="currentView === 'order'" class="box customer-list-box">
+                    <header v-if="$route.name === 'Bills'" class="print-customer-heading">
+                        <strong>待打印客户</strong>
+                        <span>{{ depList.length + gbBatchArr.length }}</span>
+                    </header>
                     <div class="box-body no-padding customer-list-body">
                         <!-- 有数据时显示列表 -->
                         <ul v-if="depList.length > 0 || gbBatchArr.length > 0"
@@ -65,7 +69,11 @@
                             <li v-for="(item, index) in depList" :key="item.nxDepartmentId" :id="item.nxDepartmentId"
                                 :class="{ 'active': isactive === index, 'tab-item': true }"
                                 @click="onclick(index, item.nxDepartmentId, item.nxDepartmentId,item.nxDepartmentAttrName, '',item.nxDepartmentPrintName , item.nxDepartmentSubAmount)">
-                                <a>{{ item.nxDepartmentName }}</a>
+                                <a class="print-customer-name">{{ item.nxDepartmentName }}</a>
+                                <span v-if="$route.name === 'Bills'" class="print-customer-meta">
+                                    <span>配送单待打印</span>
+                                    <strong v-if="Number(item.nxDepartmentSubAmount) > 0">¥{{ Number(item.nxDepartmentSubAmount).toFixed(2) }}</strong>
+                                </span>
                                 <ul v-if="item.nxDepartmentEntities && item.nxDepartmentEntities.length > 0"
                                     class="sub-department-list"
                                     style="list-style-type: none; padding-left: 20px;">
@@ -82,7 +90,8 @@
                             <li v-for="(item, index) in gbBatchArr" :key="item.gbDepartmentId" :id="item.gbDepartmentId"
                                 :class="{ 'active': isactivepb === index, 'tab-item': true }"
                                 @click="onclickPb(index, item.gbDistributerPurchaseBatchId, item.gbDistributerEntity.gbDistributerPrintName)">
-                                <a>{{ item.gbDistributerEntity.gbDistributerName }}</a>
+                                <a class="print-customer-name">{{ item.gbDistributerEntity.gbDistributerName }}</a>
+                                <span v-if="$route.name === 'Bills'" class="print-customer-meta">配送单待打印</span>
                             </li>
                             <!-- 显示子部门 -->
                         </ul>
@@ -2693,6 +2702,219 @@
         min-height: 200px;
     }
 
+    /* 打印中心的屏幕工作区；配送单本身的打印样式保持不变。 */
+    @media screen {
+        .is-print-center .bill-body {
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            gap: 0;
+            background: #f6f9f7;
+        }
+
+        .is-print-center .sidebar-container {
+            width: 310px;
+            max-width: 310px;
+            flex: 0 0 310px;
+            padding: 13px 10px;
+            border-right: 1px solid #dde8e1;
+            background: #fff;
+        }
+
+        .is-print-center .customer-list-box {
+            border: 0;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .print-customer-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 3px 9px 12px;
+            color: #52635a;
+        }
+
+        .print-customer-heading strong {
+            font-size: 13px;
+            font-weight: 800;
+        }
+
+        .print-customer-heading span {
+            min-width: 25px;
+            padding: 2px 7px;
+            border-radius: 99px;
+            background: #eef6f1;
+            color: #08794b;
+            font-size: 11px;
+            font-weight: 800;
+            text-align: center;
+        }
+
+        .is-print-center .customer-list-body {
+            padding: 0 0 24px;
+        }
+
+        .is-print-center .customer-list {
+            flex: none;
+            margin: 0;
+            padding: 0;
+            overflow: visible;
+        }
+
+        .is-print-center .customer-list > .tab-item {
+            display: block;
+            margin: 0 0 5px;
+            padding: 11px 12px;
+            border: 1px solid transparent;
+            border-radius: 9px;
+            background: transparent;
+            color: #27362d;
+            transition: background-color .15s ease, border-color .15s ease;
+        }
+
+        .is-print-center .customer-list > .tab-item:hover {
+            border-color: #e4eee8;
+            background: #f6faf8;
+            color: #27362d;
+        }
+
+        .is-print-center .customer-list > .tab-item.active {
+            border-color: #b9dfca;
+            background: #eaf7f0;
+            color: #135d3d;
+            box-shadow: inset 3px 0 0 #15965a;
+        }
+
+        .is-print-center .customer-list .print-customer-name {
+            display: block;
+            overflow: hidden;
+            color: inherit;
+            font-size: 16px;
+            font-weight: 800;
+            line-height: 1.35;
+            text-decoration: none;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .is-print-center .print-customer-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 7px;
+            color: #7c8c82;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .is-print-center .print-customer-meta strong {
+            color: #168358;
+            font-size: 12px;
+        }
+
+        .is-print-center .customer-list .sub-department-list {
+            margin: 9px 0 0;
+            padding-left: 0 !important;
+            border-top: 1px solid #dcece2;
+        }
+
+        .is-print-center .customer-list .tab-item-sub {
+            margin: 4px 0 0;
+            padding: 6px 8px;
+            border: 0;
+            border-radius: 6px;
+            color: #547362;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .is-print-center .customer-list .tab-item-sub.active {
+            background: #d9efe2;
+            color: #086d42;
+        }
+
+        .is-print-center .main-content-container {
+            width: auto;
+            max-width: none;
+            flex: 1 1 0;
+            padding: 12px 14px;
+            border-radius: 0;
+            background: #f6f9f7;
+            box-shadow: none;
+        }
+
+        .is-print-center .main-content-container > :deep(.applyBodyPage) {
+            gap: 10px;
+            background: transparent;
+        }
+
+        .is-print-center .main-content-container > :deep(.applyBodyPage > .order-preview-actions) {
+            min-height: 62px;
+            margin: 0;
+            padding: 10px 14px;
+            border: 1px solid #dde8e1;
+            border-radius: 11px;
+            background: #fff;
+        }
+
+        .is-print-center .main-content-container > :deep(.applyBodyPage > .card) {
+            margin: 0;
+            padding: 18px !important;
+            border: 1px solid #dde8e1;
+            border-radius: 11px;
+            background: #fff;
+            box-shadow: 0 5px 18px rgba(39, 78, 61, .04) !important;
+        }
+
+        .is-print-center .main-content-container :deep(.order-preview-actions .btn) {
+            min-height: 38px;
+            margin-left: 8px !important;
+            padding: 7px 14px;
+            border-radius: 7px;
+            font-size: 13px;
+            font-weight: 800;
+            line-height: 1.3;
+        }
+
+        .is-print-center .main-content-container :deep(.order-preview-actions .btn-secondary) {
+            border-color: #d1dfd7;
+            background: #fff;
+            color: #4e6458;
+        }
+
+        .is-print-center .main-content-container :deep(.order-preview-actions .btn-primary),
+        .is-print-center .main-content-container :deep(.order-preview-actions .btn-success) {
+            border-color: #108c54;
+            background: #108c54;
+            color: #fff;
+        }
+
+        .is-print-center .main-content-container :deep(.order-preview-actions .page-link) {
+            min-height: 36px;
+            padding: 7px 11px;
+            border-color: #d9e5de;
+            color: #16784d;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .is-print-center .main-content-container :deep(.order-preview-actions .page-link:disabled) {
+            color: #a3b0a8;
+            background: #f7f9f8;
+        }
+
+    }
+
+    @media screen and (max-width: 1400px) {
+        .is-print-center .sidebar-container {
+            width: 270px;
+            max-width: 270px;
+            flex-basis: 270px;
+        }
+    }
+
     /* 响应式设计 */
     @media (max-width: 768px) {
         .col-md-2,
@@ -2708,5 +2930,3 @@
     }
 
 </style>
-
-
