@@ -26,7 +26,7 @@ function cloneAndValidatePastePayload(input) {
     throw new Error('订单原文格式无效');
   }
   const type = input.type == null ? 3 : Number(input.type);
-  if (type !== 3) {
+  if (type !== 2 && type !== 3) {
     throw new Error('桌面端粘贴订单类型无效');
   }
 
@@ -35,7 +35,7 @@ function cloneAndValidatePastePayload(input) {
     serialized = JSON.stringify({
       orderList: input.orderList,
       pasteText: input.pasteText || '',
-      type: 3,
+      type,
     });
   } catch {
     throw new Error('订单内容无法序列化');

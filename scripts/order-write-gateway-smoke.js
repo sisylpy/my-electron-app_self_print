@@ -33,6 +33,23 @@ async function main() {
   assert.strictEqual(capturedRequest.url, 'ocr/pasteSearchGoods');
   assert.strictEqual(capturedRequest.requestOptions.headers.Origin, undefined);
   assert.strictEqual(capturedRequest.requestOptions.maxRedirects, 0);
+  assert.strictEqual(capturedRequest.data.type, 3);
+
+  const excelSuccess = await gateway.savePasteOrders({
+    orderList: [{ nxDoGoodsName: '小米椒', nxDoQuantity: '2', nxDoStandard: '斤' }],
+    pasteText: '小米椒,2,斤',
+    type: 2,
+  });
+  assert.strictEqual(excelSuccess.ok, true);
+  assert.strictEqual(capturedRequest.data.type, 2);
+
+  const unsupported = await gateway.savePasteOrders({
+    orderList: [{ nxDoGoodsName: '小米椒' }],
+    type: 1,
+  });
+  assert.strictEqual(unsupported.ok, false);
+  assert.strictEqual(unsupported.status, 400);
+  assert.strictEqual(capturedRequest.data.type, 2);
 
   const invalid = await gateway.savePasteOrders({ orderList: [], pasteText: '', type: 3 });
   assert.strictEqual(invalid.ok, false);
