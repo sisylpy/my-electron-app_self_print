@@ -74,8 +74,8 @@
               <button
                   class="btn btn-outline-primary btn-sm"
                   @click.stop="handleOpenOrderDetail(item)"
-                  title="查看订单详情">
-                👁️ 详情
+                  title="预览并补打历史订单">
+                预览 / 补打
               </button>
             </div>
           </div>

@@ -107,7 +107,7 @@
           />
           <div v-else class="history-module">
             <div class="history-heading">
-              <div><h3>客户历史订单</h3><p>保留最近月份的订单、订单详情和 Excel 下载能力。</p></div>
+              <div><h3>客户历史订单</h3><p>查看历史订单、下载 Excel，或按打印中心的配送单格式补打。</p></div>
             </div>
             <HistoryOrders
               :key="customer.nxDepartmentId"
@@ -173,31 +173,35 @@
       <aside class="order-detail-drawer">
         <header>
           <div>
-            <span>ORDER DETAIL</span>
-            <h3>历史订单详情</h3>
+            <span>ORDER REPRINT</span>
+            <h3>历史订单补打</h3>
             <p>{{ orderDetailTitle }}</p>
           </div>
           <button type="button" @click="closeOrderDetail">×</button>
         </header>
         <div v-if="orderDetailLoading" class="detail-state">正在加载订单详情…</div>
         <div v-else-if="orderDetailError" class="detail-state error">{{ orderDetailError }}</div>
-        <div v-else class="order-detail-body">
-          <section class="bill-overview">
-            <div><span>订单号</span><strong>{{ billDetail.nxDbTradeNo || selectedBill.nxDbTradeNo || '-' }}</strong></div>
-            <div><span>订单日期</span><strong>{{ billDetail.nxDbDate || selectedBill.nxDbDate || '-' }}</strong></div>
-            <div><span>客户</span><strong>{{ displayName(customer) }}</strong></div>
-            <div><span>合计金额</span><strong class="bill-total">¥ {{ billDetail.nxDbTotal ?? selectedBill.nxDbTotal ?? '0' }}</strong></div>
-          </section>
-          <section class="bill-lines">
-            <h4>商品明细 <span>{{ orderLines.length }} 项</span></h4>
-            <div v-if="!orderLines.length" class="detail-state">该订单没有商品明细</div>
-            <article v-for="(row, index) in orderLines" :key="row.nxDepartmentOrdersId || row.nxDepartmentOrderId || index">
-              <b>{{ index + 1 }}</b>
-              <div><strong>{{ orderGoodsName(row) }}</strong><small v-if="row.nxDoRemark">{{ row.nxDoRemark }}</small></div>
-              <span>{{ row.nxDoQuantity || row.nxDoWeight || '-' }} {{ row.nxDoStandard || '' }}</span>
-              <em>¥ {{ row.nxDoSubtotal ?? '-' }}</em>
-            </article>
-          </section>
+        <div v-else class="history-print-preview">
+          <component
+            v-if="loadedHistoryPrintComponent && historyPrintData"
+            :key="`customer-history-print-${selectedBill.nxDepartmentBillId}`"
+            :is="loadedHistoryPrintComponent"
+            :nx-dep-father-id="customer.nxDepartmentId"
+            :nx-dep-id="customer.nxDepartmentId"
+            :dep-name="displayName(customer)"
+            :dep-print-name="historyPrintComponentName"
+            :update-time="selectedBill.nxDepartmentBillId"
+            :dis-id="distributerId"
+            :dis-name="disUser.nxDistributerEntity?.nxDistributerName || ''"
+            :gb-dep-father-id="-1"
+            :gb-dep-id="-1"
+            :gb-dis-id="-1"
+            :gb-batch-id="-1"
+            :order-data="historyPrintData"
+            :is-history-order="true"
+            class="history-print-component"
+          />
+          <div v-else class="detail-state error">打印模板加载失败，请关闭后重试</div>
         </div>
       </aside>
     </div>
@@ -209,8 +213,13 @@
 </template>
 
 <script>
+import { markRaw } from 'vue';
 import HistoryOrders from '@/components/HistoryOrders.vue';
 import customerApi from '../api/customerApi';
+import {
+  normalizeCustomerHistoryPrintData,
+  resolveCustomerHistoryPrintComponent,
+} from '../presentation/customerHistoryPrint';
 import CustomerProfilePanel from '../components/CustomerProfilePanel.vue';
 import CustomerEditDrawer from '../components/CustomerEditDrawer.vue';
 import CustomerGoodsPanel from '../components/CustomerGoodsPanel.vue';
@@ -220,6 +229,15 @@ import CustomerAfterSalesPanel from '../components/CustomerAfterSalesPanel.vue';
 import CustomerAiRecommendationPanel from '../components/CustomerAiRecommendationPanel.vue';
 import CustomerUsersDrawer from '../components/CustomerUsersDrawer.vue';
 import CustomerDepartmentTransferDrawer from '../components/CustomerDepartmentTransferDrawer.vue';
+
+const historyPrintComponentLoaders = {
+  ApplyPanel: () => import('@/components/Applys/ApplyPanel.vue'),
+  ApplyFiftyPanel: () => import('@/components/Applys/ApplyFiftyPanel.vue'),
+  ApplyHalfPanel: () => import('@/components/Applys/ApplyHalfPanel.vue'),
+  ApplyHalfWholePanel: () => import('@/components/Applys/ApplyHalfWholePanel.vue'),
+  ApplyThirtyPanel: () => import('@/components/Applys/ApplyThirtyPanel.vue'),
+  ApplyThirtyWholePanel: () => import('@/components/Applys/ApplyThirtyWholePanel.vue'),
+};
 
 function ensureSuccess(response, fallback) {
   if (!response?.data || response.data.code !== 0) {
@@ -273,11 +291,13 @@ export default {
       orderDetailLoading: false,
       orderDetailError: '',
       selectedBill: {},
-      billDetail: {},
-      orderLines: [],
+      historyPrintData: null,
+      historyPrintComponentName: 'ApplyPanel',
+      loadedHistoryPrintComponent: null,
       notice: { visible: false, text: '', type: 'success' },
       noticeTimer: null,
       detailRequestId: 0,
+      orderDetailRequestId: 0,
     };
   },
   computed: {
@@ -444,32 +464,49 @@ export default {
       const billId = bill?.nxDepartmentBillId;
       if (!billId) return;
       this.selectedBill = bill;
-      this.billDetail = {};
-      this.orderLines = [];
+      this.historyPrintData = null;
+      this.loadedHistoryPrintComponent = null;
+      this.historyPrintComponentName = resolveCustomerHistoryPrintComponent(this.customer?.nxDepartmentPrintName);
       this.orderDetailError = '';
       this.orderDetailOpen = true;
       this.orderDetailLoading = true;
+      const requestId = ++this.orderDetailRequestId;
       try {
-        const data = ensureSuccess(
-          await customerApi.getBillDetail(billId, this.customer.nxDepartmentId),
-          '订单详情加载失败',
-        ) || {};
-        this.billDetail = data.bill || {};
-        this.orderLines = data.bill?.nxDepartmentOrdersEntities || data.arr || [];
+        const [response, printComponent] = await Promise.all([
+          customerApi.getBillDetail(billId, this.customer.nxDepartmentId),
+          this.loadHistoryPrintComponent(this.historyPrintComponentName),
+        ]);
+        if (requestId !== this.orderDetailRequestId) return;
+        const data = ensureSuccess(response, '订单详情加载失败') || {};
+        this.historyPrintData = normalizeCustomerHistoryPrintData(data, bill);
+        this.loadedHistoryPrintComponent = printComponent;
       } catch (error) {
-        this.orderDetailError = error?.message || '订单详情加载失败';
+        if (requestId === this.orderDetailRequestId) {
+          this.orderDetailError = error?.message || '订单详情加载失败';
+        }
       } finally {
-        this.orderDetailLoading = false;
+        if (requestId === this.orderDetailRequestId) this.orderDetailLoading = false;
+      }
+    },
+    async loadHistoryPrintComponent(componentName) {
+      const resolvedName = resolveCustomerHistoryPrintComponent(componentName);
+      try {
+        const module = await historyPrintComponentLoaders[resolvedName]();
+        return markRaw(module?.default || module);
+      } catch (error) {
+        if (resolvedName === 'ApplyPanel') throw new Error('打印模板加载失败');
+        console.warn(`历史订单打印模板 ${resolvedName} 加载失败，回退到 ApplyPanel`, error);
+        const fallback = await historyPrintComponentLoaders.ApplyPanel();
+        this.historyPrintComponentName = 'ApplyPanel';
+        return markRaw(fallback?.default || fallback);
       }
     },
     closeOrderDetail() {
+      this.orderDetailRequestId += 1;
       this.orderDetailOpen = false;
       this.selectedBill = {};
-      this.billDetail = {};
-      this.orderLines = [];
-    },
-    orderGoodsName(row) {
-      return row?.nxDoGoodsName || row?.nxDistributerGoodsEntity?.nxDgGoodsName || row?.nxDgGoodsName || '未命名商品';
+      this.historyPrintData = null;
+      this.loadedHistoryPrintComponent = null;
     },
     showNotice(text, type = 'success') {
       if (this.noticeTimer) window.clearTimeout(this.noticeTimer);
@@ -556,5 +593,34 @@ export default {
   .customer-commandbar{padding-inline:14px}
   .customer-commandbar .module-tabs{gap:8px}
   .customer-commandbar .module-tabs button{min-width:92px;padding-inline:2px}
+}
+.order-detail-drawer{
+  width:min(1240px,calc(100vw - 118px));
+}
+.history-print-preview{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  padding:16px;
+  background:#f5f8f6;
+}
+.history-print-component{
+  min-height:100%;
+  background:#fff;
+}
+.history-print-preview :deep(.applyBodyPage){
+  min-height:100%!important;
+  height:auto!important;
+}
+.history-print-preview :deep(.order-preview-actions){
+  position:sticky;
+  top:0;
+  z-index:5;
+  background:#fff;
+  border-bottom:1px solid #e2e9e5;
+}
+@media(max-width:1050px){
+  .order-detail-drawer{width:96vw}
+  .history-print-preview{padding:10px}
 }
 </style>
