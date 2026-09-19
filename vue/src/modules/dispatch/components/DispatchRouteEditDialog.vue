@@ -98,7 +98,11 @@
             <li
               v-for="(stop, index) in stops"
               :key="stop._stopKey"
-              :class="{ active: selectedStop?._stopKey === stop._stopKey, dragging: dragIndex === index }"
+              :class="{
+                active: selectedStop?._stopKey === stop._stopKey,
+                dragging: dragIndex === index,
+                'is-return-pickup': stop.isReturnPickup,
+              }"
               draggable="true"
               @dragstart="startDrag(index)"
               @dragover.prevent
@@ -111,6 +115,7 @@
                 <span class="route-editor__stop-copy">
                   <span class="route-editor__stop-title">
                     <strong>{{ stop.customerName || '未命名客户' }}</strong>
+                    <em v-if="stop.isReturnPickup" class="route-editor__return-name-tag">（退货）</em>
                     <em v-if="stop.windowRequirementLabel">{{ stop.windowRequirementLabel }}</em>
                     <em
                       v-if="currentLock(stop)"
@@ -118,11 +123,14 @@
                       :class="{ 'is-other-driver': !isLockedToCurrentDriver(stop) }"
                     >🔒 {{ stopLockLabel(stop) }}</em>
                   </span>
+                  <span v-if="stop.isReturnPickup" class="route-editor__return-reminder">
+                    <b>↩ 退货取货</b><span>到店拿回商品，无需装货</span>
+                  </span>
                   <small>{{ stop.goodsSummary || stop._customerAddress || '暂无商品摘要' }}</small>
                 </span>
                 <span class="route-editor__stop-times">
                   <b><small>{{ stop.arrivalFieldLabel || '到达' }}</small>{{ stop.plannedArrivalLabel || '—' }}</b>
-                  <b><small>服务</small>{{ stop.serviceDurationLabel || stop.unloadDurationText || '—' }}</b>
+                  <b><small>{{ stop.isReturnPickup ? '取货' : '服务' }}</small>{{ stop.serviceDurationLabel || stop.unloadDurationText || '—' }}</b>
                   <b><small>{{ stop.departureFieldLabel || '离开' }}</small>{{ stop.plannedDepartureLabel || '—' }}</b>
                 </span>
               </button>
@@ -161,7 +169,13 @@
             <ul>
               <li v-for="candidate in filteredAvailableStops" :key="candidate._stopKey">
                 <span class="route-editor__candidate-copy">
-                  <strong>{{ candidate.customerName }}</strong>
+                  <span class="route-editor__candidate-title">
+                    <strong>{{ candidate.customerName }}</strong>
+                    <em v-if="candidate.isReturnPickup" class="route-editor__return-name-tag">（退货）</em>
+                  </span>
+                  <span v-if="candidate.isReturnPickup" class="route-editor__return-reminder">
+                    <b>↩ 退货取货</b><span>到店拿回商品，无需装货</span>
+                  </span>
                   <em
                     v-if="currentLock(candidate)"
                     class="route-editor__driver-lock"
@@ -313,6 +327,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useStore } from 'vuex';
 import HuaweiDispatchMap from '@/modules/map/components/HuaweiStyledDispatchMap.vue';
+import { isReturnPickupStop } from '../services/readModel';
 import {
   buildPlanningStopLockPayload,
   buildReturnStopToSandboxCommand,
@@ -537,11 +552,18 @@ onBeforeUnmount(() => {
 function normalizeStops(list) {
   return (Array.isArray(list) ? list : []).map((stop, index) => {
     const key = String(stop?.sandboxStopKey ?? stop?.stopKey ?? stop?._stopKey ?? '').trim();
+    const returnPickup = isReturnPickupStop({
+      ...stop,
+      sandboxStopKey: key,
+      stopKey: key,
+    });
     return {
       ...stop,
       sandboxStopKey: key,
       stopKey: key,
       _stopKey: key || `route-stop-${index}`,
+      taskType: returnPickup ? 'RETURN_PICKUP' : stop?.taskType,
+      isReturnPickup: returnPickup,
       depFatherId: stop?.depFatherId ?? stop?.departmentId ?? stop?.depId ?? null,
       departmentId: stop?.departmentId ?? stop?.depFatherId ?? stop?.depId ?? null,
       _customerAddress: stop?._customerAddress || stop?.address || '',
@@ -2191,6 +2213,55 @@ button:disabled { cursor: not-allowed !important; opacity: .38; }
   border-color: #efae50;
   color: #925b08;
   background: #fff8e8;
+}
+
+.route-editor__order ol > li.is-return-pickup {
+  background: #fffaf9;
+  box-shadow: inset 4px 0 0 #e35b4f;
+}
+
+.route-editor__stop-title em.route-editor__return-name-tag,
+.route-editor__candidate-title em.route-editor__return-name-tag {
+  padding: 0;
+  border: 0;
+  color: #d7483d;
+  background: transparent;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.route-editor__candidate-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.route-editor__return-reminder {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
+  box-sizing: border-box;
+  margin-top: 5px;
+  padding: 4px 7px;
+  border: 1px solid #f1b5ad;
+  border-radius: 6px;
+  color: #8d514b;
+  background: #fff1ef;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.route-editor__return-reminder b {
+  color: #c63f33;
+  font-size: 9px;
+}
+
+.route-editor__return-reminder span {
+  color: #8d514b;
+  font-size: 9px;
+  font-weight: 700;
 }
 
 @media (max-width: 1360px) {

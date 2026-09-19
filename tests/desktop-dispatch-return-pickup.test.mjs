@@ -53,3 +53,17 @@ test('桌面路线表同步小程序的退货名称和取货提醒', () => {
   assert.match(component, /'is-return-pickup': isReturnPickup\(stop\)/);
   assert.match(component, /\.stop-list__return-reminder/);
 });
+
+test('编辑路线弹窗保留退货站点身份并显示取货说明', () => {
+  const component = fs.readFileSync(
+    path.join(root, 'vue/src/modules/dispatch/components/DispatchRouteEditDialog.vue'),
+    'utf8'
+  );
+  assert.match(component, /isReturnPickupStop/);
+  assert.match(component, /'is-return-pickup': stop\.isReturnPickup/);
+  assert.match(component, /class="route-editor__return-name-tag">（退货）/);
+  assert.match(component, /class="route-editor__return-reminder"/);
+  assert.match(component, /↩ 退货取货/);
+  assert.match(component, /到店拿回商品，无需装货/);
+  assert.match(component, /stop\.isReturnPickup \? '取货' : '服务'/);
+});
