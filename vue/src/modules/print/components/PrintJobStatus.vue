@@ -30,6 +30,7 @@ let dismissTimer = null;
 const title = computed(() => {
     if (status.value?.state === 'printing') return '正在打印';
     if (status.value?.state === 'success') return '打印已提交';
+    if (status.value?.printed) return '打印已提交，保存未完成';
     return '打印未完成';
 });
 

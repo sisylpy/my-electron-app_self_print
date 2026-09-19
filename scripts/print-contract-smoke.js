@@ -107,6 +107,11 @@ checkPattern(printConfig, /silentMarginsType:\s*0/, '正式打印保留系统默
 checkPattern(printConfig, /hiddenWindowZoomFactor:\s*1\.0/, '隐藏打印窗口缩放保持 1.0');
 checkPattern(main, /createSilentPrintOptions\(/, '主进程统一使用打印参数工厂');
 checkPattern(main, /shouldSave/, '多页打印保留最后一页保存语义');
+checkPattern(main, /await\s+requestPrintedOrderSave\(/, '打印成功回执会等待订单保存完成');
+checkPattern(main, /assertSuccessfulWriteResponse\(response,\s*'订单保存'\)/,
+  '订单保存会校验 HTTP 200 内的业务错误码');
+checkPattern(main, /saveFailed:\s*true/, '订单保存失败会回传给打印页面');
+checkPattern(main, /retryable:\s*!printed/, '订单已出纸但保存失败时不会提示重复打印');
 checkPattern(main, /ipcMain\.handle\('preview-return-document'/, '退货单预览使用桌面主进程受控窗口');
 checkPattern(main, /previewWindow\.webContents\.setWindowOpenHandler\(\(\) => \(\{ action: 'deny' \}\)\)/,
   '退货单预览窗口继续禁止派生弹窗');

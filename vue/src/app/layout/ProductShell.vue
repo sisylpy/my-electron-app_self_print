@@ -68,6 +68,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .product-shell {
+  --product-sidebar-width: 104px;
   display: grid;
   width: 100vw;
   height: 100vh;
@@ -76,6 +77,35 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: var(--product-text);
   background: var(--product-bg);
+}
+
+/*
+ * Windows 常见的 125%/150% 缩放会显著压缩可用 CSS 高度。
+ * 侧栏在壳层内固定为一屏，并把所有入口作为同级 flex item 等分，
+ * 避免再出现侧栏自身的滚动条。
+ */
+.product-shell :deep(.product-sidebar) {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.product-shell :deep(.product-sidebar__navigation) {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.product-shell :deep(.product-sidebar__navigation section) {
+  display: contents;
+}
+
+.product-shell :deep(.product-sidebar__navigation a) {
+  flex: 1 1 0;
+  min-height: 0;
+  justify-content: center;
+  margin: 0;
+  padding-block: 4px;
 }
 
 .product-shell__main {

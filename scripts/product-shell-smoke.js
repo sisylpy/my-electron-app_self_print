@@ -100,6 +100,13 @@ check(
 check(!shell.includes('Applys/'), 'ProductShell 不依赖打印模板');
 check(!shell.includes('/api/'), 'ProductShell 不调用业务接口');
 check(!shell.includes('dispatchCommands'), 'ProductShell 不发起调度写操作');
+check(shell.includes('--product-sidebar-width: 104px'), 'Windows 侧栏使用加宽后的 104px 宽度');
+check(shell.includes('.product-sidebar__navigation section') && shell.includes('display: contents'),
+  '侧栏分组不会阻断菜单项按整屏高度等分');
+check(shell.includes('.product-sidebar__navigation a') && shell.includes('flex: 1 1 0'),
+  '侧栏菜单项按可用高度均匀分配');
+check(shell.includes('.product-sidebar__navigation') && shell.includes('overflow: hidden'),
+  '侧栏导航不再显示独立滚动条');
 
 if (failures > 0) {
   console.error(`ProductShell smoke failed: ${failures}`);

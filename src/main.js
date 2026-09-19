@@ -92,6 +92,55 @@ let orderWriteGateway = null;
 let orderSessionGateway = null;
 const selectedFolderCapabilities = new Set();
 const saveFileCapabilities = new Set();
+const pendingPrintedOrderSaves = new Map();
+const PRINTED_ORDER_SAVE_TIMEOUT_MS = 60 * 1000;
+
+function assertSuccessfulWriteResponse(response, operationName) {
+  const responseData = response && response.data;
+  if (responseData && Number(responseData.code) !== 0) {
+    const error = new Error(responseData.msg || `${operationName}失败`);
+    error.response = response;
+    throw error;
+  }
+  return responseData;
+}
+
+function settlePrintedOrderSave(saveRequestId, error, result) {
+  if (!saveRequestId) return;
+  const pending = pendingPrintedOrderSaves.get(saveRequestId);
+  if (!pending) return;
+  pendingPrintedOrderSaves.delete(saveRequestId);
+  clearTimeout(pending.timeoutId);
+  if (error) {
+    pending.reject(error);
+  } else {
+    pending.resolve(result);
+  }
+}
+
+function requestPrintedOrderSave(printParams) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return savePrintBill(
+      printParams.depFatherId,
+      printParams.depId,
+      printParams.tradeNo,
+      printParams.userId,
+      printParams.paperCount,
+      printParams.orderIds
+    );
+  }
+
+  const saveRequestId = crypto.randomUUID();
+  const correlatedParams = { ...printParams, saveRequestId };
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      pendingPrintedOrderSaves.delete(saveRequestId);
+      reject(new Error('订单保存超时，请检查服务器连接后重试'));
+    }, PRINTED_ORDER_SAVE_TIMEOUT_MS);
+    pendingPrintedOrderSaves.set(saveRequestId, { resolve, reject, timeoutId });
+    mainWindow.webContents.send('check-device-config-for-print', correlatedParams);
+  });
+}
 
 function trustedRendererUrl(url) {
   if (typeof url !== 'string') return false;
@@ -164,12 +213,16 @@ async function runTrackedPrintJob(label, work) {
     publishPrintJobStatus({ jobId, label, state: 'success', message: `${label}已提交` });
     return result;
   } catch (error) {
+    const printed = Boolean(error && error.printed);
     publishPrintJobStatus({
       jobId,
       label,
       state: 'failed',
-      retryable: true,
-      message: `${label}失败：${serializePrintError(error)}`,
+      printed,
+      retryable: !printed,
+      message: printed
+        ? `打印已提交，但订单保存失败：${serializePrintError(error)}`
+        : `${label}失败：${serializePrintError(error)}`,
     });
     throw error;
   }
@@ -3337,7 +3390,7 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
           console.error('❌ [打印] errorDescription:', errorDescription);
         });
         
-        printWindow.webContents.print(printOptions, (success, error) => {
+        printWindow.webContents.print(printOptions, async (success, error) => {
           console.log('🖨️ [printContentToWindowWithCallback] ========== 打印回调被调用 ==========');
           console.log('🖨️ [printContentToWindowWithCallback] success:', success);
           console.log('🖨️ [printContentToWindowWithCallback] error:', error);
@@ -3363,25 +3416,34 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
             console.log('✅ [IPC回执] shouldSave:', shouldSave);
             console.log('✅ [IPC回执] 打印机:', defaultPrinter || '系统默认打印机');
             
+            let saved = false;
             // 历史订单打印：跳过保存接口和刷新客户列表
             if (isHistoryOrder) {
               console.log('⏭️ [IPC回执] 历史订单打印，跳过保存接口');
             } else if (shouldSave) {
               console.log('💾 [IPC回执] 需要保存打印记录，paperCount:', paperCount);
-              if (mainWindow) {
-                console.log('💾 [IPC回执] 发送设备配置检查请求到渲染进程');
-                mainWindow.webContents.send('check-device-config-for-print', {
+              try {
+                await requestPrintedOrderSave({
                   depFatherId, depId, tradeNo, userId, paperCount, orderIds
                 });
-              } else {
-                console.log('💾 [IPC回执] 主窗口不存在，直接调用保存接口');
-                savePrintBill(depFatherId, depId, tradeNo, userId, paperCount, orderIds);
+                saved = true;
+                console.log('✅ [IPC回执] 打印后的订单保存已确认');
+              } catch (saveError) {
+                console.error('❌ [IPC回执] 打印已提交，但订单保存失败:', saveError);
+                reject({
+                  success: false,
+                  printed: true,
+                  saveFailed: true,
+                  error: saveError.message || '订单保存失败',
+                  tradeNo
+                });
+                return;
               }
             } else {
               console.log('⏭️ [IPC回执] 跳过保存，非最后一页');
             }
             
-            resolve({ success: true, tradeNo });
+            resolve({ success: true, tradeNo, saved });
           } else {
             console.error('❌ [IPC回执] ========== 打印失败 ==========');
             console.error('❌ [IPC回执] error:', error);
@@ -3454,7 +3516,7 @@ function saveAccountBillPrinterSelf(depFatherId, depId, tradeNo, userId, paperCo
   }
 }
 
-function savePrintBill(depFatherId, depId, tradeNo, userId, paperCount, orderIds) {
+async function savePrintBill(depFatherId, depId, tradeNo, userId, paperCount, orderIds) {
   console.log('💾 [savePrintBill] 开始保存订单:', {
     depFatherId, depId, tradeNo, userId, paperCount
   });
@@ -3474,13 +3536,13 @@ function savePrintBill(depFatherId, depId, tradeNo, userId, paperCount, orderIds
 
   console.log('📤 [savePrintBill] 请求数据:', postData);
 
-  axios.post(apiUrl, postData, {
-    headers: {
-      // 'Content-Type': 'application/json',  // 正确设置请求头
-      'Content-Type': 'application/x-www-form-urlencoded'
-    }
-  })
-  .then(response => {
+  try {
+    const response = await axios.post(apiUrl, postData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+    const responseData = assertSuccessfulWriteResponse(response, '订单保存');
     console.log('✅ [savePrintBill] 保存成功:', response.data);
     
     // 保存成功后，调用设备记录接口
@@ -3496,13 +3558,14 @@ function savePrintBill(depFatherId, depId, tradeNo, userId, paperCount, orderIds
     if (mainWindow) {      
       mainWindow.webContents.send('refresh-customer-list');
     }
-  })
-  .catch(error => {
+    return responseData;
+  } catch (error) {
     console.error('❌ [savePrintBill] 保存失败:', error.message);
     console.error('❌ [savePrintBill] 错误详情:', error.response?.data);
     console.error('❌ [savePrintBill] 状态码:', error.response?.status);
     console.error('❌ [savePrintBill] 完整错误:', error);
-  });
+    throw error;
+  }
 }
 
 // 新增：设备打印记录接口
@@ -3625,96 +3688,96 @@ ipcMain.on('device-config-response', (event, deviceConfig, printParams) => {
 });
 
 // 监听来自渲染进程的设备配置信息 - 用于合并接口
-ipcMain.on('device-config-response-for-merge', (event, deviceConfig, printParams) => {
-  assertTrustedRendererEvent(event);
-  assertDeviceConfigResponse(deviceConfig, printParams);
-  console.log('📱 收到设备配置 (合并接口):', deviceConfig);
-  console.log('📋 收到printParams (合并接口):', printParams);
-  
-  const apiUrl = `${PRODUCTION_API_BASE_URL}nxdepartmentbill/saveAccountBillPrinterSelf`;
+ipcMain.on('device-config-response-for-merge', async (event, deviceConfig, printParams) => {
+  const saveRequestId = printParams && printParams.saveRequestId;
+  try {
+    assertTrustedRendererEvent(event);
+    assertDeviceConfigResponse(deviceConfig, printParams);
+    console.log('📱 收到设备配置 (合并接口):', deviceConfig);
+    console.log('📋 收到printParams (合并接口):', printParams);
 
-  // 构建合并接口的请求数据
-  const mergeData = {
-    depFatherId: parseInt(printParams.depFatherId || 0),
-    depId: parseInt(printParams.depId || 0),
-    tradeNo: printParams.tradeNo || '',
-    userId: parseInt(printParams.userId || 0),
-    deviceId: parseInt(deviceConfig?.selectedDevice?.nxPdId || 0),
-    pricePerSheet: '0.00', // 默认价格，可以根据需要调整
-    marketId: parseInt(deviceConfig?.deviceAdminInfo?.marketId || 0),
-    paperCount: Math.max(1, parseInt(printParams.paperCount || 1)),
-    orderIds: Array.isArray(printParams.orderIds) && printParams.orderIds.length
-      ? printParams.orderIds.join(',')
-      : undefined
-  };
-
-  console.log('📤 发送合并接口数据:', mergeData);
-
-  // 使用 form 格式发送请求
-  const formData = new URLSearchParams();
-  Object.keys(mergeData).forEach(key => {
-    const value = mergeData[key];
-    if (value !== null && value !== undefined && value !== '') {
-      formData.append(key, value.toString());
+    if (!deviceConfig?.selectedDevice?.nxPdId || !deviceConfig?.deviceAdminInfo?.marketId) {
+      throw new Error('打印设备配置已失效，请重新选择打印设备');
     }
-  });
 
-  axios.post(apiUrl, formData, {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded'
-    }
-  })
-  .then(response => {
-    console.log('✅ 合并接口调用成功:', response.data);
-    
-    if (mainWindow) {      
+    const apiUrl = `${PRODUCTION_API_BASE_URL}nxdepartmentbill/saveAccountBillPrinterSelf`;
+    const mergeData = {
+      depFatherId: parseInt(printParams.depFatherId || 0),
+      depId: parseInt(printParams.depId || 0),
+      tradeNo: printParams.tradeNo || '',
+      userId: parseInt(printParams.userId || 0),
+      deviceId: parseInt(deviceConfig.selectedDevice.nxPdId),
+      pricePerSheet: '0.00',
+      marketId: parseInt(deviceConfig.deviceAdminInfo.marketId),
+      paperCount: Math.max(1, parseInt(printParams.paperCount || 1)),
+      orderIds: Array.isArray(printParams.orderIds) && printParams.orderIds.length
+        ? printParams.orderIds.join(',')
+        : undefined
+    };
+
+    console.log('📤 发送合并接口数据:', mergeData);
+    const formData = new URLSearchParams();
+    Object.keys(mergeData).forEach(key => {
+      const value = mergeData[key];
+      if (value !== null && value !== undefined && value !== '') {
+        formData.append(key, value.toString());
+      }
+    });
+
+    const response = await axios.post(apiUrl, formData, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    const responseData = assertSuccessfulWriteResponse(response, '订单及打印记录保存');
+    console.log('✅ 合并接口调用成功:', responseData);
+    if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('refresh-customer-list');
     }
-  })
-  .catch(error => {
+    settlePrintedOrderSave(saveRequestId, null, responseData);
+  } catch (error) {
     console.error('❌ 合并接口调用失败:', error.message);
     console.error('❌ 错误详情:', error.response?.data);
     console.error('❌ 状态码:', error.response?.status);
-  });
+    settlePrintedOrderSave(saveRequestId, error);
+  }
 });
 
 // 监听设备配置检查结果 - 决定使用哪个保存接口
-ipcMain.on('device-config-check-result', (event, hasDeviceConfig, printParams) => {
-  assertTrustedRendererEvent(event);
-  if (typeof hasDeviceConfig !== 'boolean') {
-    throw new TypeError('hasDeviceConfig 必须是布尔值');
-  }
-  assertPrintMetadata(printParams);
-  console.log('📋 [主进程] 收到设备配置检查结果:', hasDeviceConfig);
-  console.log('📋 [主进程] 打印参数:', JSON.stringify(printParams, null, 2));
-  
-  if (hasDeviceConfig) {
-    console.log('✅ [主进程] 有设备配置，使用新接口 saveAccountBillPrinterSelf');
-    // 使用新接口 - 先请求设备配置，然后调用合并接口
-    if (mainWindow) {
+ipcMain.on('device-config-check-result', async (event, hasDeviceConfig, printParams) => {
+  const saveRequestId = printParams && printParams.saveRequestId;
+  try {
+    assertTrustedRendererEvent(event);
+    if (typeof hasDeviceConfig !== 'boolean') {
+      throw new TypeError('hasDeviceConfig 必须是布尔值');
+    }
+    assertPrintMetadata(printParams);
+    console.log('📋 [主进程] 收到设备配置检查结果:', hasDeviceConfig);
+    console.log('📋 [主进程] 打印参数:', JSON.stringify(printParams, null, 2));
+
+    if (hasDeviceConfig) {
+      console.log('✅ [主进程] 有设备配置，使用新接口 saveAccountBillPrinterSelf');
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        throw new Error('主窗口不可用，无法读取打印设备配置');
+      }
       console.log('📤 [主进程] 发送设备配置合并请求到渲染进程');
       mainWindow.webContents.send('get-device-config-for-merge', printParams);
-    } else {
-      console.error('❌ [主进程] 主窗口不存在，无法调用新接口');
+      return;
     }
-  } else {
+
     console.log('⚠️ [主进程] 没有设备配置，使用老接口 savePrintBill');
-    console.log('📞 [主进程] 开始调用 savePrintBill:', {
-      depFatherId: printParams.depFatherId,
-      depId: printParams.depId,
-      tradeNo: printParams.tradeNo,
-      userId: printParams.userId,
-      paperCount: printParams.paperCount
-    });
-    // 使用老接口
-    savePrintBill(
-      printParams.depFatherId, 
-      printParams.depId, 
-      printParams.tradeNo, 
-      printParams.userId, 
+    const responseData = await savePrintBill(
+      printParams.depFatherId,
+      printParams.depId,
+      printParams.tradeNo,
+      printParams.userId,
       printParams.paperCount,
       printParams.orderIds
     );
+    settlePrintedOrderSave(saveRequestId, null, responseData);
+  } catch (error) {
+    settlePrintedOrderSave(saveRequestId, error);
+    if (!saveRequestId) {
+      console.error('❌ [主进程] 打印后保存失败:', error);
+    }
   }
 });
 
