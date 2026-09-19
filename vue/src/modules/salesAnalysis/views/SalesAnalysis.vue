@@ -35,48 +35,66 @@
 
     <main v-else class="analysis-body">
       <div v-if="errorMessage" class="inline-message error">{{ errorMessage }}</div>
-
-      <section class="overview-grid">
-        <article class="analysis-panel category-panel">
-          <header><div><h2>配送商品分布</h2><p>面积代表成交销售额，点击大类继续下钻</p></div><span>{{ overview?.categories?.length || 0 }} 个大类</span></header>
-          <SalesCategoryTreemap
-            :categories="overview?.categories || []"
-            :selected-id="selectedCategoryId"
-            @select="selectCategory"
-          />
-        </article>
-
-        <article class="analysis-panel customer-panel">
-          <header><div><h2>{{ customerChartTitle }}</h2><p>按成交销售额排序</p></div><span>Top 5</span></header>
-          <CustomerContributionBars :customers="currentTopCustomers" />
-        </article>
-      </section>
-
       <div v-if="detailError" class="inline-message error">{{ detailError }}</div>
-      <section class="drill-grid">
-        <article class="analysis-panel subcategory-panel">
-          <header><div><h2>{{ selectedCategoryName }} · 小类</h2><p>金额、数量与使用客户</p></div><span>{{ subcategories.length }} 类</span></header>
-          <div v-if="detailLoading" class="panel-state">正在加载小类…</div>
-          <div v-else-if="!subcategories.length" class="panel-state">当前大类暂无可下钻的小类</div>
-          <nav v-else class="subcategory-list">
-            <button
-              v-for="subcategory in subcategories"
-              :key="subcategory.id"
-              type="button"
-              :class="{ active: same(subcategory.id, selectedSubcategoryId) }"
-              @click="selectSubcategory(subcategory)"
-            >
-              <span><strong>{{ subcategory.name }}</strong><small>{{ formatQuantities(subcategory.quantities) }} · {{ subcategory.customerCount }} 家客户</small></span>
-              <b>{{ formatMoney(subcategory.salesAmount) }}</b>
-              <em><i :style="{ width: `${Math.max(3, Number(subcategory.share || 0))}%` }"></i></em>
-            </button>
-          </nav>
-        </article>
 
-        <article class="analysis-panel product-panel">
-          <header class="product-heading">
-            <div><h2>{{ selectedSubcategoryName }} · 商品明细</h2><p>点击商品查看它的重要客户</p></div>
-            <label><span>⌕</span><input v-model.trim="keyword" placeholder="搜索商品名称、规格" /></label>
+      <section class="analysis-workspace">
+        <aside class="category-tree-panel">
+          <header class="section-heading category-heading">
+            <h2>销售分类树</h2>
+            <label aria-label="搜索分类"><span>⌕</span><input v-model.trim="categoryKeyword" placeholder="搜索分类" /></label>
+          </header>
+          <nav class="category-tree" aria-label="销售分类树">
+            <section v-for="category in filteredCategories" :key="category.id">
+              <button
+                type="button"
+                class="category-row"
+                :class="{ active: same(category.id, selectedCategoryId) }"
+                @click="selectCategory(category)"
+              >
+                <span class="tree-caret">{{ same(category.id, selectedCategoryId) ? '⌄' : '›' }}</span>
+                <strong>{{ category.name }}</strong>
+                <em>{{ percentageLabel(category.share) }}</em>
+                <b>{{ formatMoney(category.salesAmount) }}</b>
+              </button>
+              <div v-if="same(category.id, selectedCategoryId)" class="subcategory-tree">
+                <button
+                  v-for="subcategory in subcategories"
+                  :key="subcategory.id"
+                  type="button"
+                  :class="{ active: same(subcategory.id, selectedSubcategoryId) }"
+                  @click="selectSubcategory(subcategory)"
+                >
+                  <span>▸</span>
+                  <strong>{{ subcategory.name }}</strong>
+                  <b>{{ formatMoney(subcategory.salesAmount) }}</b>
+                  <em>{{ percentageLabel(overallShare(subcategory.salesAmount)) }}</em>
+                </button>
+                <p v-if="detailLoading">正在加载分类…</p>
+                <p v-else-if="!subcategories.length">暂无小类</p>
+              </div>
+            </section>
+            <div v-if="!filteredCategories.length" class="tree-empty">没有符合条件的分类</div>
+          </nav>
+        </aside>
+
+        <section class="product-analysis-panel">
+          <header class="selection-heading">
+            <div>
+              <h2>{{ selectedCategoryName }} / {{ selectedSubcategoryName }}</h2>
+              <p>共 {{ selectedSubcategory?.goodsCount || visibleProducts.length }} 个商品 · {{ formatMoney(selectedSubcategory?.salesAmount || 0) }} · 占总销售额 {{ percentageLabel(selectedSubcategoryOverallShare) }}</p>
+            </div>
+          </header>
+
+          <div class="selection-summary" aria-label="当前分类销售概览">
+            <article><strong>{{ formatMoney(selectedSubcategory?.salesAmount || 0) }}</strong><span>销售额</span></article>
+            <article><strong>{{ selectedSubcategory?.customerCount || 0 }} 家</strong><span>客户数</span></article>
+            <article><strong>{{ selectedSubcategory?.goodsCount || visibleProducts.length }} 种</strong><span>商品数</span></article>
+            <article><strong>{{ percentageLabel(selectedSubcategoryOverallShare) }}</strong><span>在总销售中的占比</span></article>
+          </div>
+
+          <header class="section-heading product-heading">
+            <div><h2>商品明细（{{ selectedSubcategoryName }}）</h2></div>
+            <label><span>⌕</span><input v-model.trim="keyword" placeholder="搜索商品名称、规格、条码" /></label>
           </header>
           <div v-if="detailLoading" class="panel-state">正在加载商品明细…</div>
           <div v-else class="product-table-wrap">
@@ -109,7 +127,40 @@
               </tbody>
             </table>
           </div>
-        </article>
+          <footer class="panel-footer">共 {{ visibleProducts.length }} 条数据</footer>
+        </section>
+
+        <aside class="customer-contribution-panel">
+          <header class="section-heading customer-heading"><h2>客户贡献</h2></header>
+          <section class="customer-concentration">
+            <div class="concentration-ring" :style="donutStyle"><span></span></div>
+            <div class="concentration-copy"><span>客户集中度</span><strong>{{ percentageLabel(customerConcentration) }}</strong><small>前 3 客户贡献</small></div>
+            <ul>
+              <li v-for="(customer, index) in currentTopCustomers.slice(0, 4)" :key="customer.customerId || customer.customerName">
+                <i :class="`tone-${index + 1}`"></i><span>{{ customer.customerName }}</span><b>{{ percentageLabel(customer.share) }}</b>
+              </li>
+            </ul>
+          </section>
+          <div class="customer-tools">
+            <label><span>⌕</span><input v-model.trim="customerKeyword" placeholder="搜索客户名称" /></label>
+            <span>按成交销售额</span>
+          </div>
+          <div class="customer-table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>客户名称</th><th>成交销售额</th><th>占比</th></tr></thead>
+              <tbody>
+                <tr v-for="(customer, index) in filteredCustomers" :key="customer.customerId || customer.customerName">
+                  <td>{{ index + 1 }}</td>
+                  <td><strong>{{ customer.customerName }}</strong><small>{{ customer.goodsCount }} 种商品</small></td>
+                  <td>{{ formatMoney(customer.salesAmount) }}</td>
+                  <td><span class="share-bar"><i :style="{ width: relativeBarWidth(currentTopCustomers, customer.salesAmount) }"></i></span><em>{{ percentageLabel(customer.share) }}</em></td>
+                </tr>
+                <tr v-if="!filteredCustomers.length"><td colspan="4" class="empty-cell">暂无客户贡献数据</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <footer class="panel-footer">共 {{ filteredCustomers.length }} 个客户</footer>
+        </aside>
       </section>
 
       <footer class="data-note">
@@ -133,8 +184,6 @@
 </template>
 
 <script>
-import SalesCategoryTreemap from '../components/SalesCategoryTreemap.vue';
-import CustomerContributionBars from '../components/CustomerContributionBars.vue';
 import ProductCustomerDrawer from '../components/ProductCustomerDrawer.vue';
 import salesAnalysisApi from '../api/salesAnalysisApi';
 import config from '../../../config';
@@ -142,7 +191,9 @@ import {
   formatAveragePrices,
   formatMoney,
   formatQuantities,
+  percentageLabel,
   rangeForDays,
+  relativeBarWidth,
   resolveGoodsImage,
 } from '../presentation/salesAnalysisPresentation';
 
@@ -150,7 +201,7 @@ const IMAGE_SERVER = new URL('../', config.baseURL).toString();
 
 export default {
   name: 'SalesAnalysis',
-  components: { SalesCategoryTreemap, CustomerContributionBars, ProductCustomerDrawer },
+  components: { ProductCustomerDrawer },
   data() {
     return {
       presets: [{ days: 7, label: '近7天' }, { days: 30, label: '近30天' }, { days: 90, label: '近90天' }],
@@ -165,6 +216,8 @@ export default {
       selectedProductId: null,
       productDrawerOpen: false,
       keyword: '',
+      categoryKeyword: '',
+      customerKeyword: '',
       overviewLoading: false,
       detailLoading: false,
       productLoading: false,
@@ -190,13 +243,31 @@ export default {
       return (this.overview?.categories || []).find((row) => this.same(row.id, this.selectedCategoryId)) || null;
     },
     selectedCategoryName() { return this.categoryDetail?.category?.name || this.selectedCategory?.name || '商品大类'; },
-    customerChartTitle() { return `${this.selectedCategoryName} · 客户贡献`; },
     currentTopCustomers() { return this.categoryDetail?.topCustomers || this.overview?.topCustomers || []; },
+    filteredCategories() {
+      const key = this.categoryKeyword.toLowerCase();
+      if (!key) return this.overview?.categories || [];
+      return (this.overview?.categories || []).filter((category) => String(category.name || '').toLowerCase().includes(key));
+    },
+    filteredCustomers() {
+      const key = this.customerKeyword.toLowerCase();
+      if (!key) return this.currentTopCustomers;
+      return this.currentTopCustomers.filter((customer) => String(customer.customerName || '').toLowerCase().includes(key));
+    },
+    customerConcentration() {
+      return Math.min(100, this.currentTopCustomers.slice(0, 3)
+        .reduce((total, customer) => total + (Number(customer.share) || 0), 0));
+    },
+    donutStyle() {
+      const share = Math.max(0, Math.min(100, this.customerConcentration));
+      return { background: `conic-gradient(#109c5c 0 ${share}%, #dfe8e3 ${share}% 100%)` };
+    },
     subcategories() { return this.categoryDetail?.subcategories || []; },
     selectedSubcategory() {
       return this.subcategories.find((row) => this.same(row.id, this.selectedSubcategoryId)) || null;
     },
     selectedSubcategoryName() { return this.selectedSubcategory?.name || '商品'; },
+    selectedSubcategoryOverallShare() { return this.overallShare(this.selectedSubcategory?.salesAmount); },
     visibleProducts() {
       const key = this.keyword.toLowerCase();
       return (this.categoryDetail?.products || []).filter((product) => {
@@ -223,10 +294,16 @@ export default {
     formatAveragePrices,
     formatMoney,
     formatQuantities,
+    percentageLabel,
+    relativeBarWidth,
     goodsImage(product) {
       return resolveGoodsImage(product, this.imageServer, 'goodsImage/logo.jpg');
     },
     same(left, right) { return String(left) === String(right); },
+    overallShare(amount) {
+      const total = Number(this.summary.salesAmount) || 0;
+      return total > 0 ? (Number(amount) || 0) / total * 100 : 0;
+    },
     applyPreset(days) {
       this.activePreset = days;
       this.range = rangeForDays(days);
@@ -425,5 +502,252 @@ export default {
     border-left: 0;
     border-top: 1px solid #e3ebe7;
   }
+}
+
+/* Redesigned three-column sales workspace. */
+.analysis-body {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.analysis-body > .inline-message {
+  flex: none;
+  margin: 0;
+  border-radius: 0;
+}
+
+.analysis-workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 290px minmax(560px, 1fr) 370px;
+  overflow: hidden;
+  border-bottom: 1px solid #dce7e1;
+  background: #fff;
+}
+
+.category-tree-panel,
+.product-analysis-panel,
+.customer-contribution-panel {
+  min-width: 0;
+  min-height: 0;
+  background: #fff;
+}
+
+.category-tree-panel,
+.customer-contribution-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.category-tree-panel { border-right: 1px solid #dce7e1; }
+.customer-contribution-panel { border-left: 1px solid #dce7e1; }
+
+.section-heading,
+.selection-heading {
+  flex: none;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #dfe8e3;
+  background: #fff;
+}
+
+.section-heading h2,
+.selection-heading h2,
+.selection-heading p { margin: 0; }
+.section-heading h2,
+.selection-heading h2 { color: #202d27; font-size: 16px; }
+.selection-heading { min-height: 58px; padding-left: 17px; border-left: 3px solid #10a05d; }
+.selection-heading p { margin-top: 4px; color: #7d8983; font-size: 10px; }
+
+.category-heading label,
+.product-heading label,
+.customer-tools label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #d7e2dc;
+  background: #fff;
+  color: #0b8851;
+}
+
+.category-heading label { width: 110px; height: 30px; padding: 0 8px; }
+.category-heading input,
+.product-heading input,
+.customer-tools input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #314139;
+  font-size: 10px;
+}
+
+.category-tree { flex: 1; min-height: 0; overflow: auto; }
+.category-tree > section { border-bottom: 1px solid #e5ece8; }
+.category-row {
+  width: 100%;
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 54px 78px;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 11px;
+  border: 0;
+  background: #fff;
+  color: #25342d;
+  text-align: left;
+  cursor: pointer;
+}
+.category-row:hover { background: #f4faf7; }
+.category-row.active { background: #f7fbf9; }
+.category-row strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.category-row b { font-size: 11px; text-align: right; white-space: nowrap; }
+.category-row em { color: #079153; font-size: 10px; font-style: normal; text-align: right; }
+.tree-caret { color: #466057; font-size: 17px; }
+
+.subcategory-tree { padding: 0 8px 7px 30px; }
+.subcategory-tree button {
+  width: 100%;
+  min-height: 35px;
+  display: grid;
+  grid-template-columns: 13px minmax(0, 1fr) 72px 40px;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 0;
+  background: #fff;
+  color: #415149;
+  text-align: left;
+  cursor: pointer;
+}
+.subcategory-tree button.active { background: #e7f6ee; color: #176741; }
+.subcategory-tree button strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.subcategory-tree button b { font-size: 10px; text-align: right; white-space: nowrap; }
+.subcategory-tree button em { color: #6f7f77; font-size: 9px; font-style: normal; text-align: right; }
+.subcategory-tree p,
+.tree-empty { margin: 0; padding: 12px; color: #8b9791; font-size: 10px; text-align: center; }
+
+.product-analysis-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.selection-summary {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 14px;
+  border: 1px solid #dfe8e3;
+}
+.selection-summary article { min-width: 0; padding: 13px 9px; border-right: 1px solid #dfe8e3; text-align: center; }
+.selection-summary article:last-child { border-right: 0; }
+.selection-summary strong,
+.selection-summary span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selection-summary strong { color: #17241e; font-size: 20px; }
+.selection-summary span { margin-top: 5px; color: #7c8982; font-size: 10px; }
+
+.product-heading { min-height: 48px; }
+.product-heading label { width: 250px; height: 32px; padding: 0 9px; }
+.product-table-wrap { flex: 1; min-height: 0; overflow: auto; }
+.product-table-wrap table { min-width: 760px; }
+.product-table-wrap th,
+.product-table-wrap td { padding: 9px 10px; }
+.product-table-wrap th { position: sticky; top: 0; z-index: 1; font-size: 10px; }
+.product-table-wrap td { font-size: 11px; }
+.product-table-wrap td > button strong { font-size: 13px; }
+.product-table-wrap td > button small { margin-top: 2px; font-size: 10px; }
+.product-table-wrap .product-identity { min-width: 150px; gap: 8px; }
+.product-thumb { width: 38px; height: 38px; border-radius: 7px; }
+.customer-tags i { padding: 3px 6px; border-radius: 8px; font-size: 9px; }
+.product-table-wrap .row-open { width: 27px; height: 27px; border-radius: 6px; font-size: 19px; }
+
+.panel-footer {
+  flex: none;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 13px;
+  border-top: 1px solid #e2eae6;
+  color: #7f8c85;
+  font-size: 10px;
+}
+
+.customer-heading { min-height: 52px; border-left: 3px solid #10a05d; }
+.customer-concentration {
+  flex: none;
+  display: grid;
+  grid-template-columns: 72px 90px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 16px 13px;
+  border-bottom: 1px solid #dfe8e3;
+}
+.concentration-ring { width: 68px; height: 68px; display: grid; place-items: center; border-radius: 50%; }
+.concentration-ring span { width: 42px; height: 42px; border-radius: 50%; background: #fff; }
+.concentration-copy span,
+.concentration-copy strong,
+.concentration-copy small { display: block; }
+.concentration-copy span { color: #5f6f67; font-size: 10px; }
+.concentration-copy strong { margin-top: 3px; color: #099253; font-size: 20px; }
+.concentration-copy small { margin-top: 3px; color: #87938d; font-size: 9px; }
+.customer-concentration ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.customer-concentration li { min-width: 0; display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 5px; color: #65736c; font-size: 9px; }
+.customer-concentration li i { width: 6px; height: 6px; border-radius: 50%; background: #10a05d; }
+.customer-concentration li .tone-2 { background: #2f90e8; }
+.customer-concentration li .tone-3 { background: #7189e8; }
+.customer-concentration li .tone-4 { background: #b3c0ba; }
+.customer-concentration li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.customer-concentration li b { font-weight: 600; white-space: nowrap; }
+
+.customer-tools { flex: none; display: grid; grid-template-columns:minmax(0, 1fr) 105px; gap: 7px; padding: 9px 11px; border-bottom: 1px solid #dfe8e3; }
+.customer-tools label { height: 31px; padding: 0 8px; }
+.customer-tools > span { display: flex; align-items: center; justify-content: center; border: 1px solid #d7e2dc; color: #637169; font-size: 9px; }
+.customer-table-wrap { flex: 1; min-height: 0; overflow: auto; }
+.customer-table-wrap table { width: 100%; border-collapse: collapse; }
+.customer-table-wrap th,
+.customer-table-wrap td { padding: 8px 7px; border-bottom: 1px solid #e6ece9; text-align: left; vertical-align: middle; }
+.customer-table-wrap th { position: sticky; top: 0; z-index: 1; background: #f5f8f6; color: #78857f; font-size: 9px; }
+.customer-table-wrap td { font-size: 10px; }
+.customer-table-wrap td:first-child { width: 28px; text-align: center; }
+.customer-table-wrap td:nth-child(3) { white-space: nowrap; }
+.customer-table-wrap td:last-child { width: 120px; }
+.customer-table-wrap strong,
+.customer-table-wrap small { display: block; }
+.customer-table-wrap small { margin-top: 2px; color: #8a9690; font-size: 8px; }
+.customer-table-wrap td:last-child { display: grid; grid-template-columns: minmax(44px, 1fr) 35px; align-items: center; gap: 5px; }
+.share-bar { height: 7px; display: block; overflow: hidden; border-radius: 5px; background: #edf2ef; }
+.share-bar i { height: 100%; display: block; border-radius: inherit; background: #10a05d; }
+.customer-table-wrap em { color: #77847d; font-size: 8px; font-style: normal; text-align: right; }
+
+.analysis-body > .data-note {
+  flex: none;
+  min-height: 28px;
+  align-items: center;
+  margin: 0;
+  padding: 0 15px;
+  background: #fff;
+}
+
+@media (max-width: 1500px) {
+  .analysis-workspace { grid-template-columns: 260px minmax(520px, 1fr) 330px; }
+  .customer-concentration { grid-template-columns: 64px 80px minmax(0, 1fr); gap: 7px; }
+  .concentration-ring { width: 60px; height: 60px; }
+  .concentration-ring span { width: 37px; height: 37px; }
+}
+
+@media (max-width: 1120px) {
+  .analysis-body { overflow: auto; }
+  .analysis-workspace { min-height: 760px; grid-template-columns: 240px minmax(520px, 1fr); overflow: visible; }
+  .customer-contribution-panel { grid-column: 1 / -1; min-height: 420px; border-top: 1px solid #dce7e1; border-left: 0; }
 }
 </style>
