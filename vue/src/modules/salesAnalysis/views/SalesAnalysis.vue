@@ -83,6 +83,7 @@
               <h2>{{ selectedCategoryName }} / {{ selectedSubcategoryName }}</h2>
               <p>共 {{ selectedSubcategory?.goodsCount || visibleProducts.length }} 个商品 · {{ formatMoney(selectedSubcategory?.salesAmount || 0) }} · 占总销售额 {{ percentageLabel(selectedSubcategoryOverallShare) }}</p>
             </div>
+            <label class="product-search"><span>⌕</span><input v-model.trim="keyword" placeholder="搜索商品名称、规格、条码" /></label>
           </header>
 
           <div class="selection-summary" aria-label="当前分类销售概览">
@@ -92,10 +93,6 @@
             <article><strong>{{ percentageLabel(selectedSubcategoryOverallShare) }}</strong><span>在总销售中的占比</span></article>
           </div>
 
-          <header class="section-heading product-heading">
-            <div><h2>商品明细（{{ selectedSubcategoryName }}）</h2></div>
-            <label><span>⌕</span><input v-model.trim="keyword" placeholder="搜索商品名称、规格、条码" /></label>
-          </header>
           <div v-if="detailLoading" class="panel-state">正在加载商品明细…</div>
           <div v-else class="product-table-wrap">
             <table>
@@ -567,7 +564,7 @@ export default {
 .selection-heading p { margin-top: 4px; color: #7d8983; font-size: 10px; }
 
 .category-heading label,
-.product-heading label,
+.product-search,
 .customer-tools label {
   display: flex;
   align-items: center;
@@ -579,7 +576,7 @@ export default {
 
 .category-heading label { width: 110px; height: 30px; padding: 0 8px; }
 .category-heading input,
-.product-heading input,
+.product-search input,
 .customer-tools input {
   width: 100%;
   min-width: 0;
@@ -655,8 +652,7 @@ export default {
 .selection-summary strong { color: #17241e; font-size: 20px; }
 .selection-summary span { margin-top: 5px; color: #7c8982; font-size: 10px; }
 
-.product-heading { min-height: 48px; }
-.product-heading label { width: 250px; height: 32px; padding: 0 9px; }
+.product-search { width: 250px; height: 32px; flex: none; padding: 0 9px; border-radius: 8px; }
 .product-table-wrap { flex: 1; min-height: 0; overflow: auto; }
 .product-table-wrap table { min-width: 760px; }
 .product-table-wrap th,
