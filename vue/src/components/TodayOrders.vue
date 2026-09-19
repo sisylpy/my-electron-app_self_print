@@ -2,16 +2,6 @@
   <div class="saved-orders-tab"
        style="height: 100%; overflow: hidden; display: flex; flex-direction: column;">
     <div v-if="batchPrintMode" class="batch-print-bar">
-      <div class="batch-print-bar__summary">
-        <div class="batch-print-bar__heading">
-          <strong>可打印 {{ printableOrders.length }} 项</strong>
-          <span class="batch-print-bar__selection">
-            本批已选: <strong>{{ selectedPrintOrders.length }} 项</strong>
-            <b>¥{{ selectedPrintTotal.toFixed(2) }}</b>
-          </span>
-        </div>
-        <span>仅已完成出库、已有单价和小计的商品可加入本次配送批次</span>
-      </div>
       <div class="batch-print-bar__actions">
         <label>
           <input
@@ -20,7 +10,7 @@
             :disabled="!printableOrders.length"
             @change="toggleAllPrintable($event.target.checked)"
           >
-          全选可打印商品
+          全选
         </label>
         <button class="btn btn-primary btn-sm" :disabled="!canDownloadExcel" @click="handlePrintDeliveryOrder">
           打印并保存本批（{{ selectedPrintOrders.length }}项）
@@ -708,9 +698,9 @@
           </div>
           <!-- 订单状态统计 -->
           <div class="d-flex align-items-center gap-3 text-muted small" @click="handleStatsAreaClick">
-            <span>完成: <span class="text-success fw-bold">{{ orderStatusStats.completed || 0 }}</span></span>
-            <span>处理中: <span class="text-warning fw-bold">{{ orderStatusStats.pending || 0 }}</span></span>
             <span>待确认: <span class="text-danger fw-bold">{{ orderStatusStats.temp || 0 }}</span></span>
+            <span>出货中: <span class="text-warning fw-bold">{{ orderStatusStats.pending || 0 }}</span></span>
+            <span>完成: <span class="text-success fw-bold">{{ orderStatusStats.completed || 0 }}</span></span>
             <div v-if="showSaveTrainingDataButton" class="d-flex align-items-center gap-3">
               <button class="btn btn-primary btn-sm" @click.stop="handleShowDatePicker">
                 保存训练数据
@@ -738,9 +728,9 @@
 
     <Teleport v-if="statusHeaderTarget" :to="statusHeaderTarget">
       <div class="d-flex align-items-center gap-3 text-muted small" @click="handleStatsAreaClick">
-        <span>{{ batchPrintMode ? '可打印' : '完成' }}: <span class="text-success fw-bold">{{ batchPrintMode ? printableOrders.length : (orderStatusStats.completed || 0) }}</span></span>
-        <span>处理中: <span class="text-warning fw-bold">{{ orderStatusStats.pending || 0 }}</span></span>
         <span>待确认: <span class="text-danger fw-bold">{{ orderStatusStats.temp || 0 }}</span></span>
+        <span>出货中: <span class="text-warning fw-bold">{{ orderStatusStats.pending || 0 }}</span></span>
+        <span>{{ batchPrintMode ? '可打印' : '完成' }}: <span class="text-success fw-bold">{{ batchPrintMode ? printableOrders.length : (orderStatusStats.completed || 0) }}</span></span>
         <div v-if="showSaveTrainingDataButton" class="d-flex align-items-center gap-3">
           <button class="btn btn-primary btn-sm" @click.stop="handleShowDatePicker">
             保存训练数据
@@ -943,12 +933,6 @@ export default {
     selectedPrintOrders() {
       const selectedIds = new Set(this.selectedPrintOrderIds.map(String));
       return this.printableOrders.filter(order => selectedIds.has(String(order.nxDepartmentOrdersId)));
-    },
-    selectedPrintTotal() {
-      return this.selectedPrintOrders.reduce(
-        (total, order) => total + (Number.parseFloat(order.nxDoSubtotal) || 0),
-        0
-      );
     },
     allPrintableSelected() {
       return this.printableOrders.length > 0
@@ -2709,26 +2693,16 @@ export default {
 <style scoped>
 .batch-print-bar {
   display: flex;
-  min-height: 50px;
+  min-height: 44px;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 18px;
+  justify-content: flex-start;
   padding: 8px 14px;
   border-bottom: 1px solid #cfe8da;
   color: #315b47;
   background: #f1faf5;
 }
 
-.batch-print-bar__summary { min-width: 0; flex: 1; }
-.batch-print-bar__heading { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px; }
-.batch-print-bar__heading > strong { font-size: 13px; }
-.batch-print-bar__summary > span { display: block; margin-top: 2px; color: #728279; font-size: 10px; }
-
-.batch-print-bar__selection { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 12px; }
-.batch-print-bar__selection strong { font-size: 14px; }
-.batch-print-bar__selection b { color: #08794b; font-size: 14px; }
-.batch-print-bar__actions { display: flex; align-items: center; gap: 12px; }
+.batch-print-bar__actions { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .batch-print-bar__actions button { white-space: nowrap; }
 
 .batch-print-bar label {

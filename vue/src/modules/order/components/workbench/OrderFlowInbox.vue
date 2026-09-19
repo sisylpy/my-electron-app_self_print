@@ -236,24 +236,27 @@ const activeListLoading = computed(() => smartMode.value ? props.allCustomersLoa
 const activeListError = computed(() => smartMode.value ? props.allCustomersError : props.listError);
 
 const stageOrders = computed(() => ordersVisibleInStage(props.snapshot.orders, props.stageFilter));
+const stageSubtotalFields = {
+  ready: { department: 'depPrintableSubtotal', snapshot: 'printableSubtotal' },
+  progress: { department: 'depProgressSubtotal', snapshot: 'progressSubtotal' },
+  price: { department: 'depPriceSubtotal', snapshot: 'priceSubtotal' },
+};
 const stageDepartments = computed(() => {
   const departments = Array.isArray(props.snapshot.departments) ? props.snapshot.departments : [];
   if (!['ready', 'progress', 'price'].includes(props.stageFilter)) return departments;
+  const amountField = stageSubtotalFields[props.stageFilter].department;
   return departments.map(department => {
     const depOrders = ordersVisibleInStage(department.depOrders, props.stageFilter);
     return {
       ...department,
       depOrders,
-      depSubtotal: depOrders.reduce((total, order) => total + (Number(order.nxDoSubtotal) || 0), 0),
+      depSubtotal: Number(department[amountField]) || 0,
     };
   }).filter(department => department.depOrders.length > 0);
 });
 const stageTotal = computed(() => {
   if (!['ready', 'progress', 'price'].includes(props.stageFilter)) return props.snapshot.total;
-  const orders = props.snapshot.hasSubDepartments
-    ? stageDepartments.value.flatMap(department => department.depOrders)
-    : stageOrders.value;
-  return orders.reduce((total, order) => total + (Number(order.nxDoSubtotal) || 0), 0);
+  return Number(props.snapshot[stageSubtotalFields[props.stageFilter].snapshot]) || 0;
 });
 const hasStageOrders = computed(() => props.snapshot.hasSubDepartments
   ? stageDepartments.value.some(department => (department.depOrders || []).length > 0)
