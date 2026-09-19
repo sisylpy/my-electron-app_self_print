@@ -129,16 +129,6 @@ export default {
   getAfterSalesDetail(afterSalesId, params) {
     return axiosInstance.get(`nxdepartmentaftersales/detail/${afterSalesId}`, { ...quiet, params });
   },
-  getAiRecommendations(departmentId, page = 1, limit = 50) {
-    return axiosInstance.post(
-      'nxdepartmentdisgoods/disGetSubDepAiOrder',
-      formData({ depId: departmentId, page, limit }),
-      { ...quiet, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
-    );
-  },
-  saveOrder(order) {
-    return coreApi.saveManulOrder(order);
-  },
   getBillDetail(billId, customerId) {
     return coreApi.getBillApplys({ billId, depFatherId: customerId });
   },

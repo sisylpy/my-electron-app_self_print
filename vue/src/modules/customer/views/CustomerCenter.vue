@@ -97,14 +97,6 @@
             :distributer-id="distributerId"
             :operator-user-id="operatorUserId"
           />
-          <CustomerAiRecommendationPanel
-            v-else-if="activeTab === 'ai'"
-            :customer="customer"
-            :distributer-id="distributerId"
-            :operator-user-id="operatorUserId"
-            @notice="showNotice"
-            @order-saved="handleOrderSaved"
-          />
           <div v-else class="history-module">
             <div class="history-heading">
               <div><h3>客户历史订单</h3><p>查看历史订单、下载 Excel，或按打印中心的配送单格式补打。</p></div>
@@ -226,7 +218,6 @@ import CustomerGoodsPanel from '../components/CustomerGoodsPanel.vue';
 import CustomerGoodsStandardDrawer from '../components/CustomerGoodsStandardDrawer.vue';
 import CustomerGoodsPriceDrawer from '../components/CustomerGoodsPriceDrawer.vue';
 import CustomerAfterSalesPanel from '../components/CustomerAfterSalesPanel.vue';
-import CustomerAiRecommendationPanel from '../components/CustomerAiRecommendationPanel.vue';
 import CustomerUsersDrawer from '../components/CustomerUsersDrawer.vue';
 import CustomerDepartmentTransferDrawer from '../components/CustomerDepartmentTransferDrawer.vue';
 
@@ -256,7 +247,6 @@ export default {
     CustomerGoodsStandardDrawer,
     CustomerGoodsPriceDrawer,
     CustomerAfterSalesPanel,
-    CustomerAiRecommendationPanel,
     CustomerUsersDrawer,
     CustomerDepartmentTransferDrawer,
   },
@@ -277,7 +267,6 @@ export default {
         { key: 'profile', icon: '客', label: '客户资料', description: '基础与配送信息' },
         { key: 'goods', icon: '货', label: '客户商品', description: '商品与专属要求' },
         { key: 'afterSales', icon: '售', label: '售后问题', description: '按整家门店汇总' },
-        { key: 'ai', icon: 'AI', label: '预计订单', description: '按内部部门推荐' },
         { key: 'history', icon: '单', label: '历史订单', description: '订单与下载记录' },
       ],
       editDrawerOpen: false,
@@ -459,7 +448,6 @@ export default {
     openGoodsStandard(relation) { this.standardRelation = relation; },
     openGoodsPrice(goods) { this.priceGoods = goods; },
     handleStandardUpdated() { this.showNotice('客户商品要求已更新'); },
-    handleOrderSaved() { this.showNotice('订单已创建，可到订单工作台继续处理'); },
     async openOrderDetail(bill) {
       const billId = bill?.nxDepartmentBillId;
       if (!billId) return;
