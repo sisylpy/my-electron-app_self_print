@@ -94,7 +94,7 @@
               <thead><tr><th>商品</th><th>销售数量</th><th>成交销售额</th><th>加权平均单价</th><th>使用客户</th><th>重要客户</th><th aria-label="查看详情"></th></tr></thead>
               <tbody>
                 <tr
-                  v-for="product in visibleProducts"
+                  v-for="(product, index) in visibleProducts"
                   :key="product.goodsId"
                   :class="{ selected: same(product.goodsId, selectedProductId) }"
                   role="button"
@@ -104,6 +104,7 @@
                 >
                   <td>
                     <button class="product-identity" type="button" @click.stop="selectProduct(product)">
+                      <span class="product-index">{{ index + 1 }}</span>
                       <span class="product-thumb"><img :src="goodsImage(product)" :alt="product.goodsName" /></span>
                       <span class="product-copy"><strong>{{ product.goodsName }}</strong><small>{{ product.goodsStandard || '未标规格' }}</small></span>
                     </button>
@@ -650,7 +651,8 @@ export default {
 .product-table-wrap td { font-size: 13px; }
 .product-table-wrap td > button strong { font-size: 13px; }
 .product-table-wrap td > button small { margin-top: 2px; font-size: 10px; }
-.product-table-wrap .product-identity { min-width: 150px; gap: 8px; }
+.product-table-wrap .product-identity { min-width: 170px; gap: 8px; }
+.product-index { width: 22px; flex: none; color: #607169; font-size: 12px; font-weight: 800; text-align: center; }
 .product-thumb { width: 38px; height: 38px; border-radius: 7px; }
 .customer-tags i { padding: 3px 7px; border-radius: 8px; font-size: 11px; }
 .product-table-wrap .row-open { width: 27px; height: 27px; border-radius: 6px; font-size: 19px; }
