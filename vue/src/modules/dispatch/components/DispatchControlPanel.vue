@@ -82,7 +82,7 @@
         <span>时间窗口</span>
         <span>路段距离</span>
         <span>预计到达</span>
-        <span>服务时长</span>
+        <span>卸货/取货</span>
         <span>预计离开</span>
         <span>状态</span>
         <span>操作</span>
@@ -92,14 +92,16 @@
         <li
           v-for="(stop, index) in selectedRoute._stops"
           :key="stop._stopKey"
-          :class="{ active: selectedStopKey === stop._stopKey, 'is-driver-locked': stop.driverLocked }"
+          :class="{ active: selectedStopKey === stop._stopKey, 'is-driver-locked': stop.driverLocked, 'is-return-pickup': isReturnPickup(stop) }"
         >
           <div class="stop-list__row">
             <button type="button" class="stop-list__select" @click="$emit('select-stop', stop)">
               <span class="stop-list__sequence">{{ stop.seq || index + 1 }}</span>
               <span class="stop-list__customer">
-                <strong>{{ stop.customerName || stop.name || '未命名客户' }}</strong>
-                <b v-if="stop.isReturnPickup" class="return-pickup-badge">退货取货</b>
+                <span class="stop-list__customer-name">
+                  <strong>{{ stop.customerName || stop.name || '未命名客户' }}</strong>
+                  <b v-if="isReturnPickup(stop)" class="return-pickup-name-tag">（退货）</b>
+                </span>
                 <span v-if="stop.driverLocked" class="driver-lock-badge">
                   🔒 {{ stop.driverLockLabel || '已锁定司机' }}
                 </span>
@@ -124,6 +126,10 @@
               >{{ action.label || actionLabel(action) }}</button>
             </span>
           </div>
+          <div v-if="isReturnPickup(stop)" class="stop-list__return-reminder">
+            <strong>↩ 退货取货</strong>
+            <span>到店拿回商品，无需装货</span>
+          </div>
         </li>
         <li class="stop-list__depot">
           <span>{{ returnToDepotRequired ? '仓' : '终' }}</span>
@@ -142,13 +148,16 @@
         v-for="stop in unassignedStops"
         :key="stop._stopKey"
         type="button"
-        :class="{ active: selectedStopKey === stop._stopKey, 'is-driver-locked': stop.driverLocked }"
+        :class="{ active: selectedStopKey === stop._stopKey, 'is-driver-locked': stop.driverLocked, 'is-return-pickup': isReturnPickup(stop) }"
         @click="$emit('select-stop', stop)"
       >
         <span>?</span>
         <span>
-          <strong>{{ stop.customerName || '未命名客户' }}</strong>
-          <b v-if="stop.isReturnPickup" class="return-pickup-badge">退货取货</b>
+          <span class="stop-list__customer-name">
+            <strong>{{ stop.customerName || '未命名客户' }}</strong>
+            <b v-if="isReturnPickup(stop)" class="return-pickup-name-tag">（退货）</b>
+          </span>
+          <span v-if="isReturnPickup(stop)" class="unassigned-return-reminder">↩ 退货取货 · 到店拿回商品，无需装货</span>
           <span v-if="stop.driverLocked" class="driver-lock-badge">
             🔒 {{ stop.driverLockLabel || '已锁定司机' }}
           </span>
@@ -278,6 +287,14 @@ const routePrimaryVisible = computed(() => isVisibleAction(selectedRoute.value?.
 
 function normalizedActionType(action) {
   return String(action?.actionType || action?.action || '').trim().toUpperCase();
+}
+
+function isReturnPickup(stop) {
+  if (!stop || typeof stop !== 'object') return false;
+  if (stop.isReturnPickup === true) return true;
+  if (String(stop.taskType || '').trim().toUpperCase() === 'RETURN_PICKUP') return true;
+  return [stop.sandboxStopKey, stop.cardKey, stop.stopKey]
+    .some((key) => String(key || '').trim().toLowerCase().startsWith('return-pickup:'));
 }
 
 function isVisibleAction(action, stop = null) {
@@ -1485,16 +1502,66 @@ function statusTone(tone) {
   font-size: 12px;
 }
 
-.return-pickup-badge {
-  display: inline-block;
-  width: fit-content;
-  margin-top: 3px;
-  padding: 2px 6px;
-  border-radius: 9px;
-  color: #a04c25;
-  background: #fff0e7;
+.stop-list__customer-name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.stop-list__customer-name strong {
+  min-width: 0;
+}
+
+.return-pickup-name-tag {
+  flex: none;
+  color: #d84b3e;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.stop-list li.is-return-pickup {
+  background: #fffaf9;
+  box-shadow: inset 4px 0 0 #e55b4e;
+}
+
+.stop-list li.is-return-pickup.active {
+  background: #fff5f3;
+}
+
+.stop-list__return-reminder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 82px 8px 54px;
+  padding: 7px 10px;
+  border: 1px solid #f1b5ad;
+  border-radius: 6px;
+  background: #fff1ef;
+}
+
+.stop-list__return-reminder strong {
+  flex: none;
+  color: #c63f33;
+  font-size: 10px;
+}
+
+.stop-list__return-reminder span,
+.unassigned-return-reminder {
+  color: #8d514b;
   font-size: 9px;
-  font-weight: 800;
+  font-weight: 700;
+}
+
+.unassigned-list button.is-return-pickup {
+  border-color: #f1b5ad;
+  background: #fffaf9;
+  box-shadow: inset 4px 0 0 #e55b4e;
+}
+
+.unassigned-return-reminder {
+  display: block;
+  margin-top: 5px;
 }
 
 @media (max-width: 1260px) {

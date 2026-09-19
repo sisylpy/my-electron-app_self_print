@@ -29,6 +29,14 @@ function stableStopKey(stop, phase, routeKey, index) {
   return `${phase}:${routeKey}:${serverKey ?? asText(stop.customerName, index)}:${index}`;
 }
 
+export function isReturnPickupStop(stop) {
+  if (!stop || typeof stop !== 'object') return false;
+  if (stop.isReturnPickup === true) return true;
+  if (asText(stop.taskType).toUpperCase() === 'RETURN_PICKUP') return true;
+  return [stop.sandboxStopKey, stop.cardKey, stop.stopKey]
+    .some((key) => asText(key).toLowerCase().startsWith('return-pickup:'));
+}
+
 export function pageSections(pageViewModel) {
   return asArray(pageViewModel?.sections);
 }
@@ -65,8 +73,11 @@ function lookupCustomer(customerIndex, stop) {
 function decorateStop(stop, context) {
   const customer = lookupCustomer(context.customerIndex, stop);
   const phasePresentation = PHASE_PRESENTATION[context.phase] || PHASE_PRESENTATION.dispatch;
+  const returnPickup = isReturnPickupStop(stop);
   return {
     ...stop,
+    taskType: returnPickup ? 'RETURN_PICKUP' : stop.taskType,
+    isReturnPickup: returnPickup,
     _stopKey: stableStopKey(stop, context.phase, context.routeKey, context.index),
     _routeKey: context.routeKey,
     _phase: context.phase,
