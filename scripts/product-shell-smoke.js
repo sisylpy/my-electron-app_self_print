@@ -54,8 +54,9 @@ for (const name of [
     && panel.indexOf('order-preview-actions', actions + 'order-preview-actions'.length) === -1
     && panel.includes('display: flex; flex-direction: column; height: 100%; min-height: 0;')
     && panel.includes('style="order: -1; flex-shrink: 0;"')
+    && panel.includes('<slot name="department-selector"></slot>')
     && panel.includes('@click="printOnly"'),
-  `${name} 的打印操作栏在预览上方且只出现一次`);
+  `${name} 的打印操作栏在预览上方、只出现一次并支持部门选择`);
 }
 
 check(
@@ -96,6 +97,17 @@ check(
 check(
   bills.includes("route?.query?.mcpPrint === 'true'"),
   'ProductShell 适配保留 MCP 打印路由优先级'
+);
+check(
+  bills.includes('<template #department-selector>')
+    && bills.includes('<option value="all">全部部门</option>')
+    && bills.includes('@change="handlePrintDepartmentSelection"'),
+  '多部门打印默认显示全部部门，并可在右侧切换单部门'
+);
+check(
+  !bills.includes('¥{{ Number(item.nxDepartmentSubAmount).toFixed(2) }}')
+    && !bills.includes('class="sub-department-list"'),
+  '客户列表不再把子部门数量显示成金额，部门入口已移到右侧'
 );
 check(!shell.includes('Applys/'), 'ProductShell 不依赖打印模板');
 check(!shell.includes('/api/'), 'ProductShell 不调用业务接口');

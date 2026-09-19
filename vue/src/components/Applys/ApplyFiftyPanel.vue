@@ -27,6 +27,8 @@
                 </ul>
             </div>
 
+            <slot name="department-selector"></slot>
+
             <div v-if="gbBatchId !== -1">
                 <button class="btn btn-lg btn-primary" @click="printOnly">
                     <i class="fas fa-print"></i> 打印订货单

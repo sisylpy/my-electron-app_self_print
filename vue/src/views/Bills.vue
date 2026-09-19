@@ -72,18 +72,7 @@
                                 <a class="print-customer-name">{{ item.nxDepartmentName }}</a>
                                 <span v-if="$route.name === 'Bills'" class="print-customer-meta">
                                     <span>配送单待打印</span>
-                                    <strong v-if="Number(item.nxDepartmentSubAmount) > 0">¥{{ Number(item.nxDepartmentSubAmount).toFixed(2) }}</strong>
                                 </span>
-                                <ul v-if="item.nxDepartmentEntities && item.nxDepartmentEntities.length > 0"
-                                    class="sub-department-list"
-                                    style="list-style-type: none; padding-left: 20px;">
-                                    <li v-for="(subItem, subIndex) in item.nxDepartmentEntities"
-                                        :key="subItem.nxDepartmentId"
-                                        :class="{ 'active': issubactive === subIndex && isactive === index, 'tab-item-sub': true }"
-                                        @click="childClick(index, subIndex, item.nxDepartmentId, subItem.nxDepartmentId, item.nxDepartmentAttrName,  '-'+subItem.nxDepartmentAttrName, subItem.nxDepartmentPrintName,$event, item.nxDepartmentSubAmount)">
-                                        <a>{{ subItem.nxDepartmentName }}</a>
-                                    </li>
-                                </ul>
                             </li>
 
                             <!-- 改进 nav 样式，确保垂直排列 -Gb-- ---->
@@ -220,7 +209,25 @@
                         :gbBatchId="gbBatchId"
                         @order-saved="handleOrderSavedFromPrintView"
                         @print-only="handlePrintOnly"
-                    />
+                    >
+                        <template #department-selector>
+                            <label v-if="printDepartmentOptions.length > 0" class="print-department-filter">
+                                <span>打印部门</span>
+                                <select
+                                    :value="selectedPrintDepartmentValue"
+                                    @change="handlePrintDepartmentSelection"
+                                    aria-label="选择打印部门">
+                                    <option value="all">全部部门</option>
+                                    <option
+                                        v-for="department in printDepartmentOptions"
+                                        :key="department.nxDepartmentId"
+                                        :value="String(department.nxDepartmentId)">
+                                        {{ department.nxDepartmentName }}
+                                    </option>
+                                </select>
+                            </label>
+                        </template>
+                    </component>
                 </keep-alive>
 
                 <!-- 配送单视图 - 无数据提示 -->
@@ -630,6 +637,26 @@
                     return `order-print-gb-${gb}-${this.depPrintName || ''}`;
                 }
                 return `order-print-nx-${this.nxDepFatherId}-${this.nxDepId}-${this.depPrintName || ''}`;
+            },
+
+            activePrintCustomer() {
+                const activeCustomer = this.depList[this.isactive];
+                if (!activeCustomer) return null;
+                return Number(activeCustomer.nxDepartmentId) === Number(this.nxDepFatherId)
+                    ? activeCustomer
+                    : null;
+            },
+
+            printDepartmentOptions() {
+                const departments = this.activePrintCustomer?.nxDepartmentEntities;
+                return Array.isArray(departments) ? departments : [];
+            },
+
+            selectedPrintDepartmentValue() {
+                if (!this.activePrintCustomer || Number(this.nxDepFatherId) === Number(this.nxDepId)) {
+                    return 'all';
+                }
+                return String(this.nxDepId);
             },
 
         },
@@ -2015,13 +2042,55 @@
                 this.updateTime = Date.now();
             },
 
+            handlePrintDepartmentSelection(event) {
+                const customer = this.activePrintCustomer;
+                if (!customer) return;
+
+                const selectedValue = event?.target?.value || 'all';
+                const parentId = Number(customer.nxDepartmentId);
+                const parentName = customer.nxDepartmentAttrName || customer.nxDepartmentName || '';
+                const parentPrintName = customer.nxDepartmentPrintName || 'ApplyPanel';
+
+                if (selectedValue === 'all') {
+                    this.onclick(
+                        this.isactive,
+                        parentId,
+                        parentId,
+                        parentName,
+                        '',
+                        parentPrintName,
+                        customer.nxDepartmentSubAmount
+                    );
+                    return;
+                }
+
+                const subIndex = this.printDepartmentOptions.findIndex(
+                    department => String(department.nxDepartmentId) === String(selectedValue)
+                );
+                if (subIndex < 0) return;
+
+                const department = this.printDepartmentOptions[subIndex];
+                const departmentName = department.nxDepartmentAttrName || department.nxDepartmentName || '';
+                this.childClick(
+                    this.isactive,
+                    subIndex,
+                    parentId,
+                    Number(department.nxDepartmentId),
+                    parentName,
+                    `-${departmentName}`,
+                    department.nxDepartmentPrintName || parentPrintName,
+                    null,
+                    customer.nxDepartmentSubAmount
+                );
+            },
+
 
             // 注意：onclickGb 方法已不再使用（模板中未引用）
 
 
             childClick(index, subIndex, nxDepFatherId, nxDeId, depName, subDepName, depPrintName, event, subAmount) {
                 // 阻止事件冒泡，防止触发父部门的点击事件
-                event.stopPropagation();
+                event?.stopPropagation?.();
 
                 // 检查打印组件是否存在，如果不存在则使用默认组件（与 onclick 一致）
                 const validComponents = ['ApplyPanel', 'ApplyFiftyPanel', 'ApplyHalfPanel', 'ApplyHalfWholePanel',
@@ -2809,32 +2878,6 @@
             font-weight: 600;
         }
 
-        .is-print-center .print-customer-meta strong {
-            color: #168358;
-            font-size: 12px;
-        }
-
-        .is-print-center .customer-list .sub-department-list {
-            margin: 9px 0 0;
-            padding-left: 0 !important;
-            border-top: 1px solid #dcece2;
-        }
-
-        .is-print-center .customer-list .tab-item-sub {
-            margin: 4px 0 0;
-            padding: 6px 8px;
-            border: 0;
-            border-radius: 6px;
-            color: #547362;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .is-print-center .customer-list .tab-item-sub.active {
-            background: #d9efe2;
-            color: #086d42;
-        }
-
         .is-print-center .main-content-container {
             width: auto;
             max-width: none;
@@ -2876,6 +2919,35 @@
             font-size: 13px;
             font-weight: 800;
             line-height: 1.3;
+        }
+
+        .print-department-filter {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 230px;
+            margin: 0 12px;
+            color: #52635a;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .print-department-filter select {
+            min-width: 150px;
+            height: 38px;
+            padding: 6px 32px 6px 11px;
+            border: 1px solid #cfe0d6;
+            border-radius: 7px;
+            background-color: #fff;
+            color: #1f4f38;
+            font-size: 13px;
+            font-weight: 700;
+            outline: none;
+        }
+
+        .print-department-filter select:focus {
+            border-color: #15965a;
+            box-shadow: 0 0 0 3px rgba(21, 150, 90, .12);
         }
 
         .is-print-center .main-content-container :deep(.order-preview-actions .btn-secondary) {
