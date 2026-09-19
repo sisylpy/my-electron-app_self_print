@@ -51,6 +51,20 @@ export async function getPredictionGoodsDetail(goodsId, signal) {
   }
 }
 
+export async function getDistributorGoodsCategories(distributerId, signal) {
+  try {
+    const response = await axiosInstance.get(`nxdistributerfathergoods/getLevelOneGoods/${distributerId}`, {
+      ...quiet,
+      signal,
+      timeout: 30000,
+    });
+    return unwrap(response, '商品分类读取失败') || [];
+  } catch (error) {
+    if (error?.name === 'CanceledError' || error?.name === 'AbortError') throw error;
+    throw normalizeApiError(error, '商品分类读取失败');
+  }
+}
+
 export async function runPurchasePrediction(payload, signal) {
   try {
     const response = await axiosInstance.post('purchase-prediction-lab/runs', payload, {
@@ -133,6 +147,7 @@ export async function createSmartReplenishmentProcurementItem(payload) {
 export default {
   getCatalog: getPredictionLabCatalog,
   getGoodsDetail: getPredictionGoodsDetail,
+  getGoodsCategories: getDistributorGoodsCategories,
   run: runPurchasePrediction,
   forecast: forecastPurchasePrediction,
   reconciliationForecast: forecastReconciliationBaseline,

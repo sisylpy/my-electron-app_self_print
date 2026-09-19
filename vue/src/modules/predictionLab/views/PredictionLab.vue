@@ -164,6 +164,7 @@ const rangeOptions = Object.freeze([
 
 const store = useStore();
 const catalog = ref(null);
+const distributorGoodsCategories = ref([]);
 const catalogLoading = ref(false);
 const catalogError = ref('');
 const loading = ref(false);
@@ -199,22 +200,45 @@ const selectedDepartmentName = computed(() => selectedDepartment.value?.departme
 const departmentCount = computed(() => form.departmentId ? 1 : departments.value.filter((item) => Number(item.historicalLineCount) > 0).length);
 const predictionDates = computed(() => datesBetween(form.startDate, form.endDate));
 const loadingProgress = computed(() => loadingTotal.value > 1 ? `${loadingCompleted.value}/${loadingTotal.value}` : '');
+const distributorSubcategoryIndex = computed(() => {
+  const index = new Map();
+  (distributorGoodsCategories.value || []).forEach((category) => {
+    (category?.fatherGoodsEntities || []).forEach((subcategory) => {
+      const subcategoryId = Number(subcategory?.nxDistributerFatherGoodsId);
+      if (!Number.isFinite(subcategoryId) || subcategoryId <= 0) return;
+      index.set(subcategoryId, {
+        categoryId: category?.nxDistributerFatherGoodsId,
+        categoryName: category?.nxDfgFatherGoodsName,
+        subcategoryId,
+        subcategoryName: subcategory?.nxDfgFatherGoodsName,
+      });
+    });
+  });
+  return index;
+});
 const presentationRun = computed(() => {
   if (!runResult.value) return null;
   return {
     ...runResult.value,
-      items: (runResult.value.items || []).map((item) => {
+    items: (runResult.value.items || []).map((item) => {
       const goods = goodsDetails[Number(item?.goodsId)] || {};
+      const catalogSubcategory = distributorSubcategoryIndex.value.get(Number(goods?.nxDgDfgGoodsGrandId));
       const itemHasTopLevelCategory = Number(item.goodsCategoryLevel) === 0
         && item.goodsCategoryId && item.goodsCategoryName;
+      const categoryId = catalogSubcategory?.categoryId
+        ?? (itemHasTopLevelCategory ? item.goodsCategoryId : null);
+      const categoryName = catalogSubcategory?.categoryName
+        ?? (itemHasTopLevelCategory ? item.goodsCategoryName : null);
       return {
         ...item,
         ...goods,
-        goodsCategoryName: itemHasTopLevelCategory ? item.goodsCategoryName : null,
-        goodsCategoryId: itemHasTopLevelCategory ? item.goodsCategoryId : null,
-        goodsCategoryLevel: itemHasTopLevelCategory ? 0 : null,
-        };
-      }),
+        goodsCategoryName: categoryName,
+        goodsCategoryId: categoryId,
+        goodsCategoryLevel: categoryId && categoryName ? 0 : null,
+        goodsSubcategoryId: item.goodsSubcategoryId || catalogSubcategory?.subcategoryId || null,
+        goodsSubcategoryName: item.goodsSubcategoryName || catalogSubcategory?.subcategoryName || null,
+      };
+    }),
   };
 });
 const presentation = computed(() => buildProcurementPresentation(presentationRun.value, departmentCount.value));
@@ -276,7 +300,16 @@ async function loadCatalog(options = {}) {
   catalogController = new AbortController();
   catalogLoading.value = true; catalogError.value = ''; actionError.value = '';
   try {
-    catalog.value = await predictionLabApi.getCatalog(currentDisId.value, catalogController.signal);
+    const [predictionCatalog, categoryResult] = await Promise.all([
+      predictionLabApi.getCatalog(currentDisId.value, catalogController.signal),
+      predictionLabApi.getGoodsCategories(currentDisId.value, catalogController.signal)
+        .catch((error) => {
+          if (error?.name === 'CanceledError' || error?.name === 'AbortError') throw error;
+          return [];
+        }),
+    ]);
+    catalog.value = predictionCatalog;
+    distributorGoodsCategories.value = categoryResult;
     const firstDepartment = departments.value.find((item) => Number(item.historicalLineCount) > 0) || departments.value[0];
     const previousDepartmentStillExists = departments.value.some((department) => (
       String(department.departmentId) === String(previousDepartmentId)
