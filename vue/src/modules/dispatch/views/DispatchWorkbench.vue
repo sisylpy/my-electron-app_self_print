@@ -251,7 +251,6 @@ import {
 
 const store = useStore();
 const router = useRouter();
-let refreshTimer = null;
 const driverDialogVisible = ref(false);
 const confirmDialogRoute = ref(null);
 const routeEditorRoute = ref(null);
@@ -1027,12 +1026,6 @@ async function handleDesktopSessionExpired(error = null) {
   }
 }
 
-function refreshWhenVisible() {
-  if (document.visibilityState === 'visible' && !isReading.value) {
-    refresh();
-  }
-}
-
 watch(
   () => [
     activePhase.value,
@@ -1049,13 +1042,9 @@ onMounted(async () => {
     return;
   }
   await refresh();
-  refreshTimer = window.setInterval(refreshWhenVisible, 60_000);
-  window.addEventListener('focus', refreshWhenVisible);
 });
 
 onBeforeUnmount(() => {
-  if (refreshTimer) window.clearInterval(refreshTimer);
-  window.removeEventListener('focus', refreshWhenVisible);
   store.dispatch('dispatch/cancelRead');
   store.commit('dispatch/CLEAR_COMMAND');
 });

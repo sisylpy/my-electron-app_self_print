@@ -83,6 +83,18 @@ test('编辑路线明确区分预览和保存且保存不会暗中重新计算',
   assert.doesNotMatch(component, /const previewed = await previewRoute\(\);\s*if \(!previewed\) return;\s*\}\s*saving\.value/);
 });
 
+test('调度工作台只在首次打开和用户操作后刷新，不定时或聚焦重算路线', () => {
+  const component = fs.readFileSync(
+    path.join(root, 'vue/src/modules/dispatch/views/DispatchWorkbench.vue'),
+    'utf8'
+  );
+  assert.match(component, /@click="refresh"/);
+  assert.match(component, /onMounted\(async \(\) => \{[\s\S]*await refresh\(\);[\s\S]*\}\);/);
+  assert.doesNotMatch(component, /setInterval\(/);
+  assert.doesNotMatch(component, /addEventListener\(['"]focus['"]/);
+  assert.doesNotMatch(component, /refreshWhenVisible/);
+});
+
 test('编辑路线顶部承载紧凑统计且地图列收窄', () => {
   const component = fs.readFileSync(
     path.join(root, 'vue/src/modules/dispatch/components/DispatchRouteEditDialog.vue'),
