@@ -70,6 +70,11 @@ for (const contract of templateContracts) {
   checkPattern(source, new RegExp(`pageRowsCount:\\s*${contract.rows}\\b`), `${label} 分页行数保持 ${contract.rows}`);
   checkPattern(source, contract.size, `${label} 纸张尺寸保持现场值`);
   checkPattern(source, contract.wait, `${label} 逐页走纸等待保持现场值`);
+  checkPattern(
+    source,
+    /\.footerPage\s+\.summary\s+\.text-right\s*\{[\s\S]*?width:\s*100%;[\s\S]*?text-align:\s*right;/,
+    `${label} 预览合计金额保持整行右对齐`
+  );
   if (contract.legacyWidth) {
     checkPattern(source, contract.legacyWidth, `${label} 保留 241mm 历史兼容宽度`);
   }

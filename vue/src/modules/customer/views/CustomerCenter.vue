@@ -163,7 +163,7 @@
 
     <div v-if="orderDetailOpen" class="order-detail-layer" @click.self="closeOrderDetail">
       <aside class="order-detail-drawer">
-        <header>
+        <header class="history-reprint-header">
           <div>
             <span>ORDER REPRINT</span>
             <h3>历史订单补打</h3>
@@ -585,11 +585,44 @@ export default {
 .order-detail-drawer{
   width:min(1240px,calc(100vw - 118px));
 }
+.order-detail-drawer>.history-reprint-header{
+  flex:none;
+  align-items:center;
+  min-height:86px;
+  padding:12px 22px;
+}
+.history-reprint-header>div{
+  display:grid;
+  grid-template-columns:auto auto;
+  align-items:baseline;
+  column-gap:12px;
+}
+.order-detail-drawer .history-reprint-header>div>span{
+  grid-column:1/-1;
+  font-size:9px;
+}
+.order-detail-drawer .history-reprint-header h3{
+  margin:2px 0 0;
+  font-size:21px;
+  line-height:1.2;
+}
+.order-detail-drawer .history-reprint-header p{
+  margin:0;
+  font-size:12px;
+  white-space:nowrap;
+}
+.order-detail-drawer .history-reprint-header button{
+  width:34px;
+  height:34px;
+  border-radius:9px;
+  font-size:23px;
+  line-height:1;
+}
 .history-print-preview{
   flex:1;
   min-height:0;
   overflow:auto;
-  padding:16px;
+  padding:10px 14px 14px;
   background:#f5f8f6;
 }
 .history-print-component{
@@ -604,11 +637,25 @@ export default {
   position:sticky;
   top:0;
   z-index:5;
+  min-height:58px;
+  align-items:center;
+  padding:9px 14px!important;
   background:#fff;
   border-bottom:1px solid #e2e9e5;
 }
+.history-print-preview :deep(.order-preview-actions .pagination){
+  margin:0;
+}
+.history-print-preview :deep(.order-preview-actions .btn-lg){
+  padding:8px 15px;
+  border-radius:7px;
+  font-size:13px;
+  line-height:1.2;
+}
 @media(max-width:1050px){
   .order-detail-drawer{width:96vw}
-  .history-print-preview{padding:10px}
+  .history-print-preview{padding:8px}
+  .history-reprint-header>div{display:block}
+  .order-detail-drawer .history-reprint-header p{margin-top:2px}
 }
 </style>

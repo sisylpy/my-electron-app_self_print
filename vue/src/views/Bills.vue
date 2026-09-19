@@ -70,8 +70,9 @@
                                 :class="{ 'active': isactive === index, 'tab-item': true }"
                                 @click="onclick(index, item.nxDepartmentId, item.nxDepartmentId,item.nxDepartmentAttrName, '',item.nxDepartmentPrintName , item.nxDepartmentSubAmount)">
                                 <a class="print-customer-name">{{ item.nxDepartmentName }}</a>
-                                <span v-if="$route.name === 'Bills'" class="print-customer-meta">
-                                    <span>配送单待打印</span>
+                                <span v-if="item._printCenterStats" class="print-customer-metrics">
+                                    <span>商品: <strong>{{ item._printCenterStats.total }}</strong>个</span>
+                                    <span>金额: <strong>{{ item._printCenterStats.subtotalText }}</strong>元</span>
                                 </span>
                             </li>
 
@@ -80,7 +81,6 @@
                                 :class="{ 'active': isactivepb === index, 'tab-item': true }"
                                 @click="onclickPb(index, item.gbDistributerPurchaseBatchId, item.gbDistributerEntity.gbDistributerPrintName)">
                                 <a class="print-customer-name">{{ item.gbDistributerEntity.gbDistributerName }}</a>
-                                <span v-if="$route.name === 'Bills'" class="print-customer-meta">配送单待打印</span>
                             </li>
                             <!-- 显示子部门 -->
                         </ul>
@@ -435,6 +435,7 @@
     import PlaceOrder from '@/modules/order/components/PlaceOrderWorkspace.vue';
     import TaskOrder from '@/modules/order/components/TaskOrderWorkspace.vue';
     import HistoryOrders from '@/components/HistoryOrders.vue';
+    import { customerOrderStats } from '@/modules/order/services/orderWorkbenchStage';
 
     const applyComponentMap = {
         ApplyPanel: () => import('../components/Applys/ApplyPanel.vue'),
@@ -1893,13 +1894,33 @@
                     }
 
                     const _disId = this.disUser.nxDiuDistributerId;
-                    api.webNxDisGetTodayOrderCustomer(_disId).then((res) => {
+                    const statsRequest = api.disGetTodayOrderCustomer(_disId).catch((error) => {
+                        console.warn('打印中心客户统计读取失败，将继续显示待打印客户:', error);
+                        return null;
+                    });
+
+                    Promise.all([
+                        api.webNxDisGetTodayOrderCustomer(_disId),
+                        statsRequest
+                    ]).then(([res, statsResponse]) => {
                         if (res && res.data) {
                             this.orderLoadError = '';
                             this.orderSessionExpired = false;
                             this.isactive = 0;
                             this.issubactive = -1;
-                            this.depList = res.data.data.nxArr || [];
+                            const overviewEntries = statsResponse?.data?.data?.deps?.nxDep || [];
+                            const statsByDepartmentId = new Map(
+                                overviewEntries
+                                    .filter(entry => entry?.dep?.nxDepartmentId != null)
+                                    .map(entry => [
+                                        String(entry.dep.nxDepartmentId),
+                                        customerOrderStats(entry)
+                                    ])
+                            );
+                            this.depList = (res.data.data.nxArr || []).map(customer => ({
+                                ...customer,
+                                _printCenterStats: statsByDepartmentId.get(String(customer.nxDepartmentId)) || null
+                            }));
                             console.log('[MCP] fetchCustomerList API 返回: nxArr 长度=', (res.data.data.nxArr || []).length);
                             console.log('[MCP] fetchCustomerList 赋值后: this.depList 长度=', this.depList.length);
                             if (this.depList.length > 0) {
@@ -2867,15 +2888,26 @@
             white-space: nowrap;
         }
 
-        .is-print-center .print-customer-meta {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            margin-top: 7px;
-            color: #7c8c82;
-            font-size: 11px;
-            font-weight: 600;
+        .is-print-center .print-customer-metrics {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 5px 10px;
+            margin-top: 8px;
+            color: #65766c;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .is-print-center .print-customer-metrics > span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .is-print-center .print-customer-metrics strong {
+            color: #08794b;
+            font-size: 13px;
+            font-weight: 800;
         }
 
         .is-print-center .main-content-container {

@@ -2876,6 +2876,17 @@ let res = await api.phoneGetToFillDepOrders(requestData);
         font-size: 14px;
     }
 
+    .footerPage .summary {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .footerPage .summary .text-right {
+        width: 100%;
+        margin-left: auto;
+        text-align: right;
+    }
+
     .address {
         margin-top: 10px;
     }

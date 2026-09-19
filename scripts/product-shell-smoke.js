@@ -109,6 +109,13 @@ check(
     && !bills.includes('class="sub-department-list"'),
   '客户列表不再把子部门数量显示成金额，部门入口已移到右侧'
 );
+check(
+  bills.includes('class="print-customer-metrics"')
+    && bills.includes('item._printCenterStats.total')
+    && bills.includes('item._printCenterStats.subtotalText')
+    && bills.includes('customerOrderStats(entry)'),
+  '打印中心客户卡片复用工作台口径显示商品数和金额'
+);
 check(!shell.includes('Applys/'), 'ProductShell 不依赖打印模板');
 check(!shell.includes('/api/'), 'ProductShell 不调用业务接口');
 check(!shell.includes('dispatchCommands'), 'ProductShell 不发起调度写操作');

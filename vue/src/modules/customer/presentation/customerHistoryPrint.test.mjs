@@ -42,6 +42,8 @@ assert.deepEqual(normalizedDetail.arr, detailLines, '账单内商品应优先于
 assert.match(customerCenter, /:is-history-order="true"/);
 assert.match(customerCenter, /:order-data="historyPrintData"/);
 assert.match(customerCenter, /loadedHistoryPrintComponent/);
+assert.match(customerCenter, /class="history-reprint-header"/);
+assert.match(customerCenter, /\.history-print-preview :deep\(\.order-preview-actions\)[\s\S]*padding:9px 14px!important/);
 assert.doesNotMatch(customerCenter, /class="bill-overview"/);
 assert.doesNotMatch(customerCenter, /class="bill-lines"/);
 assert.match(historyOrders, /预览 \/ 补打/);
