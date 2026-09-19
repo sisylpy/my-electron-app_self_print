@@ -68,16 +68,18 @@ test('编辑路线弹窗保留退货站点身份并显示取货说明', () => {
   assert.match(component, /stop\.isReturnPickup \? '取货' : '服务'/);
 });
 
-test('编辑路线试算和保存不会被无关后台状态永久锁死', () => {
+test('编辑路线明确区分预览和保存且保存不会暗中重新计算', () => {
   const component = fs.readFileSync(
     path.join(root, 'vue/src/modules/dispatch/components/DispatchRouteEditDialog.vue'),
     'utf8'
   );
   assert.match(component, /:disabled="previewing \|\| saving \|\| closing"[\s\S]*@click\.stop="previewRoute\(\)"/);
-  assert.match(component, /class="primary"[\s\S]*:disabled="previewing \|\| saving \|\| closing"/);
+  assert.match(component, /正在预览…' : '预览路线'/);
+  assert.match(component, /class="primary"[\s\S]*:disabled="dirty \|\| !previewReady \|\| previewing \|\| saving \|\| closing"/);
   assert.match(component, /@click\.stop="previewRoute\(\)"/);
-  assert.match(component, /dirty \|\| !previewReady \? '重新计算并保存'/);
-  assert.match(component, /if \(dirty\.value \|\| !previewReady\.value\) \{\s*const previewed = await previewRoute\(\);/);
+  assert.match(component, /saving \? '正在保存…' : '保存路线'/);
+  assert.match(component, /if \(dirty\.value \|\| !previewReady\.value\) \{\s*messageTone\.value = 'warning';/);
+  assert.doesNotMatch(component, /const previewed = await previewRoute\(\);\s*if \(!previewed\) return;\s*\}\s*saving\.value/);
 });
 
 test('编辑路线顶部承载紧凑统计且地图列收窄', () => {

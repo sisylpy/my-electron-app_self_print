@@ -278,10 +278,10 @@
           </div>
 
           <footer>
-            <span>采用后仍需重新预览并点击“确认保存路线”，取消不会改变当前路线。</span>
+            <span>采用后会生成新的路线预览；确认页面状态后，再点击“保存路线”。</span>
             <div>
               <button type="button" @click="cancelExpansion">保持原路线</button>
-              <button type="button" class="primary" :disabled="!expansionProposal?.addedStops?.length || busy" @click="adoptExpansion">采用并进入路线预览</button>
+              <button type="button" class="primary" :disabled="!expansionProposal?.addedStops?.length || busy" @click="adoptExpansion">采用并预览路线</button>
             </div>
           </footer>
         </section>
@@ -317,16 +317,16 @@
           <button
             type="button"
             :disabled="previewing || saving || closing"
-            title="按当前客户顺序重新计算距离与到达时间"
+            title="预览页面当前客户顺序对应的路线、距离和到达时间"
             @click.stop="previewRoute()"
-          >{{ previewing ? '正在计算…' : '重新计算路线' }}</button>
+          >{{ previewing ? '正在预览…' : '预览路线' }}</button>
           <button
             type="button"
             class="primary"
-            :disabled="previewing || saving || closing"
-            :title="dirty || !previewReady ? '将先重新计算路线，计算成功后自动保存' : '保存当前路线'"
+            :disabled="dirty || !previewReady || previewing || saving || closing"
+            :title="dirty || !previewReady ? '请先预览并确认页面上的路线' : '保存页面上当前预览的路线'"
             @click.stop="saveRoute"
-          >{{ saving ? '正在保存…' : (dirty || !previewReady ? '重新计算并保存' : '保存并确认路线') }}</button>
+          >{{ saving ? '正在保存…' : '保存路线' }}</button>
         </div>
       </footer>
     </section>
@@ -369,7 +369,7 @@ const selectedStop = ref(stops.value[0] || null);
 const previewMapOverview = ref(props.initialMapOverview || {});
 const previewMetrics = ref(null);
 const previewReturnLabel = ref(
-  props.route.plannedReturnLabel || props.route.plannedFinishLabel || '等待重新计算'
+  props.route.plannedReturnLabel || props.route.plannedFinishLabel || '等待预览'
 );
 const dirty = ref(false);
 const previewReady = ref(false);
@@ -419,12 +419,12 @@ const filteredAvailableStops = computed(() => {
 });
 const footerHint = computed(() => {
   if (loading.value) return '正在读取该司机的可派客户和锁定关系';
-  if (previewing.value) return '后台正在按这位司机的新路线计算';
+  if (previewing.value) return '正在生成页面当前路线的预览';
   if (saving.value) return '正在保存这位司机的路线';
   if (locking.value) return '正在更新客户锁定关系';
   if (expanding.value) return '后台正在用 Huawei 道路成本分析可补充客户';
-  if (dirty.value) return '路线已改变，请先重新计算路线';
-  if (previewReady.value) return '路线计算完成，可以确认保存';
+  if (dirty.value) return '路线已改变，请先预览路线';
+  if (previewReady.value) return '当前预览已确认，可以保存路线';
   return '可拖动排序、添加或移除客户；AI 建议不会直接保存路线';
 });
 const driverEstimateLabel = computed(() => {
@@ -464,9 +464,9 @@ const routePhaseLabel = computed(() => {
   return '分派中';
 });
 const routeEstimateLabel = computed(() => {
-  if (previewing.value) return '路线计算中';
-  if (dirty.value) return '路线已改变，需重新计算';
-  if (previewReady.value) return '路线试算已完成';
+  if (previewing.value) return '路线预览生成中';
+  if (dirty.value) return '路线已改变，等待预览';
+  if (previewReady.value) return '当前路线已预览';
   return '当前显示服务端权威路线';
 });
 const expansionCapability = computed(() => {
@@ -721,7 +721,7 @@ function resetOrder() {
     || page.value?.routeEndTimeLabel
     || props.route.plannedReturnLabel
     || props.route.plannedFinishLabel
-    || '等待重新计算';
+    || '等待预览';
   pendingRemovedStopKeys.value = [];
   pendingRemovalCommandId.value = '';
   dirty.value = false; previewReady.value = false; pendingExpansionProposalId.value = null; message.value = '';
@@ -870,7 +870,7 @@ function showError(result, context = '') {
     if (context === 'page') {
       emit('stale', presentation.message);
     } else {
-      message.value = `${presentation.message}。当前编辑内容仍保留，请重新计算；如状态仍冲突，再关闭后重新打开。`;
+      message.value = `${presentation.message}。当前编辑内容仍保留，请重新预览；如状态仍冲突，再关闭后重新打开。`;
     }
   }
   if (presentation.roadUnavailable) {
@@ -1078,7 +1078,7 @@ async function generateRouteExpansion() {
     if (!previewed) return;
   }
   if (!page.value?.previewToken) {
-    messageTone.value = 'warning'; message.value = '请先重新计算当前路线，再生成 AI 建议。'; return;
+    messageTone.value = 'warning'; message.value = '请先预览当前路线，再生成 AI 建议。'; return;
   }
   let constraints;
   try {
@@ -1145,7 +1145,7 @@ async function adoptExpansion() {
   pendingExpansionProposalId.value = null;
   await emit('changed');
   messageTone.value = 'success';
-  message.value = 'AI建议已原子更新沙箱组合并进入路线预览；其他受影响司机路线已刷新。';
+  message.value = 'AI 建议已更新页面路线并生成预览；其他受影响司机路线已刷新。';
 }
 
 async function previewRoute(proposalId = null) {
@@ -1170,7 +1170,7 @@ async function previewRoute(proposalId = null) {
       || nextPage.pageHeader?.plannedReturnLabel
       || props.route.plannedReturnLabel
       || props.route.plannedFinishLabel
-      || '已重新计算';
+      || '预览已更新';
     pendingRemovedStopKeys.value = [];
     pendingRemovalCommandId.value = '';
     dirty.value = false;
@@ -1181,8 +1181,8 @@ async function previewRoute(proposalId = null) {
       ).length;
       messageTone.value = reassignedLockCount ? 'warning' : 'success';
       message.value = reassignedLockCount
-        ? `路线已经重新计算；保存后将自动取消${reassignedLockCount}个原司机的当日锁定。`
-        : '当前司机的路线已经重新计算，请确认地图、时间和客户顺序后保存。';
+        ? `路线预览已更新；保存后将自动取消${reassignedLockCount}个原司机的当日锁定。`
+        : '路线预览已更新，请确认地图、时间和客户顺序后保存。';
     }
     else { messageTone.value = 'warning'; message.value = nextPage.actions?.disabledReason || '服务端暂不允许保存这条路线。'; }
     return previewReady.value;
@@ -1194,8 +1194,9 @@ async function previewRoute(proposalId = null) {
 async function saveRoute() {
   if (previewing.value || saving.value || closing.value) return;
   if (dirty.value || !previewReady.value) {
-    const previewed = await previewRoute();
-    if (!previewed) return;
+    messageTone.value = 'warning';
+    message.value = '路线内容已变化，请先点击“预览路线”，确认页面上的路线后再保存。';
+    return;
   }
   saving.value = true; message.value = '';
   try {
