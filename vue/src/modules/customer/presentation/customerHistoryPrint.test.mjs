@@ -45,6 +45,7 @@ assert.match(customerCenter, /loadedHistoryPrintComponent/);
 assert.doesNotMatch(customerCenter, /class="bill-overview"/);
 assert.doesNotMatch(customerCenter, /class="bill-lines"/);
 assert.match(historyOrders, /预览 \/ 补打/);
+assert.doesNotMatch(historyOrders, /handleDownloadExcel|downloadExcelLoading|下载Excel/);
 
 for (const componentName of CUSTOMER_HISTORY_PRINT_COMPONENTS) {
   const printComponent = fs.readFileSync(
@@ -56,6 +57,7 @@ for (const componentName of CUSTOMER_HISTORY_PRINT_COMPONENTS) {
     new RegExp(`components/Applys/${componentName}\\.vue`),
     `${componentName} 应与打印中心复用同一个模板`,
   );
+  assert.match(printComponent, /@click="downLoadOnly"/);
   assert.match(printComponent, /@click="printOnly"/);
   assert.match(
     printComponent,
