@@ -66,60 +66,76 @@
                   </button>
                 </div>
               </div>
-              <label class="goods-search"><span aria-hidden="true">⌕</span><input v-model.trim="searchText" type="search" placeholder="输入商品名称、规格" /></label>
+              <label class="goods-search"><span aria-hidden="true">⌕</span><input v-model.trim="searchText" type="search" placeholder="输入商品名称、规格" @input="clearTreeProductSelection" /></label>
             </header>
 
-            <nav class="category-tabs" aria-label="商品大类">
-              <button type="button" :class="{ active: !activeCategory }" @click="selectCategory('')"><span>全部</span><b>{{ activeLevelProducts.length }}</b></button>
-              <button v-for="category in categories" :key="category.key" type="button" :class="{ active: activeCategory === category.key }" @click="selectCategory(category.key)">
-                <span>{{ category.label }}</span><b>{{ category.count }}</b>
-              </button>
-            </nav>
-
-            <div class="product-table">
-              <div class="product-table__head">
-                <span>序号</span><span>商品名称 / 规格</span><span>预估数量</span><span>订货单位</span><span>库存数量</span><span>可信度</span><span>需求门店</span><span>采购订货</span>
-              </div>
-              <div v-if="!visibleProducts.length" class="empty-products">当前分类下没有符合条件的商品</div>
-              <template v-for="(product, productIndex) in visibleProducts" :key="`${product.level}-${product.goodsId}-${product.predictedUnit}`">
-                <article class="product-row" :class="`is-${product.level.toLowerCase()}`">
-                  <i class="goods-sequence">{{ productIndex + 1 }}</i>
-                  <div class="goods-name">
-                    <div>
-                      <strong>{{ product.goodsName }}</strong>
-                      <span class="goods-specification">
-                        <small v-if="goodsDetailText(product)" class="is-detail">{{ goodsDetailText(product) }}</small>
-                        <small v-if="goodsStandardText(product)" class="is-standard">规格 {{ goodsStandardText(product) }}</small>
-                        <small v-if="goodsCartonText(product)" class="is-carton">大包装 {{ goodsCartonText(product) }}</small>
-                      </span>
-                    </div>
-                  </div>
-                  <div class="quantity-cell">
-                    <span v-if="product.predictedQuantity !== null"><strong>{{ number(product.predictedQuantity) }}</strong></span>
-                  </div>
-                  <div class="unit-cell">{{ product.predictedUnit }}</div>
-                  <div class="stock-cell">
-                    <span v-if="productContextLoading(product)">查询中</span>
-                    <template v-else><strong>{{ number(productContext(product).stockQuantity) }}</strong><small>{{ productContext(product).stockUnit || product.predictedUnit }}</small></template>
-                  </div>
-                  <div class="trust-cell"><strong>{{ percent(product.trustPercent) }}</strong></div>
-                  <div class="department-cell" :title="departmentForecastText(product)">
-                    <span v-for="line in departmentForecastLines(product)" :key="line.key" class="department-order-line">
-                      <strong>{{ line.departmentName }}</strong><small>{{ line.text }}</small>
-                    </span>
-                  </div>
-                  <div class="procurement-cell">
-                    <span v-if="productContextLoading(product)" class="procurement-pending">查询中</span>
-                    <span v-else-if="productContext(product).error" class="procurement-unknown">状态未知</span>
-                    <span v-else-if="productContext(product).hasActivePurchase" class="procurement-active">采购中<small v-if="Number(productContext(product).activePurchaseCount) > 1">{{ productContext(product).activePurchaseCount }}笔</small></span>
-                    <button v-else type="button" :disabled="Boolean(creatingPurchases[Number(product.goodsId)])" @click="addProcurement(product)">
-                      {{ creatingPurchases[Number(product.goodsId)] ? '添加中' : '+ 添加采购' }}
+            <div class="product-catalog-workspace">
+              <aside class="product-category-tree" aria-label="商品分类树">
+                <header><strong>商品分类</strong><span>{{ categories.length }} 类</span></header>
+                <nav>
+                  <button type="button" class="tree-root" :class="{ active: !activeCategory }" @click="selectCategory('')">
+                    <i>全</i><strong>全部商品</strong><b>{{ activeLevelProducts.length }}</b>
+                  </button>
+                  <section v-for="category in categories" :key="category.key" class="tree-category">
+                    <button type="button" class="tree-category__button" :class="{ active: activeCategory === category.key }" @click="selectCategory(category.key)">
+                      <i aria-hidden="true">{{ activeCategory === category.key ? '⌄' : '›' }}</i><strong>{{ category.label }}</strong><b>{{ category.count }}</b>
                     </button>
+                    <div v-if="activeCategory === category.key" class="tree-products">
+                      <button v-for="product in category.products" :key="`${product.level}-${product.goodsId}-${product.predictedUnit}`" type="button" :class="{ active: selectedTreeProductId === Number(product.goodsId) }" @click="selectTreeProduct(product)">
+                        <span>{{ product.goodsName }}</span><small>{{ number(product.predictedQuantity) }}{{ product.predictedUnit }}</small>
+                      </button>
+                    </div>
+                  </section>
+                </nav>
+              </aside>
+
+              <section class="product-table-zone">
+                <div class="product-table">
+                  <div class="product-table__head">
+                    <span>序号</span><span>商品名称 / 规格</span><span>预估数量</span><span>订货单位</span><span>库存数量</span><span>可信度</span><span>需求门店</span><span>采购订货</span>
                   </div>
-                </article>
-              </template>
+                  <div v-if="!visibleProducts.length" class="empty-products">当前分类下没有符合条件的商品</div>
+                  <template v-for="(product, productIndex) in visibleProducts" :key="`${product.level}-${product.goodsId}-${product.predictedUnit}`">
+                    <article class="product-row" :class="`is-${product.level.toLowerCase()}`">
+                      <i class="goods-sequence">{{ productIndex + 1 }}</i>
+                      <div class="goods-name">
+                        <div>
+                          <strong>{{ product.goodsName }}</strong>
+                          <span class="goods-specification">
+                            <small v-if="goodsDetailText(product)" class="is-detail">{{ goodsDetailText(product) }}</small>
+                            <small v-if="goodsStandardText(product)" class="is-standard">规格 {{ goodsStandardText(product) }}</small>
+                            <small v-if="goodsCartonText(product)" class="is-carton">大包装 {{ goodsCartonText(product) }}</small>
+                          </span>
+                        </div>
+                      </div>
+                      <div class="quantity-cell">
+                        <span v-if="product.predictedQuantity !== null"><strong>{{ number(product.predictedQuantity) }}</strong></span>
+                      </div>
+                      <div class="unit-cell">{{ product.predictedUnit }}</div>
+                      <div class="stock-cell">
+                        <span v-if="productContextLoading(product)">查询中</span>
+                        <template v-else><strong>{{ number(productContext(product).stockQuantity) }}</strong><small>{{ productContext(product).stockUnit || product.predictedUnit }}</small></template>
+                      </div>
+                      <div class="trust-cell"><strong>{{ percent(product.trustPercent) }}</strong></div>
+                      <div class="department-cell" :title="departmentForecastText(product)">
+                        <span v-for="line in departmentForecastLines(product)" :key="line.key" class="department-order-line">
+                          <strong>{{ line.departmentName }}</strong><small>{{ line.text }}</small>
+                        </span>
+                      </div>
+                      <div class="procurement-cell">
+                        <span v-if="productContextLoading(product)" class="procurement-pending">查询中</span>
+                        <span v-else-if="productContext(product).error" class="procurement-unknown">状态未知</span>
+                        <span v-else-if="productContext(product).hasActivePurchase" class="procurement-active">采购中<small v-if="Number(productContext(product).activePurchaseCount) > 1">{{ productContext(product).activePurchaseCount }}笔</small></span>
+                        <button v-else type="button" :disabled="Boolean(creatingPurchases[Number(product.goodsId)])" @click="addProcurement(product)">
+                          {{ creatingPurchases[Number(product.goodsId)] ? '添加中' : '+ 添加采购' }}
+                        </button>
+                      </div>
+                    </article>
+                  </template>
+                </div>
+                <footer class="product-detail__footer"><span>共 {{ categories.length }} 个大类，{{ visibleProducts.length }} 种商品</span></footer>
+              </section>
             </div>
-            <footer class="product-detail__footer"><span>共 {{ categories.length }} 个大类，{{ visibleProducts.length }} 种商品</span></footer>
           </section>
         </section>
 
@@ -160,6 +176,7 @@ const departmentSearch = ref('');
 const dateMode = ref('TODAY');
 const activeLevelFilter = ref('');
 const activeCategory = ref('');
+const selectedTreeProductId = ref(null);
 const searchText = ref('');
 const procurementContexts = reactive({});
 const creatingPurchases = reactive({});
@@ -208,6 +225,9 @@ const categories = computed(() => buildCategoryGroups(activeLevelProducts.value)
 const selectedCategory = computed(() => categories.value.find((category) => category.key === activeCategory.value));
 const visibleProducts = computed(() => {
   const source = selectedCategory.value?.products || activeLevelProducts.value;
+  if (selectedTreeProductId.value !== null) {
+    return source.filter((item) => Number(item.goodsId) === selectedTreeProductId.value);
+  }
   const query = searchText.value.toLocaleLowerCase('zh-CN');
   return query ? source.filter((item) => [item.goodsName, goodsDetailText(item), goodsStandardText(item), goodsCartonText(item)]
     .some((value) => String(value || '').toLocaleLowerCase('zh-CN').includes(query))) : source;
@@ -328,10 +348,12 @@ async function refreshProcurement() {
 }
 
 function resetProductFilters() {
-  activeLevelFilter.value = ''; searchText.value = ''; activeCategory.value = '';
+  activeLevelFilter.value = ''; searchText.value = ''; activeCategory.value = ''; selectedTreeProductId.value = null;
 }
-function selectLevel(level) { activeLevelFilter.value = activeLevelFilter.value === level ? '' : level; activeCategory.value = ''; searchText.value = ''; }
-function selectCategory(category) { activeCategory.value = category; }
+function selectLevel(level) { activeLevelFilter.value = activeLevelFilter.value === level ? '' : level; activeCategory.value = ''; selectedTreeProductId.value = null; searchText.value = ''; }
+function selectCategory(category) { activeCategory.value = category; selectedTreeProductId.value = null; searchText.value = ''; }
+function selectTreeProduct(product) { selectedTreeProductId.value = Number(product.goodsId); searchText.value = ''; }
+function clearTreeProductSelection() { selectedTreeProductId.value = null; }
 
 async function loadGoodsDetails(items) {
   const goodsIds = Array.from(new Set((items || [])
@@ -544,6 +566,7 @@ button{cursor:pointer}
 /* 商品优先布局：顶部只保留日期和快捷操作，右侧主体全部交给商品明细。 */
 .prediction-header-controls{gap:6px;overflow:hidden}.header-date-range{height:36px;display:flex;align-items:center;gap:8px;padding:3px 8px 3px 10px;border:1px solid #d7e1db;border-radius:8px;background:#fff}.header-date-range>span{color:#6f7d75;font-size:9px;font-weight:900;white-space:nowrap}.header-date-range label{height:28px;display:flex;align-items:center;gap:5px}.header-date-range input{width:116px;border:0;outline:0;background:transparent;color:#28352e;font-size:11px;font-weight:700}.header-date-range label>i{color:#9aa69f;font-size:11px;font-style:normal}.header-date-range.is-custom{border-color:#a9d4bc}.header-range-presets button{height:36px}.header-refresh{height:36px}.header-level-tabs{height:36px;display:flex;align-items:center;gap:2px;padding:0 5px}.header-level-tabs>span{display:flex;align-items:center;gap:4px;padding:0 4px}.header-level-tabs>span i{width:18px;height:18px;display:grid;place-items:center;border-radius:99px;background:#e8f6ee;color:#087747;font-size:9px;font-style:normal;font-weight:900}.header-level-tabs>span.is-level_b i{background:#fff0d7;color:#ad6b0a}.header-level-tabs>span b{color:#5f6e66;font-size:10px}
 .overview-panel{gap:0}.product-board{flex:1;min-height:0;display:flex;border-radius:12px}.product-detail{width:100%;padding:9px 12px 0}.product-detail__header{min-height:40px;padding:0 4px 6px}.product-detail__header h2{font-size:17px}.detail-level-filter{display:flex;align-items:center;gap:5px;margin-left:3px}.detail-level-filter button{height:27px;display:flex;align-items:center;gap:5px;padding:0 8px;border:1px solid #dbe5df;border-radius:7px;background:#fff;color:#617068}.detail-level-filter button i{width:18px;height:18px;display:grid;place-items:center;border-radius:50%;background:#e9f6ef;color:#087b48;font-size:9px;font-style:normal;font-weight:900}.detail-level-filter button b{font-size:10px}.detail-level-filter button.active{border-color:#9fd3b8;background:#edf8f2;color:#087b48;box-shadow:0 3px 8px rgba(17,145,86,.1)}.detail-level-filter button.is-level_b i{background:#fff0d6;color:#a96a0e}.detail-level-filter button.is-level_b.active{border-color:#edca8d;background:#fff6e7;color:#a5680c}.goods-search{width:260px;height:32px}.category-tabs{flex:none;display:flex;align-items:center;align-content:flex-start;flex-wrap:wrap;gap:7px;min-width:0;overflow:visible;padding:2px 4px 8px}.category-tabs button{height:32px;display:flex;align-items:center;gap:9px;padding:0 13px;border:1px solid #dfe7e2;border-radius:7px;background:#fff;color:#536159;font-size:13px;font-weight:900;white-space:nowrap}.category-tabs button b{min-width:21px;padding:2px 5px;border-radius:99px;background:#f0f4f2;color:#718078;font-size:11px}.category-tabs button.active{border-color:#15965a;background:#15965a;color:#fff;box-shadow:0 4px 10px rgba(21,150,90,.13)}.category-tabs button.active b{background:rgba(255,255,255,.18);color:#fff}
+.product-catalog-workspace{flex:1;min-height:0;display:grid;grid-template-columns:230px minmax(0,1fr);border:1px solid #e1e8e4;border-radius:9px;background:#fff;overflow:hidden}.product-category-tree{min-width:0;min-height:0;display:flex;flex-direction:column;border-right:1px solid #e1e8e4;background:#fbfcfb}.product-category-tree>header{height:38px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 13px;border-bottom:1px solid #e7ece9;background:#f7f9f8}.product-category-tree>header strong{color:#26372e;font-size:13px}.product-category-tree>header span{color:#7a8981;font-size:10px;font-weight:800}.product-category-tree nav{min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#d5e2db transparent}.product-category-tree button{width:100%;border:0;background:transparent;color:#35443c;text-align:left}.tree-root,.tree-category__button{min-height:42px;display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:7px;padding:5px 11px;border-bottom:1px solid #eef2f0!important}.tree-root:hover,.tree-category__button:hover{background:#f2f7f4}.tree-root.active,.tree-category__button.active{background:#e8f6ee;color:#087747}.tree-root i{width:23px;height:23px;display:grid;place-items:center;border-radius:6px;background:#dff2e8;color:#087747;font-size:10px;font-style:normal;font-weight:900}.tree-category__button i{color:#718078;font-size:17px;font-style:normal;text-align:center}.tree-root strong,.tree-category__button strong{min-width:0;overflow:hidden;font-size:13px;text-overflow:ellipsis;white-space:nowrap}.tree-root b,.tree-category__button b{min-width:24px;color:#738078;font-size:10px;text-align:right}.tree-root.active b,.tree-category__button.active b{color:#087747}.tree-category{display:block}.tree-products{position:relative;padding:3px 0 5px 31px;background:#fff}.tree-products::before{content:'';position:absolute;top:0;bottom:8px;left:22px;border-left:1px solid #cfe1d7}.tree-products button{position:relative;min-height:33px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:4px 10px 4px 14px}.tree-products button::before{content:'';position:absolute;left:-9px;width:12px;border-top:1px solid #cfe1d7}.tree-products button:hover{background:#f5faf7}.tree-products button.active{background:#e8f6ee;color:#087747}.tree-products span{min-width:0;overflow:hidden;font-size:12px;font-weight:800;text-overflow:ellipsis;white-space:nowrap}.tree-products small{color:#7d8982;font-size:10px;white-space:nowrap}.tree-products button.active small{color:#087747}.product-table-zone{min-width:0;min-height:0;display:flex;flex-direction:column}.product-table-zone .product-table{border:0;border-radius:0}.product-table-zone .product-table__head{border-radius:0}
 .detail-level-filter button>span{font-size:10px;font-weight:800;white-space:nowrap}
 .product-table{border:1px solid #e1e8e4;border-radius:9px;background:#fff;overflow-x:hidden}.product-table__head,.product-row{grid-template-columns:34px minmax(170px,240px) 100px 86px 105px 100px minmax(120px,1fr) 112px;gap:10px}.product-table__head{min-height:38px;padding:0 14px;border-radius:8px 8px 0 0;background:#f7f9f8}.product-row{min-height:49px;padding:4px 14px}.goods-sequence{display:block;color:#75847c;font-size:12px;font-style:normal;font-weight:800;text-align:center}.product-row.is-level_b>.goods-sequence{color:#a66d17}.goods-name{gap:0}.goods-name strong,.quantity-cell strong,.unit-cell{color:#1f2b25;font-size:13px;font-weight:800;line-height:1.15}.goods-specification{margin-top:2px}.goods-specification:empty{display:none}.goods-specification small{padding:0;border-radius:0;background:transparent;color:#68776f;font-size:11px;line-height:1.15}.goods-specification small+small::before{content:'·';margin-right:4px;color:#a8b2ac}.goods-specification small.is-standard,.goods-specification small.is-carton{background:transparent}.goods-specification small.is-standard{color:#50675b}.goods-specification small.is-carton{color:#946111}.row-level{padding:4px 7px}.department-cell strong{font-size:12px}.department-cell small.department-estimate{display:block;margin-top:2px;color:#087b48;font-size:10px;font-weight:800}.trust-cell strong{font-size:13px}.trust-cell>span{margin-top:3px}.product-detail__footer{justify-content:space-between;min-height:34px;padding:5px 6px}.product-detail__footer small{color:#7d8a83;font-size:10px}:global(.product-header__page p){display:none}
 .row-level,.is-level_b .row-level{padding:0;border-radius:0;background:transparent}.row-level{color:#087747}.is-level_b .row-level{color:#a5680c}.department-cell{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:3px 7px;min-width:0;white-space:normal}.department-cell strong{line-height:1.35}.department-cell small.department-estimate{display:flex;min-width:0;flex-wrap:wrap;gap:2px 8px;margin:0;color:#1f2b25;font-size:12px;font-weight:400;line-height:1.35;white-space:normal}.department-cell small.department-estimate span{display:inline-block;white-space:nowrap}
