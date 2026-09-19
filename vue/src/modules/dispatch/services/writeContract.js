@@ -351,6 +351,7 @@ export function buildRouteEditConfirmPayload({
   routeDate,
   batchCode,
   previewToken,
+  expectedTaskVersions,
 }) {
   if (!route || !Array.isArray(route._stops)) {
     throw new Error('请选择需要调整的司机路线');
@@ -373,6 +374,27 @@ export function buildRouteEditConfirmPayload({
         String(item?.sandboxStopKey ?? item?.stopKey ?? '').trim() === key
       )) === index;
     });
+  const authoritativeTaskVersions = Array.isArray(expectedTaskVersions)
+    ? expectedTaskVersions.map((item) => ({
+      taskId: requireInteger(item?.taskId, 'expectedTaskVersions.taskId', 1),
+      taskVersion: requireInteger(item?.taskVersion, 'expectedTaskVersions.taskVersion'),
+    }))
+    : [];
+  const derivedTaskVersions = versionStops
+    .filter((stop) => stop.taskId !== null && stop.taskId !== undefined)
+    .map((stop) => ({
+      taskId: requireInteger(stop.taskId, 'taskId', 1),
+      taskVersion: requireInteger(stop.taskVersion, 'taskVersion'),
+    }));
+  const taskVersions = authoritativeTaskVersions.length
+    ? authoritativeTaskVersions
+    : derivedTaskVersions;
+  const uniqueTaskVersions = taskVersions.filter(({ taskId }, index, values) => (
+    values.findIndex((item) => item.taskId === taskId) === index
+  ));
+  if (uniqueTaskVersions.length !== taskVersions.length) {
+    throw new Error('任务版本清单存在重复 taskId，请重新预览路线');
+  }
   return {
     ...routeConfirmResourcePayload(route),
     routeDate: requireText(routeDate, 'routeDate'),
@@ -388,15 +410,7 @@ export function buildRouteEditConfirmPayload({
     previewToken: requireText(previewToken, 'previewToken'),
     confirmReason: 'Electron 桌面调度调整路线顺序',
     expectedRouteVersion: requireInteger(route.routeVersion, 'routeVersion'),
-    expectedTaskVersions: versionStops
-      .filter((stop) => stop.taskId !== null && stop.taskId !== undefined)
-      .map((stop) => ({
-        taskId: requireInteger(stop.taskId, 'taskId', 1),
-        taskVersion: requireInteger(stop.taskVersion, 'taskVersion'),
-      }))
-      .filter(({ taskId }, index, values) => (
-        values.findIndex((item) => item.taskId === taskId) === index
-      )),
+    expectedTaskVersions: uniqueTaskVersions,
   };
 }
 

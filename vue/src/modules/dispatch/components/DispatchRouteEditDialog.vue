@@ -1207,6 +1207,7 @@ async function saveRoute() {
       routeDate: props.routeDate,
       batchCode: props.batchCode,
       previewToken: page.value?.previewToken,
+      expectedTaskVersions: page.value?.expectedTaskVersions,
     });
     const result = await store.dispatch('dispatch/confirmRouteEdit', payload);
     if (!result?.ok) { showError(result, 'confirm'); return; }

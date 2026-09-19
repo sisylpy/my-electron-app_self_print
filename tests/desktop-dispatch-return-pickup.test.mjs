@@ -7,6 +7,7 @@ import {
   buildOrderCollections,
   isReturnPickupStop,
 } from '../vue/src/modules/dispatch/services/readModel.js';
+import { buildRouteEditConfirmPayload } from '../vue/src/modules/dispatch/services/writeContract.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -103,4 +104,27 @@ test('编辑路线服务时长优先使用接口文本并兼容分钟数', () =>
   assert.match(component, /stop\?\.serviceDurationLabel \|\| stop\?\.unloadDurationText/);
   assert.match(component, /stop\?\.serviceMinutes \?\? stop\?\.unloadDurationMinutes/);
   assert.match(component, /return '未设置'/);
+});
+
+test('保存路线原样提交预览接口返回的完整任务版本清单', () => {
+  const expectedTaskVersions = [
+    { taskId: 101, taskVersion: 3 },
+    { taskId: 202, taskVersion: 7 },
+  ];
+  const payload = buildRouteEditConfirmPayload({
+    route: {
+      routeResourceType: 'FORMAL_DRIVER_ROUTE',
+      driverUserId: 56,
+      driverRouteId: 88,
+      routeVersion: 4,
+      _stops: [{ stopKey: 'dep:10', sandboxStopKey: 'dep:10', taskId: 101, taskVersion: 3 }],
+    },
+    stops: [{ stopKey: 'dep:10', sandboxStopKey: 'dep:10', taskId: 101, taskVersion: 3 }],
+    stopKeys: ['dep:10'],
+    routeDate: '2026-09-19',
+    batchCode: 'MORNING',
+    previewToken: 'preview-token',
+    expectedTaskVersions,
+  });
+  assert.deepEqual(payload.expectedTaskVersions, expectedTaskVersions);
 });
