@@ -79,3 +79,26 @@ test('编辑路线试算和保存不会被无关后台状态永久锁死', () =>
   assert.match(component, /dirty \|\| !previewReady \? '重新计算并保存'/);
   assert.match(component, /if \(dirty\.value \|\| !previewReady\.value\) \{\s*const previewed = await previewRoute\(\);/);
 });
+
+test('编辑路线顶部承载紧凑统计且地图列收窄', () => {
+  const component = fs.readFileSync(
+    path.join(root, 'vue/src/modules/dispatch/components/DispatchRouteEditDialog.vue'),
+    'utf8'
+  );
+  const header = component.match(/<header class="route-editor__header">([\s\S]*?)<\/header>/)?.[1] || '';
+  assert.match(header, /class="route-editor__overview"/);
+  assert.match(component, /grid-template-columns: minmax\(470px, \.88fr\) minmax\(640px, 1\.12fr\)/);
+  assert.match(component, /text-overflow: ellipsis/);
+  assert.match(component, /white-space: nowrap/);
+});
+
+test('编辑路线服务时长优先使用接口文本并兼容分钟数', () => {
+  const component = fs.readFileSync(
+    path.join(root, 'vue/src/modules/dispatch/components/DispatchRouteEditDialog.vue'),
+    'utf8'
+  );
+  assert.match(component, /stopServiceDurationLabel\(stop\)/);
+  assert.match(component, /stop\?\.serviceDurationLabel \|\| stop\?\.unloadDurationText/);
+  assert.match(component, /stop\?\.serviceMinutes \?\? stop\?\.unloadDurationMinutes/);
+  assert.match(component, /return '未设置'/);
+});

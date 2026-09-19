@@ -10,6 +10,14 @@
           </h2>
           <p>调整饭店部门顺序、增减站点或使用 AI 补充路线</p>
         </div>
+        <section class="route-editor__overview" aria-label="当前路线指标">
+          <span><strong>{{ stops.length }} 站</strong></span>
+          <span><strong>{{ editorDistanceLabel }}</strong></span>
+          <span><strong>{{ editorDurationLabel }}</strong></span>
+          <span><strong>建议出发 {{ plannedDepartLabel }}</strong></span>
+          <span><strong>首站到达 {{ firstStopArrivalLabel }}</strong></span>
+          <span><strong>{{ page?.routeEndLabel || (returnToDepotRequired ? '预计返回' : '预计完成') }} {{ previewReturnLabel }}</strong></span>
+        </section>
         <button type="button" aria-label="关闭路线调整" :disabled="closing" @click="closeEditor">×</button>
       </header>
 
@@ -24,15 +32,6 @@
           :title="page.actions.reassignDriverDisabledReason || ''"
           @click="reassignVisible = true"
         >{{ reassigning ? '更换中…' : '更换司机' }}</button>
-      </section>
-
-      <section class="route-editor__overview" aria-label="当前路线指标">
-        <span><strong>{{ stops.length }} 站</strong></span>
-        <span><strong>{{ editorDistanceLabel }}</strong></span>
-        <span><strong>{{ editorDurationLabel }}</strong></span>
-        <span><strong>建议出发 {{ plannedDepartLabel }}</strong></span>
-        <span><strong>首站到达 {{ firstStopArrivalLabel }}</strong></span>
-        <span><strong>{{ page?.routeEndLabel || (returnToDepotRequired ? '预计返回' : '预计完成') }} {{ previewReturnLabel }}</strong></span>
       </section>
 
       <div class="route-editor__body">
@@ -130,7 +129,7 @@
                 </span>
                 <span class="route-editor__stop-times">
                   <b><small>{{ stop.arrivalFieldLabel || '到达' }}</small>{{ stop.plannedArrivalLabel || '—' }}</b>
-                  <b><small>{{ stop.isReturnPickup ? '取货' : '服务' }}</small>{{ stop.serviceDurationLabel || stop.unloadDurationText || '—' }}</b>
+                  <b><small>{{ stop.isReturnPickup ? '取货' : '服务' }}</small>{{ stopServiceDurationLabel(stop) }}</b>
                   <b><small>{{ stop.departureFieldLabel || '离开' }}</small>{{ stop.plannedDepartureLabel || '—' }}</b>
                 </span>
               </button>
@@ -581,6 +580,16 @@ function normalizeStops(list) {
       liveOrderIds: Array.isArray(stop?.liveOrderIds) ? stop.liveOrderIds : [],
     };
   });
+}
+
+function stopServiceDurationLabel(stop) {
+  const label = String(stop?.serviceDurationLabel || stop?.unloadDurationText || '').trim();
+  if (label) return label;
+  const minutes = Number(stop?.serviceMinutes ?? stop?.unloadDurationMinutes);
+  if (Number.isFinite(minutes) && minutes > 0) return `${Math.round(minutes)} 分钟`;
+  const seconds = Number(stop?.serviceDurationS ?? stop?.serviceDurationSeconds);
+  if (Number.isFinite(seconds) && seconds > 0) return `${Math.ceil(seconds / 60)} 分钟`;
+  return '未设置';
 }
 
 function stopKeys() {
@@ -1488,8 +1497,11 @@ button:disabled { cursor: not-allowed !important; opacity: .38; }
 }
 
 .route-editor__header {
-  min-height: 86px;
+  display: grid;
+  grid-template-columns: minmax(230px, .72fr) minmax(0, 2.28fr) 40px;
   align-items: center;
+  min-height: 86px;
+  gap: 18px;
   padding: 15px 25px 13px;
   border-bottom: 1px solid #e1e7e4;
 }
@@ -1541,10 +1553,11 @@ button:disabled { cursor: not-allowed !important; opacity: .38; }
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0;
-  min-height: 55px;
+  min-width: 0;
+  min-height: 52px;
   margin: 0;
   border: 0;
-  border-bottom: 1px solid #e2e8e5;
+  border-left: 1px solid #e2e8e5;
   border-radius: 0;
   background: #fff;
 }
@@ -1552,7 +1565,8 @@ button:disabled { cursor: not-allowed !important; opacity: .38; }
 .route-editor__overview > span {
   position: relative;
   justify-content: center;
-  padding: 10px 12px;
+  min-width: 0;
+  padding: 8px 7px;
   background: #fff;
 }
 
@@ -1571,9 +1585,15 @@ button:disabled { cursor: not-allowed !important; opacity: .38; }
 }
 
 .route-editor__overview strong {
+  display: block;
+  overflow: hidden;
   margin: 0;
   color: #263931;
-  font-size: 13px;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .route-editor__reassign {
@@ -1585,7 +1605,7 @@ button:disabled { cursor: not-allowed !important; opacity: .38; }
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: minmax(590px, 1.26fr) minmax(520px, 1fr);
+  grid-template-columns: minmax(470px, .88fr) minmax(640px, 1.12fr);
   gap: 0;
   padding: 0;
 }
@@ -1998,7 +2018,7 @@ button:disabled { cursor: not-allowed !important; opacity: .38; }
 
 @media (max-width: 1280px) {
   .route-editor__body {
-    grid-template-columns: minmax(520px, 1.12fr) minmax(470px, 1fr);
+    grid-template-columns: minmax(430px, .84fr) minmax(560px, 1.16fr);
   }
 
   .route-editor__stop {
