@@ -71,6 +71,23 @@ function resolveCategory(item) {
   return { key: 'UNCLASSIFIED', label: '未分类', icon: '未', source: 'MISSING_CATALOG_CATEGORY' };
 }
 
+function resolveSubcategory(item, category) {
+  const explicitLabel = item?.goodsSubcategoryName || item?.subcategoryName;
+  const explicitKey = item?.goodsSubcategoryId || item?.subcategoryId;
+  if (explicitLabel) {
+    return {
+      key: explicitKey ? `SUB_${explicitKey}` : `SUB_${category.key}_${explicitLabel}`,
+      label: String(explicitLabel),
+      source: 'DISTRIBUTER_CATALOG',
+    };
+  }
+  return {
+    key: `SUB_${category.key}_UNCLASSIFIED`,
+    label: '未分类',
+    source: 'MISSING_DISTRIBUTER_SUBCATEGORY',
+  };
+}
+
 function resolveReasons(item, run) {
   const reasons = item?.policy?.supportingReasons || item?.supportingReasons || [];
   const result = reasons.map(cleanReason).filter(Boolean).slice(0, 4);
@@ -89,6 +106,7 @@ export function toProcurementProduct(item, run) {
   const level = resolveLevel(item, run);
   if (!level) return null;
   const category = resolveCategory(item);
+  const subcategory = resolveSubcategory(item, category);
   const candidateChannels = Array.isArray(item?.candidateChannels) ? item.candidateChannels : [];
   const isRangeHint = item?.candidateTier === 'RANGE_REVIEW'
     && candidateChannels.includes('RANGE_WINDOW');
@@ -96,6 +114,7 @@ export function toProcurementProduct(item, run) {
     goodsId: item.goodsId,
     goodsName: item.goodsName,
     category,
+    subcategory,
     level,
     levelMeta: LEVEL_META[level],
     statusLabel: isRangeHint ? '历史提示' : LEVEL_META[level].badge,
@@ -287,12 +306,29 @@ export function buildCategoryGroups(products) {
       ...product.category,
       count: 0,
       products: [],
+      _subcategories: new Map(),
     };
     existing.count += 1;
     existing.products.push(product);
+    const subcategory = existing._subcategories.get(product.subcategory.key) || {
+      ...product.subcategory,
+      count: 0,
+      products: [],
+    };
+    subcategory.count += 1;
+    subcategory.products.push(product);
+    existing._subcategories.set(product.subcategory.key, subcategory);
     groups.set(product.category.key, existing);
   });
-  return Array.from(groups.values()).sort((left, right) => (
+  return Array.from(groups.values()).map((category) => {
+    const { _subcategories, ...view } = category;
+    return {
+      ...view,
+      subcategories: Array.from(_subcategories.values()).sort((left, right) => (
+        right.count - left.count || left.label.localeCompare(right.label, 'zh-CN')
+      )),
+    };
+  }).sort((left, right) => (
     right.count - left.count || left.label.localeCompare(right.label, 'zh-CN')
   ));
 }

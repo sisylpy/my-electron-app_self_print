@@ -66,7 +66,7 @@
                   </button>
                 </div>
               </div>
-              <label class="goods-search"><span aria-hidden="true">⌕</span><input v-model.trim="searchText" type="search" placeholder="输入商品名称、规格" @input="clearTreeProductSelection" /></label>
+              <label class="goods-search"><span aria-hidden="true">⌕</span><input v-model.trim="searchText" type="search" placeholder="输入商品名称、规格" /></label>
             </header>
 
             <div class="product-catalog-workspace">
@@ -81,8 +81,8 @@
                       <i aria-hidden="true">{{ activeCategory === category.key ? '⌄' : '›' }}</i><strong>{{ category.label }}</strong><b>{{ category.count }}</b>
                     </button>
                     <div v-if="activeCategory === category.key" class="tree-products">
-                      <button v-for="product in category.products" :key="`${product.level}-${product.goodsId}-${product.predictedUnit}`" type="button" :class="{ active: selectedTreeProductId === Number(product.goodsId) }" @click="selectTreeProduct(product)">
-                        <span>{{ product.goodsName }}</span><small>{{ number(product.predictedQuantity) }}{{ product.predictedUnit }}</small>
+                      <button v-for="subcategory in category.subcategories" :key="subcategory.key" type="button" :class="{ active: activeSubcategory === subcategory.key }" @click="selectSubcategory(category.key, subcategory.key)">
+                        <span>{{ subcategory.label }}</span><small>{{ subcategory.count }}</small>
                       </button>
                     </div>
                   </section>
@@ -176,7 +176,7 @@ const departmentSearch = ref('');
 const dateMode = ref('TODAY');
 const activeLevelFilter = ref('');
 const activeCategory = ref('');
-const selectedTreeProductId = ref(null);
+const activeSubcategory = ref('');
 const searchText = ref('');
 const procurementContexts = reactive({});
 const creatingPurchases = reactive({});
@@ -223,11 +223,12 @@ const activeLevelProducts = computed(() => activeLevelFilter.value
   : (presentation.value.products || []));
 const categories = computed(() => buildCategoryGroups(activeLevelProducts.value));
 const selectedCategory = computed(() => categories.value.find((category) => category.key === activeCategory.value));
+const selectedSubcategory = computed(() => selectedCategory.value?.subcategories
+  ?.find((subcategory) => subcategory.key === activeSubcategory.value));
 const visibleProducts = computed(() => {
-  const source = selectedCategory.value?.products || activeLevelProducts.value;
-  if (selectedTreeProductId.value !== null) {
-    return source.filter((item) => Number(item.goodsId) === selectedTreeProductId.value);
-  }
+  const source = selectedSubcategory.value?.products
+    || selectedCategory.value?.products
+    || activeLevelProducts.value;
   const query = searchText.value.toLocaleLowerCase('zh-CN');
   return query ? source.filter((item) => [item.goodsName, goodsDetailText(item), goodsStandardText(item), goodsCartonText(item)]
     .some((value) => String(value || '').toLocaleLowerCase('zh-CN').includes(query))) : source;
@@ -348,12 +349,11 @@ async function refreshProcurement() {
 }
 
 function resetProductFilters() {
-  activeLevelFilter.value = ''; searchText.value = ''; activeCategory.value = ''; selectedTreeProductId.value = null;
+  activeLevelFilter.value = ''; searchText.value = ''; activeCategory.value = ''; activeSubcategory.value = '';
 }
-function selectLevel(level) { activeLevelFilter.value = activeLevelFilter.value === level ? '' : level; activeCategory.value = ''; selectedTreeProductId.value = null; searchText.value = ''; }
-function selectCategory(category) { activeCategory.value = category; selectedTreeProductId.value = null; searchText.value = ''; }
-function selectTreeProduct(product) { selectedTreeProductId.value = Number(product.goodsId); searchText.value = ''; }
-function clearTreeProductSelection() { selectedTreeProductId.value = null; }
+function selectLevel(level) { activeLevelFilter.value = activeLevelFilter.value === level ? '' : level; activeCategory.value = ''; activeSubcategory.value = ''; searchText.value = ''; }
+function selectCategory(category) { activeCategory.value = category; activeSubcategory.value = ''; searchText.value = ''; }
+function selectSubcategory(category, subcategory) { activeCategory.value = category; activeSubcategory.value = subcategory; searchText.value = ''; }
 
 async function loadGoodsDetails(items) {
   const goodsIds = Array.from(new Set((items || [])
