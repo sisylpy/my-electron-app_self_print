@@ -39,10 +39,6 @@
 
       <section class="analysis-workspace">
         <aside class="category-tree-panel">
-          <header class="section-heading category-heading">
-            <h2>销售分类树</h2>
-            <label aria-label="搜索分类"><span>⌕</span><input v-model.trim="categoryKeyword" placeholder="搜索分类" /></label>
-          </header>
           <nav class="category-tree" aria-label="销售分类树">
             <section v-for="category in filteredCategories" :key="category.id">
               <button
@@ -64,7 +60,6 @@
                   :class="{ active: same(subcategory.id, selectedSubcategoryId) }"
                   @click="selectSubcategory(subcategory)"
                 >
-                  <span>▸</span>
                   <strong>{{ subcategory.name }}</strong>
                   <b>{{ formatMoney(subcategory.salesAmount) }}</b>
                   <em>{{ percentageLabel(overallShare(subcategory.salesAmount)) }}</em>
@@ -213,7 +208,6 @@ export default {
       selectedProductId: null,
       productDrawerOpen: false,
       keyword: '',
-      categoryKeyword: '',
       customerKeyword: '',
       overviewLoading: false,
       detailLoading: false,
@@ -242,9 +236,7 @@ export default {
     selectedCategoryName() { return this.categoryDetail?.category?.name || this.selectedCategory?.name || '商品大类'; },
     currentTopCustomers() { return this.categoryDetail?.topCustomers || this.overview?.topCustomers || []; },
     filteredCategories() {
-      const key = this.categoryKeyword.toLowerCase();
-      if (!key) return this.overview?.categories || [];
-      return (this.overview?.categories || []).filter((category) => String(category.name || '').toLowerCase().includes(key));
+      return this.overview?.categories || [];
     },
     filteredCustomers() {
       const key = this.customerKeyword.toLowerCase();
@@ -563,7 +555,6 @@ export default {
 .selection-heading { min-height: 58px; padding-left: 17px; border-left: 3px solid #10a05d; }
 .selection-heading p { margin-top: 4px; color: #7d8983; font-size: 10px; }
 
-.category-heading label,
 .product-search,
 .customer-tools label {
   display: flex;
@@ -574,8 +565,6 @@ export default {
   color: #0b8851;
 }
 
-.category-heading label { width: 110px; height: 30px; padding: 0 8px; }
-.category-heading input,
 .product-search input,
 .customer-tools input {
   width: 100%;
@@ -615,7 +604,7 @@ export default {
   width: 100%;
   min-height: 35px;
   display: grid;
-  grid-template-columns: 13px minmax(0, 1fr) 72px 40px;
+  grid-template-columns: minmax(0, 1fr) 72px 40px;
   align-items: center;
   gap: 5px;
   padding: 5px 8px;
@@ -741,6 +730,8 @@ export default {
   .concentration-ring { width: 60px; height: 60px; }
   .concentration-ring span { width: 37px; height: 37px; }
 }
+
+.analysis-filters nav button { font-size: 13px; }
 
 @media (max-width: 1120px) {
   .analysis-body { overflow: auto; }
