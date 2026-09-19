@@ -67,3 +67,15 @@ test('编辑路线弹窗保留退货站点身份并显示取货说明', () => {
   assert.match(component, /到店拿回商品，无需装货/);
   assert.match(component, /stop\.isReturnPickup \? '取货' : '服务'/);
 });
+
+test('编辑路线试算和保存不会被无关后台状态永久锁死', () => {
+  const component = fs.readFileSync(
+    path.join(root, 'vue/src/modules/dispatch/components/DispatchRouteEditDialog.vue'),
+    'utf8'
+  );
+  assert.match(component, /:disabled="previewing \|\| saving \|\| closing"[\s\S]*@click\.stop="previewRoute\(\)"/);
+  assert.match(component, /class="primary"[\s\S]*:disabled="previewing \|\| saving \|\| closing"/);
+  assert.match(component, /@click\.stop="previewRoute\(\)"/);
+  assert.match(component, /dirty \|\| !previewReady \? '重新计算并保存'/);
+  assert.match(component, /if \(dirty\.value \|\| !previewReady\.value\) \{\s*const previewed = await previewRoute\(\);/);
+});

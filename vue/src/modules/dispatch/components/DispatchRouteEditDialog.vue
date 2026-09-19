@@ -315,8 +315,19 @@
         <span :class="{ ready: previewReady && !dirty }">{{ footerHint }}</span>
         <div>
           <button type="button" :disabled="busy || closing" @click="closeEditor">{{ closing ? '正在关闭…' : '取消' }}</button>
-          <button type="button" :disabled="!dirty || busy" @click="previewRoute">{{ previewing ? '正在计算…' : '重新计算路线' }}</button>
-          <button type="button" class="primary" :disabled="!previewReady || dirty || busy" @click="saveRoute">{{ saving ? '正在保存…' : '保存并确认路线' }}</button>
+          <button
+            type="button"
+            :disabled="previewing || saving || closing"
+            title="按当前客户顺序重新计算距离与到达时间"
+            @click.stop="previewRoute()"
+          >{{ previewing ? '正在计算…' : '重新计算路线' }}</button>
+          <button
+            type="button"
+            class="primary"
+            :disabled="previewing || saving || closing"
+            :title="dirty || !previewReady ? '将先重新计算路线，计算成功后自动保存' : '保存当前路线'"
+            @click.stop="saveRoute"
+          >{{ saving ? '正在保存…' : (dirty || !previewReady ? '重新计算并保存' : '保存并确认路线') }}</button>
         </div>
       </footer>
     </section>
@@ -1172,6 +1183,11 @@ async function previewRoute(proposalId = null) {
   } finally { previewing.value = false; }
 }
 async function saveRoute() {
+  if (previewing.value || saving.value || closing.value) return;
+  if (dirty.value || !previewReady.value) {
+    const previewed = await previewRoute();
+    if (!previewed) return;
+  }
   saving.value = true; message.value = '';
   try {
     const payload = buildRouteEditConfirmPayload({
@@ -1951,6 +1967,8 @@ button:disabled { cursor: not-allowed !important; opacity: .38; }
 
 .route-editor__footer {
   min-height: 54px;
+  position: relative;
+  z-index: 30;
   padding: 8px 22px;
 }
 
