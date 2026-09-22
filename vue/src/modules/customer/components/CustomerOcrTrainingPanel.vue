@@ -174,7 +174,7 @@
     </div>
 
     <div v-if="createOpen" class="modal-layer" @click.self="closeCreate">
-      <section class="create-card">
+      <section :class="['create-card', { 'image-mode': form.sourceType === 'IMAGE' }]">
         <header>
           <div><span>PRETRAINING</span><h3>新建 OCR 预训练</h3></div>
           <button type="button" @click="closeCreate">×</button>
@@ -207,11 +207,29 @@
           <textarea v-model="form.sourceText" placeholder="每行一条，例如：&#10;西红柿 10斤&#10;青椒 2箱"></textarea>
           <p>系统先拆成商品明细，之后仍需逐条确认匹配商品。</p>
         </div>
-        <div v-else-if="form.sourceType === 'IMAGE'" class="source-editor image-picker">
-          <input ref="imageInput" type="file" accept="image/jpeg,image/png,image/webp" @change="onImageSelected" />
-          <button type="button" @click="$refs.imageInput.click()">选择 JPG / PNG / WebP 图片</button>
-          <span>{{ form.sourceName || '尚未选择图片，最大 7.5MB' }}</span>
-          <img v-if="imagePreview" :src="imagePreview" alt="待识别订单图片" />
+        <div v-else-if="form.sourceType === 'IMAGE'" class="formal-image-workspace">
+          <ImageUpload
+            source="placeOrder"
+            :new-task-only="true"
+            :dep-id="form.departmentId"
+            :task-type="1"
+            :current-task="null"
+            :has-cache="false"
+            :has-running-task="creating"
+            :uploaded-image-file="null"
+            :image-preview="null"
+            :show-deep-seek-loading="creating"
+            :order-items="[]"
+            @image-upload="onImageSelected"
+          >
+            <template #order-list>
+              <div class="formal-image-empty">
+                <b>与正式下单完全相同的图片识别</b>
+                <span>选择、拖入或粘贴图片后，可旋转、裁剪，并选择单列快速识别或多列复杂识别。</span>
+                <small>识别结果只进入预训练确认，不会生成正式订单。</small>
+              </div>
+            </template>
+          </ImageUpload>
         </div>
         <div v-else class="source-editor">
           <textarea v-model="form.sourceText" placeholder="从 Excel 复制后粘贴到这里。列顺序：商品名称、数量、规格、备注"></textarea>
@@ -224,19 +242,31 @@
           </div>
         </div>
         <div v-if="createError" class="form-error">{{ createError }}</div>
-        <footer>
+        <footer v-if="form.sourceType !== 'IMAGE'">
           <button type="button" @click="closeCreate">取消</button>
           <button class="primary-button" type="button" :disabled="creating" @click="createTask">
-            {{ creating ? (form.sourceType === 'IMAGE' ? '正在识别图片…' : '正在创建…') : '创建并进入确认' }}
+            {{ creating ? '正在创建…' : '创建并进入确认' }}
           </button>
         </footer>
       </section>
     </div>
+
+    <ImageCropperModal
+      v-model="showImagePreviewModal"
+      :src="previewImageDataUrl"
+      :file-size="imageFileSize"
+      title="图片预览与裁剪"
+      @cancel="closeImagePreviewModal"
+      @direct-recognize="(dataUrl) => createImageTask(dataUrl, 'FAST')"
+      @direct-recognize-ai="(dataUrl) => createImageTask(dataUrl, 'COMPLEX')"
+    />
   </div>
 </template>
 
 <script>
 import customerApi from '../api/customerApi';
+import ImageCropperModal from '@/components/ImageCropperModal.vue';
+import ImageUpload from '@/components/upload/ImageUpload.vue';
 
 function todayText() {
   const now = new Date();
@@ -255,6 +285,7 @@ function leafDepartments(rows) {
 
 export default {
   name: 'CustomerOcrTrainingPanel',
+  components: { ImageCropperModal, ImageUpload },
   props: {
     customer: { type: Object, required: true },
     distributerId: { type: [Number, String], required: true },
@@ -273,7 +304,9 @@ export default {
       createOpen: false,
       creating: false,
       createError: '',
-      imagePreview: '',
+      showImagePreviewModal: false,
+      previewImageDataUrl: '',
+      imageFileSize: 0,
       today: todayText(),
       form: this.emptyForm(),
       searchKeywords: {},
@@ -387,21 +420,32 @@ export default {
     openCreate() {
       this.form = this.emptyForm();
       this.form.departmentId = this.departments[0]?.nxDepartmentId || null;
-      this.imagePreview = '';
+      this.previewImageDataUrl = '';
+      this.imageFileSize = 0;
       this.createError = '';
       this.createOpen = true;
     },
     closeCreate() {
       if (this.creating) return;
       this.createOpen = false;
-      this.imagePreview = '';
+      this.closeImagePreviewModal();
     },
     onImageSelected(event) {
       const file = event.target.files?.[0];
       this.createError = '';
       if (!file) return;
-      if (file.size > 7_500_000) {
-        this.createError = '图片不能超过 7.5MB';
+      if (!file.type?.startsWith('image/')) {
+        this.createError = '请选择图片文件';
+        event.target.value = '';
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        this.createError = '图片不能超过 10MB';
+        event.target.value = '';
+        return;
+      }
+      if (!this.form.sampleDate || !this.form.departmentId) {
+        this.createError = '请先选择样本日期和实际订货部门';
         event.target.value = '';
         return;
       }
@@ -409,12 +453,21 @@ export default {
       reader.onload = () => {
         this.form.imageBase64 = String(reader.result || '');
         this.form.sourceName = file.name;
-        this.imagePreview = this.form.imageBase64;
+        this.previewImageDataUrl = this.form.imageBase64;
+        this.imageFileSize = file.size;
+        this.showImagePreviewModal = true;
       };
       reader.onerror = () => { this.createError = '图片读取失败'; };
       reader.readAsDataURL(file);
     },
-    async createTask() {
+    closeImagePreviewModal() {
+      this.showImagePreviewModal = false;
+    },
+    async createImageTask(imageDataUrl, recognitionMode) {
+      this.form.imageBase64 = imageDataUrl;
+      await this.createTask({ recognitionMode });
+    },
+    async createTask(options = {}) {
       this.createError = '';
       if (!this.form.sampleDate || !this.form.departmentId) {
         this.createError = '请选择样本日期和实际订货部门';
@@ -442,12 +495,16 @@ export default {
           sourceType: this.form.sourceType,
           sourceName: this.form.sourceName || undefined,
         };
-        if (this.form.sourceType === 'IMAGE') payload.imageBase64 = this.form.imageBase64;
+        if (this.form.sourceType === 'IMAGE') {
+          payload.imageBase64 = this.form.imageBase64;
+          payload.recognitionMode = options.recognitionMode || 'COMPLEX';
+        }
         else if (this.form.sourceType === 'EXCEL_PASTE') payload.items = this.excelPreview;
         else payload.sourceText = this.form.sourceText;
         const result = await customerApi.createCustomerOcrTraining(payload);
         if (!result?.ok) throw new Error(result?.message || '预训练任务创建失败');
         this.createOpen = false;
+        this.showImagePreviewModal = false;
         this.detail = result.data;
         this.selectedKey = `PRETRAINING-${result.data.taskId}`;
         await this.loadTasks({ scene: 'PRETRAINING', taskId: result.data.taskId });
@@ -616,6 +673,7 @@ button { cursor: pointer; }
 .state-box button { border: 0; color: #0b8c50; background: transparent; }
 .modal-layer { position: fixed; inset: 0; z-index: 1100; display: grid; place-items: center; padding: 30px; background: rgba(20,34,27,.36); }
 .create-card { width: min(820px, 94vw); max-height: 90vh; overflow: auto; border-radius: 14px; background: white; box-shadow: 0 24px 60px rgba(20,45,32,.22); }
+.create-card.image-mode { width: min(1500px, 96vw); height: 92vh; display: flex; flex-direction: column; overflow: hidden; }
 .create-card > header { padding: 20px 24px; border-bottom: 1px solid #e0e8e3; }
 .create-card > header button { border: 0; background: transparent; font-size: 25px; color: #68766f; }
 .create-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; padding: 20px 24px 10px; }
@@ -625,10 +683,11 @@ button { cursor: pointer; }
 .source-tabs small { color: #819087; }
 .source-editor { padding: 8px 24px 22px; }
 .source-editor textarea { box-sizing: border-box; width: 100%; min-height: 190px; resize: vertical; border: 1px solid #cfded6; border-radius: 9px; padding: 12px; line-height: 1.7; }
-.image-picker { display: grid; justify-items: center; gap: 12px; min-height: 230px; align-content: center; border: 1px dashed #bed5c8; margin: 8px 24px 22px; padding: 22px; border-radius: 9px; background: #f8fbf9; }
-.image-picker input { display: none; }
-.image-picker button { border: 0; border-radius: 7px; padding: 10px 16px; background: #0c9755; color: white; }
-.image-picker img { max-width: 100%; max-height: 280px; object-fit: contain; }
+.formal-image-workspace { flex: 1; min-height: 0; display: flex; padding: 8px 18px 18px; overflow: hidden; }
+.formal-image-workspace :deep(.upload-section) { width: 100%; min-height: 0; }
+.formal-image-empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 8px; color: #7b8882; text-align: center; }
+.formal-image-empty b { color: #34443c; font-size: 18px; }
+.formal-image-empty small { color: #0b8b50; }
 .excel-preview { display: grid; gap: 4px; margin-top: 9px; border-radius: 7px; padding: 9px; background: #f4f7f5; color: #68776f; font-size: 12px; }
 .form-error { padding: 0 24px 12px; }
 .create-card > footer { justify-content: flex-end; padding: 16px 24px; border-top: 1px solid #e0e8e3; }

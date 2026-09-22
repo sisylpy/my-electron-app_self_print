@@ -765,7 +765,7 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     try {
       const data = strictPayload(input || {}, [
         'customerId', 'departmentId', 'sampleDate', 'sourceType', 'sourceName',
-        'sourceText', 'imageBase64', 'items',
+        'sourceText', 'imageBase64', 'recognitionMode', 'items',
       ]);
       data.customerId = requirePositiveId(data.customerId, 'customerId');
       data.departmentId = requirePositiveId(data.departmentId, 'departmentId');
@@ -780,8 +780,14 @@ function createDispatchGateway({ app, safeStorage, axios }) {
       if (data.sourceText !== undefined && (typeof data.sourceText !== 'string' || data.sourceText.length > 20_000)) {
         throw new Error('粘贴内容过长');
       }
-      if (data.imageBase64 !== undefined && (typeof data.imageBase64 !== 'string' || data.imageBase64.length > 10_500_000)) {
+      if (data.imageBase64 !== undefined && (typeof data.imageBase64 !== 'string' || data.imageBase64.length > 14_000_000)) {
         throw new Error('图片过大');
+      }
+      if (data.sourceType === 'IMAGE') {
+        data.recognitionMode = String(data.recognitionMode || 'COMPLEX').toUpperCase();
+        if (!['FAST', 'COMPLEX'].includes(data.recognitionMode)) throw new Error('图片识别模式无效');
+      } else {
+        delete data.recognitionMode;
       }
       if (data.items !== undefined) {
         if (!Array.isArray(data.items) || data.items.length < 1 || data.items.length > 500) {

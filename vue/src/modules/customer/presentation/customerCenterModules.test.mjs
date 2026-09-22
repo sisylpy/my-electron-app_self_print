@@ -9,6 +9,10 @@ const read = (relativePath) => fs.readFileSync(path.join(customerRoot, relativeP
 
 const customerCenter = read('views/CustomerCenter.vue');
 const customerApi = read('api/customerApi.js');
+const dispatchGateway = fs.readFileSync(
+  path.resolve(customerRoot, '../../../../src/dispatch/dispatch-gateway.js'),
+  'utf8',
+);
 const routes = read('routes.js');
 const readme = read('README.md');
 const ocrTrainingPanel = read('components/CustomerOcrTrainingPanel.vue');
@@ -35,7 +39,14 @@ assert.match(ocrTrainingPanel, /Excel 粘贴/);
 assert.match(ocrTrainingPanel, /样本原始日期/);
 assert.match(ocrTrainingPanel, /KEEP_EXISTING/);
 assert.match(ocrTrainingPanel, /REPLACE/);
+assert.match(ocrTrainingPanel, /import ImageUpload from '@\/components\/upload\/ImageUpload\.vue'/);
+assert.match(ocrTrainingPanel, /import ImageCropperModal from '@\/components\/ImageCropperModal\.vue'/);
+assert.match(ocrTrainingPanel, /createImageTask\(dataUrl, 'FAST'\)/);
+assert.match(ocrTrainingPanel, /createImageTask\(dataUrl, 'COMPLEX'\)/);
+assert.doesNotMatch(ocrTrainingPanel, /class="source-editor image-picker"/);
 assert.match(customerApi, /listCustomerOcrTasks/);
 assert.match(customerApi, /completeCustomerOcrTraining/);
+assert.match(dispatchGateway, /'imageBase64', 'recognitionMode', 'items'/);
+assert.match(dispatchGateway, /\['FAST', 'COMPLEX'\]/);
 
 console.log('Customer center module regression tests passed.');
