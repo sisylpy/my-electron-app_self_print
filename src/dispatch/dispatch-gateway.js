@@ -826,6 +826,26 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     }
   }
 
+  async function deleteCustomerOcrTrainingItem(input) {
+    try {
+      const data = strictPayload(input || {}, ['taskId', 'itemId']);
+      const taskId = requirePositiveId(data.taskId, 'taskId');
+      const itemId = requirePositiveId(data.itemId, 'itemId');
+      return request('DELETE', `customer-ocr-training/tasks/${taskId}/items/${itemId}`);
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function deleteCustomerOcrTraining(input) {
+    try {
+      const taskId = requirePositiveId(input?.taskId, 'taskId');
+      return request('DELETE', `customer-ocr-training/tasks/${taskId}`);
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
   async function completeCustomerOcrTraining(input) {
     try {
       const taskId = requirePositiveId(input?.taskId, 'taskId');
@@ -980,6 +1000,8 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     loadCustomerOcrTask,
     createCustomerOcrTraining,
     updateCustomerOcrTrainingItem,
+    deleteCustomerOcrTrainingItem,
+    deleteCustomerOcrTraining,
     completeCustomerOcrTraining,
     loadSalesAnalysisOverview,
     loadSalesAnalysisCategory,

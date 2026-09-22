@@ -76,33 +76,113 @@
             </div>
           </header>
 
-          <div v-if="detail.imageBase64" class="source-preview">
-            <img :src="detail.imageBase64" alt="预训练原始订单图片" />
-          </div>
-          <details v-if="detail.sourceText" class="source-text">
-            <summary>查看识别原文</summary>
-            <pre>{{ detail.sourceText }}</pre>
-          </details>
-
-          <div class="items-toolbar">
-            <div>
-              <strong>训练明细</strong>
-              <span v-if="detail.scene === 'PRETRAINING' && !detail.readOnly">
-                每一条都需要选择商品并确认；冲突不会自动覆盖。
+          <div
+            v-if="detail.scene === 'PRETRAINING' && detail.sourceType === 'IMAGE' && detail.imageBase64"
+            class="formal-detail-workspace"
+          >
+            <div v-if="activeTrainingConflict" class="training-conflict-bar">
+              <span>
+                “{{ activeTrainingConflict.originalGoodsName }}”原记忆为
+                <b>{{ activeTrainingConflict.existingGoodsName }}</b>，本次选择
+                <b>{{ activeTrainingConflict.matchedGoodsName }}</b>。
               </span>
-              <span v-else>该任务仅供查看。</span>
+              <button type="button" @click="confirmItem(activeTrainingConflict, 'KEEP_EXISTING')">保留原记忆</button>
+              <button class="danger-soft" type="button" @click="confirmItem(activeTrainingConflict, 'REPLACE')">用本次结果替换</button>
             </div>
-            <button
-              v-if="detail.scene === 'PRETRAINING' && !detail.readOnly"
-              class="complete-button"
-              type="button"
-              :disabled="completing || !canComplete"
-              @click="completeTask"
-            >{{ completing ? '正在完成…' : '完成训练' }}</button>
+            <ImageUpload
+              :source="detail.readOnly ? 'taskOrder' : 'placeOrder'"
+              :new-task-only="true"
+              :dep-id="detail.departmentId"
+              :task-type="1"
+              :current-task="trainingCurrentTask"
+              :has-cache="true"
+              :has-running-task="false"
+              :uploaded-image-file="trainingImageFile"
+              :image-preview="detail.imageBase64"
+              :image-scale="trainingImageScale"
+              :image-translate-x="trainingImageTranslateX"
+              :image-translate-y="trainingImageTranslateY"
+              :is-dragging="trainingImageDragging"
+              :order-items="trainingOrderItems"
+              :current-reading-text="trainingTtsState.currentText"
+              :current-reading-index="trainingTtsState.currentIndex"
+              :tts-playing="trainingTtsState.isTTSPlaying"
+              :tts-loading="trainingTtsState.isTTSLoading"
+              :tts-stopped-index="trainingTtsState.stoppedIndex"
+              @reset-transform="resetTrainingImageTransform"
+              @zoom-in="zoomTrainingImage(0.1)"
+              @zoom-out="zoomTrainingImage(-0.1)"
+              @start-drag="startTrainingImageDrag"
+              @on-drag="dragTrainingImage"
+              @end-drag="endTrainingImageDrag"
+              @wheel="wheelTrainingImage"
+              @re-upload="deleteTrainingTask"
+              @show-fix-items="showTrainingAdjustmentNotice"
+              @finish-task="completeTask"
+              @read-order-list="readTrainingOrders"
+              @pause-reading="pauseTrainingOrders"
+              @restart-reading="restartTrainingOrders"
+              @stop-reading="stopTrainingOrders"
+              @continue-reading="continueTrainingOrders"
+            >
+              <template #order-list>
+                <OrderEditor
+                  ref="trainingOrderEditor"
+                  :order-items="trainingOrderItems"
+                  :dis-id="distributerId"
+                  source-type="image"
+                  :show-matched-goods="trainingShowMatchedGoods"
+                  :order-arr-index="trainingOrderArrIndex"
+                  :str-arr="trainingSearchResults"
+                  :nx-arr="[]"
+                  :is-valid-order-quantity-and-standard="isTrainingOrderValid"
+                  empty-message="图片中没有识别到订单明细"
+                  @tts-state="onTrainingTtsState"
+                  @goods-name-input="searchTrainingGoodsFromEditor"
+                  @goods-name-focus="focusTrainingOrder"
+                  @quantity-input="updateTrainingOrderField($event, 'quantity')"
+                  @standard-change="updateTrainingOrderField($event, 'standard')"
+                  @remark-input="updateTrainingOrderRemark"
+                  @update-order="editTrainingOrder"
+                  @save-new-goods="searchTrainingGoodsFromEditor"
+                  @delete-order="deleteTrainingItem"
+                  @toggle-matched-goods="toggleTrainingMatchedGoods"
+                  @close-all-matched-goods="closeTrainingGoodsMenus"
+                  @select-matched-goods="selectTrainingMatchedGoods"
+                  @close-str="closeTrainingGoodsSearch"
+                  @select-search-result="selectTrainingSearchResult"
+                  @add-new-order-before="showTrainingAddNotice"
+                  @download-goods-nx="showTrainingAddNotice"
+                />
+              </template>
+            </ImageUpload>
           </div>
 
-          <div v-if="!detail.items?.length" class="state-box">任务中暂无明细</div>
-          <div v-else class="items-list">
+          <template v-else>
+            <details v-if="detail.sourceText" class="source-text">
+              <summary>查看识别原文</summary>
+              <pre>{{ detail.sourceText }}</pre>
+            </details>
+
+            <div class="items-toolbar">
+              <div>
+                <strong>训练明细</strong>
+                <span v-if="detail.scene === 'PRETRAINING' && !detail.readOnly">
+                  每一条都需要选择商品并确认；冲突不会自动覆盖。
+                </span>
+                <span v-else>该任务仅供查看。</span>
+              </div>
+              <button
+                v-if="detail.scene === 'PRETRAINING' && !detail.readOnly"
+                class="complete-button"
+                type="button"
+                :disabled="completing || !canComplete"
+                @click="completeTask"
+              >{{ completing ? '正在完成…' : '完成训练' }}</button>
+            </div>
+
+            <div v-if="!detail.items?.length" class="state-box">任务中暂无明细</div>
+            <div v-else class="items-list">
             <article
               v-for="(item, index) in detail.items"
               :key="item.itemId"
@@ -168,7 +248,8 @@
                 匹配商品：<b>{{ item.matchedGoodsName }}</b>
               </div>
             </article>
-          </div>
+            </div>
+          </template>
         </template>
       </section>
     </div>
@@ -267,6 +348,7 @@
 import customerApi from '../api/customerApi';
 import ImageCropperModal from '@/components/ImageCropperModal.vue';
 import ImageUpload from '@/components/upload/ImageUpload.vue';
+import OrderEditor from '@/modules/order/components/OrderEditor.vue';
 
 function todayText() {
   const now = new Date();
@@ -285,7 +367,7 @@ function leafDepartments(rows) {
 
 export default {
   name: 'CustomerOcrTrainingPanel',
-  components: { ImageCropperModal, ImageUpload },
+  components: { ImageCropperModal, ImageUpload, OrderEditor },
   props: {
     customer: { type: Object, required: true },
     distributerId: { type: [Number, String], required: true },
@@ -314,6 +396,22 @@ export default {
       searchingItemId: null,
       savingItemId: null,
       completing: false,
+      deletingTask: false,
+      trainingOrderArrIndex: -1,
+      trainingSearchResults: [],
+      trainingShowMatchedGoods: {},
+      trainingTtsState: {
+        isTTSPlaying: false,
+        isTTSLoading: false,
+        stoppedIndex: -1,
+        currentText: '',
+        currentIndex: -1,
+      },
+      trainingImageScale: 1,
+      trainingImageTranslateX: 0,
+      trainingImageTranslateY: 0,
+      trainingImageDragging: false,
+      trainingImageDragStart: null,
       sceneOptions: [
         { value: 'ALL', label: '全部' },
         { value: 'PRETRAINING', label: '预训练' },
@@ -353,6 +451,57 @@ export default {
       return Number(this.detail.confirmedItems) === Number(this.detail.totalItems)
         && Number(this.detail.conflictItems || 0) === 0;
     },
+    activeTrainingConflict() {
+      return this.detail?.items?.find((item) => item.statusCode === 'CONFLICT') || null;
+    },
+    trainingImageFile() {
+      if (!this.detail?.imageBase64) return null;
+      return { name: this.detail.sourceName || '训练订单图片', type: 'image/*', size: 0 };
+    },
+    trainingCurrentTask() {
+      if (!this.detail) return null;
+      const total = Number(this.detail.totalItems || 0);
+      const confirmed = Number(this.detail.confirmedItems || 0);
+      const pending = this.detail.readOnly || !this.canComplete ? Math.max(1, total - confirmed) : 0;
+      return {
+        nxOcrTaskId: this.detail.taskId,
+        nxOcrTaskFileName: this.detail.sourceName || 'OCR预训练',
+        nxOcrTaskStatus: 1,
+        nxOcrTaskTotalOrders: total,
+        nxOcrTaskCompletedOrders: confirmed,
+        nxOcrTaskPendingOrders: pending,
+      };
+    },
+    trainingOrderItems() {
+      return (this.detail?.items || []).map((item) => {
+        const editable = !this.detail.readOnly && (item.statusCode !== 'CONFIRMED' || item._editing);
+        const matchedGoods = item.matchedDisGoodsId ? {
+          nxDistributerGoodsId: item.matchedDisGoodsId,
+          nxDgGoodsName: item.matchedGoodsName,
+          nxDgGoodsStandardname: item.standard || '',
+        } : null;
+        const suggestedGoods = item.suggestedDisGoodsId ? [{
+          nxDistributerGoodsId: item.suggestedDisGoodsId,
+          nxDgGoodsName: item.suggestedGoodsName,
+          nxDgGoodsStandardname: item.standard || '',
+        }] : [];
+        return {
+          ...item,
+          _trainingItem: item,
+          nxDoGoodsName: item.originalGoodsName || '',
+          nxDoGoodsNameOriginal: item.originalGoodsName || '',
+          nxDoQuantity: item.quantity || '',
+          nxDoStandard: item.standard || '',
+          nxDoRemark: item.remark || '',
+          nxDoAddRemark: Boolean(item.remark),
+          nxDoStatus: editable ? -2 : 0,
+          nxDoDisGoodsId: item.matchedDisGoodsId || null,
+          nxDistributerGoodsEntity: matchedGoods,
+          nxDistributerGoodsEntityList: editable ? suggestedGoods : [],
+          nxGoodsEntities: [],
+        };
+      });
+    },
   },
   watch: {
     'customer.nxDepartmentId': {
@@ -362,6 +511,9 @@ export default {
         this.loadTasks();
       },
     },
+  },
+  beforeUnmount() {
+    this.stopTrainingOrders();
   },
   methods: {
     emptyForm() {
@@ -375,9 +527,11 @@ export default {
       };
     },
     resetForCustomer() {
+      this.stopTrainingOrders();
       this.tasks = [];
       this.detail = null;
       this.selectedKey = '';
+      this.resetTrainingWorkspaceState();
       this.form = this.emptyForm();
       this.form.departmentId = this.departments[0]?.nxDepartmentId || null;
     },
@@ -401,6 +555,8 @@ export default {
     async selectTask(task, force = false) {
       const key = `${task.scene}-${task.taskId}`;
       if (!force && this.selectedKey === key && this.detail) return;
+      this.stopTrainingOrders();
+      this.resetTrainingWorkspaceState();
       this.selectedKey = key;
       this.detailLoading = true;
       this.detailError = '';
@@ -564,6 +720,195 @@ export default {
         this.savingItemId = null;
       }
     },
+    resetTrainingWorkspaceState() {
+      this.trainingOrderArrIndex = -1;
+      this.trainingSearchResults = [];
+      this.trainingShowMatchedGoods = {};
+      this.trainingTtsState = {
+        isTTSPlaying: false,
+        isTTSLoading: false,
+        stoppedIndex: -1,
+        currentText: '',
+        currentIndex: -1,
+      };
+      this.resetTrainingImageTransform();
+    },
+    trainingItemFromPayload(payload) {
+      return payload?.item?._trainingItem || payload?.item || null;
+    },
+    isTrainingOrderValid() {
+      return true;
+    },
+    focusTrainingOrder({ orderIndex }) {
+      this.trainingOrderArrIndex = orderIndex;
+    },
+    updateTrainingOrderField(payload, field) {
+      const item = this.trainingItemFromPayload(payload);
+      if (!item || this.detail?.readOnly) return;
+      item[field] = payload.value == null ? '' : String(payload.value);
+    },
+    updateTrainingOrderRemark(payload) {
+      const item = this.trainingItemFromPayload(payload);
+      if (!item || this.detail?.readOnly) return;
+      if (payload.field === 'nxDoRemark') item.remark = payload.value == null ? '' : String(payload.value);
+    },
+    async searchTrainingGoodsFromEditor(payload) {
+      const item = this.trainingItemFromPayload(payload);
+      if (!item || this.detail?.readOnly) return;
+      const keyword = String(payload?.value || payload?.goodsName || payload?.item?.nxDoGoodsName
+        || item.originalGoodsName || '').trim();
+      if (!keyword) return;
+      item.originalGoodsName = keyword;
+      this.trainingOrderArrIndex = payload.orderIndex;
+      this.searchingItemId = item.itemId;
+      try {
+        const response = await customerApi.searchDistributerGoods(this.distributerId, keyword);
+        if (response?.data?.code !== 0) throw new Error(response?.data?.msg || '商品搜索失败');
+        this.trainingSearchResults = response.data.data?.disArr || [];
+        if (!this.trainingSearchResults.length) {
+          this.$emit('notice', '没有找到配送商商品，请先在商品中心建立商品', 'error');
+        }
+      } catch (error) {
+        this.trainingSearchResults = [];
+        this.$emit('notice', error?.message || '商品搜索失败', 'error');
+      } finally {
+        this.searchingItemId = null;
+      }
+    },
+    async selectTrainingGoods(item, goods) {
+      if (!item || !goods || this.detail?.readOnly) return;
+      item.matchedDisGoodsId = goods.nxDistributerGoodsId;
+      item.matchedGoodsName = goods.nxDgGoodsName;
+      this.closeTrainingGoodsMenus();
+      await this.confirmItem(item);
+    },
+    selectTrainingMatchedGoods({ item, goodsIndex }) {
+      const trainingItem = this.trainingItemFromPayload({ item });
+      const goods = item?.nxDistributerGoodsEntityList?.[goodsIndex];
+      return this.selectTrainingGoods(trainingItem, goods);
+    },
+    selectTrainingSearchResult({ goods, orderIndex }) {
+      const trainingItem = this.trainingOrderItems[orderIndex]?._trainingItem;
+      return this.selectTrainingGoods(trainingItem, goods);
+    },
+    toggleTrainingMatchedGoods(orderIndex) {
+      this.trainingShowMatchedGoods = {
+        ...this.trainingShowMatchedGoods,
+        [orderIndex]: !this.trainingShowMatchedGoods[orderIndex],
+      };
+      this.trainingOrderArrIndex = orderIndex;
+    },
+    closeTrainingGoodsSearch() {
+      this.trainingSearchResults = [];
+      this.trainingOrderArrIndex = -1;
+    },
+    closeTrainingGoodsMenus() {
+      this.trainingShowMatchedGoods = {};
+      this.closeTrainingGoodsSearch();
+    },
+    editTrainingOrder(payload) {
+      const item = this.trainingItemFromPayload(payload);
+      if (!item || this.detail?.readOnly) return;
+      item._editing = true;
+      this.trainingOrderArrIndex = payload.orderIndex;
+    },
+    async deleteTrainingItem(payload) {
+      const item = this.trainingItemFromPayload(payload);
+      if (!item || this.detail?.readOnly) return;
+      try {
+        const result = await customerApi.deleteCustomerOcrTrainingItem(this.detail.taskId, item.itemId);
+        if (!result?.ok) throw new Error(result?.message || '删除训练明细失败');
+        this.detail = result.data;
+        this.closeTrainingGoodsMenus();
+        await this.refreshTaskSummary();
+        this.$emit('notice', '训练明细已删除', 'success');
+      } catch (error) {
+        this.$emit('notice', error?.message || '删除训练明细失败', 'error');
+      }
+    },
+    async deleteTrainingTask() {
+      if (!this.detail || this.detail.readOnly || this.deletingTask) return;
+      if (!window.confirm('确定删除这条预训练任务吗？删除后无法恢复。')) return;
+      this.deletingTask = true;
+      try {
+        const result = await customerApi.deleteCustomerOcrTraining(this.detail.taskId);
+        if (!result?.ok) throw new Error(result?.message || '删除预训练任务失败');
+        this.stopTrainingOrders();
+        this.detail = null;
+        this.selectedKey = '';
+        await this.loadTasks();
+        this.$emit('notice', '预训练任务已删除', 'success');
+      } catch (error) {
+        this.$emit('notice', error?.message || '删除预训练任务失败', 'error');
+      } finally {
+        this.deletingTask = false;
+      }
+    },
+    showTrainingAdjustmentNotice() {
+      this.$emit('notice', '训练任务请在列表中逐条修改并确认商品', 'error');
+    },
+    showTrainingAddNotice() {
+      this.$emit('notice', '新增商品请先到商品中心建立，再回到训练任务中搜索确认', 'error');
+    },
+    onTrainingTtsState(payload) {
+      const editor = this.$refs.trainingOrderEditor;
+      this.trainingTtsState = {
+        isTTSPlaying: Boolean(payload?.isTTSPlaying),
+        isTTSLoading: Boolean(payload?.isTTSLoading),
+        stoppedIndex: payload?.stoppedIndex ?? -1,
+        currentText: editor?.currentReadingText || '',
+        currentIndex: editor?.currentReadingIndex ?? -1,
+      };
+    },
+    readTrainingOrders() {
+      this.$refs.trainingOrderEditor?.readOrderList?.();
+    },
+    pauseTrainingOrders() {
+      this.$refs.trainingOrderEditor?.pauseReading?.();
+    },
+    restartTrainingOrders() {
+      this.closeTrainingGoodsMenus();
+      this.$refs.trainingOrderEditor?.restartReading?.();
+    },
+    stopTrainingOrders() {
+      this.$refs.trainingOrderEditor?.stopReading?.();
+    },
+    continueTrainingOrders() {
+      this.$refs.trainingOrderEditor?.continueReading?.();
+    },
+    resetTrainingImageTransform() {
+      this.trainingImageScale = 1;
+      this.trainingImageTranslateX = 0;
+      this.trainingImageTranslateY = 0;
+      this.trainingImageDragging = false;
+      this.trainingImageDragStart = null;
+    },
+    zoomTrainingImage(delta) {
+      this.trainingImageScale = Math.min(3, Math.max(0.3, this.trainingImageScale + delta));
+    },
+    wheelTrainingImage(event) {
+      this.zoomTrainingImage(event?.deltaY < 0 ? 0.1 : -0.1);
+    },
+    startTrainingImageDrag(event) {
+      this.trainingImageDragging = true;
+      this.trainingImageDragStart = {
+        x: event.clientX,
+        y: event.clientY,
+        translateX: this.trainingImageTranslateX,
+        translateY: this.trainingImageTranslateY,
+      };
+    },
+    dragTrainingImage(event) {
+      if (!this.trainingImageDragging || !this.trainingImageDragStart) return;
+      this.trainingImageTranslateX = this.trainingImageDragStart.translateX
+        + event.clientX - this.trainingImageDragStart.x;
+      this.trainingImageTranslateY = this.trainingImageDragStart.translateY
+        + event.clientY - this.trainingImageDragStart.y;
+    },
+    endTrainingImageDrag() {
+      this.trainingImageDragging = false;
+      this.trainingImageDragStart = null;
+    },
     async refreshTaskSummary() {
       const result = await customerApi.listCustomerOcrTasks(this.customer.nxDepartmentId);
       if (result?.ok) this.tasks = result.data?.tasks || [];
@@ -634,6 +979,14 @@ button { cursor: pointer; }
 .progress-summary b { font-size: 26px; color: #0b8d50; }
 .progress-summary span { font-size: 12px; color: #78857e; }
 .progress-summary em { margin-top: 4px; color: #b43d36; font-size: 12px; font-style: normal; }
+.formal-detail-workspace { height: max(560px, calc(100vh - 320px)); min-height: 0; padding-top: 18px; display: flex; flex-direction: column; }
+.formal-detail-workspace :deep(.upload-section) { flex: 1; min-height: 0; }
+.formal-detail-workspace :deep(.btn-outline-info),
+.formal-detail-workspace :deep(button[title="之前添加订单"]) { display: none !important; }
+.training-conflict-bar { flex-shrink: 0; display: flex; align-items: center; gap: 9px; margin-bottom: 10px; border: 1px solid #efb5b0; border-radius: 8px; padding: 9px 11px; background: #fff3f2; color: #8d3934; font-size: 12px; }
+.training-conflict-bar span { flex: 1; }
+.training-conflict-bar button { border: 1px solid #dfaaa6; border-radius: 6px; padding: 6px 10px; background: white; color: #8d3934; }
+.training-conflict-bar .danger-soft { background: #c94e47; color: white; border-color: #c94e47; }
 .source-preview { margin: 18px 0; border: 1px solid #e0e9e4; border-radius: 10px; padding: 10px; background: #f8faf9; }
 .source-preview img { display: block; max-width: 100%; max-height: 340px; margin: auto; object-fit: contain; }
 .source-text { margin: 15px 0; color: #617069; }

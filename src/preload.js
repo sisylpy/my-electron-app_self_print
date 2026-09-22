@@ -162,6 +162,9 @@ const electronAPI = Object.freeze({
     create: (payload) => ipcRenderer.invoke('customer-ocr-training-create', payload),
     updateItem: (taskId, itemId, payload) =>
       ipcRenderer.invoke('customer-ocr-training-update-item', { taskId, itemId, payload }),
+    deleteItem: (taskId, itemId) =>
+      ipcRenderer.invoke('customer-ocr-training-delete-item', { taskId, itemId }),
+    deleteTask: (taskId) => ipcRenderer.invoke('customer-ocr-training-delete', { taskId }),
     complete: (taskId) => ipcRenderer.invoke('customer-ocr-training-complete', { taskId }),
   }),
 

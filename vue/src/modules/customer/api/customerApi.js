@@ -142,6 +142,12 @@ export default {
   updateCustomerOcrTrainingItem(taskId, itemId, payload) {
     return trainingBridge('updateItem', taskId, itemId, payload);
   },
+  deleteCustomerOcrTrainingItem(taskId, itemId) {
+    return trainingBridge('deleteItem', taskId, itemId);
+  },
+  deleteCustomerOcrTraining(taskId) {
+    return trainingBridge('deleteTask', taskId);
+  },
   completeCustomerOcrTraining(taskId) {
     return trainingBridge('complete', taskId);
   },

@@ -753,6 +753,14 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().updateCustomerOcrTrainingItem(command);
   });
+  ipcMain.handle('customer-ocr-training-delete-item', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().deleteCustomerOcrTrainingItem(command);
+  });
+  ipcMain.handle('customer-ocr-training-delete', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().deleteCustomerOcrTraining(command);
+  });
   ipcMain.handle('customer-ocr-training-complete', async (event, command) => {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().completeCustomerOcrTraining(command);
