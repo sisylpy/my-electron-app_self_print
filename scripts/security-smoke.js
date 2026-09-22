@@ -26,6 +26,7 @@ const orderWriteGateway = read('src/order/order-write-gateway.js');
 const dispatchGateway = read('src/dispatch/dispatch-gateway.js');
 const placeOrder = read('vue/src/components/PlaceOrder.vue');
 const historyOrders = read('vue/src/components/HistoryOrders.vue');
+const customerOcrTraining = read('vue/src/modules/customer/components/CustomerOcrTrainingPanel.vue');
 const publicConfig = read('vue/src/config/index.js');
 const packageJson = JSON.parse(read('package.json'));
 const mcpConfig = JSON.parse(read('src/mcp-config.json'));
@@ -47,6 +48,14 @@ check(preload.includes('customerHistory: Object.freeze')
   && historyOrders.includes('window.electronAPI?.customerHistory?.loadMonths'),
   '客户历史订单通过主进程白名单网关读取');
 check(!historyOrders.includes('Authorization'), '客户历史订单页面不接触登录令牌');
+check(preload.includes('customerOcrTraining: Object.freeze')
+  && main.includes("ipcMain.handle('customer-ocr-training-create'")
+  && dispatchGateway.includes("request('POST', 'customer-ocr-training/tasks'")
+  && !preload.includes('customerOcrTrainingRequest:'),
+  '客户OCR训练仅通过主进程固定白名单动作访问');
+check(!customerOcrTraining.includes('Authorization')
+  && !customerOcrTraining.includes('accessToken'),
+  '客户OCR训练页面不接触安全会话令牌');
 check(preload.includes('salesAnalysis: Object.freeze')
   && main.includes("ipcMain.handle('sales-analysis-load-overview'")
   && dispatchGateway.includes("request('GET', 'sales-analysis/overview'")

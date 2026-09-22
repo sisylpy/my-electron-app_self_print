@@ -109,6 +109,7 @@ function createDispatchGateway({ app, safeStorage, axios }) {
         data: options.data,
         params: options.params,
         headers,
+        timeout: options.timeout || undefined,
       });
       const body = response.data && typeof response.data === 'object' ? response.data : {};
       if (response.status >= 200 && response.status < 300 && Number(body.code) === 0) {
@@ -737,6 +738,97 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     });
   }
 
+  async function listCustomerOcrTasks(input) {
+    try {
+      const customerId = requirePositiveId(input?.customerId, 'customerId');
+      return request('GET', 'customer-ocr-training/tasks', { params: { customerId } });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function loadCustomerOcrTask(input) {
+    try {
+      const data = strictPayload(input || {}, ['scene', 'taskId']);
+      const scene = String(data.scene || '').toUpperCase();
+      if (!['FORMAL', 'PRETRAINING'].includes(scene)) throw new Error('任务类型无效');
+      const taskId = requirePositiveId(data.taskId, 'taskId');
+      return request('GET', `customer-ocr-training/tasks/${scene}/${taskId}`, {
+        timeout: 60_000,
+      });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function createCustomerOcrTraining(input) {
+    try {
+      const data = strictPayload(input || {}, [
+        'customerId', 'departmentId', 'sampleDate', 'sourceType', 'sourceName',
+        'sourceText', 'imageBase64', 'items',
+      ]);
+      data.customerId = requirePositiveId(data.customerId, 'customerId');
+      data.departmentId = requirePositiveId(data.departmentId, 'departmentId');
+      if (typeof data.sampleDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data.sampleDate)) {
+        throw new Error('样本日期格式无效');
+      }
+      data.sourceType = String(data.sourceType || '').toUpperCase();
+      if (!['PASTE', 'IMAGE', 'EXCEL_PASTE'].includes(data.sourceType)) throw new Error('数据来源无效');
+      if (data.sourceName !== undefined && (typeof data.sourceName !== 'string' || data.sourceName.length > 255)) {
+        throw new Error('来源名称过长');
+      }
+      if (data.sourceText !== undefined && (typeof data.sourceText !== 'string' || data.sourceText.length > 20_000)) {
+        throw new Error('粘贴内容过长');
+      }
+      if (data.imageBase64 !== undefined && (typeof data.imageBase64 !== 'string' || data.imageBase64.length > 10_500_000)) {
+        throw new Error('图片过大');
+      }
+      if (data.items !== undefined) {
+        if (!Array.isArray(data.items) || data.items.length < 1 || data.items.length > 500) {
+          throw new Error('Excel明细数量无效');
+        }
+        data.items = data.items.map((item) => strictPayload(item, [
+          'rawText', 'goodsName', 'quantity', 'standard', 'remark',
+        ]));
+      }
+      return request('POST', 'customer-ocr-training/tasks', { data, timeout: 180_000 });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function updateCustomerOcrTrainingItem(input) {
+    try {
+      const envelope = strictPayload(input || {}, ['taskId', 'itemId', 'payload']);
+      const taskId = requirePositiveId(envelope.taskId, 'taskId');
+      const itemId = requirePositiveId(envelope.itemId, 'itemId');
+      const data = strictPayload(envelope.payload || {}, [
+        'rawText', 'goodsName', 'quantity', 'standard', 'remark',
+        'matchedDisGoodsId', 'conflictResolution',
+      ]);
+      data.matchedDisGoodsId = requirePositiveId(data.matchedDisGoodsId, 'matchedDisGoodsId');
+      if (typeof data.goodsName !== 'string' || !data.goodsName.trim() || data.goodsName.length > 255) {
+        throw new Error('商品名称无效');
+      }
+      if (data.conflictResolution !== undefined
+          && !['', 'KEEP_EXISTING', 'REPLACE'].includes(String(data.conflictResolution))) {
+        throw new Error('冲突处理方式无效');
+      }
+      return request('PUT', `customer-ocr-training/tasks/${taskId}/items/${itemId}`, { data });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function completeCustomerOcrTraining(input) {
+    try {
+      const taskId = requirePositiveId(input?.taskId, 'taskId');
+      return request('POST', `customer-ocr-training/tasks/${taskId}/complete`, { data: {} });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
   async function loadSalesAnalysisOverview(input) {
     try {
       return request('GET', 'sales-analysis/overview', {
@@ -878,6 +970,11 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     previewRouteReassignment,
     confirmRouteReassignment,
     loadCustomerHistory,
+    listCustomerOcrTasks,
+    loadCustomerOcrTask,
+    createCustomerOcrTraining,
+    updateCustomerOcrTrainingItem,
+    completeCustomerOcrTraining,
     loadSalesAnalysisOverview,
     loadSalesAnalysisCategory,
     loadSalesAnalysisProductCustomers,

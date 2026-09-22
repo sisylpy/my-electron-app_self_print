@@ -11,6 +11,19 @@ function formData(values) {
 
 const quiet = { showLoading: false };
 
+function trainingBridge(method, ...args) {
+  const bridge = window.electronAPI?.customerOcrTraining;
+  if (!bridge || typeof bridge[method] !== 'function') {
+    return Promise.resolve({
+      ok: false,
+      status: 503,
+      errorCode: 'DESKTOP_SESSION_UNAVAILABLE',
+      message: '客户OCR训练需要在桌面端安全会话中使用',
+    });
+  }
+  return bridge[method](...args);
+}
+
 export default {
   listCustomers(distributerId, responsibleUserId) {
     return axiosInstance.get(`nxdepartment/disGetAllCustomer/${distributerId}`, {
@@ -116,6 +129,21 @@ export default {
       formData({ disId: distributerId, searchStr }),
       { ...quiet, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
     );
+  },
+  listCustomerOcrTasks(customerId) {
+    return trainingBridge('list', customerId);
+  },
+  getCustomerOcrTask(scene, taskId) {
+    return trainingBridge('detail', scene, taskId);
+  },
+  createCustomerOcrTraining(payload) {
+    return trainingBridge('create', payload);
+  },
+  updateCustomerOcrTrainingItem(taskId, itemId, payload) {
+    return trainingBridge('updateItem', taskId, itemId, payload);
+  },
+  completeCustomerOcrTraining(taskId) {
+    return trainingBridge('complete', taskId);
   },
   updateGoodsRelation(relationId, data) {
     return axiosInstance.post(`nxdepartmentdisgoodsstandard/relation/${relationId}`, data);

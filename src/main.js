@@ -737,6 +737,26 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().loadCustomerHistory(command);
   });
+  ipcMain.handle('customer-ocr-training-list', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().listCustomerOcrTasks(command);
+  });
+  ipcMain.handle('customer-ocr-training-detail', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadCustomerOcrTask(command);
+  });
+  ipcMain.handle('customer-ocr-training-create', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().createCustomerOcrTraining(command);
+  });
+  ipcMain.handle('customer-ocr-training-update-item', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().updateCustomerOcrTrainingItem(command);
+  });
+  ipcMain.handle('customer-ocr-training-complete', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().completeCustomerOcrTraining(command);
+  });
   ipcMain.handle('sales-analysis-load-overview', async (event, range) => {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().loadSalesAnalysisOverview(range);

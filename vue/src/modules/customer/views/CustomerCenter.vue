@@ -97,6 +97,13 @@
             :distributer-id="distributerId"
             :operator-user-id="operatorUserId"
           />
+          <CustomerOcrTrainingPanel
+            v-else-if="activeTab === 'ocr'"
+            :key="`ocr-${customer.nxDepartmentId}`"
+            :customer="customer"
+            :distributer-id="distributerId"
+            @notice="showNotice"
+          />
           <div v-else class="history-module">
             <div class="history-heading">
               <div><h3>客户历史订单</h3><p>查看历史订单、下载 Excel，或按打印中心的配送单格式补打。</p></div>
@@ -220,6 +227,7 @@ import CustomerGoodsPriceDrawer from '../components/CustomerGoodsPriceDrawer.vue
 import CustomerAfterSalesPanel from '../components/CustomerAfterSalesPanel.vue';
 import CustomerUsersDrawer from '../components/CustomerUsersDrawer.vue';
 import CustomerDepartmentTransferDrawer from '../components/CustomerDepartmentTransferDrawer.vue';
+import CustomerOcrTrainingPanel from '../components/CustomerOcrTrainingPanel.vue';
 
 const historyPrintComponentLoaders = {
   ApplyPanel: () => import('@/components/Applys/ApplyPanel.vue'),
@@ -249,6 +257,7 @@ export default {
     CustomerAfterSalesPanel,
     CustomerUsersDrawer,
     CustomerDepartmentTransferDrawer,
+    CustomerOcrTrainingPanel,
   },
   data() {
     return {
@@ -267,6 +276,7 @@ export default {
         { key: 'profile', icon: '客', label: '客户资料', description: '基础与配送信息' },
         { key: 'goods', icon: '货', label: '客户商品', description: '商品与专属要求' },
         { key: 'afterSales', icon: '售', label: '售后问题', description: '按整家门店汇总' },
+        { key: 'ocr', icon: '训', label: 'OCR任务', description: '正式任务与预训练' },
         { key: 'history', icon: '单', label: '历史订单', description: '订单与下载记录' },
       ],
       editDrawerOpen: false,

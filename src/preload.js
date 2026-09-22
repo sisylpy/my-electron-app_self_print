@@ -155,6 +155,16 @@ const electronAPI = Object.freeze({
       ipcRenderer.invoke('customer-history-load-months', { departmentId }),
   }),
 
+  // 客户OCR预训练通过主进程安全会话访问；页面不能提交配送商或操作人身份。
+  customerOcrTraining: Object.freeze({
+    list: (customerId) => ipcRenderer.invoke('customer-ocr-training-list', { customerId }),
+    detail: (scene, taskId) => ipcRenderer.invoke('customer-ocr-training-detail', { scene, taskId }),
+    create: (payload) => ipcRenderer.invoke('customer-ocr-training-create', payload),
+    updateItem: (taskId, itemId, payload) =>
+      ipcRenderer.invoke('customer-ocr-training-update-item', { taskId, itemId, payload }),
+    complete: (taskId) => ipcRenderer.invoke('customer-ocr-training-complete', { taskId }),
+  }),
+
   // 正式包只暴露扫码轮询及两个固定订单读取动作；会话 Cookie 留在主进程。
   orderSession: Object.freeze({
     pollLogin: (sessionId) => ipcRenderer.invoke('order-session-poll-login', sessionId),
