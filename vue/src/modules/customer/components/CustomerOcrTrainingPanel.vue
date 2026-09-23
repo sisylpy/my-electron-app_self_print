@@ -46,13 +46,22 @@
           </button>
         </div>
       </aside>
+    </div>
 
-      <section class="detail-pane">
+    <Transition name="task-drawer">
+      <div v-if="detailOpen" class="task-detail-layer" @click.self="closeTaskDetail">
+        <section class="detail-pane" role="dialog" aria-modal="true" aria-label="OCR任务详情">
+          <div class="drawer-topbar">
+            <button class="drawer-back" type="button" @click="closeTaskDetail">← 返回任务列表</button>
+            <span>OCR 任务操作</span>
+            <button class="drawer-close" type="button" aria-label="关闭任务详情" @click="closeTaskDetail">×</button>
+          </div>
+          <div class="detail-body">
         <div v-if="detailLoading" class="state-box large">正在加载任务详情…</div>
         <div v-else-if="detailError" class="state-box large error">{{ detailError }}</div>
         <div v-else-if="!detail" class="state-box large">
-          <b>选择左侧任务查看详情</b>
-          <span>也可以新建一条预训练任务，提前积累客户商品匹配数据。</span>
+          <b>任务详情暂不可用</b>
+          <span>请关闭窗口后重新选择任务。</span>
         </div>
         <template v-else>
           <header class="detail-heading">
@@ -251,8 +260,10 @@
             </div>
           </template>
         </template>
-      </section>
-    </div>
+          </div>
+        </section>
+      </div>
+    </Transition>
 
     <div v-if="createOpen" class="modal-layer" @click.self="closeCreate">
       <section :class="['create-card', { 'image-mode': form.sourceType === 'IMAGE' }]">
@@ -381,6 +392,7 @@ export default {
       sceneFilter: 'ALL',
       selectedKey: '',
       detail: null,
+      detailOpen: false,
       detailLoading: false,
       detailError: '',
       createOpen: false,
@@ -512,7 +524,11 @@ export default {
       },
     },
   },
+  mounted() {
+    document.addEventListener('keydown', this.handleDetailEscape);
+  },
   beforeUnmount() {
+    document.removeEventListener('keydown', this.handleDetailEscape);
     this.stopTrainingOrders();
   },
   methods: {
@@ -530,6 +546,7 @@ export default {
       this.stopTrainingOrders();
       this.tasks = [];
       this.detail = null;
+      this.detailOpen = false;
       this.selectedKey = '';
       this.resetTrainingWorkspaceState();
       this.form = this.emptyForm();
@@ -554,6 +571,7 @@ export default {
     },
     async selectTask(task, force = false) {
       const key = `${task.scene}-${task.taskId}`;
+      this.detailOpen = true;
       if (!force && this.selectedKey === key && this.detail) return;
       this.stopTrainingOrders();
       this.resetTrainingWorkspaceState();
@@ -571,6 +589,16 @@ export default {
         this.detailError = error?.message || '任务详情加载失败';
       } finally {
         this.detailLoading = false;
+      }
+    },
+    closeTaskDetail() {
+      this.stopTrainingOrders();
+      this.closeTrainingGoodsMenus();
+      this.detailOpen = false;
+    },
+    handleDetailEscape(event) {
+      if (event.key === 'Escape' && this.detailOpen && !this.createOpen && !this.showImagePreviewModal) {
+        this.closeTaskDetail();
       }
     },
     openCreate() {
@@ -835,6 +863,7 @@ export default {
         if (!result?.ok) throw new Error(result?.message || '删除预训练任务失败');
         this.stopTrainingOrders();
         this.detail = null;
+        this.detailOpen = false;
         this.selectedKey = '';
         await this.loadTasks();
         this.$emit('notice', '预训练任务已删除', 'success');
@@ -954,13 +983,13 @@ button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 .primary-button, .complete-button { border: 0; border-radius: 8px; background: #0da45c; color: white; padding: 11px 18px; font-weight: 700; }
 .primary-button:disabled, .complete-button:disabled, .confirm-button:disabled { cursor: not-allowed; opacity: .45; }
-.workspace-grid { display: grid; grid-template-columns: 290px minmax(0, 1fr); min-height: 650px; }
-.task-pane { border-right: 1px solid #dce8e1; background: #f7fbf8; padding: 18px; }
-.task-filters { display: flex; gap: 6px; margin-bottom: 14px; }
-.task-filters button { flex: 1; border: 1px solid #d8e4dd; border-radius: 7px; padding: 7px 4px; background: white; color: #66756d; }
+.workspace-grid { min-height: 650px; background: #f7fbf8; }
+.task-pane { min-height: 650px; padding: 22px 26px 32px; }
+.task-filters { display: flex; width: max-content; gap: 8px; margin-bottom: 18px; }
+.task-filters button { min-width: 86px; border: 1px solid #d8e4dd; border-radius: 7px; padding: 8px 13px; background: white; color: #66756d; }
 .task-filters button.active { border-color: #0da45c; color: #087943; background: #eaf8f0; }
-.task-list { display: flex; flex-direction: column; gap: 10px; max-height: 720px; overflow: auto; }
-.task-card { display: grid; grid-template-columns: auto 1fr; gap: 7px 9px; text-align: left; border: 1px solid #dce8e1; border-radius: 10px; background: white; padding: 13px; color: inherit; }
+.task-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 360px)); gap: 14px; align-items: start; }
+.task-card { min-height: 132px; display: grid; grid-template-columns: auto 1fr; gap: 9px 10px; text-align: left; border: 1px solid #dce8e1; border-radius: 12px; background: white; padding: 16px; color: inherit; box-shadow: 0 4px 14px rgba(30, 68, 47, .035); }
 .task-card.active { border-color: #12a562; box-shadow: 0 0 0 2px rgba(13,164,92,.1); }
 .task-card strong { align-self: center; font-size: 14px; }
 .task-card small { grid-column: 1 / -1; color: #8a9690; }
@@ -971,7 +1000,15 @@ button { cursor: pointer; }
 .status-pill.completed, .status-pill.confirmed { background: #e5f7ed; color: #087943; }
 .status-pill.failed, .status-pill.conflict { background: #ffebea; color: #b43d36; }
 .status-pill.archived { background: #eef1ef; color: #69756f; }
-.detail-pane { padding: 24px 28px 36px; min-width: 0; }
+.task-detail-layer { position: fixed; z-index: 1080; top: 0; right: 0; bottom: 0; left: var(--product-sidebar-width, 104px); display: flex; justify-content: flex-end; padding: 12px; background: rgba(23, 39, 31, .3); backdrop-filter: blur(2px); }
+.detail-pane { width: 100%; height: 100%; min-width: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #d8e4dd; border-radius: 14px; background: white; box-shadow: -18px 0 54px rgba(19, 48, 33, .2); }
+.drawer-topbar { min-height: 52px; flex: 0 0 auto; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; padding: 0 20px; border-bottom: 1px solid #dce8e1; background: #f8fbf9; }
+.drawer-topbar > span { color: #415149; font-size: 14px; font-weight: 800; letter-spacing: .5px; }
+.drawer-back, .drawer-close { border: 0; background: transparent; color: #537066; }
+.drawer-back { width: max-content; padding: 8px 4px; font-weight: 700; }
+.drawer-close { justify-self: end; width: 36px; height: 36px; border-radius: 8px; font-size: 27px; line-height: 1; }
+.drawer-back:hover, .drawer-close:hover { background: #e9f5ee; color: #078249; }
+.detail-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; padding: 18px 24px 24px; }
 .detail-heading { padding-bottom: 18px; border-bottom: 1px solid #e2ebe6; }
 .detail-kicker { display: flex; gap: 8px; margin-bottom: 8px; }
 .detail-heading h4 { margin: 0 0 5px; font-size: 20px; }
@@ -979,7 +1016,7 @@ button { cursor: pointer; }
 .progress-summary b { font-size: 26px; color: #0b8d50; }
 .progress-summary span { font-size: 12px; color: #78857e; }
 .progress-summary em { margin-top: 4px; color: #b43d36; font-size: 12px; font-style: normal; }
-.formal-detail-workspace { height: max(560px, calc(100vh - 320px)); min-height: 0; padding-top: 18px; display: flex; flex-direction: column; }
+.formal-detail-workspace { flex: 1; min-height: 560px; padding-top: 14px; display: flex; flex-direction: column; }
 .formal-detail-workspace :deep(.upload-section) { flex: 1; min-height: 0; }
 .formal-detail-workspace :deep(.btn-outline-info),
 .formal-detail-workspace :deep(button[title="之前添加订单"]) { display: none !important; }
@@ -1045,8 +1082,13 @@ button { cursor: pointer; }
 .form-error { padding: 0 24px 12px; }
 .create-card > footer { justify-content: flex-end; padding: 16px 24px; border-top: 1px solid #e0e8e3; }
 .create-card > footer > button:not(.primary-button) { border: 1px solid #d2ded7; border-radius: 7px; padding: 10px 17px; background: white; color: #596960; }
+.task-drawer-enter-active, .task-drawer-leave-active { transition: opacity .18s ease; }
+.task-drawer-enter-active .detail-pane, .task-drawer-leave-active .detail-pane { transition: transform .22s ease; }
+.task-drawer-enter-from, .task-drawer-leave-to { opacity: 0; }
+.task-drawer-enter-from .detail-pane, .task-drawer-leave-to .detail-pane { transform: translateX(42px); }
 @media (max-width: 1050px) {
-  .workspace-grid { grid-template-columns: 240px minmax(0, 1fr); }
+  .task-detail-layer { left: 0; padding: 8px; }
+  .task-list { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
   .item-fields { grid-template-columns: 1fr 1fr; }
   .search-results { grid-template-columns: 1fr 1fr; }
 }
