@@ -49,7 +49,12 @@ assert.doesNotMatch(ocrTrainingPanel, /class="source-editor image-picker"/);
 assert.match(ocrTrainingPanel, /class="formal-detail-workspace"/);
 assert.match(ocrTrainingPanel, /class="task-detail-layer"/);
 assert.match(ocrTrainingPanel, /OCR 任务操作/);
-assert.match(ocrTrainingPanel, /grid-template-columns: repeat\(auto-fill, minmax\(280px, 360px\)\)/);
+assert.match(ocrTrainingPanel, /class="task-table"/);
+for (const heading of ['日期', '名称', '类别', '进度', '状态']) {
+  assert.match(ocrTrainingPanel, new RegExp(`<th>${heading}<\\/th>`));
+}
+assert.match(ocrTrainingPanel, /detail\.sourceType === 'IMAGE' && detailImageUrl/);
+assert.match(ocrTrainingPanel, /this\.detail\?\.imageBase64 \|\| this\.detail\?\.imagePath/);
 assert.match(ocrTrainingPanel, /left: var\(--product-sidebar-width, 104px\)/);
 assert.match(ocrTrainingPanel, /@delete-order="deleteTrainingItem"/);
 assert.match(ocrTrainingPanel, /@read-order-list="readTrainingOrders"/);
@@ -61,6 +66,16 @@ assert.match(ocrTrainingPanel, /loadFormalOrderGoodsCandidates\(item, keyword\)/
 assert.match(ocrTrainingPanel, /item\.nxDistributerGoodsEntityList = disArr/);
 assert.match(ocrTrainingPanel, /item\.nxGoodsEntities = nxArr/);
 assert.match(ocrTrainingPanel, /await this\.loadFormalOrderGoodsCandidates\(trainingItem, keyword\)/);
+const completeTaskStart = ocrTrainingPanel.indexOf('async completeTask()');
+const completeTaskSource = ocrTrainingPanel.slice(
+  completeTaskStart,
+  ocrTrainingPanel.indexOf('    isSelected(task)', completeTaskStart),
+);
+assert.match(completeTaskSource, /this\.detail = null/);
+assert.match(completeTaskSource, /this\.detailOpen = false/);
+assert.match(completeTaskSource, /this\.selectedKey = ''/);
+assert.match(completeTaskSource, /this\.resetTrainingWorkspaceState\(\)/);
+assert.match(completeTaskSource, /await this\.loadTasks\(\)/);
 assert.match(customerApi, /listCustomerOcrTasks/);
 assert.match(customerApi, /completeCustomerOcrTraining/);
 assert.match(customerApi, /deleteCustomerOcrTrainingItem/);

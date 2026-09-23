@@ -26,24 +26,44 @@
           <button type="button" @click="loadTasks">重试</button>
         </div>
         <div v-else-if="!filteredTasks.length" class="state-box">暂无相关任务</div>
-        <div v-else class="task-list">
-          <button
-            v-for="task in filteredTasks"
-            :key="`${task.scene}-${task.taskId}`"
-            type="button"
-            :class="['task-card', { active: isSelected(task) }]"
-            @click="selectTask(task)"
-          >
-            <span :class="['scene-badge', task.scene.toLowerCase()]">
-              {{ task.scene === 'PRETRAINING' ? '预训练' : '正式单' }}
-            </span>
-            <strong>{{ sourceLabel(task.sourceType) }} · {{ departmentName(task.departmentId) }}</strong>
-            <small>{{ task.sampleDate || task.createdAt || '日期未记录' }}</small>
-            <span class="task-progress">
-              {{ task.confirmedItems || 0 }}/{{ task.totalItems || 0 }} 已确认
-              <i :class="statusClass(task.statusCode)">{{ statusLabel(task.statusCode) }}</i>
-            </span>
-          </button>
+        <div v-else class="task-table-wrap">
+          <table class="task-table">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>名称</th>
+                <th>类别</th>
+                <th>进度</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="task in filteredTasks"
+                :key="`${task.scene}-${task.taskId}`"
+                :class="['task-row', { active: isSelected(task) }]"
+                tabindex="0"
+                role="button"
+                @click="selectTask(task)"
+                @keydown.enter.prevent="selectTask(task)"
+                @keydown.space.prevent="selectTask(task)"
+              >
+                <td class="task-date">{{ task.sampleDate || task.createdAt || '日期未记录' }}</td>
+                <td class="task-name">
+                  <strong>{{ sourceLabel(task.sourceType) }} · {{ departmentName(task.departmentId) }}</strong>
+                  <small v-if="task.sourceName">{{ task.sourceName }}</small>
+                </td>
+                <td class="task-category">
+                  <span :class="['scene-badge', task.scene.toLowerCase()]">
+                    {{ task.scene === 'PRETRAINING' ? '预训练' : '正式任务' }}
+                  </span>
+                  <small>{{ sourceLabel(task.sourceType) }}</small>
+                </td>
+                <td class="task-progress">{{ task.confirmedItems || 0 }}/{{ task.totalItems || 0 }} 已确认</td>
+                <td><i :class="statusClass(task.statusCode)">{{ statusLabel(task.statusCode) }}</i></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </aside>
     </div>
@@ -86,7 +106,7 @@
           </header>
 
           <div
-            v-if="detail.scene === 'PRETRAINING' && detail.sourceType === 'IMAGE' && detail.imageBase64"
+            v-if="detail.sourceType === 'IMAGE' && detailImageUrl"
             class="formal-detail-workspace"
           >
             <div v-if="activeTrainingConflict" class="training-conflict-bar">
@@ -107,7 +127,7 @@
               :has-cache="true"
               :has-running-task="false"
               :uploaded-image-file="trainingImageFile"
-              :image-preview="detail.imageBase64"
+              :image-preview="detailImageUrl"
               :image-scale="trainingImageScale"
               :image-translate-x="trainingImageTranslateX"
               :image-translate-y="trainingImageTranslateY"
@@ -469,8 +489,15 @@ export default {
       return this.detail?.items?.find((item) => item.statusCode === 'CONFLICT') || null;
     },
     trainingImageFile() {
-      if (!this.detail?.imageBase64) return null;
+      if (!this.detailImageUrl) return null;
       return { name: this.detail.sourceName || '训练订单图片', type: 'image/*', size: 0 };
+    },
+    detailImageUrl() {
+      const source = this.detail?.imageBase64 || this.detail?.imagePath;
+      if (!source) return '';
+      if (/^(?:data:|https?:|blob:)/i.test(source)) return source;
+      const base = customerApi.imageServerUrl();
+      return `${String(base || '').replace(/\/$/, '')}/${String(source).replace(/^\//, '')}`;
     },
     trainingCurrentTask() {
       if (!this.detail) return null;
@@ -499,8 +526,8 @@ export default {
         return {
           ...item,
           _trainingItem: item,
-          nxDoGoodsName: item.originalGoodsName || '',
-          nxDoGoodsNameOriginal: item.originalGoodsName || '',
+          nxDoGoodsName: item.originalGoodsName || item.goodsName || item.matchedGoodsName || '',
+          nxDoGoodsNameOriginal: item.originalGoodsName || item.goodsName || '',
           nxDoQuantity: item.quantity || '',
           nxDoStandard: item.standard || '',
           nxDoRemark: item.remark || '',
@@ -1016,8 +1043,13 @@ export default {
       try {
         const result = await customerApi.completeCustomerOcrTraining(this.detail.taskId);
         if (!result?.ok) throw new Error(result?.message || '完成训练失败');
-        this.detail = this.mergeTrainingDetail(result.data);
-        await this.refreshTaskSummary();
+        this.stopTrainingOrders();
+        this.closeTrainingGoodsMenus();
+        this.detail = null;
+        this.detailOpen = false;
+        this.selectedKey = '';
+        this.resetTrainingWorkspaceState();
+        await this.loadTasks();
         this.$emit('notice', '预训练已完成，确认的匹配已加入该订货部门记忆', 'success');
       } catch (error) {
         this.$emit('notice', error?.message || '完成训练失败', 'error');
@@ -1056,12 +1088,24 @@ button { cursor: pointer; }
 .task-filters { display: flex; width: max-content; gap: 8px; margin-bottom: 18px; }
 .task-filters button { min-width: 86px; border: 1px solid #d8e4dd; border-radius: 7px; padding: 8px 13px; background: white; color: #66756d; }
 .task-filters button.active { border-color: #0da45c; color: #087943; background: #eaf8f0; }
-.task-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 360px)); gap: 14px; align-items: start; }
-.task-card { min-height: 132px; display: grid; grid-template-columns: auto 1fr; gap: 9px 10px; text-align: left; border: 1px solid #dce8e1; border-radius: 12px; background: white; padding: 16px; color: inherit; box-shadow: 0 4px 14px rgba(30, 68, 47, .035); }
-.task-card.active { border-color: #12a562; box-shadow: 0 0 0 2px rgba(13,164,92,.1); }
-.task-card strong { align-self: center; font-size: 14px; }
-.task-card small { grid-column: 1 / -1; color: #8a9690; }
-.task-progress { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; color: #65726b; font-size: 12px; }
+.task-table-wrap { overflow: hidden; border: 1px solid #dce8e1; border-radius: 12px; background: white; box-shadow: 0 4px 14px rgba(30, 68, 47, .035); }
+.task-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.task-table th { padding: 11px 16px; border-bottom: 1px solid #dce8e1; background: #f3f8f5; color: #66756d; font-size: 12px; font-weight: 700; text-align: left; }
+.task-table th:nth-child(1) { width: 18%; }
+.task-table th:nth-child(2) { width: 34%; }
+.task-table th:nth-child(3) { width: 18%; }
+.task-table th:nth-child(4) { width: 17%; }
+.task-table th:nth-child(5) { width: 13%; }
+.task-row { outline: none; transition: background .15s ease, box-shadow .15s ease; }
+.task-row + .task-row { border-top: 1px solid #edf2ef; }
+.task-row:hover, .task-row:focus-visible { background: #f2faf6; }
+.task-row.active { background: #eaf8f0; box-shadow: inset 3px 0 #0da45c; }
+.task-row td { padding: 14px 16px; color: #47564f; vertical-align: middle; cursor: pointer; }
+.task-date { color: #718078 !important; font-size: 13px; }
+.task-name, .task-category { min-width: 0; }
+.task-name strong { display: block; overflow: hidden; color: #27372f; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.task-name small, .task-category small { display: block; overflow: hidden; margin-top: 4px; color: #8a9690; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.task-progress { color: #65726b !important; font-size: 12px; }
 .scene-badge { display: inline-flex; align-items: center; border-radius: 5px; padding: 3px 6px; font-size: 11px; font-style: normal; font-weight: 700; background: #e5f6ed; color: #087943; }
 .scene-badge.formal { background: #edf2fb; color: #416db2; }
 .status-pill { display: inline-flex; width: max-content; border-radius: 12px; padding: 3px 8px; background: #fff4d9; color: #9a6500; font-size: 11px; font-style: normal; }
@@ -1156,7 +1200,8 @@ button { cursor: pointer; }
 .task-drawer-enter-from .detail-pane, .task-drawer-leave-to .detail-pane { transform: translateX(42px); }
 @media (max-width: 1050px) {
   .task-detail-layer { left: 0; padding: 8px; }
-  .task-list { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .task-table th:nth-child(2) { width: 30%; }
+  .task-table th:nth-child(3) { width: 20%; }
   .item-fields { grid-template-columns: 1fr 1fr; }
   .search-results { grid-template-columns: 1fr 1fr; }
 }
