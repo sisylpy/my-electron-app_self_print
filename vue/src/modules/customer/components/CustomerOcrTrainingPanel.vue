@@ -44,7 +44,7 @@
                 @keydown.enter.prevent="selectTask(task)"
                 @keydown.space.prevent="selectTask(task)"
               >
-                <td class="task-date">{{ task.sampleDate || task.createdAt || '日期未记录' }}</td>
+                <td class="task-date">{{ taskDisplayDate(task) }}</td>
                 <td class="task-name">
                   <strong>{{ sourceLabel(task.sourceType) }} · {{ departmentName(task.departmentId) }}</strong>
                   <small v-if="task.sourceName">{{ task.sourceName }}</small>
@@ -1072,6 +1072,14 @@ export default {
       }
     },
     isSelected(task) { return this.selectedKey === `${task.scene}-${task.taskId}`; },
+    taskDisplayDate(task) {
+      const createdAt = String(task?.createdAt || '').trim();
+      const sampleDate = String(task?.sampleDate || '').trim();
+      const time = createdAt.match(/[T\s](\d{2}:\d{2})/)?.[1] || '';
+      if (sampleDate) return time ? `${sampleDate} ${time}` : sampleDate;
+      if (!createdAt) return '日期未记录';
+      return createdAt.replace('T', ' ').slice(0, 16);
+    },
     departmentName(id) {
       return this.departmentDisplayName(this.departments.find((dep) => String(dep.nxDepartmentId) === String(id)) || this.customer);
     },
@@ -1119,7 +1127,7 @@ button { cursor: pointer; }
 .task-row:hover, .task-row:focus-visible { background: #f2faf6; }
 .task-row.active { background: #eaf8f0; box-shadow: inset 3px 0 #0da45c; }
 .task-row td { padding: 14px 16px; color: #47564f; vertical-align: middle; cursor: pointer; }
-.task-date { color: #718078 !important; font-size: 13px; }
+.task-date { color: #718078 !important; font-size: 13px; white-space: nowrap; }
 .task-name, .task-category { min-width: 0; }
 .task-name strong { display: block; overflow: hidden; color: #27372f; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .task-name small, .task-category small { display: block; overflow: hidden; margin-top: 4px; color: #8a9690; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }

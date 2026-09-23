@@ -52,6 +52,8 @@ assert.match(ocrTrainingPanel, /OCR 任务操作/);
 assert.match(ocrTrainingPanel, /class="task-table"/);
 assert.match(ocrTrainingPanel, /class="panel-heading panel-toolbar"/);
 assert.match(ocrTrainingPanel, /\.panel-toolbar \.task-filters/);
+assert.match(ocrTrainingPanel, /taskDisplayDate\(task\)/);
+assert.match(ocrTrainingPanel, /sampleDate.*\$\{sampleDate\} \$\{time\}/s);
 for (const heading of ['日期', '名称', '类别', '进度', '状态']) {
   assert.match(ocrTrainingPanel, new RegExp(`<th>${heading}<\\/th>`));
 }
