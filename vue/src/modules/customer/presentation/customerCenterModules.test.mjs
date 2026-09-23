@@ -50,10 +50,14 @@ assert.match(ocrTrainingPanel, /class="formal-detail-workspace"/);
 assert.match(ocrTrainingPanel, /class="task-detail-layer"/);
 assert.match(ocrTrainingPanel, /OCR 任务操作/);
 assert.match(ocrTrainingPanel, /class="task-table"/);
+assert.match(ocrTrainingPanel, /class="panel-heading panel-toolbar"/);
+assert.match(ocrTrainingPanel, /\.panel-toolbar \.task-filters/);
 for (const heading of ['日期', '名称', '类别', '进度', '状态']) {
   assert.match(ocrTrainingPanel, new RegExp(`<th>${heading}<\\/th>`));
 }
 assert.match(ocrTrainingPanel, /detail\.sourceType === 'IMAGE' && detailImageUrl/);
+assert.match(ocrTrainingPanel, /detail-heading', \{ compact: detail\.sourceType === 'IMAGE' \}/);
+assert.match(ocrTrainingPanel, /\.detail-heading\.compact > div:first-child/);
 assert.match(ocrTrainingPanel, /this\.detail\?\.imageBase64 \|\| this\.detail\?\.imagePath/);
 assert.match(ocrTrainingPanel, /await this\.ensureFormalTaskImage\(\)/);
 assert.match(ocrTrainingPanel, /orderApi\.getTaskOrders\(this\.detail\.taskId/);

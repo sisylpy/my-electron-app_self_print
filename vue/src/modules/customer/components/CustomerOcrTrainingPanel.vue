@@ -1,17 +1,8 @@
 <template>
   <div class="ocr-training-panel">
-    <header class="panel-heading">
-      <div>
-        <span>OCR TRAINING</span>
-        <h3>OCR 任务与预训练</h3>
-        <p>正式下单任务只读展示；预训练确认完成后，匹配记忆仅对所选订货部门生效。</p>
-      </div>
-      <button class="primary-button" type="button" @click="openCreate">＋ 新建预训练</button>
-    </header>
-
-    <div class="workspace-grid">
-      <aside class="task-pane">
-        <div class="task-filters">
+    <header class="panel-heading panel-toolbar">
+      <h3>OCR 任务与预训练</h3>
+      <div class="task-filters">
           <button
             v-for="option in sceneOptions"
             :key="option.value"
@@ -19,7 +10,12 @@
             :class="{ active: sceneFilter === option.value }"
             @click="sceneFilter = option.value"
           >{{ option.label }}</button>
-        </div>
+      </div>
+      <button class="primary-button" type="button" @click="openCreate">＋ 新建预训练</button>
+    </header>
+
+    <div class="workspace-grid">
+      <aside class="task-pane">
         <div v-if="listLoading" class="state-box">正在加载任务…</div>
         <div v-else-if="listError" class="state-box error">
           {{ listError }}
@@ -84,7 +80,7 @@
           <span>请关闭窗口后重新选择任务。</span>
         </div>
         <template v-else>
-          <header class="detail-heading">
+          <header :class="['detail-heading', { compact: detail.sourceType === 'IMAGE' }]">
             <div>
               <div class="detail-kicker">
                 <span :class="['scene-badge', detail.scene.toLowerCase()]">
@@ -1097,14 +1093,18 @@ export default {
 .panel-heading span, .create-card > header span { color: #139f60; font-size: 12px; font-weight: 800; letter-spacing: 2px; }
 .panel-heading h3, .create-card h3 { margin: 4px 0; font-size: 24px; }
 .panel-heading p, .detail-heading p, .source-editor p { margin: 0; color: #77857e; font-size: 13px; }
+.panel-toolbar { min-height: 64px; box-sizing: border-box; padding: 10px 26px; gap: 16px; }
+.panel-toolbar h3 { flex: 0 0 auto; margin: 0; font-size: 20px; white-space: nowrap; }
+.panel-toolbar .task-filters { flex: 1; justify-content: center; margin: 0; }
+.panel-toolbar .primary-button { flex: 0 0 auto; padding: 9px 16px; white-space: nowrap; }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 .primary-button, .complete-button { border: 0; border-radius: 8px; background: #0da45c; color: white; padding: 11px 18px; font-weight: 700; }
 .primary-button:disabled, .complete-button:disabled, .confirm-button:disabled { cursor: not-allowed; opacity: .45; }
 .workspace-grid { min-height: 650px; background: #f7fbf8; }
-.task-pane { min-height: 650px; padding: 22px 26px 32px; }
+.task-pane { min-height: 650px; padding: 12px 26px 32px; }
 .task-filters { display: flex; width: max-content; gap: 8px; margin-bottom: 18px; }
-.task-filters button { min-width: 86px; border: 1px solid #d8e4dd; border-radius: 7px; padding: 8px 13px; background: white; color: #66756d; }
+.task-filters button { min-width: 78px; border: 1px solid #d8e4dd; border-radius: 7px; padding: 7px 13px; background: white; color: #66756d; }
 .task-filters button.active { border-color: #0da45c; color: #087943; background: #eaf8f0; }
 .task-table-wrap { overflow: hidden; border: 1px solid #dce8e1; border-radius: 12px; background: white; box-shadow: 0 4px 14px rgba(30, 68, 47, .035); }
 .task-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
@@ -1142,11 +1142,18 @@ button { cursor: pointer; }
 .detail-heading { padding-bottom: 18px; border-bottom: 1px solid #e2ebe6; }
 .detail-kicker { display: flex; gap: 8px; margin-bottom: 8px; }
 .detail-heading h4 { margin: 0 0 5px; font-size: 20px; }
+.detail-heading.compact { flex: 0 0 auto; min-height: 0; padding: 2px 0 10px; }
+.detail-heading.compact > div:first-child { min-width: 0; display: flex; align-items: center; gap: 14px; }
+.detail-heading.compact .detail-kicker { flex: 0 0 auto; margin: 0; }
+.detail-heading.compact h4 { flex: 0 1 auto; overflow: hidden; margin: 0; font-size: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.detail-heading.compact p { flex: 0 0 auto; white-space: nowrap; }
+.detail-heading.compact .progress-summary { min-width: 90px; }
+.detail-heading.compact .progress-summary b { font-size: 22px; }
 .progress-summary { min-width: 110px; display: grid; justify-items: end; }
 .progress-summary b { font-size: 26px; color: #0b8d50; }
 .progress-summary span { font-size: 12px; color: #78857e; }
 .progress-summary em { margin-top: 4px; color: #b43d36; font-size: 12px; font-style: normal; }
-.formal-detail-workspace { flex: 1; min-height: 560px; padding-top: 14px; display: flex; flex-direction: column; }
+.formal-detail-workspace { flex: 1; min-height: 560px; padding-top: 8px; display: flex; flex-direction: column; }
 .formal-detail-workspace :deep(.upload-section) { flex: 1; min-height: 0; }
 .formal-detail-workspace :deep(.btn-outline-info),
 .formal-detail-workspace :deep(button[title="之前添加订单"]) { display: none !important; }
@@ -1220,6 +1227,8 @@ button { cursor: pointer; }
   .task-detail-layer { left: 0; padding: 8px; }
   .task-table th:nth-child(2) { width: 30%; }
   .task-table th:nth-child(3) { width: 20%; }
+  .detail-heading.compact > div:first-child { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .detail-heading.compact h4 { max-width: 100%; }
   .item-fields { grid-template-columns: 1fr 1fr; }
   .search-results { grid-template-columns: 1fr 1fr; }
 }
