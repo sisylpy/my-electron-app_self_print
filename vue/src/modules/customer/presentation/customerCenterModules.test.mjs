@@ -41,6 +41,7 @@ assert.match(ocrTrainingPanel, /KEEP_EXISTING/);
 assert.match(ocrTrainingPanel, /REPLACE/);
 assert.match(ocrTrainingPanel, /import ImageUpload from '@\/components\/upload\/ImageUpload\.vue'/);
 assert.match(ocrTrainingPanel, /import OrderEditor from '@\/modules\/order\/components\/OrderEditor\.vue'/);
+assert.match(ocrTrainingPanel, /import orderApi from '@\/modules\/order\/services\/orderApi'/);
 assert.match(ocrTrainingPanel, /import ImageCropperModal from '@\/components\/ImageCropperModal\.vue'/);
 assert.match(ocrTrainingPanel, /createImageTask\(dataUrl, 'FAST'\)/);
 assert.match(ocrTrainingPanel, /createImageTask\(dataUrl, 'COMPLEX'\)/);
@@ -52,6 +53,10 @@ assert.match(ocrTrainingPanel, /grid-template-columns: repeat\(auto-fill, minmax
 assert.match(ocrTrainingPanel, /left: var\(--product-sidebar-width, 104px\)/);
 assert.match(ocrTrainingPanel, /@delete-order="deleteTrainingItem"/);
 assert.match(ocrTrainingPanel, /@read-order-list="readTrainingOrders"/);
+assert.match(ocrTrainingPanel, /item\.nxDistributerGoodsEntityList/);
+assert.match(ocrTrainingPanel, /item\.nxGoodsEntities/);
+assert.match(ocrTrainingPanel, /isTrainingOrderValid\(item\)/);
+assert.match(ocrTrainingPanel, /queryDisGoodsByQuickSearchWithDepId/);
 assert.match(customerApi, /listCustomerOcrTasks/);
 assert.match(customerApi, /completeCustomerOcrTraining/);
 assert.match(customerApi, /deleteCustomerOcrTrainingItem/);

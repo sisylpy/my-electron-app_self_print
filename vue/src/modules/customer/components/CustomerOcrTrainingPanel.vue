@@ -143,7 +143,7 @@
                   :show-matched-goods="trainingShowMatchedGoods"
                   :order-arr-index="trainingOrderArrIndex"
                   :str-arr="trainingSearchResults"
-                  :nx-arr="[]"
+                  :nx-arr="trainingNxSearchResults"
                   :is-valid-order-quantity-and-standard="isTrainingOrderValid"
                   empty-message="图片中没有识别到订单明细"
                   @tts-state="onTrainingTtsState"
@@ -360,6 +360,7 @@ import customerApi from '../api/customerApi';
 import ImageCropperModal from '@/components/ImageCropperModal.vue';
 import ImageUpload from '@/components/upload/ImageUpload.vue';
 import OrderEditor from '@/modules/order/components/OrderEditor.vue';
+import orderApi from '@/modules/order/services/orderApi';
 
 function todayText() {
   const now = new Date();
@@ -411,6 +412,7 @@ export default {
       deletingTask: false,
       trainingOrderArrIndex: -1,
       trainingSearchResults: [],
+      trainingNxSearchResults: [],
       trainingShowMatchedGoods: {},
       trainingTtsState: {
         isTTSPlaying: false,
@@ -492,11 +494,8 @@ export default {
           nxDgGoodsName: item.matchedGoodsName,
           nxDgGoodsStandardname: item.standard || '',
         } : null;
-        const suggestedGoods = item.suggestedDisGoodsId ? [{
-          nxDistributerGoodsId: item.suggestedDisGoodsId,
-          nxDgGoodsName: item.suggestedGoodsName,
-          nxDgGoodsStandardname: item.standard || '',
-        }] : [];
+        const recommendedGoods = Array.isArray(item.nxDistributerGoodsEntityList)
+          ? item.nxDistributerGoodsEntityList : [];
         return {
           ...item,
           _trainingItem: item,
@@ -509,8 +508,8 @@ export default {
           nxDoStatus: editable ? -2 : 0,
           nxDoDisGoodsId: item.matchedDisGoodsId || null,
           nxDistributerGoodsEntity: matchedGoods,
-          nxDistributerGoodsEntityList: editable ? suggestedGoods : [],
-          nxGoodsEntities: [],
+          nxDistributerGoodsEntityList: editable ? recommendedGoods : [],
+          nxGoodsEntities: editable && Array.isArray(item.nxGoodsEntities) ? item.nxGoodsEntities : [],
         };
       });
     },
@@ -581,7 +580,7 @@ export default {
       try {
         const result = await customerApi.getCustomerOcrTask(task.scene, task.taskId);
         if (!result?.ok) throw new Error(result?.message || '任务详情加载失败');
-        this.detail = result.data;
+        this.detail = this.mergeTrainingDetail(result.data);
         this.searchKeywords = {};
         this.searchResults = {};
       } catch (error) {
@@ -689,7 +688,7 @@ export default {
         if (!result?.ok) throw new Error(result?.message || '预训练任务创建失败');
         this.createOpen = false;
         this.showImagePreviewModal = false;
-        this.detail = result.data;
+        this.detail = this.mergeTrainingDetail(result.data);
         this.selectedKey = `PRETRAINING-${result.data.taskId}`;
         await this.loadTasks({ scene: 'PRETRAINING', taskId: result.data.taskId });
         this.$emit('notice', '预训练任务已创建，请逐条确认商品', 'success');
@@ -704,7 +703,11 @@ export default {
       if (!keyword) return;
       this.searchingItemId = item.itemId;
       try {
-        const response = await customerApi.searchDistributerGoods(this.distributerId, keyword);
+        const response = await orderApi.queryDisGoodsByQuickSearchWithDepId({
+          disId: this.distributerId,
+          searchStr: keyword,
+          depId: this.detail?.departmentId || this.form.departmentId,
+        });
         if (response?.data?.code !== 0) throw new Error(response?.data?.msg || '商品搜索失败');
         this.searchResults[item.itemId] = response.data.data?.disArr || [];
       } catch (error) {
@@ -736,7 +739,7 @@ export default {
           conflictResolution,
         });
         if (!result?.ok) throw new Error(result?.message || '训练明细保存失败');
-        this.detail = result.data;
+        this.detail = this.mergeTrainingDetail(result.data);
         await this.refreshTaskSummary();
         const updated = result.data.items?.find((row) => String(row.itemId) === String(item.itemId));
         if (updated?.statusCode === 'CONFLICT') {
@@ -751,6 +754,7 @@ export default {
     resetTrainingWorkspaceState() {
       this.trainingOrderArrIndex = -1;
       this.trainingSearchResults = [];
+      this.trainingNxSearchResults = [];
       this.trainingShowMatchedGoods = {};
       this.trainingTtsState = {
         isTTSPlaying: false,
@@ -764,8 +768,11 @@ export default {
     trainingItemFromPayload(payload) {
       return payload?.item?._trainingItem || payload?.item || null;
     },
-    isTrainingOrderValid() {
-      return true;
+    isTrainingOrderValid(item) {
+      const quantity = item?.nxDoQuantity;
+      const standard = item?.nxDoStandard;
+      return quantity != null && quantity !== '' && !Number.isNaN(Number(quantity))
+        && standard != null && String(standard).trim() !== '';
     },
     focusTrainingOrder({ orderIndex }) {
       this.trainingOrderArrIndex = orderIndex;
@@ -790,14 +797,20 @@ export default {
       this.trainingOrderArrIndex = payload.orderIndex;
       this.searchingItemId = item.itemId;
       try {
-        const response = await customerApi.searchDistributerGoods(this.distributerId, keyword);
+        const response = await orderApi.queryDisGoodsByQuickSearchWithDepId({
+          disId: this.distributerId,
+          searchStr: keyword,
+          depId: this.detail.departmentId,
+        });
         if (response?.data?.code !== 0) throw new Error(response?.data?.msg || '商品搜索失败');
         this.trainingSearchResults = response.data.data?.disArr || [];
-        if (!this.trainingSearchResults.length) {
+        this.trainingNxSearchResults = response.data.data?.nxArr || [];
+        if (!this.trainingSearchResults.length && !this.trainingNxSearchResults.length) {
           this.$emit('notice', '没有找到配送商商品，请先在商品中心建立商品', 'error');
         }
       } catch (error) {
         this.trainingSearchResults = [];
+        this.trainingNxSearchResults = [];
         this.$emit('notice', error?.message || '商品搜索失败', 'error');
       } finally {
         this.searchingItemId = null;
@@ -819,15 +832,26 @@ export default {
       const trainingItem = this.trainingOrderItems[orderIndex]?._trainingItem;
       return this.selectTrainingGoods(trainingItem, goods);
     },
-    toggleTrainingMatchedGoods(orderIndex) {
-      this.trainingShowMatchedGoods = {
-        ...this.trainingShowMatchedGoods,
-        [orderIndex]: !this.trainingShowMatchedGoods[orderIndex],
-      };
+    toggleTrainingMatchedGoods(payload) {
+      const orderIndex = typeof payload === 'object' ? payload.orderIndex : payload;
+      const hasSearchResults = typeof payload === 'object'
+        ? payload.hasSearchResults
+        : (this.trainingOrderArrIndex === orderIndex
+          && (this.trainingSearchResults.length + this.trainingNxSearchResults.length) > 0);
+      const isExpanded = Boolean(this.trainingShowMatchedGoods[orderIndex]);
+      if (isExpanded || hasSearchResults) {
+        if (hasSearchResults) this.closeTrainingGoodsSearch();
+        this.trainingShowMatchedGoods = { ...this.trainingShowMatchedGoods, [orderIndex]: false };
+        return;
+      }
+      this.trainingSearchResults = [];
+      this.trainingNxSearchResults = [];
       this.trainingOrderArrIndex = orderIndex;
+      this.trainingShowMatchedGoods = { [orderIndex]: true };
     },
     closeTrainingGoodsSearch() {
       this.trainingSearchResults = [];
+      this.trainingNxSearchResults = [];
       this.trainingOrderArrIndex = -1;
     },
     closeTrainingGoodsMenus() {
@@ -846,7 +870,7 @@ export default {
       try {
         const result = await customerApi.deleteCustomerOcrTrainingItem(this.detail.taskId, item.itemId);
         if (!result?.ok) throw new Error(result?.message || '删除训练明细失败');
-        this.detail = result.data;
+        this.detail = this.mergeTrainingDetail(result.data);
         this.closeTrainingGoodsMenus();
         await this.refreshTaskSummary();
         this.$emit('notice', '训练明细已删除', 'success');
@@ -942,13 +966,34 @@ export default {
       const result = await customerApi.listCustomerOcrTasks(this.customer.nxDepartmentId);
       if (result?.ok) this.tasks = result.data?.tasks || [];
     },
+    mergeTrainingDetail(nextDetail) {
+      if (String(nextDetail?.taskId || '') !== String(this.detail?.taskId || '')
+        || !nextDetail?.items?.length || !this.detail?.items?.length) return nextDetail;
+      const previousById = new Map(this.detail.items.map((item) => [String(item.itemId), item]));
+      return {
+        ...nextDetail,
+        items: nextDetail.items.map((item) => {
+          const previous = previousById.get(String(item.itemId));
+          if (!previous) return item;
+          return {
+            ...item,
+            nxDistributerGoodsEntityList: Array.isArray(item.nxDistributerGoodsEntityList)
+              ? item.nxDistributerGoodsEntityList
+              : previous.nxDistributerGoodsEntityList,
+            nxGoodsEntities: Array.isArray(item.nxGoodsEntities)
+              ? item.nxGoodsEntities
+              : previous.nxGoodsEntities,
+          };
+        }),
+      };
+    },
     async completeTask() {
       if (!this.canComplete) return;
       this.completing = true;
       try {
         const result = await customerApi.completeCustomerOcrTraining(this.detail.taskId);
         if (!result?.ok) throw new Error(result?.message || '完成训练失败');
-        this.detail = result.data;
+        this.detail = this.mergeTrainingDetail(result.data);
         await this.refreshTaskSummary();
         this.$emit('notice', '预训练已完成，确认的匹配已加入该订货部门记忆', 'success');
       } catch (error) {
