@@ -787,6 +787,22 @@ export default {
       if (!item || this.detail?.readOnly) return;
       if (payload.field === 'nxDoRemark') item.remark = payload.value == null ? '' : String(payload.value);
     },
+    async loadFormalOrderGoodsCandidates(item, keyword) {
+      const response = await orderApi.queryDisGoodsByQuickSearchWithDepId({
+        disId: this.distributerId,
+        searchStr: keyword,
+        depId: this.detail.departmentId,
+      });
+      if (response?.data?.code !== 0) throw new Error(response?.data?.msg || '商品搜索失败');
+      const disArr = Array.isArray(response.data.data?.disArr) ? response.data.data.disArr : [];
+      const nxArr = Array.isArray(response.data.data?.nxArr) ? response.data.data.nxArr : [];
+
+      // 与正式下单的 getSearchString 保持一致：搜索结果不只用于临时下拉框，
+      // 还要回写到 OrderEditor 的正式推荐字段，再次展开时不会退回旧候选集。
+      item.nxDistributerGoodsEntityList = disArr;
+      item.nxGoodsEntities = nxArr;
+      return { disArr, nxArr };
+    },
     async searchTrainingGoodsFromEditor(payload) {
       const item = this.trainingItemFromPayload(payload);
       if (!item || this.detail?.readOnly) return;
@@ -797,14 +813,9 @@ export default {
       this.trainingOrderArrIndex = payload.orderIndex;
       this.searchingItemId = item.itemId;
       try {
-        const response = await orderApi.queryDisGoodsByQuickSearchWithDepId({
-          disId: this.distributerId,
-          searchStr: keyword,
-          depId: this.detail.departmentId,
-        });
-        if (response?.data?.code !== 0) throw new Error(response?.data?.msg || '商品搜索失败');
-        this.trainingSearchResults = response.data.data?.disArr || [];
-        this.trainingNxSearchResults = response.data.data?.nxArr || [];
+        const { disArr, nxArr } = await this.loadFormalOrderGoodsCandidates(item, keyword);
+        this.trainingSearchResults = disArr;
+        this.trainingNxSearchResults = nxArr;
         if (!this.trainingSearchResults.length && !this.trainingNxSearchResults.length) {
           this.$emit('notice', '没有找到配送商商品，请先在商品中心建立商品', 'error');
         }
@@ -832,7 +843,7 @@ export default {
       const trainingItem = this.trainingOrderItems[orderIndex]?._trainingItem;
       return this.selectTrainingGoods(trainingItem, goods);
     },
-    toggleTrainingMatchedGoods(payload) {
+    async toggleTrainingMatchedGoods(payload) {
       const orderIndex = typeof payload === 'object' ? payload.orderIndex : payload;
       const hasSearchResults = typeof payload === 'object'
         ? payload.hasSearchResults
@@ -847,6 +858,18 @@ export default {
       this.trainingSearchResults = [];
       this.trainingNxSearchResults = [];
       this.trainingOrderArrIndex = orderIndex;
+      const trainingItem = this.trainingOrderItems[orderIndex]?._trainingItem;
+      const keyword = String(trainingItem?.originalGoodsName || '').trim();
+      if (trainingItem && keyword) {
+        this.searchingItemId = trainingItem.itemId;
+        try {
+          await this.loadFormalOrderGoodsCandidates(trainingItem, keyword);
+        } catch (error) {
+          this.$emit('notice', error?.message || '商品搜索失败', 'error');
+        } finally {
+          this.searchingItemId = null;
+        }
+      }
       this.trainingShowMatchedGoods = { [orderIndex]: true };
     },
     closeTrainingGoodsSearch() {
