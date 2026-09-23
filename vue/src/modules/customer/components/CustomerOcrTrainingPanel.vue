@@ -608,6 +608,7 @@ export default {
         const result = await customerApi.getCustomerOcrTask(task.scene, task.taskId);
         if (!result?.ok) throw new Error(result?.message || '任务详情加载失败');
         this.detail = this.mergeTrainingDetail(result.data);
+        await this.ensureFormalTaskImage();
         this.searchKeywords = {};
         this.searchResults = {};
       } catch (error) {
@@ -615,6 +616,23 @@ export default {
         this.detailError = error?.message || '任务详情加载失败';
       } finally {
         this.detailLoading = false;
+      }
+    },
+    async ensureFormalTaskImage() {
+      if (this.detail?.scene !== 'FORMAL' || this.detail?.sourceType !== 'IMAGE'
+        || this.detail.imageBase64 || this.detail.imagePath) return;
+      try {
+        const response = await orderApi.getTaskOrders(this.detail.taskId, {
+          page: 1,
+          limit: 1,
+          processStatus: true,
+          showLoading: false,
+        });
+        const data = response?.data || {};
+        const imagePath = data.imagePath || data.task?.nxOcrTaskImagePath;
+        if (imagePath) this.detail = { ...this.detail, imagePath };
+      } catch (error) {
+        console.warn('[CustomerOcrTrainingPanel] 正式 OCR 原图加载失败', error);
       }
     },
     closeTaskDetail() {

@@ -55,6 +55,9 @@ for (const heading of ['日期', '名称', '类别', '进度', '状态']) {
 }
 assert.match(ocrTrainingPanel, /detail\.sourceType === 'IMAGE' && detailImageUrl/);
 assert.match(ocrTrainingPanel, /this\.detail\?\.imageBase64 \|\| this\.detail\?\.imagePath/);
+assert.match(ocrTrainingPanel, /await this\.ensureFormalTaskImage\(\)/);
+assert.match(ocrTrainingPanel, /orderApi\.getTaskOrders\(this\.detail\.taskId/);
+assert.match(ocrTrainingPanel, /data\.imagePath \|\| data\.task\?\.nxOcrTaskImagePath/);
 assert.match(ocrTrainingPanel, /left: var\(--product-sidebar-width, 104px\)/);
 assert.match(ocrTrainingPanel, /@delete-order="deleteTrainingItem"/);
 assert.match(ocrTrainingPanel, /@read-order-list="readTrainingOrders"/);
