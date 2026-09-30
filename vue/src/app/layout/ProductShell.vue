@@ -81,8 +81,8 @@ onBeforeUnmount(() => {
 
 /*
  * Windows 常见的 125%/150% 缩放会显著压缩可用 CSS 高度。
- * 侧栏在壳层内固定为一屏，并把所有入口作为同级 flex item 等分，
- * 避免再出现侧栏自身的滚动条。
+ * 侧栏在正常高度下把入口均匀铺满；窗口被 DevTools 或系统缩放压低时，
+ * 菜单项保持可读的最小高度并在侧栏内部滚动，避免图标和文字互相覆盖。
  */
 .product-shell :deep(.product-sidebar) {
   height: 100vh;
@@ -93,7 +93,8 @@ onBeforeUnmount(() => {
   display: flex;
   min-height: 0;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .product-shell :deep(.product-sidebar__navigation section) {
@@ -101,8 +102,8 @@ onBeforeUnmount(() => {
 }
 
 .product-shell :deep(.product-sidebar__navigation a) {
-  flex: 1 1 0;
-  min-height: 0;
+  flex: 1 0 54px;
+  min-height: 54px;
   justify-content: center;
   margin: 0;
   padding-block: 4px;
