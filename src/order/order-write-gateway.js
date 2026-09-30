@@ -43,6 +43,16 @@ function cloneAndValidatePastePayload(input) {
         || !/^fp:[A-Za-z0-9_-]{8,60}$/.test(source.conversationFingerprint)) {
       throw new Error('微信订单来源指纹无效');
     }
+    if (!['direct', 'group'].includes(source.conversationKind)) {
+      throw new Error('微信订单会话类型无效');
+    }
+    const groupModes = ['ALL_MEMBER_MESSAGES', 'MENTION_SELF_ONLY'];
+    if (source.conversationKind === 'group' && !groupModes.includes(source.groupMode)) {
+      throw new Error('微信群订单规则无效');
+    }
+    if (source.conversationKind === 'direct' && source.groupMode != null) {
+      throw new Error('个人好友不能设置群订单规则');
+    }
     if (!Array.isArray(source.messages) || source.messages.length < 1 || source.messages.length > 200) {
       throw new Error('微信订单消息数量无效');
     }
@@ -59,6 +69,8 @@ function cloneAndValidatePastePayload(input) {
       customerId,
       accountFingerprint: source.accountFingerprint,
       conversationFingerprint: source.conversationFingerprint,
+      conversationKind: source.conversationKind,
+      groupMode: source.groupMode == null ? null : source.groupMode,
       messages,
     };
   }

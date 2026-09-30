@@ -31,7 +31,7 @@
           :class="['ai-order-panel__wechat-mode', { 'is-active': selectedMode === 'wechat' }]"
           @click="handleModeChange('wechat')"
         >
-          微信好友
+          微信聊天
         </button>
       </div>
     </div>

@@ -43,12 +43,46 @@ async function main() {
       customerId: 7,
       accountFingerprint: 'fp:account1234',
       conversationFingerprint: 'fp:friend12345',
+      conversationKind: 'direct',
+      groupMode: null,
       messages: [{ messageFingerprint: 'fp:friend12345:99', messageTimeMs: 1700000000000 }],
     },
   });
   assert.strictEqual(wechatSuccess.ok, true);
   assert.strictEqual(capturedRequest.data.wechatOrderSource.customerId, 7);
+  assert.strictEqual(capturedRequest.data.wechatOrderSource.conversationKind, 'direct');
   assert.strictEqual(capturedRequest.data.wechatOrderSource.messages.length, 1);
+
+  const wechatGroupSuccess = await gateway.savePasteOrders({
+    orderList: [{ nxDoGoodsName: '白菜', nxDoQuantity: '2', nxDoStandard: '件' }],
+    pasteText: '白菜2件',
+    type: 3,
+    wechatOrderSource: {
+      customerId: 7,
+      accountFingerprint: 'fp:account1234',
+      conversationFingerprint: 'fp:group123456',
+      conversationKind: 'group',
+      groupMode: 'MENTION_SELF_ONLY',
+      messages: [{ messageFingerprint: 'fp:group123456:100', messageTimeMs: 1700000001000 }],
+    },
+  });
+  assert.strictEqual(wechatGroupSuccess.ok, true);
+  assert.strictEqual(capturedRequest.data.wechatOrderSource.conversationKind, 'group');
+  assert.strictEqual(capturedRequest.data.wechatOrderSource.groupMode, 'MENTION_SELF_ONLY');
+
+  const missingGroupMode = await gateway.savePasteOrders({
+    orderList: [{ nxDoGoodsName: '白菜', nxDoQuantity: '2', nxDoStandard: '件' }],
+    type: 3,
+    wechatOrderSource: {
+      customerId: 7,
+      accountFingerprint: 'fp:account1234',
+      conversationFingerprint: 'fp:group123456',
+      conversationKind: 'group',
+      messages: [{ messageFingerprint: 'fp:group123456:100', messageTimeMs: 1700000001000 }],
+    },
+  });
+  assert.strictEqual(missingGroupMode.ok, false);
+  assert.strictEqual(missingGroupMode.status, 400);
 
   const invalidWechatSource = await gateway.savePasteOrders({
     orderList: [{ nxDoGoodsName: '土豆', nxDoQuantity: '5', nxDoStandard: '斤' }],
@@ -57,6 +91,7 @@ async function main() {
       customerId: 7,
       accountFingerprint: 'wxid_secret',
       conversationFingerprint: 'fp:friend12345',
+      conversationKind: 'direct',
       messages: [{ messageFingerprint: 'fp:friend12345:99', messageTimeMs: 1700000000000 }],
     },
   });

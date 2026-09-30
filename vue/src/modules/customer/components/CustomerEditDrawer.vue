@@ -23,14 +23,14 @@
           <label>客户名称（配送单打印）<input v-model.trim="form.nxDepartmentName" /></label>
           <label>简称（标签打印）<input v-model.trim="form.nxDepartmentAttrName" /></label>
           <label>对外订货代号<input v-model.trim="form.nxDepartmentOrderCode" /></label>
-          <label>微信好友昵称
+          <label>微信好友／群昵称
             <input
               v-model.trim="form.nxDepartmentWechatDisplayName"
               type="text"
               maxlength="255"
-              placeholder="与微信通讯录中的好友昵称一致"
+              placeholder="与微信中的好友昵称或群名称一致"
             />
-            <small class="field-tip">用于“微信好友”订单搜索；更换已绑定好友请在订单录入页操作。</small>
+            <small class="field-tip">用于微信聊天订单搜索；更换已绑定好友或群聊请在订单录入页操作。</small>
           </label>
           <label>拣货名称<input v-model.trim="form.nxDepartmentPickName" /></label>
           <label>每日录音时长（分钟）<input v-model.number="form.nxDepartmentRecordMinutes" type="number" min="0" /></label>

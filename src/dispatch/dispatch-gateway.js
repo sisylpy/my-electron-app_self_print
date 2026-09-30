@@ -884,22 +884,37 @@ function createDispatchGateway({ app, safeStorage, axios }) {
 
   async function saveCustomerWechatBinding(input) {
     try {
-      const envelope = strictPayload(input || {}, ['customerId', 'displayName', 'accountFingerprint', 'conversationFingerprint']);
+      const envelope = strictPayload(input || {}, [
+        'customerId', 'displayName', 'accountFingerprint', 'conversationFingerprint',
+        'conversationKind', 'groupMode',
+      ]);
       const customerId = requirePositiveId(envelope.customerId, 'customerId');
       if (typeof envelope.displayName !== 'string' || !envelope.displayName.trim()
           || envelope.displayName.trim().length > 255) {
-        throw new Error('微信好友昵称无效');
+        throw new Error('微信好友或群名称无效');
       }
       ['accountFingerprint', 'conversationFingerprint'].forEach((field) => {
         if (typeof envelope[field] !== 'string' || !/^fp:[A-Za-z0-9_-]{8,60}$/.test(envelope[field])) {
           throw new Error(`${field} 无效`);
         }
       });
+      if (!['direct', 'group'].includes(envelope.conversationKind)) {
+        throw new Error('微信会话类型无效');
+      }
+      const groupModes = ['ALL_MEMBER_MESSAGES', 'MENTION_SELF_ONLY'];
+      if (envelope.conversationKind === 'group' && !groupModes.includes(envelope.groupMode)) {
+        throw new Error('请选择群订单接收规则');
+      }
+      if (envelope.conversationKind === 'direct' && envelope.groupMode != null) {
+        throw new Error('个人好友不能设置群订单规则');
+      }
       return request('PUT', `customer-wechat-orders/${customerId}/binding`, {
         data: {
           displayName: envelope.displayName.trim(),
           accountFingerprint: envelope.accountFingerprint,
           conversationFingerprint: envelope.conversationFingerprint,
+          conversationKind: envelope.conversationKind,
+          groupMode: envelope.groupMode,
         },
       });
     } catch (error) {

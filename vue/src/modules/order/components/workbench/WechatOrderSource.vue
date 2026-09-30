@@ -2,11 +2,11 @@
   <section class="wechat-order-source">
     <div class="wechat-order-source__title">
       <div>
-        <strong>微信好友订单</strong>
+        <strong>微信聊天订单</strong>
         <span>客户：{{ customerName || customerId }}</span>
       </div>
       <button v-if="binding?.bound" type="button" class="link-button" :disabled="busy" @click="clearBinding">
-        更换好友
+        更换微信聊天
       </button>
     </div>
 
@@ -15,8 +15,9 @@
     <template v-else-if="binding?.bound">
       <div class="wechat-order-source__bound">
         <div>
-          <span class="wechat-order-source__label">已绑定好友</span>
+          <span class="wechat-order-source__label">{{ boundTypeLabel }}</span>
           <strong>{{ binding.displayName }}</strong>
+          <small v-if="binding.conversationKind === CONVERSATION_GROUP">{{ groupModeLabel }}</small>
           <small>{{ cursorText }}</small>
         </div>
         <button type="button" class="primary-button" :disabled="busy" @click="pullMessages">
@@ -31,11 +32,11 @@
           v-model.trim="searchName"
           type="text"
           maxlength="255"
-          placeholder="输入该客户对应的微信好友昵称"
-          @keyup.enter="searchFriend"
+          placeholder="输入该客户对应的微信好友或群名称"
+          @keyup.enter="searchConversation"
         >
-        <button type="button" class="primary-button" :disabled="busy || !searchName" @click="searchFriend">
-          {{ busy ? '正在搜索…' : '搜索好友' }}
+        <button type="button" class="primary-button" :disabled="busy || !searchName" @click="searchConversation">
+          {{ busy ? '正在搜索…' : '搜索微信' }}
         </button>
       </div>
       <div v-if="matches.length" class="wechat-order-source__matches">
@@ -44,11 +45,23 @@
           :key="match.id"
           type="button"
           :disabled="busy"
-          @click="bindFriend(match)"
+          @click="chooseConversation(match)"
         >
           <strong>{{ match.displayName }}</strong>
-          <span>好友 · 最近活跃 {{ formatTime(match.lastMessageAt) }}</span>
+          <span>{{ match.kind === CONVERSATION_GROUP ? '群聊' : '好友' }} · 最近活跃 {{ formatTime(match.lastMessageAt) }}</span>
         </button>
+      </div>
+      <div v-if="pendingGroup" class="wechat-order-source__group-mode">
+        <strong>“{{ pendingGroup.displayName }}”的订单接收方式</strong>
+        <p>专属客户群可接收群内全部成员消息；混合业务群只接收明确 @ 当前微信账号的消息。</p>
+        <div>
+          <button type="button" :disabled="busy" @click="bindConversation(pendingGroup, GROUP_ALL_MEMBER_MESSAGES)">
+            <strong>专属客户群</strong><span>群内其他成员发的文字都作为订单</span>
+          </button>
+          <button type="button" :disabled="busy" @click="bindConversation(pendingGroup, GROUP_MENTION_SELF_ONLY)">
+            <strong>混合业务群</strong><span>只接收 @ 当前微信账号的文字</span>
+          </button>
+        </div>
       </div>
     </template>
 
@@ -60,6 +73,14 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import {
+  CONVERSATION_GROUP,
+  GROUP_ALL_MEMBER_MESSAGES,
+  GROUP_MENTION_SELF_ONLY,
+  normalizeConversationKind,
+  normalizeGroupMode,
+  selectWechatOrderMessages,
+} from '../../services/wechatOrderMessagePolicy';
 
 const props = defineProps({
   customerId: { type: [Number, String], required: true },
@@ -72,6 +93,7 @@ const busy = ref(false);
 const binding = ref(null);
 const searchName = ref('');
 const matches = ref([]);
+const pendingGroup = ref(null);
 const statusMessage = ref('');
 const statusType = ref('info');
 
@@ -79,6 +101,11 @@ const cursorText = computed(() => {
   if (!binding.value?.cursorTimeMs) return '尚未生成过微信订单，首次默认读取最近 24 小时';
   return `上次订单消息：${new Date(binding.value.cursorTimeMs).toLocaleString()}`;
 });
+const boundTypeLabel = computed(() => binding.value?.conversationKind === CONVERSATION_GROUP
+  ? '已绑定群聊' : '已绑定好友');
+const groupModeLabel = computed(() => binding.value?.groupMode === GROUP_ALL_MEMBER_MESSAGES
+  ? '专属客户群 · 接收群内全部成员消息'
+  : '混合业务群 · 仅接收 @ 当前账号的消息');
 
 watch(() => props.customerId, () => loadBinding());
 onMounted(() => loadBinding());
@@ -99,8 +126,11 @@ function unwrapServer(response) {
 }
 
 function normalizeBinding(data) {
+  const conversationKind = normalizeConversationKind(data?.conversationKind);
   return {
     ...(data || {}),
+    conversationKind,
+    groupMode: normalizeGroupMode(conversationKind, data?.groupMode),
     bound: Number(data?.enabled) === 1
       && Boolean(data?.accountFingerprint)
       && Boolean(data?.conversationFingerprint),
@@ -111,10 +141,11 @@ async function loadBinding() {
   loadingBinding.value = true;
   searchName.value = '';
   matches.value = [];
+  pendingGroup.value = null;
   setStatus('');
   try {
     const api = window.electronAPI?.customerWechatOrders;
-    if (!api?.loadBinding) throw new Error('当前安装包不支持微信好友订单');
+    if (!api?.loadBinding) throw new Error('当前安装包不支持微信聊天订单');
     const loaded = normalizeBinding(unwrapServer(await api.loadBinding(Number(props.customerId))));
     binding.value = loaded;
     if (!loaded.bound && loaded.displayName) searchName.value = loaded.displayName;
@@ -135,19 +166,20 @@ async function activeAccount() {
   return account;
 }
 
-async function searchFriend() {
+async function searchConversation() {
   if (!searchName.value || busy.value) return;
   busy.value = true;
   matches.value = [];
+  pendingGroup.value = null;
   setStatus('');
   try {
     const account = await activeAccount();
     const found = unwrapReader(await window.electronAPI.wechatReader.findConversation(account.id, searchName.value));
     matches.value = (Array.isArray(found?.matches) ? found.matches : [])
-      .filter((item) => item.kind === 'direct');
+      .filter((item) => item.kind === 'direct' || item.kind === CONVERSATION_GROUP);
     binding.value = { ...normalizeBinding(binding.value), pendingAccountFingerprint: account.id };
-    if (!matches.value.length) setStatus('没有找到同名微信好友，请确认昵称后重试', 'warning');
-    else if (matches.value.length > 1) setStatus('找到多个同名好友，请按最近活跃时间选择', 'warning');
+    if (!matches.value.length) setStatus('没有找到同名微信好友或群聊，请确认名称后重试', 'warning');
+    else if (matches.value.length > 1) setStatus('找到多个同名微信聊天，请按类型和最近活跃时间选择', 'warning');
   } catch (error) {
     setStatus(error.message, 'error');
   } finally {
@@ -155,7 +187,17 @@ async function searchFriend() {
   }
 }
 
-async function bindFriend(friend) {
+function chooseConversation(conversation) {
+  if (conversation.kind === CONVERSATION_GROUP) {
+    pendingGroup.value = conversation;
+    setStatus('请选择这个群的订单接收方式', 'warning');
+    return;
+  }
+  pendingGroup.value = null;
+  void bindConversation(conversation, null);
+}
+
+async function bindConversation(conversation, groupMode) {
   if (busy.value) return;
   busy.value = true;
   setStatus('');
@@ -164,13 +206,16 @@ async function bindFriend(friend) {
     if (!accountFingerprint) throw new Error('微信账号状态已变化，请重新搜索');
     const saved = unwrapServer(await window.electronAPI.customerWechatOrders.saveBinding({
       customerId: Number(props.customerId),
-      displayName: friend.displayName,
+      displayName: conversation.displayName,
       accountFingerprint,
-      conversationFingerprint: friend.id,
+      conversationFingerprint: conversation.id,
+      conversationKind: conversation.kind,
+      groupMode,
     }));
     binding.value = normalizeBinding(saved);
     matches.value = [];
-    setStatus(`已把 ${friend.displayName} 绑定到当前客户`, 'success');
+    pendingGroup.value = null;
+    setStatus(`已把 ${conversation.displayName} 绑定到当前客户`, 'success');
   } catch (error) {
     setStatus(error.message, 'error');
   } finally {
@@ -189,7 +234,8 @@ async function clearBinding() {
     binding.value = normalizeBinding(cleared);
     searchName.value = '';
     matches.value = [];
-    setStatus('已解除绑定，可以重新选择微信好友', 'success');
+    pendingGroup.value = null;
+    setStatus('已解除绑定，可以重新选择微信好友或群聊', 'success');
   } catch (error) {
     setStatus(error.message, 'error');
   } finally {
@@ -206,13 +252,6 @@ async function pullMessages() {
     const participants = unwrapReader(
       await reader.getParticipants(binding.value.conversationFingerprint)
     );
-    const selfIds = new Set(
-      (Array.isArray(participants) ? participants : [])
-        .filter((item) => item.isSelf)
-        .map((item) => item.id)
-    );
-    if (!selfIds.size) throw new Error('无法识别当前微信账号，请先确认 Reader 数据状态');
-
     const now = Date.now();
     const cursor = Number(binding.value.cursorTimeMs);
     const startMs = Number.isFinite(cursor) && cursor > 0
@@ -224,10 +263,7 @@ async function pullMessages() {
       { offset: 0, limit: 200 }
     ));
 
-    const incoming = (Array.isArray(page?.items) ? page.items : [])
-      .filter((message) => message?.type === 'text')
-      .filter((message) => typeof message.text === 'string' && message.text.trim())
-      .filter((message) => !selfIds.has(message.senderId))
+    const incoming = selectWechatOrderMessages(page?.items, participants, binding.value)
       .map((message) => ({
         ...message,
         messageTimeMs: Date.parse(message.timestamp),
@@ -236,7 +272,14 @@ async function pullMessages() {
       .sort((left, right) => left.messageTimeMs - right.messageTimeMs || left.id.localeCompare(right.id));
 
     if (!incoming.length) {
-      setStatus('所选时间范围内没有新的好友文字消息', 'info');
+      if (binding.value.conversationKind === CONVERSATION_GROUP
+          && binding.value.groupMode === GROUP_MENTION_SELF_ONLY) {
+        setStatus('所选时间范围内没有 @ 当前微信账号的新群消息', 'info');
+      } else if (binding.value.conversationKind === CONVERSATION_GROUP) {
+        setStatus('所选时间范围内没有新的群成员文字消息', 'info');
+      } else {
+        setStatus('所选时间范围内没有新的好友文字消息', 'info');
+      }
       return;
     }
 
@@ -256,11 +299,13 @@ async function pullMessages() {
     }
 
     emit('messages-loaded', {
-      text: pending.map((message) => message.text.trim()).join('\n'),
+      text: pending.map((message) => message.orderText).join('\n'),
       source: {
         customerId: Number(props.customerId),
         accountFingerprint: binding.value.accountFingerprint,
         conversationFingerprint: binding.value.conversationFingerprint,
+        conversationKind: binding.value.conversationKind,
+        groupMode: binding.value.groupMode,
         messages: pending.map((message) => ({
           messageFingerprint: message.id,
           messageTimeMs: message.messageTimeMs,
@@ -348,6 +393,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: #fff;
 }
 .wechat-order-source__matches span { color: #64766e; font-size: 11px; }
+.wechat-order-source__group-mode { margin-top: 10px; padding: 11px; border: 1px solid #e3c77a; border-radius: 7px; background: #fffaf0; }
+.wechat-order-source__group-mode > p { margin: 5px 0 9px; color: #7d6b3d; font-size: 12px; }
+.wechat-order-source__group-mode > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.wechat-order-source__group-mode button { display: grid; gap: 3px; min-width: 240px; padding: 9px 11px; border: 1px solid #d8c17d; border-radius: 6px; background: #fff; text-align: left; color: #183f30; cursor: pointer; }
+.wechat-order-source__group-mode button span { color: #75683f; font-size: 11px; }
 .wechat-order-source__status { margin: 9px 0 0; font-size: 12px; }
 .wechat-order-source__status.error { color: #bd2c2c; }
 .wechat-order-source__status.warning { color: #9a6300; }
