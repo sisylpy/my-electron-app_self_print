@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ordersVisibleInStage } from './orderWorkbenchStage.js';
+import { ordersVisibleInStage, orderStatusSummary } from './orderWorkbenchStage.js';
 
 test('ready, progress, and price show matching rows without changing all orders', () => {
   const ready = {
@@ -25,4 +25,32 @@ test('ready, progress, and price show matching rows without changing all orders'
   assert.equal(ordersVisibleInStage(rows, 'all'), rows);
   assert.deepEqual(ordersVisibleInStage(null, 'ready'), []);
   assert.equal(rows.length, 7);
+});
+
+test('order status summary is safe to render in the stable workbench header', () => {
+  const printable = {
+    nxDepartmentOrdersId: 1,
+    nxDoStatus: 2,
+    nxDoPurchaseStatus: 4,
+    nxDoWeight: 1,
+    nxDoPrice: 1,
+    nxDoSubtotal: 1,
+  };
+  assert.deepEqual(orderStatusSummary([
+    { nxDoStatus: -2 },
+    { nxDoStatus: 0 },
+    printable,
+    { ...printable, nxDepartmentOrdersId: 2, nxDoWeight: 0 },
+  ]), {
+    awaitingConfirmation: 1,
+    inProgress: 1,
+    completed: 2,
+    printable: 1,
+  });
+  assert.deepEqual(orderStatusSummary(null), {
+    awaitingConfirmation: 0,
+    inProgress: 0,
+    completed: 0,
+    printable: 0,
+  });
 });

@@ -54,10 +54,18 @@
           </div>
           <div
             v-if="!smartMode && stageFilter !== 'review'"
-            id="order-flow-customer-status"
             class="order-flow__customer-status"
             aria-label="客户订单状态"
-          ></div>
+          >
+            <span>待确认: <strong class="text-danger">{{ currentStatusSummary.awaitingConfirmation }}</strong></span>
+            <span>出货中: <strong class="text-warning">{{ currentStatusSummary.inProgress }}</strong></span>
+            <span>
+              {{ stageFilter === 'ready' ? '可打印' : '完成' }}:
+              <strong class="text-success">
+                {{ stageFilter === 'ready' ? currentStatusSummary.printable : currentStatusSummary.completed }}
+              </strong>
+            </span>
+          </div>
           <div
             v-if="smartMode && reminderSummary"
             class="order-flow__reminder-summary"
@@ -139,7 +147,7 @@
               :selected-customer-name="customerName(selectedCustomer)"
               :selected-customer-entity="selectedCustomer"
               :selected-customer-dep-print-name="selectedCustomer.nxDepartmentPrintName || 'ApplyPanel'"
-              status-header-target="#order-flow-customer-status"
+              hide-footer
               @order-updated="handleOrdersChanged"
               @order-deleted="handleOrdersChanged"
             />
@@ -160,7 +168,7 @@
             :selected-customer-name="customerName(selectedCustomer)"
             :selected-customer-entity="selectedCustomer"
             :selected-customer-dep-print-name="selectedCustomer.nxDepartmentPrintName || 'ApplyPanel'"
-            status-header-target="#order-flow-customer-status"
+            hide-footer
             @order-updated="handleOrdersChanged"
             @order-deleted="handleOrdersChanged"
           />
@@ -184,7 +192,11 @@ import TodayOrders from '@/components/TodayOrders.vue';
 import TaskOrderWorkspace from '../TaskOrderWorkspace.vue';
 import SmartReplenishmentComparison from './SmartReplenishmentComparison.vue';
 import { customerId, customerName } from '../../services/orderWorkbenchService';
-import { customerVisibleInStage, ordersVisibleInStage } from '../../services/orderWorkbenchStage';
+import {
+  customerVisibleInStage,
+  ordersVisibleInStage,
+  orderStatusSummary,
+} from '../../services/orderWorkbenchStage';
 
 const props = defineProps({
   customers: { type: Array, default: () => [] },
@@ -236,6 +248,7 @@ const activeListLoading = computed(() => smartMode.value ? props.allCustomersLoa
 const activeListError = computed(() => smartMode.value ? props.allCustomersError : props.listError);
 
 const stageOrders = computed(() => ordersVisibleInStage(props.snapshot.orders, props.stageFilter));
+const currentStatusSummary = computed(() => orderStatusSummary(stageOrders.value));
 const stageSubtotalFields = {
   ready: { department: 'depPrintableSubtotal', snapshot: 'printableSubtotal' },
   progress: { department: 'depProgressSubtotal', snapshot: 'progressSubtotal' },
@@ -428,7 +441,9 @@ function handleTaskChanged(change) {
   flex: none;
 }
 .order-flow__customer-title h2 { overflow: hidden; margin: 0; font-size: 18px; text-overflow: ellipsis; white-space: nowrap; }
-.order-flow__customer-status { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: flex-end; padding-right: 20px; }
+.order-flow__customer-status { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: flex-end; gap: 14px; padding-right: 20px; color: var(--product-text-muted); font-size: 10px; }
+.order-flow__customer-status span { white-space: nowrap; }
+.order-flow__customer-status strong { font-size: 11px; }
 .order-flow__reminder-summary {
   display: flex;
   min-width: 0;

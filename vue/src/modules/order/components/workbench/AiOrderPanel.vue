@@ -27,11 +27,14 @@
           @change="handleModeChange"
         />
         <button
+          v-if="hasWechatContact"
           type="button"
           :class="['ai-order-panel__wechat-mode', { 'is-active': selectedMode === 'wechat' }]"
-          @click="handleModeChange('wechat')"
+          :disabled="wechatPulling"
+          title="获取当前客户的微信新消息并解析"
+          @click="handleWechatQuickAction"
         >
-          微信聊天
+          {{ wechatPulling ? '正在获取…' : '微信聊天' }}
         </button>
       </div>
     </div>
@@ -64,10 +67,11 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import PlaceOrderWorkspace from '../PlaceOrderWorkspace.vue';
 import OrderModeSelector from '../OrderModeSelector.vue';
 import CustomerContextPicker from './CustomerContextPicker.vue';
+import { customerHasWechatContact } from '../../services/wechatOrderAvailability';
 
 const props = defineProps({
   customers: { type: Array, default: () => [] },
@@ -94,22 +98,43 @@ const workspaceKey = computed(() => (
 ));
 const placeOrderRef = ref(null);
 const selectedMode = ref('paste');
+const wechatPulling = ref(false);
+const hasWechatContact = computed(() => customerHasWechatContact(props.selectedCustomer));
+let workspaceResetTimer = null;
 
 watch(() => [props.selectedCustomerId, props.selectedDepartmentId], () => {
   selectedMode.value = 'paste';
 });
 
 function handleTaskAdded(event) {
-  selectedMode.value = 'paste';
-  newTaskSequence.value += 1;
   emit('task-added', event);
+  clearTimeout(workspaceResetTimer);
+  workspaceResetTimer = setTimeout(() => {
+    selectedMode.value = 'paste';
+    newTaskSequence.value += 1;
+    workspaceResetTimer = null;
+  }, 0);
 }
+
+onBeforeUnmount(() => clearTimeout(workspaceResetTimer));
 
 async function handleModeChange(mode) {
   if (mode === selectedMode.value) return;
   selectedMode.value = mode;
   await nextTick();
   placeOrderRef.value?.handleUploadTypeChange?.(mode);
+}
+
+async function handleWechatQuickAction() {
+  if (wechatPulling.value) return;
+  wechatPulling.value = true;
+  try {
+    selectedMode.value = 'wechat';
+    await nextTick();
+    await placeOrderRef.value?.pullWechatMessages?.();
+  } finally {
+    wechatPulling.value = false;
+  }
 }
 </script>
 

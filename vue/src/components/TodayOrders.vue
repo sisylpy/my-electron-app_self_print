@@ -689,7 +689,7 @@
     </div>
 
     <!-- 独立订单页保留底部操作；工作台在顶部显示状态和打印操作。 -->
-    <div v-if="!statusHeaderTarget && !batchPrintMode" class="border-top p-3 bg-light">
+    <div v-if="!hideFooter && !batchPrintMode" class="border-top p-3 bg-light">
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div class="d-flex flex-column gap-1">
           <div class="d-flex align-items-center gap-2">
@@ -726,20 +726,7 @@
       </div>
     </div>
 
-    <Teleport v-if="statusHeaderTarget" :to="statusHeaderTarget">
-      <div class="d-flex align-items-center gap-3 text-muted small" @click="handleStatsAreaClick">
-        <span>待确认: <span class="text-danger fw-bold">{{ orderStatusStats.temp || 0 }}</span></span>
-        <span>出货中: <span class="text-warning fw-bold">{{ orderStatusStats.pending || 0 }}</span></span>
-        <span>{{ batchPrintMode ? '可打印' : '完成' }}: <span class="text-success fw-bold">{{ batchPrintMode ? printableOrders.length : (orderStatusStats.completed || 0) }}</span></span>
-        <div v-if="showSaveTrainingDataButton" class="d-flex align-items-center gap-3">
-          <button class="btn btn-primary btn-sm" @click.stop="handleShowDatePicker">
-            保存训练数据
-          </button>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- 状态统计会传送到工作台顶部；模态框留在底部操作栏外，避免被隐藏。 -->
+    <!-- 模态框留在底部操作栏外，避免被隐藏。 -->
     <div v-if="showDatePicker" class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" @click.self="showDatePicker = false">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content" @click.stop>
@@ -853,9 +840,9 @@ export default {
       type: Boolean,
       default: false
     },
-    statusHeaderTarget: {
-      type: String,
-      default: ''
+    hideFooter: {
+      type: Boolean,
+      default: false
     }
   },
   emits: ['order-updated', 'order-deleted'],

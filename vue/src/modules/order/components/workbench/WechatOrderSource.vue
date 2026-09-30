@@ -96,6 +96,7 @@ const matches = ref([]);
 const pendingGroup = ref(null);
 const statusMessage = ref('');
 const statusType = ref('info');
+let bindingLoadPromise = null;
 
 const cursorText = computed(() => {
   if (!binding.value?.cursorTimeMs) return '尚未生成过微信订单，首次默认读取最近 24 小时';
@@ -107,8 +108,8 @@ const groupModeLabel = computed(() => binding.value?.groupMode === GROUP_ALL_MEM
   ? '专属客户群 · 接收群内全部成员消息'
   : '混合业务群 · 仅接收 @ 当前账号的消息');
 
-watch(() => props.customerId, () => loadBinding());
-onMounted(() => loadBinding());
+watch(() => props.customerId, () => { void loadBinding(); });
+onMounted(() => { void loadBinding(); });
 
 function setStatus(message, type = 'info') {
   statusMessage.value = message;
@@ -137,7 +138,15 @@ function normalizeBinding(data) {
   };
 }
 
-async function loadBinding() {
+function loadBinding() {
+  if (bindingLoadPromise) return bindingLoadPromise;
+  bindingLoadPromise = performLoadBinding();
+  return bindingLoadPromise.finally(() => {
+    bindingLoadPromise = null;
+  });
+}
+
+async function performLoadBinding() {
   loadingBinding.value = true;
   searchName.value = '';
   matches.value = [];
@@ -245,6 +254,13 @@ async function clearBinding() {
 
 async function pullMessages() {
   if (busy.value) return;
+  if (bindingLoadPromise) await bindingLoadPromise;
+  if (!binding.value?.bound) {
+    if (statusType.value !== 'error') {
+      setStatus('当前客户尚未绑定微信好友或群聊，请先完成绑定', 'warning');
+    }
+    return false;
+  }
   busy.value = true;
   setStatus('');
   try {
@@ -320,6 +336,8 @@ async function pullMessages() {
     busy.value = false;
   }
 }
+
+defineExpose({ pullMessages });
 
 function formatTime(value) {
   if (!value) return '未知';

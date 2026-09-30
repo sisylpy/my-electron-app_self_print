@@ -13,6 +13,7 @@
 
             <WechatOrderSource
                     v-if="uploadType === 'wechat'"
+                    ref="wechatOrderSourceRef"
                     :customer-id="selectedAllCustomer"
                     :customer-name="selectedCustomerName"
                     @messages-loaded="handleWechatMessagesLoaded"

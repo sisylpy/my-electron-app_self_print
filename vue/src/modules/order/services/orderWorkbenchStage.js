@@ -46,6 +46,22 @@ export function isPrintableOrder(order) {
     && Number(order.nxDoSubtotal) > 0;
 }
 
+export function orderStatusSummary(orders) {
+  return (Array.isArray(orders) ? orders : []).reduce((summary, order) => {
+    const status = Number(order?.nxDoStatus);
+    if (status === -2) summary.awaitingConfirmation += 1;
+    if (status === 0) summary.inProgress += 1;
+    if (status === 2) summary.completed += 1;
+    if (isPrintableOrder(order)) summary.printable += 1;
+    return summary;
+  }, {
+    awaitingConfirmation: 0,
+    inProgress: 0,
+    completed: 0,
+    printable: 0,
+  });
+}
+
 function isConfirmedOrder(order) {
   if (order?.nxDoStatus == null || order.nxDoStatus === '') return false;
   const status = Number(order.nxDoStatus);

@@ -388,6 +388,18 @@ import api from '../services/orderApi';
                 this.$emit('upload-type-change', type);
             },
 
+            async pullWechatMessages() {
+                if (this.uploadType !== 'wechat') {
+                    this.handleUploadTypeChange('wechat');
+                    await this.$nextTick();
+                }
+                const source = this.$refs.wechatOrderSourceRef;
+                if (!source || typeof source.pullMessages !== 'function') {
+                    throw new Error('微信消息读取组件尚未就绪');
+                }
+                return source.pullMessages();
+            },
+
             // 停止所有正在进行的朗读
             stopAllReading() {
                 console.log('[PlaceOrder] 停止所有朗读');
