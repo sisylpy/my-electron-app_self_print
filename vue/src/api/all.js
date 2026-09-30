@@ -2,6 +2,7 @@
 import axiosInstance from './axios'; // 使用配置了拦截器的 Axios 实例
 import config from '../config';
 import { desktopOrderSessionRequest, isPackagedDesktop } from './desktopOrderSession';
+import { toIpcCloneableJson } from './ipcPayload';
 
 const api = '/api';
 if (!api) {
@@ -359,7 +360,8 @@ const apiMethods = {
       ? window.electronAPI?.orderWrite?.savePasteOrders
       : null;
     if (typeof desktopWriter === 'function') {
-      const result = await desktopWriter(body);
+      // Vue data 中的订单和微信来源会被包装成 Proxy，不能直接跨 Electron IPC。
+      const result = await desktopWriter(toIpcCloneableJson(body, '订单数据'));
       if (result?.ok) {
         // 保持原有 Axios 调用方的 res.data 返回契约，业务组件无需感知传输通道。
         return { data: result.data };
