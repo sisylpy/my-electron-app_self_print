@@ -109,12 +109,15 @@ function normalizeBinding(data) {
 
 async function loadBinding() {
   loadingBinding.value = true;
+  searchName.value = '';
   matches.value = [];
   setStatus('');
   try {
     const api = window.electronAPI?.customerWechatOrders;
     if (!api?.loadBinding) throw new Error('当前安装包不支持微信好友订单');
-    binding.value = normalizeBinding(unwrapServer(await api.loadBinding(Number(props.customerId))));
+    const loaded = normalizeBinding(unwrapServer(await api.loadBinding(Number(props.customerId))));
+    binding.value = loaded;
+    if (!loaded.bound && loaded.displayName) searchName.value = loaded.displayName;
   } catch (error) {
     binding.value = normalizeBinding(null);
     setStatus(error.message, 'error');
