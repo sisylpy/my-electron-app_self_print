@@ -30,13 +30,48 @@ function cloneAndValidatePastePayload(input) {
     throw new Error('桌面端粘贴订单类型无效');
   }
 
+  let wechatOrderSource;
+  if (input.wechatOrderSource != null) {
+    const source = input.wechatOrderSource;
+    const customerId = Number(source?.customerId);
+    if (!Number.isSafeInteger(customerId) || customerId <= 0) {
+      throw new Error('微信订单客户编号无效');
+    }
+    if (typeof source.accountFingerprint !== 'string'
+        || !/^fp:[A-Za-z0-9_-]{8,60}$/.test(source.accountFingerprint)
+        || typeof source.conversationFingerprint !== 'string'
+        || !/^fp:[A-Za-z0-9_-]{8,60}$/.test(source.conversationFingerprint)) {
+      throw new Error('微信订单来源指纹无效');
+    }
+    if (!Array.isArray(source.messages) || source.messages.length < 1 || source.messages.length > 200) {
+      throw new Error('微信订单消息数量无效');
+    }
+    const messages = source.messages.map((message) => {
+      const messageTimeMs = Number(message?.messageTimeMs);
+      if (typeof message?.messageFingerprint !== 'string'
+          || !/^[A-Za-z0-9:._-]{8,160}$/.test(message.messageFingerprint)
+          || !Number.isSafeInteger(messageTimeMs) || messageTimeMs < 0) {
+        throw new Error('微信订单消息元数据无效');
+      }
+      return { messageFingerprint: message.messageFingerprint, messageTimeMs };
+    });
+    wechatOrderSource = {
+      customerId,
+      accountFingerprint: source.accountFingerprint,
+      conversationFingerprint: source.conversationFingerprint,
+      messages,
+    };
+  }
+
   let serialized;
   try {
-    serialized = JSON.stringify({
+    const payload = {
       orderList: input.orderList,
       pasteText: input.pasteText || '',
       type,
-    });
+    };
+    if (wechatOrderSource) payload.wechatOrderSource = wechatOrderSource;
+    serialized = JSON.stringify(payload);
   } catch {
     throw new Error('订单内容无法序列化');
   }

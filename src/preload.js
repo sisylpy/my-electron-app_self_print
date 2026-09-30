@@ -168,6 +168,27 @@ const electronAPI = Object.freeze({
     complete: (taskId) => ipcRenderer.invoke('customer-ocr-training-complete', { taskId }),
   }),
 
+  // 客户微信好友绑定及消息去重登记通过主进程安全会话访问。
+  customerWechatOrders: Object.freeze({
+    loadBinding: (customerId) => ipcRenderer.invoke('customer-wechat-binding-load', { customerId }),
+    saveBinding: (payload) => ipcRenderer.invoke('customer-wechat-binding-save', payload),
+    clearBinding: (customerId) => ipcRenderer.invoke('customer-wechat-binding-clear', { customerId }),
+    prepareMessages: (customerId, messages) =>
+      ipcRenderer.invoke('customer-wechat-messages-prepare', { customerId, messages }),
+  }),
+
+  // Reader 只返回不可逆 ID 和业务 DTO；绝不暴露启动命令、路径、stdio 或 access material。
+  wechatReader: Object.freeze({
+    diagnose: () => ipcRenderer.invoke('wechat-reader-diagnose'),
+    listAccounts: () => ipcRenderer.invoke('wechat-reader-list-accounts'),
+    findConversation: (accountId, name) =>
+      ipcRenderer.invoke('wechat-reader-find-conversation', { accountId, name }),
+    getParticipants: (conversationId) =>
+      ipcRenderer.invoke('wechat-reader-get-participants', { conversationId }),
+    getMessages: (conversationId, timeRange, page) =>
+      ipcRenderer.invoke('wechat-reader-get-messages', { conversationId, timeRange, page }),
+  }),
+
   // 正式包只暴露扫码轮询及两个固定订单读取动作；会话 Cookie 留在主进程。
   orderSession: Object.freeze({
     pollLogin: (sessionId) => ipcRenderer.invoke('order-session-poll-login', sessionId),

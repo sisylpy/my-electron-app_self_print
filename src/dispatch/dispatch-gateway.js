@@ -855,6 +855,79 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     }
   }
 
+  function validateWechatMessageRefs(messages) {
+    if (!Array.isArray(messages) || messages.length < 1 || messages.length > 200) {
+      throw new Error('微信消息数量无效，单次最多 200 条');
+    }
+    return messages.map((message) => {
+      const data = strictPayload(message || {}, ['messageFingerprint', 'messageTimeMs']);
+      if (typeof data.messageFingerprint !== 'string'
+          || !/^[A-Za-z0-9:._-]{8,160}$/.test(data.messageFingerprint)) {
+        throw new Error('微信消息指纹无效');
+      }
+      const messageTimeMs = Number(data.messageTimeMs);
+      if (!Number.isSafeInteger(messageTimeMs) || messageTimeMs < 0) {
+        throw new Error('微信消息时间无效');
+      }
+      return { messageFingerprint: data.messageFingerprint, messageTimeMs };
+    });
+  }
+
+  async function loadCustomerWechatBinding(input) {
+    try {
+      const customerId = requirePositiveId(input?.customerId, 'customerId');
+      return request('GET', `customer-wechat-orders/${customerId}/binding`);
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function saveCustomerWechatBinding(input) {
+    try {
+      const envelope = strictPayload(input || {}, ['customerId', 'displayName', 'accountFingerprint', 'conversationFingerprint']);
+      const customerId = requirePositiveId(envelope.customerId, 'customerId');
+      if (typeof envelope.displayName !== 'string' || !envelope.displayName.trim()
+          || envelope.displayName.trim().length > 255) {
+        throw new Error('微信好友昵称无效');
+      }
+      ['accountFingerprint', 'conversationFingerprint'].forEach((field) => {
+        if (typeof envelope[field] !== 'string' || !/^fp:[A-Za-z0-9_-]{8,60}$/.test(envelope[field])) {
+          throw new Error(`${field} 无效`);
+        }
+      });
+      return request('PUT', `customer-wechat-orders/${customerId}/binding`, {
+        data: {
+          displayName: envelope.displayName.trim(),
+          accountFingerprint: envelope.accountFingerprint,
+          conversationFingerprint: envelope.conversationFingerprint,
+        },
+      });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function clearCustomerWechatBinding(input) {
+    try {
+      const customerId = requirePositiveId(input?.customerId, 'customerId');
+      return request('DELETE', `customer-wechat-orders/${customerId}/binding`);
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function prepareCustomerWechatMessages(input) {
+    try {
+      const data = strictPayload(input || {}, ['customerId', 'messages']);
+      const customerId = requirePositiveId(data.customerId, 'customerId');
+      return request('POST', `customer-wechat-orders/${customerId}/messages/prepare`, {
+        data: { messages: validateWechatMessageRefs(data.messages) },
+      });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
   async function loadSalesAnalysisOverview(input) {
     try {
       return request('GET', 'sales-analysis/overview', {
@@ -1003,6 +1076,10 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     deleteCustomerOcrTrainingItem,
     deleteCustomerOcrTraining,
     completeCustomerOcrTraining,
+    loadCustomerWechatBinding,
+    saveCustomerWechatBinding,
+    clearCustomerWechatBinding,
+    prepareCustomerWechatMessages,
     loadSalesAnalysisOverview,
     loadSalesAnalysisCategory,
     loadSalesAnalysisProductCustomers,

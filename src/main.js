@@ -46,6 +46,7 @@ const axios = require('axios');
 const { createDispatchGateway } = require('./dispatch/dispatch-gateway');
 const { createOrderWriteGateway } = require('./order/order-write-gateway');
 const { createOrderSessionGateway } = require('./order/order-session-gateway');
+const { createWechatReaderService, shutdownReader } = require('./wechat/reader-service');
 const { PRODUCTION_API_BASE_URL } = require('./api-runtime');
 
 // MCP 服务器模块
@@ -90,6 +91,9 @@ let mcpSessionUser = null;
 let dispatchGateway = null;
 let orderWriteGateway = null;
 let orderSessionGateway = null;
+let wechatReaderService = null;
+let quitAfterReaderShutdown = false;
+let beforeQuitReaderPromise = null;
 const selectedFolderCapabilities = new Set();
 const saveFileCapabilities = new Set();
 const pendingPrintedOrderSaves = new Map();
@@ -262,6 +266,13 @@ function getOrderSessionGateway() {
     });
   }
   return orderSessionGateway;
+}
+
+function getWechatReaderService() {
+  if (!wechatReaderService) {
+    wechatReaderService = createWechatReaderService(appLogger);
+  }
+  return wechatReaderService;
 }
 
 function sanitizeMcpSessionUser(value) {
@@ -574,6 +585,28 @@ function setupIpcHandlers() {
     return getOrderWriteGateway().savePasteOrders(payload);
   });
 
+  // 本地微信 Reader：只开放有限 DTO 方法；路径、子进程、密钥材料均不跨 preload。
+  ipcMain.handle('wechat-reader-diagnose', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getWechatReaderService().diagnose();
+  });
+  ipcMain.handle('wechat-reader-list-accounts', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getWechatReaderService().listAccounts();
+  });
+  ipcMain.handle('wechat-reader-find-conversation', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    return getWechatReaderService().findConversation(input);
+  });
+  ipcMain.handle('wechat-reader-get-participants', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    return getWechatReaderService().getParticipants(input);
+  });
+  ipcMain.handle('wechat-reader-get-messages', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    return getWechatReaderService().getMessages(input);
+  });
+
   // 桌面调度：token 只存在主进程，渲染进程仅能调用以下白名单能力。
   ipcMain.handle('dispatch-auth-get-session', async (event) => {
     assertTrustedRendererEvent(event);
@@ -764,6 +797,22 @@ function setupIpcHandlers() {
   ipcMain.handle('customer-ocr-training-complete', async (event, command) => {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().completeCustomerOcrTraining(command);
+  });
+  ipcMain.handle('customer-wechat-binding-load', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadCustomerWechatBinding(command);
+  });
+  ipcMain.handle('customer-wechat-binding-save', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().saveCustomerWechatBinding(command);
+  });
+  ipcMain.handle('customer-wechat-binding-clear', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().clearCustomerWechatBinding(command);
+  });
+  ipcMain.handle('customer-wechat-messages-prepare', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().prepareCustomerWechatMessages(command);
   });
   ipcMain.handle('sales-analysis-load-overview', async (event, range) => {
     assertTrustedRendererEvent(event);
@@ -4052,7 +4101,26 @@ app.whenReady().then(async () => {
 });
 
 // 应用退出时关闭 MCP 服务器
+app.on('before-quit', (event) => {
+  if (quitAfterReaderShutdown) return;
+  event.preventDefault();
+  if (!beforeQuitReaderPromise) {
+    beforeQuitReaderPromise = shutdownReader()
+      .catch((error) => {
+        appLogger.append('error', 'wechat-reader', 'reader stop failed during before-quit', {
+          message: error?.message,
+        });
+      })
+      .finally(() => {
+        quitAfterReaderShutdown = true;
+        app.quit();
+      });
+  }
+});
+
 app.on('will-quit', () => {
+  // before-quit 已等待 Reader；这里保留幂等兜底，禁止遗漏自身启动的 child。
+  void shutdownReader();
   if (dispatchGateway) {
     dispatchGateway.dispose();
     dispatchGateway = null;
@@ -4072,6 +4140,18 @@ app.on('will-quit', () => {
 });
 
 app.on('window-all-closed', () => {
-  // 对于 Windows 和 Linux，在所有窗口关闭后退出应用
-  if (process.platform !== 'darwin') app.quit();
+  // macOS 关闭最后一个窗口也释放 Reader；下次 activate 时按请求懒启动新 child。
+  shutdownReader()
+    .catch((error) => {
+      appLogger.append('error', 'wechat-reader', 'reader stop failed after window-all-closed', {
+        message: error?.message,
+      });
+    })
+    .finally(() => {
+      wechatReaderService = null;
+      if (process.platform !== 'darwin') {
+        quitAfterReaderShutdown = true;
+        app.quit();
+      }
+    });
 });

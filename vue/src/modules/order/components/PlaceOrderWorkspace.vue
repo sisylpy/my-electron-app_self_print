@@ -11,6 +11,13 @@
         <!-- 内容区域（min-height:0 配合子级让表格区域正确收缩，防止底部滚动条被遮挡） -->
         <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
 
+            <WechatOrderSource
+                    v-if="uploadType === 'wechat'"
+                    :customer-id="selectedAllCustomer"
+                    :customer-name="selectedCustomerName"
+                    @messages-loaded="handleWechatMessagesLoaded"
+            />
+
             <!-- 手动录入模式 -->
             <ManualEntryUpload
                     v-if="uploadType === 'manual'"
@@ -48,7 +55,7 @@
             <!-- 复制粘贴模式 -->
             <PasteUpload
                     ref="pasteUploadRef"
-                    v-if="uploadType === 'paste'"
+                    v-if="uploadType === 'paste' || uploadType === 'wechat'"
                     source="placeOrder"
                     :new-task-only="newTaskOnly"
                     :dep-id="selectedSubDepartment || selectedAllCustomer"

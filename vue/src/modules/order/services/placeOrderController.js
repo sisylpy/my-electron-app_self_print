@@ -14,6 +14,7 @@ import api from '../services/orderApi';
     import Toast from '@/components/Toast.vue';
     import AlertDialog from '@/components/AlertDialog.vue';
     import OrderModeSelector from '../components/OrderModeSelector.vue';
+    import WechatOrderSource from '../components/workbench/WechatOrderSource.vue';
     import {createPlaceOrderState} from '../stores/orderWorkspaceState';
 
     export default {
@@ -30,7 +31,8 @@ import api from '../services/orderApi';
             DraftOrderList,
             Toast,
             AlertDialog,
-            OrderModeSelector
+            OrderModeSelector,
+            WechatOrderSource
         },
         emits: ['order-saved', 'upload-type-change', 'switch-to-today-orders', 'task-added'],
         props: {
@@ -54,7 +56,7 @@ import api from '../services/orderApi';
             initialUploadType: {
                 type: String,
                 default: 'manual',
-                validator: value => ['manual', 'paste', 'image', 'excel-paste', 'excel', 'auto'].includes(value)
+                validator: value => ['manual', 'paste', 'image', 'excel-paste', 'excel', 'auto', 'wechat'].includes(value)
             },
             modeSelectorVariant: {
                 type: String,
@@ -369,6 +371,7 @@ import api from '../services/orderApi';
                 this.pasteInputText = '';
                 this.pasteInputContent = '';
                 this.pasteOriginText = '';
+                this.wechatOrderSource = null;
                 this.excelPasteSaveCount = null;
                 this.excelPasteTableData = Array.from({ length: 50 }, () => ({
                     goodsName: '', quantity: '', specification: '', specificationWeight: '',
@@ -3508,6 +3511,9 @@ import api from '../services/orderApi';
                         orderList: orderData,
                         pasteText: this.pasteInputText || '',
                         type: 3,
+                        ...(this.uploadType === 'wechat' && this.wechatOrderSource
+                            ? {wechatOrderSource: this.wechatOrderSource}
+                            : {}),
                     });
 
                     if (res && res.data && res.data.code === 0) {
@@ -3537,6 +3543,8 @@ import api from '../services/orderApi';
 
                         // 重置搜索和匹配商品列表状态
                         this.resetSearchAndMatchedGoodsState();
+
+                        this.wechatOrderSource = null;
 
                         this.$emit('task-added');
                     } else {
@@ -5078,6 +5086,20 @@ import api from '../services/orderApi';
             // PasteUpload 组件的事件适配器
             handlePasteInput(e) {
                 this.onPasteInput(e);
+            },
+
+            async handleWechatMessagesLoaded(payload) {
+                if (!payload || typeof payload.text !== 'string' || !payload.source) return;
+                this.wechatOrderSource = payload.source;
+                this.pasteInputText = payload.text;
+                this.pasteInputContent = payload.text;
+                this.pasteOriginText = payload.text;
+                this.pasteSaveCount = null;
+                this.orderItems = [];
+                this.pasteInvalidLineIndices = [];
+                this.pasteInvalidSegments = [];
+                this.pasteNoValidOrder = false;
+                await this.handlePasteLocalParse();
             },
 
             // DraftOrderList 组件的事件适配器（Paste 模式草稿状态）

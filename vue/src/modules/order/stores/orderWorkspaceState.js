@@ -138,6 +138,7 @@ export function createPlaceOrderState() {
     draftSelectedOrderIndex: -1,
     pasteOriginText: '',
     pasteInputContent: '',
+    wechatOrderSource: null,
     pasteInvalidLineIndices: [],
     pasteInvalidSegments: [],
     pasteNoValidOrder: false,

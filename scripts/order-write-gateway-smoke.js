@@ -35,6 +35,34 @@ async function main() {
   assert.strictEqual(capturedRequest.requestOptions.maxRedirects, 0);
   assert.strictEqual(capturedRequest.data.type, 3);
 
+  const wechatSuccess = await gateway.savePasteOrders({
+    orderList: [{ nxDoGoodsName: '土豆', nxDoQuantity: '5', nxDoStandard: '斤' }],
+    pasteText: '土豆5斤',
+    type: 3,
+    wechatOrderSource: {
+      customerId: 7,
+      accountFingerprint: 'fp:account1234',
+      conversationFingerprint: 'fp:friend12345',
+      messages: [{ messageFingerprint: 'fp:friend12345:99', messageTimeMs: 1700000000000 }],
+    },
+  });
+  assert.strictEqual(wechatSuccess.ok, true);
+  assert.strictEqual(capturedRequest.data.wechatOrderSource.customerId, 7);
+  assert.strictEqual(capturedRequest.data.wechatOrderSource.messages.length, 1);
+
+  const invalidWechatSource = await gateway.savePasteOrders({
+    orderList: [{ nxDoGoodsName: '土豆', nxDoQuantity: '5', nxDoStandard: '斤' }],
+    type: 3,
+    wechatOrderSource: {
+      customerId: 7,
+      accountFingerprint: 'wxid_secret',
+      conversationFingerprint: 'fp:friend12345',
+      messages: [{ messageFingerprint: 'fp:friend12345:99', messageTimeMs: 1700000000000 }],
+    },
+  });
+  assert.strictEqual(invalidWechatSource.ok, false);
+  assert.strictEqual(invalidWechatSource.status, 400);
+
   const excelSuccess = await gateway.savePasteOrders({
     orderList: [{ nxDoGoodsName: '小米椒', nxDoQuantity: '2', nxDoStandard: '斤' }],
     pasteText: '小米椒,2,斤',

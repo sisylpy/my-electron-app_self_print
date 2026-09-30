@@ -24,6 +24,8 @@ const mcpCli = read('src/mcp-server-cli.js');
 const mcpPush = read('src/mcp-print-push.js');
 const orderWriteGateway = read('src/order/order-write-gateway.js');
 const dispatchGateway = read('src/dispatch/dispatch-gateway.js');
+const readerBridge = read('src/wechat/reader-bridge.js');
+const wechatOrderSource = read('vue/src/modules/order/components/workbench/WechatOrderSource.vue');
 const placeOrder = read('vue/src/components/PlaceOrder.vue');
 const historyOrders = read('vue/src/components/HistoryOrders.vue');
 const customerOcrTraining = read('vue/src/modules/customer/components/CustomerOcrTrainingPanel.vue');
@@ -56,6 +58,20 @@ check(preload.includes('customerOcrTraining: Object.freeze')
 check(!customerOcrTraining.includes('Authorization')
   && !customerOcrTraining.includes('accessToken'),
   '客户OCR训练页面不接触安全会话令牌');
+check(preload.includes('wechatReader: Object.freeze')
+  && preload.includes('customerWechatOrders: Object.freeze')
+  && main.includes("ipcMain.handle('wechat-reader-get-messages'")
+  && main.includes("ipcMain.handle('customer-wechat-messages-prepare'")
+  && !preload.includes('wechatReaderRequest:'),
+  '微信好友订单仅通过 Reader 与业务白名单动作访问');
+check(!wechatOrderSource.includes('Authorization')
+  && !wechatOrderSource.includes('accessToken')
+  && !wechatOrderSource.includes('WLR_'),
+  '微信好友订单页面不接触令牌、Reader 路径或材料配置');
+check(readerBridge.includes('严禁记录 stdout 原文')
+  && !readerBridge.includes('reader stdout text=')
+  && readerBridge.includes('sanitizeDiagnosticText'),
+  'Reader 日志不记录 stdout 内容且会脱敏 stderr');
 check(preload.includes('salesAnalysis: Object.freeze')
   && main.includes("ipcMain.handle('sales-analysis-load-overview'")
   && dispatchGateway.includes("request('GET', 'sales-analysis/overview'")

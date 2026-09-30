@@ -26,6 +26,13 @@
           variant="toolbar"
           @change="handleModeChange"
         />
+        <button
+          type="button"
+          :class="['ai-order-panel__wechat-mode', { 'is-active': selectedMode === 'wechat' }]"
+          @click="handleModeChange('wechat')"
+        >
+          微信好友
+        </button>
       </div>
     </div>
 
@@ -189,6 +196,26 @@ async function handleModeChange(mode) {
 
 .ai-order-panel__modes :deep(.order-mode-selector--toolbar) {
   width: min(100%, 720px);
+}
+
+.ai-order-panel__wechat-mode {
+  height: 38px;
+  flex: none;
+  padding: 0 14px;
+  border: 1px solid var(--product-border-strong);
+  border-radius: 6px;
+  color: var(--product-text-secondary);
+  background: var(--product-surface);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.ai-order-panel__wechat-mode:hover,
+.ai-order-panel__wechat-mode.is-active {
+  border-color: #178454;
+  color: #fff;
+  background: #178454;
 }
 
 @media (max-width: 1180px) {
