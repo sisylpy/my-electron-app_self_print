@@ -12,7 +12,7 @@ from ..locators.unread_conversation import (
     UnreadConversation,
     locate_unread_conversations,
 )
-from ..mouse import click, double_click, press_escape, scroll_vertical
+from ..mouse import click, double_click, press_escape
 from ..results import OperationResult, ResultCode
 from ..screenshot import Screenshot, capture_window
 from ..state_detector import conversation_header
@@ -21,6 +21,10 @@ from ..window import WeChatWindow, activate_wechat, main_wechat_window
 
 
 HydrationProbe = Callable[[UnreadConversation], bool]
+
+
+class ScreenCaptureUnavailable(RuntimeError):
+    pass
 
 
 def chat_tab_point(image_width: int, image_height: int) -> Point:
@@ -112,23 +116,6 @@ class ReadUnreadConversationsFlow:
         shot = capture_window(self._window.bounds, self._next_path(name))
         return shot, self._read(shot)
 
-    def _list_point(self) -> Point:
-        if self._window is None:
-            raise RuntimeError("微信窗口尚未初始化")
-        bounds = self._window.bounds
-        return Point(bounds.x + bounds.width * 0.25, bounds.y + bounds.height * 0.55)
-
-    @staticmethod
-    def _page_signature(items: list[OCRItem], width: int, height: int) -> tuple[str, ...]:
-        values = [
-            f"{item.text.strip()}@{round(item.center.y / 12)}"
-            for item in items
-            if item.text.strip()
-            and item.rect.x < width * 0.46
-            and height * 0.07 < item.center.y < height * 0.98
-        ]
-        return tuple(sorted(values))
-
     @staticmethod
     def _resolve_candidate(
         saved: UnreadConversation,
@@ -172,6 +159,10 @@ class ReadUnreadConversationsFlow:
         if not self.allowed_titles:
             return None
         shot, items = self._window_shot("current-conversation")
+        if not items:
+            raise ScreenCaptureUnavailable(
+                "微信窗口截图没有任何可识别文字，通常表示 GrainPrint 没有屏幕录制权限"
+            )
         return current_allowed_title(
             items,
             self.allowed_titles,
@@ -267,6 +258,7 @@ class ReadUnreadConversationsFlow:
             return False, f"打开 {candidate.title!r} 后未能核验聊天标题，已停止"
 
         self.opened += 1
+        self._opened_titles.add(candidate.title)
         try:
             hydration = self._wait_for_hydration(candidate)
         except Exception as exc:
@@ -285,7 +277,6 @@ class ReadUnreadConversationsFlow:
     def run(self) -> OperationResult:
         code = ResultCode.INTERNAL_ERROR
         message = "未完成"
-        reached_bottom = False
         try:
             activate_wechat()
             for _ in range(3):
@@ -304,27 +295,28 @@ class ReadUnreadConversationsFlow:
             # operator.
             self._focus_chat_tab()
 
-            # Visibly return to the top of the conversation list.  The wheel
-            # event is pinned to the list, never to the chat transcript.
-            for _ in range(4):
-                scroll_vertical(self._list_point(), 18, settle=0.25)
-            time.sleep(0.6)
-
             processed: set[str] = set()
-            for page in range(1, self.max_pages + 1):
-                page_shot, page_items = self._window_shot(f"page-{page:02d}-snapshot")
+            # Double-clicking the chat logo promotes unread conversations to
+            # the top.  Re-snapshot that top region after each opened chat;
+            # never scroll through the user's full conversation history.
+            round_limit = self.max_pages
+            if self.allowed_titles is not None:
+                round_limit = min(round_limit, max(1, len(self.allowed_titles)))
+            for round_index in range(1, round_limit + 1):
+                page_shot, page_items = self._window_shot(
+                    f"top-unread-{round_index:02d}-snapshot"
+                )
                 snapshot = locate_unread_conversations(page_shot.image, page_items)
                 snapshot = [
                     item
                     for item in snapshot
                     if item.key not in processed and item.title not in self._opened_titles
                 ]
-                self.detected += len(snapshot)
+                unseen = [item for item in snapshot if item.key not in processed]
+                self.detected += len(unseen)
 
                 if self.allowed_titles is not None:
-                    unrelated = [
-                        item for item in snapshot if item.title not in self.allowed_titles
-                    ]
+                    unrelated = [item for item in unseen if item.title not in self.allowed_titles]
                     for item in unrelated:
                         processed.add(item.key)
                         self.filtered += 1
@@ -349,39 +341,29 @@ class ReadUnreadConversationsFlow:
                         {"title": item.title, "status": "AMBIGUOUS", "hydration": "NOT_CHECKED"}
                     )
                     self.details.append(
-                        f"SKIP page={page} title={item.title!r}: duplicate title and preview"
+                        f"SKIP top={round_index} title={item.title!r}: duplicate title and preview"
                     )
 
-                # The whole current page is snapshotted before the first click,
-                # so clearing one red dot cannot make later rows disappear from
-                # this work queue.
-                for index, conversation in enumerate(actionable, start=1):
-                    processed.add(conversation.key)
-                    ok, reason = self._open_one(
-                        conversation,
-                        page=page,
-                        index=index,
-                    )
-                    if not ok:
-                        code = ResultCode.VERIFY_FAILED
-                        message = reason
-                        return self._finish(code, message)
+                if not actionable:
+                    break
 
-                before_scroll, before_items = self._window_shot(
-                    f"page-{page:02d}-before-scroll"
+                # Open only the topmost bound unread conversation.  Opening it
+                # may reorder the list, so the next round locates everything
+                # again instead of reusing stale row coordinates.
+                conversation = min(actionable, key=lambda item: item.title_rect.center.y)
+                processed.add(conversation.key)
+                ok, reason = self._open_one(
+                    conversation,
+                    page=round_index,
+                    index=1,
                 )
-                before_signature = self._page_signature(
-                    before_items, before_scroll.image.width, before_scroll.image.height
-                )
-                scroll_vertical(self._list_point(), -8, settle=0.9)
-                after_scroll, after_items = self._window_shot(
-                    f"page-{page:02d}-after-scroll"
-                )
-                after_signature = self._page_signature(
-                    after_items, after_scroll.image.width, after_scroll.image.height
-                )
-                if after_signature == before_signature:
-                    reached_bottom = True
+                if not ok:
+                    code = ResultCode.VERIFY_FAILED
+                    message = reason
+                    return self._finish(code, message)
+                if self.allowed_titles is not None and self.allowed_titles.issubset(
+                    self._opened_titles
+                ):
                     break
 
             # The initially open bound conversation may not have had a red
@@ -389,14 +371,15 @@ class ReadUnreadConversationsFlow:
             # never duplicate it when the same title was opened above.
             self._include_current_bound_conversation(current_title)
 
-            if not reached_bottom:
-                code = ResultCode.SCAN_LIMIT_REACHED
-                message = (
-                    f"已核验 {self.opened} 个已绑定会话，但达到 {self.max_pages} 页扫描上限"
-                )
-            else:
-                code = ResultCode.SUCCESS
-                message = f"已在微信窗口核验 {self.opened} 个已绑定会话"
+            code = ResultCode.SUCCESS
+            message = f"已在微信顶部未读区核验 {self.opened} 个已绑定会话"
+        except ScreenCaptureUnavailable as exc:
+            code = ResultCode.SCREEN_RECORDING_PERMISSION_REQUIRED
+            message = (
+                "请在“系统设置 → 隐私与安全性 → 屏幕录制”中允许 GrainPrint，"
+                "完全退出 GrainPrint 后重新打开"
+            )
+            self.details.append(f"SCREEN_CAPTURE_UNAVAILABLE: {exc}")
         except Exception as exc:  # pragma: no cover - real UI failure path
             code = ResultCode.INTERNAL_ERROR
             message = "未读会话自动化内部错误；请查看私有诊断产物"

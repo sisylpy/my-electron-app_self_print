@@ -43,7 +43,10 @@ def _iso_to_epoch(iso: Optional[str]) -> Optional[int]:
     if not iso:
         return None
     from datetime import datetime
-    dt = datetime.fromisoformat(iso)
+    value = iso.strip()
+    if value.endswith(("Z", "z")):
+        value = value[:-1] + "+00:00"
+    dt = datetime.fromisoformat(value)
     if dt.tzinfo is None:
         dt = dt.astimezone()
     return int(dt.timestamp())

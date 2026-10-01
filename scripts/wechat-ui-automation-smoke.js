@@ -141,6 +141,25 @@ const bundledMacScript = fs.readFileSync(
 );
 assert.match(bundledMacScript, /from automation\.api import read_unread_conversations/);
 
+const bundledMacFlow = fs.readFileSync(
+  path.join(
+    __dirname,
+    '..',
+    'src',
+    'wechat',
+    'ui-automation',
+    'mac',
+    'automation',
+    'flows',
+    'read_unread.py'
+  ),
+  'utf8'
+);
+assert.doesNotMatch(bundledMacFlow, /scroll_vertical/);
+assert.match(bundledMacFlow, /top-unread-/);
+assert.match(bundledMacFlow, /self\._opened_titles\.add\(candidate\.title\)/);
+assert.match(bundledMacFlow, /SCREEN_RECORDING_PERMISSION_REQUIRED/);
+
 const serviceSource = fs.readFileSync(
   path.join(__dirname, '..', 'src', 'wechat', 'ui-automation-service.js'),
   'utf8'
@@ -194,7 +213,26 @@ async function verifyMacAccessibilityStopsBeforeAutomation() {
   assert.strictEqual(spawnCalls, 0);
 }
 
+async function verifyMacScreenPermissionStopsBeforeAutomation() {
+  let spawnCalls = 0;
+  const service = createWechatUiAutomationService({
+    platform: 'darwin',
+    ensureMacAccessibility: () => true,
+    getMacScreenAccessStatus: () => 'denied',
+    spawnProcess: () => {
+      spawnCalls += 1;
+      throw new Error('automation must not start without screen recording permission');
+    },
+  });
+  const result = await service.readUnread({ allowedTitles: ['金调料'] });
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.error.code, 'MAC_SCREEN_RECORDING_PERMISSION_REQUIRED');
+  assert.match(result.error.message, /屏幕录制/);
+  assert.strictEqual(spawnCalls, 0);
+}
+
 verifyMacAccessibilityStopsBeforeAutomation()
+  .then(() => verifyMacScreenPermissionStopsBeforeAutomation())
   .then(() => verifyWindowsNoUnreadStopsImmediately())
   .then(() => console.log('WeChat UI automation smoke passed.'))
   .catch((error) => {

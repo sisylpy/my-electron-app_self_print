@@ -307,6 +307,23 @@ function createWechatUiAutomationService(options = {}) {
             };
           }
         }
+        if (platform === 'darwin' && typeof options.getMacScreenAccessStatus === 'function') {
+          let screenAccessStatus = 'unknown';
+          try {
+            screenAccessStatus = String(options.getMacScreenAccessStatus() || 'unknown');
+          } catch {
+            screenAccessStatus = 'unknown';
+          }
+          if (screenAccessStatus === 'denied' || screenAccessStatus === 'restricted') {
+            return {
+              ok: false,
+              error: {
+                code: 'MAC_SCREEN_RECORDING_PERMISSION_REQUIRED',
+                message: '请在“系统设置 → 隐私与安全性 → 屏幕录制”中允许 GrainPrint，完全退出 GrainPrint 后重新打开',
+              },
+            };
+          }
+        }
         if (platform === 'win32') {
           const script = resolveWindowsAutomationScript(options);
           return await runWindows(script, allowedTitles);

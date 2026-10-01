@@ -293,6 +293,7 @@ function getWechatUiAutomationService() {
     wechatUiAutomationService = createWechatUiAutomationService({
       artifactRoot: path.join(app.getPath('userData'), 'wechat-ui-private-artifacts'),
       ensureMacAccessibility: () => systemPreferences.isTrustedAccessibilityClient(true),
+      getMacScreenAccessStatus: () => systemPreferences.getMediaAccessStatus('screen'),
     });
   }
   return wechatUiAutomationService;
