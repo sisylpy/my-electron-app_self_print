@@ -643,6 +643,16 @@ import ProductPanel from '../components/ProductPanel.vue';
             }
         },
         methods: {
+            handleCloseSearchResults(event) {
+                event?.preventDefault?.();
+                event?.stopPropagation?.();
+                // 关闭后不保留默认的第一项选中状态，避免离场动画或下一次
+                // 普通页面点击被误解释为商品确认。
+                this.selectedSearchResultIndex = -1;
+                this.selectedNxGoodsIndex = -1;
+                this.$emit('close-str');
+            },
+
             // 显示 Toast 提示
             showToast(message, type = 'info', duration = 3000) {
                 this.toastMessage = message;

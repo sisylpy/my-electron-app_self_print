@@ -432,7 +432,9 @@
                                  :data-order-index="orderIndex">
                                 <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
                                     <span class="text-muted small fw-bold">推荐系统商品 ({{ item.nxGoodsEntities.length }})</span>
-                                    <button class="btn btn-sm btn-link p-0" @click="$emit('close-str')"
+                                    <button type="button" class="btn btn-sm btn-link p-0"
+                                            @pointerdown.stop.prevent
+                                            @click.stop.prevent="handleCloseSearchResults"
                                             style="font-size: 12px;">✕</button>
                                 </div>
                                 <div v-for="(goods, nxIndex) in item.nxGoodsEntities"
@@ -492,7 +494,9 @@
                             <!-- 搜索标题 -->
                             <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
                                 <span class="text-muted small">搜索{{ strArr.length + nxArr.length }}个商品:</span>
-                                <button class="btn btn-sm btn-link p-0" @click="$emit('close-str')"
+                                <button type="button" class="btn btn-sm btn-link p-0"
+                                        @pointerdown.stop.prevent
+                                        @click.stop.prevent="handleCloseSearchResults"
                                         style="font-size: 12px;">✕
                                 </button>
                             </div>
@@ -707,6 +711,8 @@ export default controller;
 
     .search-results-leave-active {
         transition: all 0.3s ease-in;
+        /* 离场动画期间旧候选项仍在 DOM 中，必须禁止它接收下一次单击。 */
+        pointer-events: none;
     }
 
     .search-results-enter-from {
