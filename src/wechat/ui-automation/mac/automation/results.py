@@ -18,6 +18,7 @@ class ResultCode(str, Enum):
     NOT_IMPLEMENTED = "NOT_IMPLEMENTED"
     INTERNAL_ERROR = "INTERNAL_ERROR"
     SCREEN_RECORDING_PERMISSION_REQUIRED = "SCREEN_RECORDING_PERMISSION_REQUIRED"
+    NO_UNREAD = "NO_UNREAD"
     SCAN_LIMIT_REACHED = "SCAN_LIMIT_REACHED"
 
 
@@ -33,7 +34,7 @@ class OperationResult:
 
     @property
     def ok(self) -> bool:
-        return self.code is ResultCode.SUCCESS
+        return self.code in {ResultCode.SUCCESS, ResultCode.NO_UNREAD}
 
     def to_dict(self) -> dict[str, Any]:
         value = asdict(self)

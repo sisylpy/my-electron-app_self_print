@@ -402,8 +402,8 @@ async function handleWechatScan() {
       const warningCount = failedCount + ambiguousCount + prepareFailedCount;
       setWechatScanStatus(
         openedTitles.length
-          ? `已读完 ${openedTitles.length} 个未读会话，没有发现未处理的新订单${warningCount ? `；另有 ${warningCount} 项需检查` : ''}`
-          : '已检查微信，没有发现已绑定客户的未读会话',
+          ? `已检查 ${openedTitles.length} 个未读会话，未发现可生成的新订单${warningCount ? `；另有 ${warningCount} 项需检查` : ''}`
+          : '没有未读信息',
         warningCount ? 'warning' : 'success'
       );
       return;

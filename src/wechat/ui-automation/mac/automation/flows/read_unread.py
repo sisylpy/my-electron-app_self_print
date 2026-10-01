@@ -7,7 +7,7 @@ from collections.abc import Callable, Collection
 from datetime import datetime
 from pathlib import Path
 
-from ..coordinates import Point, Rect
+from ..coordinates import Point
 from ..locators.unread_conversation import (
     UnreadConversation,
     locate_unread_conversations,
@@ -30,32 +30,6 @@ class ScreenCaptureUnavailable(RuntimeError):
 def chat_tab_point(image_width: int, image_height: int) -> Point:
     """Return the centre of WeChat's left-rail conversation/logo button."""
     return Point(round(image_width * 0.052), round(image_height * 0.205))
-
-
-def current_allowed_title(
-    items: list[OCRItem],
-    allowed_titles: Collection[str],
-    *,
-    image_width: int,
-    image_height: int,
-) -> str | None:
-    """Return the one exact customer-bound title already open in WeChat.
-
-    WeChat does not add an unread badge when a message arrives in the chat
-    currently shown on screen.  Including that exact bound header closes the
-    gap without widening the scan to unrelated/read conversations.
-    """
-    matches = [
-        title
-        for title in sorted({value.strip() for value in allowed_titles if value.strip()})
-        if conversation_header(
-            items,
-            title,
-            image_width=image_width,
-            image_height=image_height,
-        ).matched
-    ]
-    return matches[0] if len(matches) == 1 else None
 
 
 class ReadUnreadConversationsFlow:
@@ -98,7 +72,6 @@ class ReadUnreadConversationsFlow:
         self.hydrated = 0
         self.skipped = 0
         self.filtered = 0
-        self.current_included = 0
         self._opened_titles: set[str] = set()
 
     def _next_path(self, name: str) -> Path:
@@ -155,24 +128,13 @@ class ReadUnreadConversationsFlow:
                 return "TIMEOUT"
             time.sleep(min(0.5, max(0.1, deadline - time.monotonic())))
 
-    def _current_bound_title(self) -> str | None:
-        if not self.allowed_titles:
-            return None
-        shot, items = self._window_shot("current-conversation")
+    def _focus_chat_tab(self) -> None:
+        """Double-click the green WeChat logo to promote unread chats to the top."""
+        shot, items = self._window_shot("chat-tab-before")
         if not items:
             raise ScreenCaptureUnavailable(
                 "微信窗口截图没有任何可识别文字，通常表示 GrainPrint 没有屏幕录制权限"
             )
-        return current_allowed_title(
-            items,
-            self.allowed_titles,
-            image_width=shot.image.width,
-            image_height=shot.image.height,
-        )
-
-    def _focus_chat_tab(self) -> None:
-        """Double-click the green WeChat logo to promote unread chats to the top."""
-        shot, _ = self._window_shot("chat-tab-before")
         double_click(
             shot.transform.physical_to_global_logical(
                 chat_tab_point(shot.image.width, shot.image.height)
@@ -180,38 +142,6 @@ class ReadUnreadConversationsFlow:
             settle=0.8,
         )
         self.details.append("CHAT_TAB_DOUBLE_CLICKED")
-
-    def _include_current_bound_conversation(self, title: str | None) -> None:
-        if title is None or title in self._opened_titles:
-            return
-
-        synthetic = UnreadConversation(
-            title=title,
-            preview="",
-            title_rect=Rect(0, 0, 1, 1),
-            badge_rect=Rect(0, 0, 1, 1),
-        )
-        try:
-            hydration = self._wait_for_hydration(synthetic)
-        except Exception as exc:
-            hydration = "PROBE_ERROR"
-            self.details.append(
-                f"HYDRATION_PROBE_ERROR title={title!r}: {type(exc).__name__}: {exc}"
-            )
-        self.opened += 1
-        self.current_included += 1
-        self._opened_titles.add(title)
-        self.entries.append(
-            {
-                "title": title,
-                "status": "OPENED",
-                "hydration": hydration,
-                "source": "CURRENT",
-            }
-        )
-        self.details.append(
-            f"CURRENT_BOUND title={title!r} hydration={hydration}"
-        )
 
     def _open_one(
         self,
@@ -282,12 +212,6 @@ class ReadUnreadConversationsFlow:
             for _ in range(3):
                 press_escape(0.15)
             self._window = main_wechat_window()
-
-            # A message received in the chat already on screen has no unread
-            # badge.  Remember that exact bound title, but defer reporting it
-            # until after all visible unread rows have been opened from top to
-            # bottom.  This keeps the user-visible sequence deterministic.
-            current_title = self._current_bound_title()
 
             # Explicitly enter WeChat's conversation tab.  WeChat promotes
             # unread rows to the top when this green logo is double-clicked,
@@ -366,13 +290,12 @@ class ReadUnreadConversationsFlow:
                 ):
                     break
 
-            # The initially open bound conversation may not have had a red
-            # badge.  Include it only after the top-first unread sequence, and
-            # never duplicate it when the same title was opened above.
-            self._include_current_bound_conversation(current_title)
-
-            code = ResultCode.SUCCESS
-            message = f"已在微信顶部未读区核验 {self.opened} 个已绑定会话"
+            if self.opened:
+                code = ResultCode.SUCCESS
+                message = f"已在微信顶部未读区核验 {self.opened} 个已绑定会话"
+            else:
+                code = ResultCode.NO_UNREAD
+                message = "没有未读信息"
         except ScreenCaptureUnavailable as exc:
             code = ResultCode.SCREEN_RECORDING_PERMISSION_REQUIRED
             message = (
@@ -393,7 +316,6 @@ class ReadUnreadConversationsFlow:
             "DB_HYDRATED": str(self.hydrated),
             "SKIPPED": str(self.skipped),
             "FILTERED": str(self.filtered),
-            "CURRENT_BOUND_INCLUDED": str(self.current_included),
         }
         payload = {
             "code": code.value,

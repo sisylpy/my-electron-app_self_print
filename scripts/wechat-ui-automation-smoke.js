@@ -156,8 +156,10 @@ const bundledMacFlow = fs.readFileSync(
   'utf8'
 );
 assert.doesNotMatch(bundledMacFlow, /scroll_vertical/);
+assert.doesNotMatch(bundledMacFlow, /CURRENT_BOUND|current_bound_title/);
 assert.match(bundledMacFlow, /top-unread-/);
 assert.match(bundledMacFlow, /self\._opened_titles\.add\(candidate\.title\)/);
+assert.match(bundledMacFlow, /ResultCode\.NO_UNREAD/);
 assert.match(bundledMacFlow, /SCREEN_RECORDING_PERMISSION_REQUIRED/);
 
 const serviceSource = fs.readFileSync(
