@@ -37,22 +37,22 @@ function normalizeAllowedTitles(input) {
   return unique;
 }
 
-function resolveAutomationRoot(options = {}) {
+function resolveMacAutomationRoot(options = {}) {
   const existsSync = options.existsSync || fs.existsSync;
-  const env = options.env || process.env;
-  const resourcesPath = options.resourcesPath || process.resourcesPath || '';
   const moduleDir = options.moduleDir || __dirname;
-  const candidates = [
-    env.JCYX_WECHAT_UI_HOME,
-    resourcesPath ? path.join(resourcesPath, 'wechat-ui-automation') : '',
-    path.resolve(moduleDir, '../../../..', 'jcyx', 'jcyx-wechat-ui-automation'),
-  ].filter(Boolean);
-
-  const root = candidates.find((candidate) => (
-    existsSync(path.join(candidate, 'scripts', 'read_unread_smoke.py'))
-  ));
-  if (!root) throw new Error('未找到微信界面自动化运行组件');
+  const root = path.join(moduleDir, 'ui-automation', 'mac');
+  if (!existsSync(path.join(root, 'scripts', 'read_unread.py'))) {
+    throw new Error('安装包内未找到 Mac 微信界面自动化组件');
+  }
   return root;
+}
+
+function resolveWindowsAutomationScript(options = {}) {
+  const existsSync = options.existsSync || fs.existsSync;
+  const moduleDir = options.moduleDir || __dirname;
+  const script = path.join(moduleDir, 'ui-automation', 'windows', 'read-unread.ps1');
+  if (!existsSync(script)) throw new Error('安装包内未找到 Windows 微信界面自动化组件');
+  return script;
 }
 
 function parseAutomationOutput(stdout, allowedTitles) {
@@ -104,23 +104,18 @@ function createWechatUiAutomationService(options = {}) {
     forceTimer.unref?.();
   }
 
-  function runPython(root, allowedTitles) {
-    const script = path.join(root, 'scripts', 'read_unread_smoke.py');
-    const python = options.python || process.env.JCYX_WECHAT_UI_PYTHON || 'python3';
-    const args = [script, '--max-pages', '8', '--dwell-seconds', '1.8'];
-    allowedTitles.forEach((title) => args.push('--include-title', title));
-    if (artifactRoot) args.push('--artifact-root', artifactRoot);
-
+  function runProcess(command, args, cwd, allowedTitles, processOptions = {}) {
     abortReason = '';
     activePromise = new Promise((resolve) => {
       let stdout = '';
       let stderrSize = 0;
       let outputTooLarge = false;
       let settled = false;
-      const child = spawnProcess(python, args, {
-        cwd: root,
+      const child = spawnProcess(command, args, {
+        cwd,
         env: { ...process.env, PYTHONUNBUFFERED: '1' },
         stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
       });
       activeChild = child;
 
@@ -150,12 +145,16 @@ function createWechatUiAutomationService(options = {}) {
         }
       });
       child.on('error', (error) => {
+        const missingRuntimeMessage = processOptions.missingRuntimeMessage
+          || '未找到 Python 运行环境，无法读取微信未读会话';
         finish({
           ok: false,
           error: {
-            code: error?.code === 'ENOENT' ? 'PYTHON_NOT_FOUND' : 'START_FAILED',
+            code: error?.code === 'ENOENT'
+              ? (processOptions.missingRuntimeCode || 'PYTHON_NOT_FOUND')
+              : 'START_FAILED',
             message: error?.code === 'ENOENT'
-              ? '未找到 Python 运行环境，无法读取微信未读会话'
+              ? missingRuntimeMessage
               : '微信界面自动化启动失败',
           },
         });
@@ -167,6 +166,9 @@ function createWechatUiAutomationService(options = {}) {
         }
         try {
           const result = parseAutomationOutput(stdout, allowedTitles);
+          if (processOptions.checkAllAllowedTitles) {
+            result.openedTitles = [...allowedTitles];
+          }
           if (!ACCEPTED_RESULT_CODES.has(result.code)) {
             finish({
               ok: false,
@@ -193,12 +195,43 @@ function createWechatUiAutomationService(options = {}) {
     return activePromise;
   }
 
+  function runMac(root, allowedTitles) {
+    const script = path.join(root, 'scripts', 'read_unread.py');
+    const python = options.python || process.env.JCYX_WECHAT_UI_PYTHON || 'python3';
+    const args = [script, '--max-pages', '8', '--dwell-seconds', '1.8'];
+    allowedTitles.forEach((title) => args.push('--include-title', title));
+    if (artifactRoot) args.push('--artifact-root', artifactRoot);
+    return runProcess(python, args, root, allowedTitles);
+  }
+
+  function runWindows(script, allowedTitles) {
+    const powershell = options.powershell || process.env.JCYX_WECHAT_UI_POWERSHELL || 'powershell.exe';
+    const args = [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      script,
+      '-MaxIterations',
+      '50',
+      '-DwellMilliseconds',
+      '1000',
+    ];
+    return runProcess(powershell, args, path.dirname(script), allowedTitles, {
+      checkAllAllowedTitles: true,
+      missingRuntimeCode: 'POWERSHELL_NOT_FOUND',
+      missingRuntimeMessage: '未找到 Windows PowerShell，无法读取微信未读会话',
+    });
+  }
+
   return Object.freeze({
     async readUnread(input) {
-      if (platform !== 'darwin') {
+      if (platform !== 'darwin' && platform !== 'win32') {
         return {
           ok: false,
-          error: { code: 'UNSUPPORTED_PLATFORM', message: '当前仅支持在 Mac 微信客户端读取未读会话' },
+          error: { code: 'UNSUPPORTED_PLATFORM', message: '当前系统暂不支持读取微信未读会话' },
         };
       }
       if (activePromise) {
@@ -206,8 +239,12 @@ function createWechatUiAutomationService(options = {}) {
       }
       try {
         const allowedTitles = normalizeAllowedTitles(input);
-        const root = resolveAutomationRoot(options);
-        return await runPython(root, allowedTitles);
+        if (platform === 'win32') {
+          const script = resolveWindowsAutomationScript(options);
+          return await runWindows(script, allowedTitles);
+        }
+        const root = resolveMacAutomationRoot(options);
+        return await runMac(root, allowedTitles);
       } catch (error) {
         return { ok: false, error: { code: 'INVALID_REQUEST', message: error.message } };
       }
@@ -224,5 +261,6 @@ module.exports = {
   createWechatUiAutomationService,
   normalizeAllowedTitles,
   parseAutomationOutput,
-  resolveAutomationRoot,
+  resolveMacAutomationRoot,
+  resolveWindowsAutomationScript,
 };

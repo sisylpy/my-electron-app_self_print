@@ -1,0 +1,2 @@
+"""WeChat UI automation spike."""
+

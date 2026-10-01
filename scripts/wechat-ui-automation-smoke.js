@@ -1,9 +1,11 @@
 const assert = require('assert');
+const fs = require('fs');
 const path = require('path');
 const {
   normalizeAllowedTitles,
   parseAutomationOutput,
-  resolveAutomationRoot,
+  resolveMacAutomationRoot,
+  resolveWindowsAutomationScript,
 } = require('../src/wechat/ui-automation-service');
 
 assert.deepStrictEqual(
@@ -33,17 +35,75 @@ const parsed = parseAutomationOutput(JSON.stringify({
 assert.deepStrictEqual(parsed.openedTitles, ['金调料']);
 assert.strictEqual(parsed.metrics.UNREAD_OPENED, '2');
 
-const expectedRoot = path.join('/tmp', 'wechat-ui-automation');
-const resolved = resolveAutomationRoot({
-  env: { JCYX_WECHAT_UI_HOME: expectedRoot },
-  resourcesPath: '/unused',
-  moduleDir: '/unused/module',
+const macModuleDir = path.join('/tmp', 'app', 'src', 'wechat');
+const expectedRoot = path.join(macModuleDir, 'ui-automation', 'mac');
+const resolved = resolveMacAutomationRoot({
+  moduleDir: macModuleDir,
   existsSync: (candidate) => candidate === path.join(
     expectedRoot,
     'scripts',
-    'read_unread_smoke.py'
+    'read_unread.py'
   ),
 });
 assert.strictEqual(resolved, expectedRoot);
+
+const windowsModuleDir = path.join('/tmp', 'app', 'src', 'wechat');
+const expectedWindowsScript = path.join(
+  windowsModuleDir,
+  'ui-automation',
+  'windows',
+  'read-unread.ps1'
+);
+assert.strictEqual(
+  resolveWindowsAutomationScript({
+    moduleDir: windowsModuleDir,
+    existsSync: (candidate) => candidate === expectedWindowsScript,
+  }),
+  expectedWindowsScript
+);
+
+const windowsScript = fs.readFileSync(
+  path.join(
+    __dirname,
+    '..',
+    'src',
+    'wechat',
+    'ui-automation',
+    'windows',
+    'read-unread.ps1'
+  ),
+  'utf8'
+);
+assert.match(windowsScript, /'Weixin'/);
+assert.match(windowsScript, /'WeChatAppEx'/);
+assert.match(windowsScript, /'WeChat'/);
+assert.doesNotMatch(windowsScript, /Chrome_WidgetWin_0/);
+assert.match(windowsScript, /Invoke-WeixinToggleShortcut/);
+assert.match(windowsScript, /Hide-WeixinMainWindow/);
+assert.match(windowsScript, /WEIXIN_LOGIN_REQUIRED/);
+assert.match(windowsScript, /WEIXIN_MAIN_WINDOW_NOT_READY/);
+assert.match(windowsScript, /ShowWindow/);
+
+const bundledMacScript = fs.readFileSync(
+  path.join(
+    __dirname,
+    '..',
+    'src',
+    'wechat',
+    'ui-automation',
+    'mac',
+    'scripts',
+    'read_unread.py'
+  ),
+  'utf8'
+);
+assert.match(bundledMacScript, /from automation\.api import read_unread_conversations/);
+
+const serviceSource = fs.readFileSync(
+  path.join(__dirname, '..', 'src', 'wechat', 'ui-automation-service.js'),
+  'utf8'
+);
+assert.doesNotMatch(serviceSource, /JCYX_WECHAT_UI_HOME/);
+assert.doesNotMatch(serviceSource, /jcyx-wechat-ui-automation/);
 
 console.log('WeChat UI automation smoke passed.');
