@@ -85,16 +85,20 @@
             <button type="button" class="is-secondary" :disabled="detailLoading" @click="$emit('refresh-detail')">
               {{ detailLoading ? '读取中…' : '刷新' }}
             </button>
+            <button type="button" class="is-primary" @click="$emit('continue-order', selectedCustomer)">
+              ＋ 追加订单
+            </button>
             <button
               type="button"
               :class="['is-smart', { 'is-active': smartMode }]"
               :aria-pressed="smartMode"
               @click="toggleSmartMode"
             >
-              订单提醒
-            </button>
-            <button type="button" class="is-primary" @click="$emit('continue-order', selectedCustomer)">
-              ＋ 追加订单
+              <svg class="order-flow__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                <path d="M10 21h4" />
+              </svg>
+              {{ smartMode ? '返回订单' : '订单提醒' }}
             </button>
           </div>
         </header>
@@ -469,6 +473,7 @@ function handleTaskChanged(change) {
 .order-flow__reminder-summary .is-matched strong { color: #08794b; }
 .order-flow__reminder-summary .is-customer-ordered strong { color: #41637f; }
 .order-flow__detail-actions { display: flex; flex: none; gap: 6px; margin-left: auto; }
+.order-flow__btn-icon { width: 12px; height: 12px; object-fit: contain; flex: none; }
 .order-flow__detail-actions button,
 .order-flow__detail-state button,
 .order-flow__stage-heading button {
