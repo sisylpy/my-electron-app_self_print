@@ -16,7 +16,6 @@
           type="button"
           class="is-wechat-scan"
           :disabled="wechatScanBusy"
-          :title="wechatScanMessage || '在微信窗口逐个打开已绑定的未读会话并生成待确认订单'"
           @click="handleWechatScan"
         >
           <span class="order-workbench__stage-icon is-wechat-scan" aria-hidden="true">
@@ -75,14 +74,54 @@
       @smart-mode-change="handleSmartModeChange"
     />
 
-    <aside
-      v-if="wechatScanMessage"
-      :class="['order-workbench__wechat-status', `is-${wechatScanStatus}`]"
-      role="status"
-    >
-      <span>{{ wechatScanMessage }}</span>
-      <button type="button" aria-label="关闭提示" @click="wechatScanMessage = ''">×</button>
-    </aside>
+    <Teleport to="body">
+      <Transition name="wechat-status-pop">
+        <div
+          v-if="wechatScanMessage"
+          :class="['order-workbench__wechat-status-mask', { 'is-blocking': wechatScanBusy }]"
+          @click.stop
+        >
+          <aside
+            :class="['order-workbench__wechat-status', `is-${wechatScanStatus}`, { 'is-busy': wechatScanBusy }]"
+            role="dialog"
+            aria-modal="true"
+            aria-live="polite"
+            :aria-busy="wechatScanBusy"
+          >
+            <div class="order-workbench__wechat-status-icon" aria-hidden="true">
+              <span v-if="wechatScanBusy" class="order-workbench__wechat-spinner"></span>
+              <svg v-else-if="wechatScanStatus === 'success'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m5 12 4 4L19 6" />
+              </svg>
+              <svg v-else-if="wechatScanStatus === 'warning'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3 2.8 19h18.4L12 3Z" />
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+              </svg>
+              <svg v-else-if="wechatScanStatus === 'error'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <circle cx="12" cy="12" r="9" />
+                <path d="m9 9 6 6m0-6-6 6" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 17.5 4 20v-5.2A8 8 0 1 1 7 17.5Z" />
+                <path d="M8 10h8M8 14h5" />
+              </svg>
+            </div>
+            <div class="order-workbench__wechat-status-copy">
+              <small>微信订单</small>
+              <strong>{{ wechatScanBusy ? '正在读取微信' : '读取结果' }}</strong>
+              <p>{{ wechatScanMessage }}</p>
+            </div>
+            <button
+              v-if="!wechatScanBusy"
+              type="button"
+              aria-label="关闭提示"
+              @click="wechatScanMessage = ''"
+            >×</button>
+          </aside>
+        </div>
+      </Transition>
+    </Teleport>
   </main>
 </template>
 
@@ -548,27 +587,94 @@ async function returnToOverview() {
 
 .order-workbench__content { min-width: 0; min-height: 0; }
 
-.order-workbench__wechat-status {
+.order-workbench__wechat-status-mask {
   position: fixed;
   z-index: 1500;
-  right: 22px;
-  bottom: 22px;
-  display: flex;
-  max-width: min(560px, calc(100vw - 44px));
-  align-items: flex-start;
-  gap: 12px;
-  padding: 11px 12px 11px 14px;
-  border: 1px solid #b9dacb;
-  border-radius: 8px;
-  color: #155f40;
-  background: #f1fbf5;
-  box-shadow: 0 10px 30px rgba(14, 50, 36, .16);
-  font-size: 12px;
-  font-weight: 700;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(19, 42, 32, .18);
+  backdrop-filter: blur(1.5px);
 }
-.order-workbench__wechat-status.is-warning { border-color: #e3c77a; color: #8b5d08; background: #fffaf0; }
-.order-workbench__wechat-status.is-error { border-color: #efb8b8; color: #ad2929; background: #fff5f5; }
-.order-workbench__wechat-status button { padding: 0; border: 0; color: inherit; background: transparent; font-size: 18px; line-height: 1; cursor: pointer; }
+.order-workbench__wechat-status-mask.is-blocking { cursor: wait; }
+
+.order-workbench__wechat-status {
+  position: relative;
+  display: flex;
+  width: min(430px, calc(100vw - 48px));
+  min-height: 132px;
+  align-items: center;
+  gap: 18px;
+  padding: 24px 54px 24px 24px;
+  border: 1px solid #b9dacb;
+  border-radius: 18px;
+  color: #155f40;
+  background: rgba(249, 255, 251, .98);
+  box-shadow: 0 24px 70px rgba(14, 50, 36, .25), 0 2px 8px rgba(14, 50, 36, .08);
+}
+
+.order-workbench__wechat-status.is-warning { border-color: #e3c77a; color: #8b5d08; background: rgba(255, 251, 241, .98); }
+.order-workbench__wechat-status.is-error { border-color: #efb8b8; color: #ad2929; background: rgba(255, 247, 247, .98); }
+.order-workbench__wechat-status.is-info { border-color: #acd5c1; }
+
+.order-workbench__wechat-status-icon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  flex: none;
+  place-items: center;
+  border-radius: 16px;
+  background: currentColor;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18);
+}
+
+.order-workbench__wechat-status-icon svg { width: 29px; height: 29px; color: #fff; }
+.order-workbench__wechat-status-copy { min-width: 0; }
+.order-workbench__wechat-status-copy small { display: block; margin-bottom: 3px; opacity: .7; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+.order-workbench__wechat-status-copy strong { display: block; color: #203a2f; font-size: 18px; line-height: 1.35; }
+.order-workbench__wechat-status-copy p { margin: 7px 0 0; color: #50645b; font-size: 13px; font-weight: 650; line-height: 1.65; }
+.order-workbench__wechat-status.is-warning .order-workbench__wechat-status-copy strong,
+.order-workbench__wechat-status.is-warning .order-workbench__wechat-status-copy p { color: #775313; }
+.order-workbench__wechat-status.is-error .order-workbench__wechat-status-copy strong,
+.order-workbench__wechat-status.is-error .order-workbench__wechat-status-copy p { color: #923535; }
+
+.order-workbench__wechat-status > button {
+  position: absolute;
+  top: 15px;
+  right: 17px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #718078;
+  background: rgba(21, 68, 48, .06);
+  font-size: 20px;
+  line-height: 26px;
+  cursor: pointer;
+}
+.order-workbench__wechat-status > button:hover { color: #244d3b; background: rgba(21, 68, 48, .12); }
+
+.order-workbench__wechat-spinner {
+  width: 27px;
+  height: 27px;
+  border: 3px solid rgba(255, 255, 255, .4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: wechat-status-spin .8s linear infinite;
+}
+
+.wechat-status-pop-enter-active,
+.wechat-status-pop-leave-active { transition: opacity .18s ease; }
+.wechat-status-pop-enter-active .order-workbench__wechat-status,
+.wechat-status-pop-leave-active .order-workbench__wechat-status { transition: transform .18s ease, opacity .18s ease; }
+.wechat-status-pop-enter-from,
+.wechat-status-pop-leave-to { opacity: 0; }
+.wechat-status-pop-enter-from .order-workbench__wechat-status,
+.wechat-status-pop-leave-to .order-workbench__wechat-status { opacity: 0; transform: translateY(8px) scale(.97); }
+
+@keyframes wechat-status-spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 1250px) {
   .order-workbench__header-stages { gap: 10px; }
