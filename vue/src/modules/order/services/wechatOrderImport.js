@@ -55,7 +55,9 @@ export async function loadCustomerWechatBinding(customerId, electronAPI = window
 export async function prepareWechatOrderImport({
   customerId,
   binding,
-  now = Date.now(),
+  now = null,
+  retryDelaysMs = [2000, 4000, 7000],
+  sleep = (delayMs) => new Promise(resolve => setTimeout(resolve, delayMs)),
   electronAPI = window.electronAPI,
 }) {
   const id = requireCustomerId(customerId);
@@ -78,21 +80,33 @@ export async function prepareWechatOrderImport({
     await reader.getParticipants(normalizedBinding.conversationFingerprint)
   );
   const cursor = Number(normalizedBinding.cursorTimeMs);
-  const startMs = Number.isFinite(cursor) && cursor > 0
-    ? Math.max(0, cursor - 2 * 60 * 1000)
-    : now - 24 * 60 * 60 * 1000;
-  const page = unwrapWechatReader(await reader.getMessages(
-    normalizedBinding.conversationFingerprint,
-    { start: new Date(startMs).toISOString(), end: new Date(now).toISOString() },
-    { offset: 0, limit: 200 }
-  ));
-  const incoming = selectWechatOrderMessages(page?.items, participants, normalizedBinding)
-    .map((message) => ({ ...message, messageTimeMs: Date.parse(message.timestamp) }))
-    .filter((message) => Number.isFinite(message.messageTimeMs))
-    .sort((left, right) => (
-      left.messageTimeMs - right.messageTimeMs
-      || String(left.id).localeCompare(String(right.id))
+  const fixedNow = Number(now);
+  const hasFixedNow = Number.isFinite(fixedNow) && fixedNow > 0;
+  const retryDelays = Array.isArray(retryDelaysMs)
+    ? retryDelaysMs.filter(delayMs => Number.isFinite(Number(delayMs)) && Number(delayMs) >= 0)
+    : [];
+  let incoming = [];
+
+  for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
+    if (attempt > 0) await sleep(Number(retryDelays[attempt - 1]));
+    const attemptNow = hasFixedNow ? fixedNow : Date.now();
+    const startMs = Number.isFinite(cursor) && cursor > 0
+      ? Math.max(0, cursor - 2 * 60 * 1000)
+      : attemptNow - 24 * 60 * 60 * 1000;
+    const page = unwrapWechatReader(await reader.getMessages(
+      normalizedBinding.conversationFingerprint,
+      { start: new Date(startMs).toISOString(), end: new Date(attemptNow).toISOString() },
+      { offset: 0, limit: 200 }
     ));
+    incoming = selectWechatOrderMessages(page?.items, participants, normalizedBinding)
+      .map((message) => ({ ...message, messageTimeMs: Date.parse(message.timestamp) }))
+      .filter((message) => Number.isFinite(message.messageTimeMs))
+      .sort((left, right) => (
+        left.messageTimeMs - right.messageTimeMs
+        || String(left.id).localeCompare(String(right.id))
+      ));
+    if (incoming.length) break;
+  }
 
   if (!incoming.length) {
     return {
