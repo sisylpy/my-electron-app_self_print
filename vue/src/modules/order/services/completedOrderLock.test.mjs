@@ -13,11 +13,22 @@ const apiSource = fs.readFileSync(
   path.resolve(currentDir, '../../../api/all.js'),
   'utf8',
 );
+const actionSource = fs.readFileSync(
+  path.resolve(currentDir, '../../../components/TodayOrderActions.vue'),
+  'utf8',
+);
+const policySource = fs.readFileSync(
+  path.resolve(currentDir, './todayOrderActionPolicy.js'),
+  'utf8',
+);
 
-test('completed orders expose only the restock action in both table layouts', () => {
+test('completed orders are locked by the shared row-action policy', () => {
   assert.match(todayOrdersSource, /return Number\(order\?\.nxDoStatus\) === 2/);
-  assert.equal((todayOrdersSource.match(/v-if="isCompletedOrder\(order\)"/g) || []).length, 2);
-  assert.equal((todayOrdersSource.match(/'重新出库'/g) || []).length, 2);
+  assert.match(policySource, /canModify: persisted && !draft && !completed/);
+  assert.match(policySource, /canDelete: draft/);
+  assert.match(policySource, /canRestock: persisted && completed && purchaseStatus === 4/);
+  assert.match(actionSource, /policy\.canRestock/);
+  assert.match(actionSource, /重新出库/);
   assert.equal(
     (todayOrdersSource.match(/v-if="order\.nxDoStatus > -2 && !isCompletedOrder\(order\)"/g) || []).length,
     8,

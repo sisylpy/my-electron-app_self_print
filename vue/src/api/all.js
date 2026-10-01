@@ -93,7 +93,14 @@ const apiMethods = {
   },
 
   giveOrderWeight(data) {
-    return axiosInstance.post('nxdepartmentorders/giveOrderWeight', data);
+    const params = new URLSearchParams();
+    params.append('orderId', data.orderId);
+    params.append('weight', data.weight);
+    return axiosInstance.post('nxdepartmentorders/giveOrderWeight', params, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
   },
   // 出库数量完成（订单数组）
   giveOrderWeightListForStockAndFinish(data) {
@@ -250,6 +257,28 @@ const apiMethods = {
         'Content-Type': 'application/json'
       }
     });
+  },
+
+  // 替换订单商品（保留原订单的数量、备注和排序位置）
+  exchangeDepApplyGoods(data) {
+    const params = new URLSearchParams();
+    params.append('orderId', data.orderId);
+    params.append('goodsId', data.goodsId);
+    return axiosInstance.post('nxdepartmentorders/exchangeDepApplyGoods', params, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+  },
+
+  // 完成送货
+  deliveryOrder(orderId) {
+    return axiosInstance.get(`nxdepartmentorders/deliveryOrder/${orderId}`);
+  },
+
+  // 撤回完成送货
+  cancelDeliveryOrder(orderId) {
+    return axiosInstance.get(`nxdepartmentorders/cancleDeliveryOrder/${orderId}`);
   },
 
 

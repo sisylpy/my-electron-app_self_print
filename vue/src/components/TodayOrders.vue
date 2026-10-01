@@ -31,7 +31,7 @@
           <div style="width: 150px; flex-shrink: 0;" class="text-center table-cell">规格</div>
           <div style="width: 120px; flex-shrink: 0;" class="text-center table-cell">单价</div>
           <div style="width: 120px; flex-shrink: 0;" class="text-end table-cell">小计</div>
-          <div style="width: 110px; flex-shrink: 0;" class="text-center table-cell">操作</div>
+          <div style="width: 230px; flex-shrink: 0;" class="text-center table-cell">操作</div>
         </div>
         <!-- 可滚动内容区域 -->
         <div class="order-list-scroll" style="flex: 1; min-height: 0; overflow-y: auto;">
@@ -145,29 +145,18 @@
               <span class="">{{order.nxDoSubtotal }}</span>
             </div>
 
-            <div style="width: 110px; flex-shrink: 0;" class="text-center table-cell">
-              <button
-                  v-if="isCompletedOrder(order)"
-                  class="btn btn-sm btn-outline-primary"
-                  :disabled="restockingOrderId === order.nxDepartmentOrdersId"
-                  @click="handleRestockOrder(order)"
-                  title="撤销当前出库并重新填写出库数据">
-                {{ restockingOrderId === order.nxDepartmentOrdersId ? '处理中…' : '重新出库' }}
-              </button>
-              <button
-                  v-else-if="order.nxDoStatus === -2"
-                  class="btn btn-sm btn-danger"
-                  @click="handleDeleteOrderDirect(order, index, 'list')"
-                  title="删除">
-                删除
-              </button>
-              <button
-                    v-else
-                    class="btn btn-sm btn-secondary"
-                    @click="handleOpenEditOrderModalDirect(order, index, 'list')"
-                    title="修改">
-                  修改
-                </button>
+            <div style="width: 230px; flex-shrink: 0;" class="text-center table-cell">
+              <TodayOrderActions
+                :order="order"
+                :busy-action="getOrderBusyAction(order)"
+                @modify="handleOpenEditOrderModalDirect(order, index, 'list')"
+                @delete="handleDeleteOrderDirect(order, index, 'list')"
+                @finish-outbound="handleFinishOutbound(order)"
+                @restock="handleRestockOrder(order)"
+                @finish-delivery="handleFinishDelivery(order)"
+                @cancel-delivery="handleCancelDelivery(order)"
+                @more="openMoreActions(order)"
+              />
             </div>
           </div>
           <div v-else class="d-flex align-items-center">
@@ -187,13 +176,11 @@
             <div style="width: 150px; flex-shrink: 0;" class="text-center small text-muted table-cell"></div>
             <div style="width: 120px; flex-shrink: 0;" class="text-center small text-muted table-cell"></div>
             <div style="width: 120px; flex-shrink: 0;" class="text-end small text-muted table-cell"></div>
-            <div style="width: 110px; flex-shrink: 0;" class="text-center table-cell">
-              <button
-                  class="btn btn-sm btn-danger"
-                  @click="handleDeleteOrderDirect(order, index, 'list')"
-                  title="删除">
-                删除
-              </button>
+            <div style="width: 230px; flex-shrink: 0;" class="text-center table-cell">
+              <TodayOrderActions
+                :order="order"
+                @delete="handleDeleteOrderDirect(order, index, 'list')"
+              />
             </div>
           </div>
         </div>
@@ -215,7 +202,7 @@
           <div style="width: 150px; flex-shrink: 0;" class="text-center table-cell">规格</div>
           <div style="width: 120px; flex-shrink: 0;" class="text-center table-cell">单价</div>
           <div style="width: 120px; flex-shrink: 0;" class="text-end table-cell">小计</div>
-          <div style="width: 110px; flex-shrink: 0;" class="text-center table-cell">操作</div>
+          <div style="width: 230px; flex-shrink: 0;" class="text-center table-cell">操作</div>
         </div>
 
         <!-- 可滚动内容区域（包含所有部门） -->
@@ -334,29 +321,18 @@
                   <span class="">{{ order.nxDoSubtotal }}</span>
                 </div>
 
-                <div style="width: 110px; flex-shrink: 0;" class="text-center table-cell">
-                  <button
-                      v-if="isCompletedOrder(order)"
-                      class="btn btn-sm btn-outline-primary"
-                      :disabled="restockingOrderId === order.nxDepartmentOrdersId"
-                      @click="handleRestockOrder(order)"
-                      title="撤销当前出库并重新填写出库数据">
-                    {{ restockingOrderId === order.nxDepartmentOrdersId ? '处理中…' : '重新出库' }}
-                  </button>
-                  <button
-                      v-else-if="order.nxDoStatus === -2"
-                      class="btn btn-sm btn-danger"
-                      @click="handleDeleteOrderDirect(order, index, 'dep', depIndex)"
-                      title="删除">
-                    删除
-                  </button>
-                  <button
-                      v-else
-                      class="btn btn-sm btn-secondary"
-                      @click="handleOpenEditOrderModalDirect(order, index, 'dep', depIndex)"
-                      title="修改">
-                    修改
-                  </button>
+                <div style="width: 230px; flex-shrink: 0;" class="text-center table-cell">
+                  <TodayOrderActions
+                    :order="order"
+                    :busy-action="getOrderBusyAction(order)"
+                    @modify="handleOpenEditOrderModalDirect(order, index, 'dep', depIndex)"
+                    @delete="handleDeleteOrderDirect(order, index, 'dep', depIndex)"
+                    @finish-outbound="handleFinishOutbound(order)"
+                    @restock="handleRestockOrder(order)"
+                    @finish-delivery="handleFinishDelivery(order)"
+                    @cancel-delivery="handleCancelDelivery(order)"
+                    @more="openMoreActions(order)"
+                  />
                 </div>
               </div>
               <div v-else class="d-flex align-items-center">
@@ -376,13 +352,11 @@
                 <div style="width: 150px; flex-shrink: 0;" class="text-center small text-muted table-cell"></div>
                 <div style="width: 120px; flex-shrink: 0;" class="text-center small text-muted table-cell"></div>
                 <div style="width: 120px; flex-shrink: 0;" class="text-end small text-muted table-cell"></div>
-                <div style="width: 110px; flex-shrink: 0;" class="text-center table-cell">
-                  <button
-                      class="btn btn-sm btn-danger"
-                      @click="handleDeleteOrderDirect(order, index, 'dep', depIndex)"
-                      title="删除">
-                    删除
-                  </button>
+                <div style="width: 230px; flex-shrink: 0;" class="text-center table-cell">
+                  <TodayOrderActions
+                    :order="order"
+                    @delete="handleDeleteOrderDirect(order, index, 'dep', depIndex)"
+                  />
                 </div>
               </div>
             </div>
@@ -781,6 +755,13 @@
     </div>
   </div>
 
+  <TodayOrderMoreActions
+    v-if="moreActionsOrder"
+    :order="moreActionsOrder"
+    @close="closeMoreActions"
+    @updated="handleMoreActionUpdated"
+  />
+
   <!-- Alert 弹窗组件 -->
   <AlertDialog ref="alertDialog" />
 </template>
@@ -788,7 +769,10 @@
 <script>
 import api from '../api/all';
 import AlertDialog from './AlertDialog.vue';
+import TodayOrderActions from './TodayOrderActions.vue';
+import TodayOrderMoreActions from './TodayOrderMoreActions.vue';
 import { isPrintableOrder as eligibleForBatchPrint } from '../modules/order/services/orderWorkbenchStage';
+import { getTodayOrderActionPolicy, validateFinishOutbound } from '../modules/order/services/todayOrderActionPolicy';
 
 const VALID_DEP_PRINT_NAMES = ['ApplyPanel', 'ApplyFiftyPanel', 'ApplyHalfPanel', 'ApplyHalfWholePanel', 'ApplyThirtyPanel', 'ApplyThirtyWholePanel'];
 
@@ -805,7 +789,9 @@ const applyComponentMap = {
 export default {
   name: 'TodayOrders',
   components: {
-    AlertDialog
+    AlertDialog,
+    TodayOrderActions,
+    TodayOrderMoreActions
   },
   props: {
     todayOrderList: {
@@ -921,7 +907,10 @@ export default {
       invalidPrintOrders: [], // 校验不通过的订单列表 { goodsName, missed: ['出货数量','单价','小计'] }
       selectedPrintOrderIds: [],
       knownPrintableOrderIds: [],
-      restockingOrderId: null
+      restockingOrderId: null,
+      orderActionBusyId: null,
+      orderActionBusyType: '',
+      moreActionsOrder: null
     }
   },
   computed: {
@@ -1229,6 +1218,127 @@ export default {
     isCompletedOrder(order) {
       return Number(order?.nxDoStatus) === 2;
     },
+    getOrderActionPolicy(order) {
+      return getTodayOrderActionPolicy(order);
+    },
+    getOrderBusyAction(order) {
+      const orderId = order?.nxDepartmentOrdersId;
+      if (this.restockingOrderId === orderId) return 'restock';
+      if (this.orderActionBusyId === orderId) return this.orderActionBusyType;
+      return '';
+    },
+    openMoreActions(order) {
+      this.moreActionsOrder = order;
+    },
+    closeMoreActions() {
+      this.moreActionsOrder = null;
+    },
+    async handleMoreActionUpdated(message) {
+      this.moreActionsOrder = null;
+      this.$emit('order-updated');
+      await this.$refs.alertDialog?.alert(message || '订单已更新', 'success');
+    },
+    async handleFinishOutbound(order) {
+      const policy = this.getOrderActionPolicy(order);
+      if (!policy.canFinishOutbound) {
+        await this.$refs.alertDialog.alert('当前订单状态不允许完成出库', 'warning');
+        return;
+      }
+      const validationMessage = validateFinishOutbound(order);
+      if (validationMessage) {
+        await this.$refs.alertDialog.alert(validationMessage, 'warning');
+        return;
+      }
+      if (this.orderActionBusyId !== null || this.restockingOrderId !== null) return;
+
+      const goodsName = order.nxDistributerGoodsEntity?.nxDgGoodsName || order.nxDoGoodsName || '该商品';
+      const confirmed = await this.$refs.alertDialog.confirm(
+        `确定完成“${goodsName}”的出库吗？\n\n完成后订单将锁定并进入可打印状态。`
+      );
+      if (!confirmed) return;
+
+      this.orderActionBusyId = order.nxDepartmentOrdersId;
+      this.orderActionBusyType = 'finish-outbound';
+      try {
+        this.$store.commit('SET_LOADING', true);
+        const orderCopy = { ...order, hasChoice: true };
+        const disUser = this.$store.state.disUser;
+        const businessTypeId = disUser?.nxDistributerEntity?.nxDistributerBusinessTypeId
+          ?? disUser?.nxDistributerBusinessTypeId
+          ?? 0;
+        const apiMethod = businessTypeId > 2
+          ? api.giveOrderWeightListForStockShelfGoods
+          : api.giveOrderWeightListForStockAndFinish;
+        const res = await apiMethod([orderCopy]);
+        if (res?.data?.code !== 0) {
+          await this.$refs.alertDialog.alert(res?.data?.msg || '完成出库失败', 'error');
+          return;
+        }
+        this.$emit('order-updated');
+        await this.$refs.alertDialog.alert('订单已完成出库', 'success');
+      } catch (error) {
+        console.error('完成出库失败:', error);
+        await this.$refs.alertDialog.alert('完成出库失败，请检查网络后重试', 'error');
+      } finally {
+        this.orderActionBusyId = null;
+        this.orderActionBusyType = '';
+        this.$store.commit('SET_LOADING', false);
+      }
+    },
+    async handleFinishDelivery(order) {
+      if (!this.getOrderActionPolicy(order).canFinishDelivery) {
+        await this.$refs.alertDialog.alert('当前订单状态不允许完成送货', 'warning');
+        return;
+      }
+      if (this.orderActionBusyId !== null || this.restockingOrderId !== null) return;
+      const confirmed = await this.$refs.alertDialog.confirm('确定该订单已经完成送货吗？');
+      if (!confirmed) return;
+
+      this.orderActionBusyId = order.nxDepartmentOrdersId;
+      this.orderActionBusyType = 'finish-delivery';
+      try {
+        const res = await api.deliveryOrder(order.nxDepartmentOrdersId);
+        if (res?.data?.code !== 0) {
+          await this.$refs.alertDialog.alert(res?.data?.msg || '完成送货失败', 'error');
+          return;
+        }
+        this.$emit('order-updated');
+        await this.$refs.alertDialog.alert('已完成送货', 'success');
+      } catch (error) {
+        console.error('完成送货失败:', error);
+        await this.$refs.alertDialog.alert('完成送货失败，请检查网络后重试', 'error');
+      } finally {
+        this.orderActionBusyId = null;
+        this.orderActionBusyType = '';
+      }
+    },
+    async handleCancelDelivery(order) {
+      if (!this.getOrderActionPolicy(order).canCancelDelivery) {
+        await this.$refs.alertDialog.alert('当前订单状态不允许撤回送货', 'warning');
+        return;
+      }
+      if (this.orderActionBusyId !== null || this.restockingOrderId !== null) return;
+      const confirmed = await this.$refs.alertDialog.confirm('确定撤回“完成送货”状态吗？');
+      if (!confirmed) return;
+
+      this.orderActionBusyId = order.nxDepartmentOrdersId;
+      this.orderActionBusyType = 'cancel-delivery';
+      try {
+        const res = await api.cancelDeliveryOrder(order.nxDepartmentOrdersId);
+        if (res?.data?.code !== 0) {
+          await this.$refs.alertDialog.alert(res?.data?.msg || '撤回送货失败', 'error');
+          return;
+        }
+        this.$emit('order-updated');
+        await this.$refs.alertDialog.alert('已撤回完成送货状态', 'success');
+      } catch (error) {
+        console.error('撤回送货失败:', error);
+        await this.$refs.alertDialog.alert('撤回送货失败，请检查网络后重试', 'error');
+      } finally {
+        this.orderActionBusyId = null;
+        this.orderActionBusyType = '';
+      }
+    },
     rejectCompletedOrderMutation(order) {
       if (!this.isCompletedOrder(order)) return false;
       this.$refs.alertDialog?.alert(
@@ -1238,7 +1348,7 @@ export default {
       return true;
     },
     async handleRestockOrder(order) {
-      if (!this.isCompletedOrder(order) || !order?.nxDepartmentOrdersId) {
+      if (!this.getOrderActionPolicy(order).canRestock) {
         await this.$refs.alertDialog.alert('订单状态不允许重新出库', 'warning');
         return;
       }
@@ -2129,7 +2239,7 @@ export default {
       this.currentEditWeightDepIndex = -1;
       this.editWeightForm.weight = '';
     },
-    // 保存出库数量（订单数组提交）
+    // 只保存出库数量；真正完成出库由行操作中的“完成出库”按钮触发。
     async handleSaveWeight() {
       if (!this.currentEditWeightOrder || !this.currentEditWeightOrder.nxDepartmentOrdersId) {
         await this.$refs.alertDialog.alert('订单信息错误', 'error');
@@ -2143,12 +2253,10 @@ export default {
       }
       try {
         this.$store.commit('SET_LOADING', true);
-        const orderCopy = { ...this.currentEditWeightOrder, nxDoWeight: weightVal, hasChoice: true };
-        const arr = [orderCopy];
-        const disUser = this.$store.state.disUser;
-        const businessTypeId = disUser?.nxDistributerEntity?.nxDistributerBusinessTypeId ?? disUser?.nxDistributerBusinessTypeId ?? 0;
-        const apiMethod = businessTypeId > 1 ? api.giveOrderWeightListForStockShelfGoods : api.giveOrderWeightListForStockAndFinish;
-        const res = await apiMethod(arr);
+        const res = await api.giveOrderWeight({
+          orderId: this.currentEditWeightOrder.nxDepartmentOrdersId,
+          weight: weightVal
+        });
         if (res && res.data && res.data.code === 0) {
           const orderId = this.currentEditWeightOrder.nxDepartmentOrdersId;
           const updatedOrderData = { nxDoWeight: weightVal };
