@@ -530,8 +530,7 @@ function handleTaskChanged(change) {
   background: #fff !important;
 }
 
-/* TodayOrders 的旧列宽总和大于工作台右侧可用宽度。
- * 在订单工作台内使用自适应商品列并收紧其余固定列，保证操作列完整可见。 */
+/* 工作台表格采用紧凑商品列，并为操作按钮保留固定空间。 */
 .order-flow__progress-orders :deep(.table-header-fixed > .table-cell:nth-child(1)),
 .order-flow__progress-orders :deep(.order-item > .d-flex > .table-cell:nth-child(1)),
 .order-flow__workspace.is-orders :deep(.table-header-fixed > .table-cell:nth-child(1)),
@@ -542,9 +541,9 @@ function handleTaskChanged(change) {
 .order-flow__progress-orders :deep(.order-item > .d-flex > .table-cell:nth-child(2)),
 .order-flow__workspace.is-orders :deep(.table-header-fixed > .table-cell:nth-child(2)),
 .order-flow__workspace.is-orders :deep(.order-item > .d-flex > .table-cell:nth-child(2)) {
-  width: auto !important;
-  min-width: 130px;
-  flex: 1 1 auto !important;
+  width: 220px !important;
+  min-width: 160px;
+  flex: 0 1 220px !important;
 }
 .order-flow__progress-orders :deep(.table-header-fixed > .table-cell:nth-child(3)),
 .order-flow__progress-orders :deep(.table-header-fixed > .table-cell:nth-child(4)),
@@ -580,7 +579,16 @@ function handleTaskChanged(change) {
 .order-flow__progress-orders :deep(.order-item > .d-flex > .table-cell:nth-child(9)),
 .order-flow__workspace.is-orders :deep(.table-header-fixed > .table-cell:nth-child(9)),
 .order-flow__workspace.is-orders :deep(.order-item > .d-flex > .table-cell:nth-child(9)) {
-  width: 72px !important;
+  width: 224px !important;
+  min-width: 224px;
+  flex: 0 0 224px !important;
+  margin-left: auto;
+}
+.order-flow__progress-orders :deep(.today-order-actions),
+.order-flow__workspace.is-orders :deep(.today-order-actions) {
+  flex-wrap: nowrap;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .order-flow__detail-state,
