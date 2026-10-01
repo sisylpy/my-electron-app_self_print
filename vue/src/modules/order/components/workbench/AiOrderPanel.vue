@@ -81,6 +81,7 @@ const props = defineProps({
   selectedDepartmentId: { type: [Number, String], default: null },
   customerLoading: { type: Boolean, default: false },
   customerError: { type: String, default: '' },
+  pendingWechatImport: { type: Object, default: null },
 });
 
 const emit = defineEmits([
@@ -90,6 +91,7 @@ const emit = defineEmits([
   'order-saved',
   'task-added',
   'show-today-orders',
+  'wechat-import-error',
 ]);
 
 const newTaskSequence = ref(0);
@@ -99,6 +101,7 @@ const workspaceKey = computed(() => (
 const placeOrderRef = ref(null);
 const selectedMode = ref('paste');
 const wechatPulling = ref(false);
+const appliedWechatImportToken = ref(null);
 const hasWechatContact = computed(() => customerHasWechatContact(props.selectedCustomer));
 let workspaceResetTimer = null;
 
@@ -106,8 +109,36 @@ watch(() => [props.selectedCustomerId, props.selectedDepartmentId], () => {
   selectedMode.value = 'paste';
 });
 
+watch(
+  () => [
+    props.pendingWechatImport?.token || null,
+    props.pendingWechatImport?.customerId || null,
+    props.selectedCustomerId,
+    workspaceKey.value,
+  ],
+  async ([token, importCustomerId, selectedCustomerId]) => {
+    if (!token || appliedWechatImportToken.value === token) return;
+    if (String(importCustomerId) !== String(selectedCustomerId)) return;
+    try {
+      selectedMode.value = 'wechat';
+      await nextTick();
+      const workspace = placeOrderRef.value;
+      if (!workspace?.applyWechatImport) throw new Error('订单录入区尚未就绪');
+      await workspace.applyWechatImport(props.pendingWechatImport.payload);
+      appliedWechatImportToken.value = token;
+    } catch (error) {
+      emit('wechat-import-error', { token, message: error?.message || '微信订单载入失败' });
+    }
+  },
+  { flush: 'post', immediate: true }
+);
+
 function handleTaskAdded(event) {
-  emit('task-added', event);
+  const token = appliedWechatImportToken.value;
+  emit('task-added', token
+    ? { ...(event && typeof event === 'object' ? event : {}), wechatImportToken: token }
+    : event);
+  appliedWechatImportToken.value = null;
   clearTimeout(workspaceResetTimer);
   workspaceResetTimer = setTimeout(() => {
     selectedMode.value = 'paste';

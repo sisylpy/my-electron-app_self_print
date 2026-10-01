@@ -400,6 +400,17 @@ import api from '../services/orderApi';
                 return source.pullMessages();
             },
 
+            async applyWechatImport(payload) {
+                if (!payload || typeof payload.text !== 'string' || !payload.source) {
+                    throw new Error('微信订单导入内容无效');
+                }
+                if (this.uploadType !== 'wechat') {
+                    this.handleUploadTypeChange('wechat');
+                    await this.$nextTick();
+                }
+                await this.handleWechatMessagesLoaded(payload);
+            },
+
             // 停止所有正在进行的朗读
             stopAllReading() {
                 console.log('[PlaceOrder] 停止所有朗读');

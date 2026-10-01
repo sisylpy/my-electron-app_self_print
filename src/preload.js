@@ -189,6 +189,12 @@ const electronAPI = Object.freeze({
       ipcRenderer.invoke('wechat-reader-get-messages', { conversationId, timeRange, page }),
   }),
 
+  // 只允许扫描渲染层提交的已绑定会话标题；主进程负责启动、超时和退出回收。
+  wechatUi: Object.freeze({
+    readUnread: (allowedTitles) =>
+      ipcRenderer.invoke('wechat-ui-read-unread', { allowedTitles }),
+  }),
+
   // 正式包只暴露扫码轮询及两个固定订单读取动作；会话 Cookie 留在主进程。
   orderSession: Object.freeze({
     pollLogin: (sessionId) => ipcRenderer.invoke('order-session-poll-login', sessionId),

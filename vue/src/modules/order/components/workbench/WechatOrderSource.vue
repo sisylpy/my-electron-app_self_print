@@ -77,10 +77,14 @@ import {
   CONVERSATION_GROUP,
   GROUP_ALL_MEMBER_MESSAGES,
   GROUP_MENTION_SELF_ONLY,
-  normalizeConversationKind,
-  normalizeGroupMode,
-  selectWechatOrderMessages,
 } from '../../services/wechatOrderMessagePolicy';
+import {
+  loadCustomerWechatBinding,
+  normalizeWechatBinding,
+  prepareWechatOrderImport,
+  unwrapWechatReader,
+  unwrapWechatServer,
+} from '../../services/wechatOrderImport';
 
 const props = defineProps({
   customerId: { type: [Number, String], required: true },
@@ -116,28 +120,6 @@ function setStatus(message, type = 'info') {
   statusType.value = type;
 }
 
-function unwrapReader(response) {
-  if (response?.ok) return response.result;
-  throw new Error(response?.error?.message || '读取本地微信数据失败');
-}
-
-function unwrapServer(response) {
-  if (response?.ok) return response.data;
-  throw new Error(response?.message || '服务器请求失败');
-}
-
-function normalizeBinding(data) {
-  const conversationKind = normalizeConversationKind(data?.conversationKind);
-  return {
-    ...(data || {}),
-    conversationKind,
-    groupMode: normalizeGroupMode(conversationKind, data?.groupMode),
-    bound: Number(data?.enabled) === 1
-      && Boolean(data?.accountFingerprint)
-      && Boolean(data?.conversationFingerprint),
-  };
-}
-
 function loadBinding() {
   if (bindingLoadPromise) return bindingLoadPromise;
   bindingLoadPromise = performLoadBinding();
@@ -153,13 +135,11 @@ async function performLoadBinding() {
   pendingGroup.value = null;
   setStatus('');
   try {
-    const api = window.electronAPI?.customerWechatOrders;
-    if (!api?.loadBinding) throw new Error('当前安装包不支持微信聊天订单');
-    const loaded = normalizeBinding(unwrapServer(await api.loadBinding(Number(props.customerId))));
+    const loaded = await loadCustomerWechatBinding(Number(props.customerId));
     binding.value = loaded;
     if (!loaded.bound && loaded.displayName) searchName.value = loaded.displayName;
   } catch (error) {
-    binding.value = normalizeBinding(null);
+    binding.value = normalizeWechatBinding(null);
     setStatus(error.message, 'error');
   } finally {
     loadingBinding.value = false;
@@ -167,7 +147,7 @@ async function performLoadBinding() {
 }
 
 async function activeAccount() {
-  const accounts = unwrapReader(await window.electronAPI?.wechatReader?.listAccounts?.());
+  const accounts = unwrapWechatReader(await window.electronAPI?.wechatReader?.listAccounts?.());
   const candidates = Array.isArray(accounts) ? accounts : [];
   const account = candidates.find((item) => item.isCurrentLogin && item.hasAccessMaterial)
     || candidates.find((item) => item.hasAccessMaterial);
@@ -183,10 +163,10 @@ async function searchConversation() {
   setStatus('');
   try {
     const account = await activeAccount();
-    const found = unwrapReader(await window.electronAPI.wechatReader.findConversation(account.id, searchName.value));
+    const found = unwrapWechatReader(await window.electronAPI.wechatReader.findConversation(account.id, searchName.value));
     matches.value = (Array.isArray(found?.matches) ? found.matches : [])
       .filter((item) => item.kind === 'direct' || item.kind === CONVERSATION_GROUP);
-    binding.value = { ...normalizeBinding(binding.value), pendingAccountFingerprint: account.id };
+    binding.value = { ...normalizeWechatBinding(binding.value), pendingAccountFingerprint: account.id };
     if (!matches.value.length) setStatus('没有找到同名微信好友或群聊，请确认名称后重试', 'warning');
     else if (matches.value.length > 1) setStatus('找到多个同名微信聊天，请按类型和最近活跃时间选择', 'warning');
   } catch (error) {
@@ -213,7 +193,7 @@ async function bindConversation(conversation, groupMode) {
   try {
     const accountFingerprint = binding.value?.pendingAccountFingerprint;
     if (!accountFingerprint) throw new Error('微信账号状态已变化，请重新搜索');
-    const saved = unwrapServer(await window.electronAPI.customerWechatOrders.saveBinding({
+    const saved = unwrapWechatServer(await window.electronAPI.customerWechatOrders.saveBinding({
       customerId: Number(props.customerId),
       displayName: conversation.displayName,
       accountFingerprint,
@@ -221,7 +201,7 @@ async function bindConversation(conversation, groupMode) {
       conversationKind: conversation.kind,
       groupMode,
     }));
-    binding.value = normalizeBinding(saved);
+    binding.value = normalizeWechatBinding(saved);
     matches.value = [];
     pendingGroup.value = null;
     setStatus(`已把 ${conversation.displayName} 绑定到当前客户`, 'success');
@@ -237,10 +217,10 @@ async function clearBinding() {
   busy.value = true;
   setStatus('');
   try {
-    const cleared = unwrapServer(
+    const cleared = unwrapWechatServer(
       await window.electronAPI.customerWechatOrders.clearBinding(Number(props.customerId))
     );
-    binding.value = normalizeBinding(cleared);
+    binding.value = normalizeWechatBinding(cleared);
     searchName.value = '';
     matches.value = [];
     pendingGroup.value = null;
@@ -264,74 +244,18 @@ async function pullMessages() {
   busy.value = true;
   setStatus('');
   try {
-    const reader = window.electronAPI?.wechatReader;
-    const participants = unwrapReader(
-      await reader.getParticipants(binding.value.conversationFingerprint)
-    );
-    const now = Date.now();
-    const cursor = Number(binding.value.cursorTimeMs);
-    const startMs = Number.isFinite(cursor) && cursor > 0
-      ? Math.max(0, cursor - 2 * 60 * 1000)
-      : now - 24 * 60 * 60 * 1000;
-    const page = unwrapReader(await reader.getMessages(
-      binding.value.conversationFingerprint,
-      { start: new Date(startMs).toISOString(), end: new Date(now).toISOString() },
-      { offset: 0, limit: 200 }
-    ));
-
-    const incoming = selectWechatOrderMessages(page?.items, participants, binding.value)
-      .map((message) => ({
-        ...message,
-        messageTimeMs: Date.parse(message.timestamp),
-      }))
-      .filter((message) => Number.isFinite(message.messageTimeMs))
-      .sort((left, right) => left.messageTimeMs - right.messageTimeMs || left.id.localeCompare(right.id));
-
-    if (!incoming.length) {
-      if (binding.value.conversationKind === CONVERSATION_GROUP
-          && binding.value.groupMode === GROUP_MENTION_SELF_ONLY) {
-        setStatus('所选时间范围内没有 @ 当前微信账号的新群消息', 'info');
-      } else if (binding.value.conversationKind === CONVERSATION_GROUP) {
-        setStatus('所选时间范围内没有新的群成员文字消息', 'info');
-      } else {
-        setStatus('所选时间范围内没有新的好友文字消息', 'info');
-      }
-      return;
-    }
-
-    const refs = incoming.map((message) => ({
-      messageFingerprint: message.id,
-      messageTimeMs: message.messageTimeMs,
-    }));
-    const prepared = unwrapServer(
-      await window.electronAPI.customerWechatOrders.prepareMessages(Number(props.customerId), refs)
-    );
-    const pendingIds = new Set(prepared?.pendingMessageFingerprints || []);
-    const pending = incoming.filter((message) => pendingIds.has(message.id));
-    binding.value = normalizeBinding(prepared?.binding || binding.value);
-    if (!pending.length) {
-      setStatus('读取到的消息都已经生成过订单，没有重复导入', 'success');
-      return;
-    }
-
-    emit('messages-loaded', {
-      text: pending.map((message) => message.orderText).join('\n'),
-      source: {
-        customerId: Number(props.customerId),
-        accountFingerprint: binding.value.accountFingerprint,
-        conversationFingerprint: binding.value.conversationFingerprint,
-        conversationKind: binding.value.conversationKind,
-        groupMode: binding.value.groupMode,
-        messages: pending.map((message) => ({
-          messageFingerprint: message.id,
-          messageTimeMs: message.messageTimeMs,
-        })),
-      },
+    const prepared = await prepareWechatOrderImport({
+      customerId: Number(props.customerId),
+      binding: binding.value,
     });
-    const skipped = incoming.length - pending.length;
-    setStatus(`已载入 ${pending.length} 条新消息${skipped ? `，跳过 ${skipped} 条已处理消息` : ''}`, 'success');
+    binding.value = prepared.binding;
+    setStatus(prepared.message, ['ready', 'duplicate'].includes(prepared.status) ? 'success' : 'info');
+    if (!prepared.payload) return false;
+    emit('messages-loaded', prepared.payload);
+    return true;
   } catch (error) {
     setStatus(error.message, 'error');
+    return false;
   } finally {
     busy.value = false;
   }

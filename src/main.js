@@ -47,6 +47,7 @@ const { createDispatchGateway } = require('./dispatch/dispatch-gateway');
 const { createOrderWriteGateway } = require('./order/order-write-gateway');
 const { createOrderSessionGateway } = require('./order/order-session-gateway');
 const { createWechatReaderService, shutdownReader } = require('./wechat/reader-service');
+const { createWechatUiAutomationService } = require('./wechat/ui-automation-service');
 const { PRODUCTION_API_BASE_URL } = require('./api-runtime');
 
 // MCP 服务器模块
@@ -92,6 +93,7 @@ let dispatchGateway = null;
 let orderWriteGateway = null;
 let orderSessionGateway = null;
 let wechatReaderService = null;
+let wechatUiAutomationService = null;
 let quitAfterReaderShutdown = false;
 let beforeQuitReaderPromise = null;
 const selectedFolderCapabilities = new Set();
@@ -273,6 +275,22 @@ function getWechatReaderService() {
     wechatReaderService = createWechatReaderService(appLogger);
   }
   return wechatReaderService;
+}
+
+function getWechatUiAutomationService() {
+  if (!wechatUiAutomationService) {
+    wechatUiAutomationService = createWechatUiAutomationService({
+      artifactRoot: path.join(app.getPath('userData'), 'wechat-ui-private-artifacts'),
+    });
+  }
+  return wechatUiAutomationService;
+}
+
+async function shutdownWechatUiAutomation() {
+  const service = wechatUiAutomationService;
+  if (!service) return;
+  wechatUiAutomationService = null;
+  await service.dispose();
 }
 
 function sanitizeMcpSessionUser(value) {
@@ -605,6 +623,17 @@ function setupIpcHandlers() {
   ipcMain.handle('wechat-reader-get-messages', async (event, input) => {
     assertTrustedRendererEvent(event);
     return getWechatReaderService().getMessages(input);
+  });
+  ipcMain.handle('wechat-ui-read-unread', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    try {
+      return await getWechatUiAutomationService().readUnread(input);
+    } finally {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
   });
 
   // 桌面调度：token 只存在主进程，渲染进程仅能调用以下白名单能力。
@@ -4105,12 +4134,18 @@ app.on('before-quit', (event) => {
   if (quitAfterReaderShutdown) return;
   event.preventDefault();
   if (!beforeQuitReaderPromise) {
-    beforeQuitReaderPromise = shutdownReader()
-      .catch((error) => {
+    beforeQuitReaderPromise = Promise.all([
+      shutdownReader().catch((error) => {
         appLogger.append('error', 'wechat-reader', 'reader stop failed during before-quit', {
           message: error?.message,
         });
-      })
+      }),
+      shutdownWechatUiAutomation().catch((error) => {
+        appLogger.append('error', 'wechat-ui', 'ui automation stop failed during before-quit', {
+          message: error?.message,
+        });
+      }),
+    ])
       .finally(() => {
         quitAfterReaderShutdown = true;
         app.quit();
@@ -4121,6 +4156,7 @@ app.on('before-quit', (event) => {
 app.on('will-quit', () => {
   // before-quit 已等待 Reader；这里保留幂等兜底，禁止遗漏自身启动的 child。
   void shutdownReader();
+  void shutdownWechatUiAutomation();
   if (dispatchGateway) {
     dispatchGateway.dispose();
     dispatchGateway = null;
@@ -4140,10 +4176,10 @@ app.on('will-quit', () => {
 });
 
 app.on('window-all-closed', () => {
-  // macOS 关闭最后一个窗口也释放 Reader；下次 activate 时按请求懒启动新 child。
-  shutdownReader()
+  // macOS 关闭最后一个窗口也释放 Reader 和 UI 自动化 child；下次按请求懒启动。
+  Promise.all([shutdownReader(), shutdownWechatUiAutomation()])
     .catch((error) => {
-      appLogger.append('error', 'wechat-reader', 'reader stop failed after window-all-closed', {
+      appLogger.append('error', 'wechat-runtime', 'wechat child stop failed after window-all-closed', {
         message: error?.message,
       });
     })

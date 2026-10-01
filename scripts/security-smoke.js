@@ -59,8 +59,10 @@ check(!customerOcrTraining.includes('Authorization')
   && !customerOcrTraining.includes('accessToken'),
   '客户OCR训练页面不接触安全会话令牌');
 check(preload.includes('wechatReader: Object.freeze')
+  && preload.includes('wechatUi: Object.freeze')
   && preload.includes('customerWechatOrders: Object.freeze')
   && main.includes("ipcMain.handle('wechat-reader-get-messages'")
+  && main.includes("ipcMain.handle('wechat-ui-read-unread'")
   && main.includes("ipcMain.handle('customer-wechat-messages-prepare'")
   && !preload.includes('wechatReaderRequest:'),
   '微信好友订单仅通过 Reader 与业务白名单动作访问');
