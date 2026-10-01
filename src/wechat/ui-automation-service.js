@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 
 const MAX_OUTPUT_BYTES = 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
-const ACCEPTED_RESULT_CODES = new Set(['SUCCESS', 'SCAN_LIMIT_REACHED']);
+const ACCEPTED_RESULT_CODES = new Set(['SUCCESS', 'SCAN_LIMIT_REACHED', 'NO_UNREAD']);
 
 function normalizeAllowedTitles(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
@@ -214,8 +214,9 @@ function createWechatUiAutomationService(options = {}) {
         }
         try {
           const result = parseAutomationOutput(stdout, allowedTitles);
-          if (processOptions.checkAllAllowedTitles) {
-            result.openedTitles = [...allowedTitles];
+          if (processOptions.mapOpenedCountToAllowedTitles) {
+            const openedCount = Number(result.metrics?.openedCount || 0);
+            result.openedTitles = openedCount > 0 ? [...allowedTitles] : [];
           }
           if (!ACCEPTED_RESULT_CODES.has(result.code)) {
             finish({
@@ -270,7 +271,7 @@ function createWechatUiAutomationService(options = {}) {
       '1000',
     ];
     return runProcess(powershell, args, path.dirname(script), allowedTitles, {
-      checkAllAllowedTitles: true,
+      mapOpenedCountToAllowedTitles: true,
       missingRuntimeCode: 'POWERSHELL_NOT_FOUND',
       missingRuntimeMessage: '未找到 Windows PowerShell，无法读取微信未读会话',
     });

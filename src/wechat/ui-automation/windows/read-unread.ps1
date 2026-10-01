@@ -260,6 +260,12 @@ try {
   }
 
   $openedCount = 0
+  if (-not $badgeRows.Count) {
+    Hide-WeixinMainWindow $window
+    Write-Result 'NO_UNREAD' 'No unread Weixin conversations were found.' 0 0
+    exit 0
+  }
+
   foreach ($badgeYValue in $badgeRows) {
     $badgeY = [int]$badgeYValue
     $conversationX = $window.Left + [math]::Round($window.Width * 0.205)

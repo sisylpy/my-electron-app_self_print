@@ -1,7 +1,10 @@
 const assert = require('assert');
+const { EventEmitter } = require('events');
 const fs = require('fs');
 const path = require('path');
+const { PassThrough } = require('stream');
 const {
+  createWechatUiAutomationService,
   normalizeAllowedTitles,
   parseAutomationOutput,
   classifyMacPythonFailure,
@@ -120,6 +123,8 @@ assert.match(windowsScript, /Hide-WeixinMainWindow/);
 assert.match(windowsScript, /WEIXIN_LOGIN_REQUIRED/);
 assert.match(windowsScript, /WEIXIN_MAIN_WINDOW_NOT_READY/);
 assert.match(windowsScript, /ShowWindow/);
+assert.match(windowsScript, /'NO_UNREAD'/);
+assert.match(windowsScript, /if \(-not \$badgeRows\.Count\)/);
 
 const bundledMacScript = fs.readFileSync(
   path.join(
@@ -142,5 +147,39 @@ const serviceSource = fs.readFileSync(
 );
 assert.doesNotMatch(serviceSource, /JCYX_WECHAT_UI_HOME/);
 assert.doesNotMatch(serviceSource, /jcyx-wechat-ui-automation/);
+assert.match(serviceSource, /openedCount > 0 \? \[\.\.\.allowedTitles\] : \[\]/);
 
-console.log('WeChat UI automation smoke passed.');
+async function verifyWindowsNoUnreadStopsImmediately() {
+  const service = createWechatUiAutomationService({
+    platform: 'win32',
+    moduleDir: path.join(__dirname, '..', 'src', 'wechat'),
+    spawnProcess: () => {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => {};
+      process.nextTick(() => {
+        child.stdout.end(JSON.stringify({
+          code: 'NO_UNREAD',
+          message: 'none',
+          conversations: [],
+          metrics: { openedCount: 0, iterations: 0, platform: 'win32' },
+        }));
+        child.stderr.end();
+        child.emit('close', 0);
+      });
+      return child;
+    },
+  });
+  const result = await service.readUnread({ allowedTitles: ['金调料', '测试'] });
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.result.code, 'NO_UNREAD');
+  assert.deepStrictEqual(result.result.openedTitles, []);
+}
+
+verifyWindowsNoUnreadStopsImmediately()
+  .then(() => console.log('WeChat UI automation smoke passed.'))
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
