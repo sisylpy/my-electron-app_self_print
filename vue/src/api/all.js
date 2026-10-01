@@ -288,6 +288,15 @@ const apiMethods = {
     return axiosInstance.get(`nxdepartmentorders/deleteTaskOrder/${orderId}`);
   },
 
+  // 已完成订单重新出库：撤销当前出库记录并由后端回补库存
+  cancelOutOrder(order) {
+    return axiosInstance.post('nxdepartmentorders/cancelOutOrder', order, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  },
+
   // 重新识别：将已保存订单恢复到待识别状态，用原始解析数据覆盖，需重新选择商品
   revertTaskOrder(orderId) {
     return axiosInstance.get(`nxdepartmentorders/revertTaskOrder/${orderId}`);

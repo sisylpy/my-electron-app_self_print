@@ -31,7 +31,7 @@
           <div style="width: 150px; flex-shrink: 0;" class="text-center table-cell">规格</div>
           <div style="width: 120px; flex-shrink: 0;" class="text-center table-cell">单价</div>
           <div style="width: 120px; flex-shrink: 0;" class="text-end table-cell">小计</div>
-          <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">操作</div>
+          <div style="width: 110px; flex-shrink: 0;" class="text-center table-cell">操作</div>
         </div>
         <!-- 可滚动内容区域 -->
         <div class="order-list-scroll" style="flex: 1; min-height: 0; overflow-y: auto;">
@@ -76,7 +76,7 @@
                   {{ order.nxDoWeight }}
                 </span>
                 <span 
-                 v-if="order.nxDoStatus > -2"
+                 v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
                  class="ms-1 text-primary" 
                  style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                  @click.stop="handleOpenEditWeightModal(order, index, 'list')"
@@ -90,7 +90,7 @@
                   {{ order.nxDoPrintStandard}}
                </span>
                <span 
-                 v-if="order.nxDoStatus > -2"
+                 v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
                  class="ms-1 text-primary" 
                  style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                  @click.stop="handleOpenEditPrintStandardModal(order, index, 'list')"
@@ -120,7 +120,7 @@
           <div style="width: 120px; flex-shrink: 0;" class="text-center  table-cell" v-if="order.nxDoPrice > 0.1">
               <span class="">{{order.nxDoPrice }}</span>
               <span 
-                v-if="order.nxDoStatus > -2"
+                v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
                 class="ms-1 text-primary" 
                 style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                 @click.stop="handleOpenEditPriceModal(order, index, 'list')"
@@ -133,7 +133,7 @@
                -
               </span>
               <span 
-                v-if="order.nxDoStatus > -2"
+                v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
                 class="ms-1 text-primary" 
                 style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                 @click.stop="handleOpenEditPriceModal(order, index, 'list')"
@@ -145,16 +145,24 @@
               <span class="">{{order.nxDoSubtotal }}</span>
             </div>
 
-            <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">
+            <div style="width: 110px; flex-shrink: 0;" class="text-center table-cell">
               <button
-                  v-if="order.nxDoStatus === -2"
+                  v-if="isCompletedOrder(order)"
+                  class="btn btn-sm btn-outline-primary"
+                  :disabled="restockingOrderId === order.nxDepartmentOrdersId"
+                  @click="handleRestockOrder(order)"
+                  title="撤销当前出库并重新填写出库数据">
+                {{ restockingOrderId === order.nxDepartmentOrdersId ? '处理中…' : '重新出库' }}
+              </button>
+              <button
+                  v-else-if="order.nxDoStatus === -2"
                   class="btn btn-sm btn-danger"
                   @click="handleDeleteOrderDirect(order, index, 'list')"
                   title="删除">
                 删除
               </button>
               <button
-                    v-else-if="order.nxDoStatus !== -2"
+                    v-else
                     class="btn btn-sm btn-secondary"
                     @click="handleOpenEditOrderModalDirect(order, index, 'list')"
                     title="修改">
@@ -179,7 +187,7 @@
             <div style="width: 150px; flex-shrink: 0;" class="text-center small text-muted table-cell"></div>
             <div style="width: 120px; flex-shrink: 0;" class="text-center small text-muted table-cell"></div>
             <div style="width: 120px; flex-shrink: 0;" class="text-end small text-muted table-cell"></div>
-            <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">
+            <div style="width: 110px; flex-shrink: 0;" class="text-center table-cell">
               <button
                   class="btn btn-sm btn-danger"
                   @click="handleDeleteOrderDirect(order, index, 'list')"
@@ -207,7 +215,7 @@
           <div style="width: 150px; flex-shrink: 0;" class="text-center table-cell">规格</div>
           <div style="width: 120px; flex-shrink: 0;" class="text-center table-cell">单价</div>
           <div style="width: 120px; flex-shrink: 0;" class="text-end table-cell">小计</div>
-          <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">操作</div>
+          <div style="width: 110px; flex-shrink: 0;" class="text-center table-cell">操作</div>
         </div>
 
         <!-- 可滚动内容区域（包含所有部门） -->
@@ -259,7 +267,7 @@
                     {{ order.nxDoWeight }}
                   </span>
                   <span
-                    v-if="order.nxDoStatus > -2"
+                    v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
                     class="ms-1 text-primary"
                     style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                     @click.stop="handleOpenEditWeightModal(order, index, 'dep', depIndex)"
@@ -273,7 +281,7 @@
                     {{ order.nxDoPrintStandard }}
                   </span>
                   <span
-                    v-if="order.nxDoStatus > -2"
+                    v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
                     class="ms-1 text-primary"
                     style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                     @click.stop="handleOpenEditPrintStandardModal(order, index, 'dep', depIndex)"
@@ -301,7 +309,7 @@
                 <div style="width: 120px; flex-shrink: 0;" class="text-center  table-cell" v-if="order.nxDoPrice > 0.1">
                   <span class="">{{ order.nxDoPrice }}</span>
                   <span
-                    v-if="order.nxDoStatus > -2"
+                    v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
                     class="ms-1 text-primary"
                     style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                     @click.stop="handleOpenEditPriceModal(order, index, 'dep', depIndex)"
@@ -314,7 +322,7 @@
                     -
                   </span>
                   <span
-                    v-if="order.nxDoStatus > -2"
+                    v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
                     class="ms-1 text-primary"
                     style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                     @click.stop="handleOpenEditPriceModal(order, index, 'dep', depIndex)"
@@ -326,16 +334,24 @@
                   <span class="">{{ order.nxDoSubtotal }}</span>
                 </div>
 
-                <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">
+                <div style="width: 110px; flex-shrink: 0;" class="text-center table-cell">
                   <button
-                      v-if="order.nxDoStatus === -2"
+                      v-if="isCompletedOrder(order)"
+                      class="btn btn-sm btn-outline-primary"
+                      :disabled="restockingOrderId === order.nxDepartmentOrdersId"
+                      @click="handleRestockOrder(order)"
+                      title="撤销当前出库并重新填写出库数据">
+                    {{ restockingOrderId === order.nxDepartmentOrdersId ? '处理中…' : '重新出库' }}
+                  </button>
+                  <button
+                      v-else-if="order.nxDoStatus === -2"
                       class="btn btn-sm btn-danger"
                       @click="handleDeleteOrderDirect(order, index, 'dep', depIndex)"
                       title="删除">
                     删除
                   </button>
                   <button
-                      v-else-if="order.nxDoStatus !== -2"
+                      v-else
                       class="btn btn-sm btn-secondary"
                       @click="handleOpenEditOrderModalDirect(order, index, 'dep', depIndex)"
                       title="修改">
@@ -360,7 +376,7 @@
                 <div style="width: 150px; flex-shrink: 0;" class="text-center small text-muted table-cell"></div>
                 <div style="width: 120px; flex-shrink: 0;" class="text-center small text-muted table-cell"></div>
                 <div style="width: 120px; flex-shrink: 0;" class="text-end small text-muted table-cell"></div>
-                <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">
+                <div style="width: 110px; flex-shrink: 0;" class="text-center table-cell">
                   <button
                       class="btn btn-sm btn-danger"
                       @click="handleDeleteOrderDirect(order, index, 'dep', depIndex)"
@@ -904,7 +920,8 @@ export default {
       showPrintValidationModal: false, // 打印前校验弹窗
       invalidPrintOrders: [], // 校验不通过的订单列表 { goodsName, missed: ['出货数量','单价','小计'] }
       selectedPrintOrderIds: [],
-      knownPrintableOrderIds: []
+      knownPrintableOrderIds: [],
+      restockingOrderId: null
     }
   },
   computed: {
@@ -1209,6 +1226,50 @@ export default {
     }
   },
   methods: {
+    isCompletedOrder(order) {
+      return Number(order?.nxDoStatus) === 2;
+    },
+    rejectCompletedOrderMutation(order) {
+      if (!this.isCompletedOrder(order)) return false;
+      this.$refs.alertDialog?.alert(
+        '该订单已经完成出货，不能修改数量、单价、规格或删除。如需调整，请先点击“重新出库”。',
+        'warning'
+      );
+      return true;
+    },
+    async handleRestockOrder(order) {
+      if (!this.isCompletedOrder(order) || !order?.nxDepartmentOrdersId) {
+        await this.$refs.alertDialog.alert('订单状态不允许重新出库', 'warning');
+        return;
+      }
+      if (this.restockingOrderId !== null) return;
+
+      const goodsName = order.nxDistributerGoodsEntity?.nxDgGoodsName
+        || order.nxDoGoodsName
+        || '该商品';
+      const confirmed = await this.$refs.alertDialog.confirm(
+        `确定要将“${goodsName}”重新出库吗？\n\n系统会撤销本次出库并回补库存，之后可重新填写出货数量。`
+      );
+      if (!confirmed) return;
+
+      this.restockingOrderId = order.nxDepartmentOrdersId;
+      try {
+        this.$store.commit('SET_LOADING', true);
+        const res = await api.cancelOutOrder(order);
+        if (res?.data?.code === 0) {
+          this.$emit('order-updated');
+          await this.$refs.alertDialog.alert('已撤销原出库记录，可以重新填写出库数据。', 'success');
+        } else {
+          await this.$refs.alertDialog.alert(res?.data?.msg || '重新出库失败', 'error');
+        }
+      } catch (error) {
+        console.error('重新出库失败:', error);
+        await this.$refs.alertDialog.alert('重新出库失败，请检查网络后重试', 'error');
+      } finally {
+        this.restockingOrderId = null;
+        this.$store.commit('SET_LOADING', false);
+      }
+    },
     isPrintableOrder(order) {
       return eligibleForBatchPrint(order);
     },
@@ -1262,9 +1323,11 @@ export default {
       if (!this.currentEditOrderItem) {
         return;
       }
+      if (this.rejectCompletedOrderMutation(this.currentEditOrderItem)) return;
       this.loadGoodsInfoAndOpenModal();
     },
     handleOpenEditOrderModalDirect(order, index, type, depIndex = -1) {
+      if (this.rejectCompletedOrderMutation(order)) return;
       this.currentEditOrderItem = order;
       this.currentEditOrderIndex = index;
       this.currentEditOrderType = type;
@@ -1276,6 +1339,7 @@ export default {
       if (!this.currentEditOrderItem) {
         return;
       }
+      if (this.rejectCompletedOrderMutation(this.currentEditOrderItem)) return;
 
       // 初始化表单
       this.editOrderForm = {
@@ -1314,6 +1378,7 @@ export default {
       this.newStandardName = '';
     },
     handleDeleteOrderDirect(order, index, type, depIndex = -1) {
+      if (this.rejectCompletedOrderMutation(order)) return;
       this.currentEditOrderItem = order;
       this.currentEditOrderIndex = index;
       this.currentEditOrderType = type;
@@ -1335,6 +1400,7 @@ export default {
       if (!this.currentEditOrderItem) {
         return;
       }
+      if (this.rejectCompletedOrderMutation(this.currentEditOrderItem)) return;
 
       const confirmed = await this.$refs.alertDialog.confirm(`确定要删除订单 "${this.currentEditOrderItem.nxDistributerGoodsEntity?.nxDgGoodsName || this.currentEditOrderItem.nxDoGoodsName}" 吗？`);
       if (!confirmed) {
@@ -1497,6 +1563,7 @@ export default {
         await this.$refs.alertDialog.alert('订单信息错误', 'error');
         return;
       }
+      if (this.rejectCompletedOrderMutation(this.currentEditOrderItem)) return;
 
       if (!this.editOrderForm.quantity || parseFloat(this.editOrderForm.quantity) <= 0) {
         await this.$refs.alertDialog.alert('请输入有效的订货数量', 'warning');
@@ -1781,6 +1848,7 @@ export default {
       if (!this.currentEditOrderItem) {
         return;
       }
+      if (this.rejectCompletedOrderMutation(this.currentEditOrderItem)) return;
 
       if (!this.currentEditOrderItem.nxDepartmentOrdersId) {
         await this.$refs.alertDialog.alert('订单信息错误，无法删除', 'error');
@@ -1817,6 +1885,7 @@ export default {
     
     // 打开修改单价弹窗
     handleOpenEditPriceModal(order, index, type, depIndex = -1) {
+      if (this.rejectCompletedOrderMutation(order)) return;
       this.closeEditPrintStandardModal();
       this.closeEditWeightModal();
       console.log('[TodayOrders] 打开弹窗: 修改单价', {
@@ -1849,6 +1918,7 @@ export default {
         await this.$refs.alertDialog.alert('订单信息错误', 'error');
         return;
       }
+      if (this.rejectCompletedOrderMutation(this.currentEditPriceOrder)) return;
 
       if (!this.editPriceForm.price || this.editPriceForm.price === '') {
         await this.$refs.alertDialog.alert('请输入单价', 'warning');
@@ -1920,6 +1990,7 @@ export default {
     
     // 打开修改打印规格弹窗
     handleOpenEditPrintStandardModal(order, index, type, depIndex = -1) {
+      if (this.rejectCompletedOrderMutation(order)) return;
       this.closeEditPriceModal();
       this.closeEditWeightModal();
       console.log('[TodayOrders] 打开弹窗: 修改打印规格', {
@@ -1962,6 +2033,7 @@ export default {
         await this.$refs.alertDialog.alert('订单信息错误', 'error');
         return;
       }
+      if (this.rejectCompletedOrderMutation(this.currentEditPrintStandardOrder)) return;
 
       if (!this.editPrintStandardForm.printName || !this.editPrintStandardForm.printName.trim()) {
         await this.$refs.alertDialog.alert('请输入打印规格', 'warning');
@@ -2027,6 +2099,7 @@ export default {
 
     // 打开修改出库数量弹窗
     handleOpenEditWeightModal(order, index, type, depIndex = -1) {
+      if (this.rejectCompletedOrderMutation(order)) return;
       this.closeEditPriceModal();
       this.closeEditPrintStandardModal();
       console.log('[TodayOrders] 打开弹窗: 修改出库数量', {
@@ -2062,6 +2135,7 @@ export default {
         await this.$refs.alertDialog.alert('订单信息错误', 'error');
         return;
       }
+      if (this.rejectCompletedOrderMutation(this.currentEditWeightOrder)) return;
       const weightVal = parseFloat(this.editWeightForm.weight);
       if (isNaN(weightVal) || weightVal <= 0) {
         await this.$refs.alertDialog.alert('请输入有效的出库数量（大于0）', 'warning');
