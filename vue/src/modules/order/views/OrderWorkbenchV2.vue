@@ -40,7 +40,6 @@
       :selected-department-id="customerContext.selectedDepartmentId.value"
       :customer-loading="customerContext.loading.value"
       :customer-error="customerContext.error.value"
-      :pending-wechat-import="activeWechatImport"
       @select-customer="customerContext.selectCustomer"
       @select-department="customerContext.selectDepartment"
       @retry-customers="customerContext.reload"
@@ -73,6 +72,36 @@
       @data-changed="handleOrderChanged"
       @smart-mode-change="handleSmartModeChange"
     />
+
+    <WechatOrderImportModal
+      :open="wechatImportModalOpen && Boolean(activeWechatImport)"
+      :items="wechatImportBatch"
+      :active-item="activeWechatImport"
+      :completed-tokens="wechatImportCompletedTokens"
+      @close="closeWechatImportModal"
+    >
+      <AiOrderPanel
+        v-if="activeWechatImport"
+        :key="activeWechatImport.token"
+        class="order-workbench__wechat-import-panel"
+        :customers="customerContext.customers.value"
+        :selected-customer="customerContext.selectedCustomer.value"
+        :selected-customer-id="customerContext.selectedCustomerId.value"
+        :selected-customer-name="customerContext.selectedCustomerName.value"
+        :selected-department-id="customerContext.selectedDepartmentId.value"
+        :customer-loading="customerContext.loading.value"
+        :customer-error="customerContext.error.value"
+        :pending-wechat-import="activeWechatImport"
+        wechat-import-mode
+        @select-customer="customerContext.selectCustomer"
+        @select-department="customerContext.selectDepartment"
+        @retry-customers="customerContext.reload"
+        @order-saved="handleOrderChanged"
+        @task-added="handleTaskAdded"
+        @wechat-import-error="handleWechatImportError"
+        @show-today-orders="closeWechatImportModal"
+      />
+    </WechatOrderImportModal>
 
     <Teleport to="body">
       <Transition name="wechat-status-pop">
@@ -130,6 +159,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useStore } from 'vuex';
 import AiOrderPanel from '../components/workbench/AiOrderPanel.vue';
 import OrderFlowInbox from '../components/workbench/OrderFlowInbox.vue';
+import WechatOrderImportModal from '../components/workbench/WechatOrderImportModal.vue';
 import { useOrderCustomerContext } from '../composables/useOrderCustomerContext';
 import { useTodayOrderInbox } from '../composables/useTodayOrderInbox';
 import { customerVisibleInStage } from '../services/orderWorkbenchStage';
@@ -161,6 +191,9 @@ const wechatScanBusy = ref(false);
 const wechatScanMessage = ref('');
 const wechatScanStatus = ref('info');
 const wechatImportQueue = ref([]);
+const wechatImportBatch = ref([]);
+const wechatImportCompletedTokens = ref([]);
+const wechatImportModalOpen = ref(false);
 let wechatImportSequence = 0;
 const overview = reactive({
   customers: [],
@@ -339,7 +372,7 @@ function openActiveWechatImport() {
   const item = activeWechatImport.value;
   if (!item) return false;
   smartModeActive.value = false;
-  activeView.value = 'create';
+  activeView.value = 'overview';
   const customer = customerContext.customers.value.find(
     candidate => String(customerId(candidate)) === String(item.customerId)
   );
@@ -348,7 +381,14 @@ function openActiveWechatImport() {
     return false;
   }
   customerContext.selectCustomer(customer);
+  wechatScanMessage.value = '';
+  wechatImportModalOpen.value = true;
   return true;
+}
+
+function closeWechatImportModal() {
+  wechatImportModalOpen.value = false;
+  activeView.value = 'overview';
 }
 
 async function loadBoundWechatCustomers() {
@@ -449,6 +489,8 @@ async function handleWechatScan() {
     }
 
     wechatImportQueue.value = imports;
+    wechatImportBatch.value = imports;
+    wechatImportCompletedTokens.value = [];
     const totalMessages = imports.reduce((sum, item) => sum + item.messageCount, 0);
     setWechatScanStatus(
       `发现 ${imports.length} 位客户的 ${totalMessages} 条新订单消息；请确认并保存，保存后会自动进入下一位客户`,
@@ -465,14 +507,18 @@ async function handleWechatScan() {
 async function handleTaskAdded(change) {
   const current = activeWechatImport.value;
   if (current && change?.wechatImportToken === current.token) {
+    wechatImportCompletedTokens.value = [
+      ...wechatImportCompletedTokens.value,
+      current.token,
+    ];
     wechatImportQueue.value = wechatImportQueue.value.slice(1);
   }
   await handleOrderChanged(change);
   if (!current || change?.wechatImportToken !== current.token) return;
   if (wechatImportQueue.value.length) {
-    setWechatScanStatus(`“${current.customerName}”已保存，继续处理剩余 ${wechatImportQueue.value.length} 位客户`, 'success');
     openActiveWechatImport();
   } else {
+    wechatImportModalOpen.value = false;
     activeView.value = 'overview';
     setWechatScanStatus('本轮微信订单已全部确认保存', 'success');
   }

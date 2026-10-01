@@ -1,6 +1,6 @@
 <template>
-  <section class="ai-order-panel" aria-label="AI 下单">
-    <div class="ai-order-panel__toolbar">
+  <section :class="['ai-order-panel', { 'is-wechat-import': wechatImportMode }]" aria-label="AI 下单">
+    <div v-if="!wechatImportMode" class="ai-order-panel__toolbar">
       <button type="button" class="ai-order-panel__back" @click="$emit('show-today-orders')">
         <span>←</span>
         返回订单主页
@@ -82,6 +82,7 @@ const props = defineProps({
   customerLoading: { type: Boolean, default: false },
   customerError: { type: String, default: '' },
   pendingWechatImport: { type: Object, default: null },
+  wechatImportMode: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -176,6 +177,20 @@ async function handleWechatQuickAction() {
   min-height: 0;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
+}
+
+.ai-order-panel.is-wechat-import {
+  height: 100%;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+}
+
+.ai-order-panel.is-wechat-import .ai-order-panel__workspace {
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  box-shadow: none;
 }
 
 .ai-order-panel__workspace {
