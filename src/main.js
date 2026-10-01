@@ -1,5 +1,16 @@
 // src/main.js
-const { app, BrowserWindow, ipcMain, screen, dialog, shell, Menu, safeStorage, session: electronSession } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  screen,
+  dialog,
+  shell,
+  Menu,
+  safeStorage,
+  systemPreferences,
+  session: electronSession,
+} = require('electron');
 const path = require('path')
 const fs = require('fs')
 const appLogger = require('./appLogger')
@@ -281,6 +292,7 @@ function getWechatUiAutomationService() {
   if (!wechatUiAutomationService) {
     wechatUiAutomationService = createWechatUiAutomationService({
       artifactRoot: path.join(app.getPath('userData'), 'wechat-ui-private-artifacts'),
+      ensureMacAccessibility: () => systemPreferences.isTrustedAccessibilityClient(true),
     });
   }
   return wechatUiAutomationService;

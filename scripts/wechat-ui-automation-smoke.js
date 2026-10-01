@@ -177,7 +177,25 @@ async function verifyWindowsNoUnreadStopsImmediately() {
   assert.deepStrictEqual(result.result.openedTitles, []);
 }
 
-verifyWindowsNoUnreadStopsImmediately()
+async function verifyMacAccessibilityStopsBeforeAutomation() {
+  let spawnCalls = 0;
+  const service = createWechatUiAutomationService({
+    platform: 'darwin',
+    ensureMacAccessibility: () => false,
+    spawnProcess: () => {
+      spawnCalls += 1;
+      throw new Error('automation must not start without accessibility permission');
+    },
+  });
+  const result = await service.readUnread({ allowedTitles: ['金调料'] });
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.error.code, 'MAC_ACCESSIBILITY_PERMISSION_REQUIRED');
+  assert.match(result.error.message, /辅助功能/);
+  assert.strictEqual(spawnCalls, 0);
+}
+
+verifyMacAccessibilityStopsBeforeAutomation()
+  .then(() => verifyWindowsNoUnreadStopsImmediately())
   .then(() => console.log('WeChat UI automation smoke passed.'))
   .catch((error) => {
     console.error(error);

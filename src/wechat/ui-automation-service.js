@@ -290,6 +290,23 @@ function createWechatUiAutomationService(options = {}) {
       }
       try {
         const allowedTitles = normalizeAllowedTitles(input);
+        if (platform === 'darwin' && typeof options.ensureMacAccessibility === 'function') {
+          let accessibilityGranted = false;
+          try {
+            accessibilityGranted = Boolean(options.ensureMacAccessibility());
+          } catch {
+            accessibilityGranted = false;
+          }
+          if (!accessibilityGranted) {
+            return {
+              ok: false,
+              error: {
+                code: 'MAC_ACCESSIBILITY_PERMISSION_REQUIRED',
+                message: '请在“系统设置 → 隐私与安全性 → 辅助功能”中允许 GrainPrint 控制电脑，然后重新点击“读取微信订单”',
+              },
+            };
+          }
+        }
         if (platform === 'win32') {
           const script = resolveWindowsAutomationScript(options);
           return await runWindows(script, allowedTitles);
