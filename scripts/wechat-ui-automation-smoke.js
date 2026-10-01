@@ -4,7 +4,9 @@ const path = require('path');
 const {
   normalizeAllowedTitles,
   parseAutomationOutput,
+  classifyMacPythonFailure,
   resolveMacAutomationRoot,
+  resolveMacPythonCommand,
   resolveWindowsAutomationScript,
 } = require('../src/wechat/ui-automation-service');
 
@@ -46,6 +48,41 @@ const resolved = resolveMacAutomationRoot({
   ),
 });
 assert.strictEqual(resolved, expectedRoot);
+
+assert.strictEqual(
+  resolveMacPythonCommand({
+    arch: 'x64',
+    env: {},
+    existsSync: (candidate) => candidate === '/usr/local/bin/python3',
+  }),
+  '/usr/local/bin/python3'
+);
+assert.strictEqual(
+  resolveMacPythonCommand({
+    arch: 'arm64',
+    env: {},
+    existsSync: (candidate) => candidate === '/opt/homebrew/bin/python3',
+  }),
+  '/opt/homebrew/bin/python3'
+);
+assert.strictEqual(
+  resolveMacPythonCommand({
+    env: { JCYX_WECHAT_UI_PYTHON: '/custom/python3' },
+    existsSync: () => false,
+  }),
+  '/custom/python3'
+);
+
+assert.deepStrictEqual(
+  classifyMacPythonFailure(
+    "ModuleNotFoundError: No module named 'PIL'",
+    1
+  ),
+  {
+    code: 'PYTHON_DEPENDENCY_MISSING',
+    message: 'Mac 微信自动化缺少运行组件：Pillow (PIL)',
+  }
+);
 
 const windowsModuleDir = path.join('/tmp', 'app', 'src', 'wechat');
 const expectedWindowsScript = path.join(

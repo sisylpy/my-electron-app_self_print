@@ -55,6 +55,43 @@ function resolveWindowsAutomationScript(options = {}) {
   return script;
 }
 
+function resolveMacPythonCommand(options = {}) {
+  const env = options.env || process.env;
+  const configured = String(options.python || env.JCYX_WECHAT_UI_PYTHON || '').trim();
+  if (configured) return configured;
+
+  const existsSync = options.existsSync || fs.existsSync;
+  const arch = options.arch || process.arch;
+  const homebrewCandidates = arch === 'arm64'
+    ? ['/opt/homebrew/bin/python3', '/usr/local/bin/python3']
+    : ['/usr/local/bin/python3', '/opt/homebrew/bin/python3'];
+  const candidates = [
+    ...homebrewCandidates,
+    '/Library/Frameworks/Python.framework/Versions/Current/bin/python3',
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) || 'python3';
+}
+
+function classifyMacPythonFailure(stderr, exitCode) {
+  const diagnostic = String(stderr || '');
+  const missingModule = diagnostic.match(
+    /ModuleNotFoundError:\s*No module named\s*['"]([^'"]+)['"]/u
+  );
+  if (missingModule) {
+    const moduleName = missingModule[1] === 'PIL' ? 'Pillow (PIL)' : missingModule[1];
+    return {
+      code: 'PYTHON_DEPENDENCY_MISSING',
+      message: `Mac 微信自动化缺少运行组件：${moduleName}`,
+    };
+  }
+  return {
+    code: 'MAC_AUTOMATION_EXITED',
+    message: exitCode === null
+      ? 'Mac 微信自动化进程被中断'
+      : `Mac 微信自动化进程异常退出（代码 ${exitCode}）`,
+  };
+}
+
 function parseAutomationOutput(stdout, allowedTitles) {
   let payload;
   try {
@@ -108,6 +145,7 @@ function createWechatUiAutomationService(options = {}) {
     abortReason = '';
     activePromise = new Promise((resolve) => {
       let stdout = '';
+      let stderr = '';
       let stderrSize = 0;
       let outputTooLarge = false;
       let settled = false;
@@ -140,6 +178,9 @@ function createWechatUiAutomationService(options = {}) {
       });
       child.stderr.on('data', (chunk) => {
         stderrSize += chunk.length;
+        if (Buffer.byteLength(stderr, 'utf8') < MAX_OUTPUT_BYTES) {
+          stderr += chunk.toString('utf8');
+        }
         if (stderrSize > MAX_OUTPUT_BYTES && !abortReason) {
           stopChild(child, '微信界面自动化诊断输出超过安全限制');
         }
@@ -159,9 +200,16 @@ function createWechatUiAutomationService(options = {}) {
           },
         });
       });
-      child.on('close', () => {
+      child.on('close', (code) => {
         if (abortReason) {
           finish({ ok: false, error: { code: 'ABORTED', message: abortReason } });
+          return;
+        }
+        if (!stdout.trim() && typeof processOptions.classifyEmptyOutput === 'function') {
+          finish({
+            ok: false,
+            error: processOptions.classifyEmptyOutput(stderr, code),
+          });
           return;
         }
         try {
@@ -197,11 +245,13 @@ function createWechatUiAutomationService(options = {}) {
 
   function runMac(root, allowedTitles) {
     const script = path.join(root, 'scripts', 'read_unread.py');
-    const python = options.python || process.env.JCYX_WECHAT_UI_PYTHON || 'python3';
+    const python = resolveMacPythonCommand(options);
     const args = [script, '--max-pages', '8', '--dwell-seconds', '1.8'];
     allowedTitles.forEach((title) => args.push('--include-title', title));
     if (artifactRoot) args.push('--artifact-root', artifactRoot);
-    return runProcess(python, args, root, allowedTitles);
+    return runProcess(python, args, root, allowedTitles, {
+      classifyEmptyOutput: classifyMacPythonFailure,
+    });
   }
 
   function runWindows(script, allowedTitles) {
@@ -261,6 +311,8 @@ module.exports = {
   createWechatUiAutomationService,
   normalizeAllowedTitles,
   parseAutomationOutput,
+  classifyMacPythonFailure,
   resolveMacAutomationRoot,
+  resolveMacPythonCommand,
   resolveWindowsAutomationScript,
 };
