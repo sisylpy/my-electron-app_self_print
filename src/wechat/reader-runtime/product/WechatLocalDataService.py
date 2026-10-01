@@ -66,6 +66,29 @@ def _msg_type(local_type: int) -> str:
     }.get(local_type, "unknown")
 
 
+def _visible_message_text(content: str, conversation_kind: str, sender_username: Optional[str]) -> str:
+    """Remove WeChat's group-message sender envelope from user-visible text.
+
+    WCDB stores a group text message as ``<sender username>:\n<body>`` even though
+    the sender is also available through ``real_sender_id``.  The prefix is
+    transport metadata, not order content, and may contain a raw wxid.  Strip
+    only the exact resolved sender prefix so ordinary text such as ``规格:\n...``
+    is preserved.
+    """
+    text = content or ""
+    if conversation_kind != "group" or not sender_username:
+        return text
+    prefix = sender_username + ":"
+    if not text.startswith(prefix):
+        return text
+    remainder = text[len(prefix):]
+    if remainder.startswith("\r\n"):
+        return remainder[2:]
+    if remainder.startswith("\n"):
+        return remainder[1:]
+    return text
+
+
 class _ConversationMeta:
     __slots__ = ("account_id", "username", "kind")
 
@@ -276,12 +299,16 @@ class WechatLocalDataService:
         pairs.sort(key=lambda p: int(p[1][1] or 0), reverse=True)
         total = len(pairs)
         sliced = pairs[page.offset: page.offset + page.limit]
-        items = [self._to_message(conversation, acct.wxid, db, shard, row) for shard, row in sliced]
+        items = [
+            self._to_message(conversation, meta.kind, acct.wxid, db, shard, row)
+            for shard, row in sliced
+        ]
         has_more = page.offset + page.limit < total
         return PageResult(items=items, total=total, hasMore=has_more)
 
     def _to_message(
-        self, conv_id: ConversationId, account_wxid: str, db: WechatReadOnlyDB,
+        self, conv_id: ConversationId, conversation_kind: str, account_wxid: str,
+        db: WechatReadOnlyDB,
         shard: str, row: list,
     ) -> Message:
         local_id = int(row[0] or 0)
@@ -294,7 +321,10 @@ class WechatLocalDataService:
         nick = db.contact_nick(uname) if uname else None
         sender_name = nick or uname or "(未知)"
         pid = ParticipantId(_fp(uname)) if uname else ParticipantId(_fp("rid:%d" % rid))
-        text = content if mtype == "text" else ""
+        text = (
+            _visible_message_text(content, conversation_kind, uname)
+            if mtype == "text" else ""
+        )
         att: Optional[AttachmentRef] = None
         if mtype != "text":
             att = AttachmentRef(id=AttachmentId(_fp("%s:%d" % (conv_id, local_id))), kind=mtype)
