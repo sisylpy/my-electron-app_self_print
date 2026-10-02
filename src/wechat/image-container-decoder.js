@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const V1_MAGIC = Buffer.from([0x07, 0x08, 0x56, 0x31, 0x08, 0x07]);
 const V2_MAGIC = Buffer.from([0x07, 0x08, 0x56, 0x32, 0x08, 0x07]);
 const V1_AES_KEY = Buffer.from('cfcd208495d565ef', 'ascii');
+const WXGF_MAGIC = Buffer.from('wxgf', 'ascii');
 // The existing OCR endpoint limits the base64 string itself to 10 MiB. Keep
 // the decoded payload below 7 MiB so the 4/3 base64 expansion remains safe.
 const MAX_DECODED_BYTES = 7 * 1024 * 1024;
@@ -73,20 +74,18 @@ function decodeLegacyXor(buffer) {
   throw new Error('不支持的微信图片格式');
 }
 
-function decodeWechatImageEnvelope(envelope) {
-  const encrypted = Buffer.from(String(envelope?.encryptedBase64 || ''), 'base64');
+function decodeEncryptedVariant(encrypted, v2Candidates) {
   if (!encrypted.length) throw new Error('微信图片数据为空');
   let decoded;
   if (encrypted.subarray(0, V1_MAGIC.length).equals(V1_MAGIC)) {
     decoded = decodeVersioned(encrypted, V1_AES_KEY, 0);
   } else if (encrypted.subarray(0, V2_MAGIC.length).equals(V2_MAGIC)) {
-    const candidates = Array.isArray(envelope?.v2Candidates) ? envelope.v2Candidates : [];
-    for (const candidate of candidates) {
+    for (const candidate of v2Candidates) {
       try {
         const key = Buffer.from(String(candidate?.aesKey || ''), 'ascii');
         if (key.length !== 16) continue;
         const value = decodeVersioned(encrypted, key, Number(candidate?.xorKey) & 0xff);
-        if (detectImageMime(value)) {
+        if (detectImageMime(value) || value.subarray(0, WXGF_MAGIC.length).equals(WXGF_MAGIC)) {
           decoded = value;
           break;
         }
@@ -94,14 +93,41 @@ function decodeWechatImageEnvelope(envelope) {
         // Try the next account-local candidate. No key material is logged.
       }
     }
-    if (!decoded) throw new Error('微信图片解码失败，请先在微信中打开原图后重试');
+    if (!decoded) throw new Error('DECODE_FAILED');
   } else {
     decoded = decodeLegacyXor(encrypted);
   }
   if (decoded.length > MAX_DECODED_BYTES) throw new Error('微信图片过大，暂时无法识别');
   const mimeType = detectImageMime(decoded);
-  if (!mimeType) throw new Error('微信图片格式暂不支持识别');
+  if (!mimeType) {
+    if (decoded.subarray(0, WXGF_MAGIC.length).equals(WXGF_MAGIC)) throw new Error('WXGF_UNSUPPORTED');
+    throw new Error('UNSUPPORTED_FORMAT');
+  }
   return { mimeType, base64: decoded.toString('base64'), size: decoded.length };
+}
+
+function decodeWechatImageEnvelope(envelope) {
+  const variants = Array.isArray(envelope?.encryptedVariants) && envelope.encryptedVariants.length
+    ? envelope.encryptedVariants
+    : [{ kind: 'original', encryptedBase64: envelope?.encryptedBase64 }];
+  const candidates = Array.isArray(envelope?.v2Candidates) ? envelope.v2Candidates : [];
+  let sawWxgf = false;
+  let sawPayload = false;
+  for (const variant of variants) {
+    const encrypted = Buffer.from(String(variant?.encryptedBase64 || ''), 'base64');
+    if (!encrypted.length) continue;
+    sawPayload = true;
+    try {
+      return decodeEncryptedVariant(encrypted, candidates);
+    } catch (error) {
+      if (error?.message === 'WXGF_UNSUPPORTED') sawWxgf = true;
+    }
+  }
+  if (!sawPayload) throw new Error('微信图片数据为空');
+  if (sawWxgf) {
+    throw new Error('微信原图为 WXGF 格式，且没有找到可识别的图片版本；请在微信中打开原图后重试');
+  }
+  throw new Error('微信图片解码失败，请先在微信中打开原图后重试');
 }
 
 module.exports = { decodeWechatImageEnvelope, detectImageMime };

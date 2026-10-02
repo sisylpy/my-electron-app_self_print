@@ -58,4 +58,22 @@ assert.deepEqual(
   alignedPayload,
 );
 
+// Current macOS WeChat often stores the full-size image as WXGF while keeping
+// a JPEG thumbnail beside it. The decoder must continue to the next available
+// variant instead of reporting a misleading key/decode failure.
+const wxgfPayload = Buffer.concat([Buffer.from('wxgf', 'ascii'), Buffer.alloc(1200, 0xcd)]);
+const wxgfV2 = encodeVersioned(wxgfPayload, V2_MAGIC, v2Key, 31, 1024, 27);
+const thumbnailJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x11, 0x22, 0x33]);
+const thumbnailV2 = encodeVersioned(thumbnailJpeg, V2_MAGIC, v2Key, 31, 4, 3);
+assert.deepEqual(
+  Buffer.from(decodeWechatImageEnvelope({
+    encryptedVariants: [
+      { kind: 'original', encryptedBase64: wxgfV2.toString('base64') },
+      { kind: 'thumbnail', encryptedBase64: thumbnailV2.toString('base64') },
+    ],
+    v2Candidates: [{ aesKey: v2Key, xorKey: 31 }],
+  }).base64, 'base64'),
+  thumbnailJpeg,
+);
+
 console.log('WeChat image container decoder tests passed');
