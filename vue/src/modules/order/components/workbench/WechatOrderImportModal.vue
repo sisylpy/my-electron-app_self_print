@@ -235,7 +235,7 @@ const modalSubtitle = computed(() => {
 const progressLabel = computed(() => {
   if (props.busy) return '读取中';
   if (!props.items.length) return props.scanStatus === 'error' ? '失败' : '完成';
-  return `${completedCount.value} / ${props.items.length}`;
+  return `${currentPosition.value} / ${props.items.length}`;
 });
 const closeLabel = computed(() => {
   if (props.busy || props.selectedImportBusy) return '处理中';

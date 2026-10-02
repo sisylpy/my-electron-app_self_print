@@ -823,13 +823,14 @@ async function handleWechatScan() {
 async function handleTaskAdded(change) {
   const current = activeWechatImport.value;
   if (current && change?.wechatImportToken === current.token) {
-    wechatImportCompletedTokens.value = [
-      ...wechatImportCompletedTokens.value,
-      current.token,
-    ];
-    const update = removeWechatImportQueueItem(wechatImportQueue.value, current.token);
-    wechatImportQueue.value = update.items;
-    activeWechatImportToken.value = update.nextToken;
+    const queueUpdate = removeWechatImportQueueItem(wechatImportQueue.value, current.token);
+    const batchUpdate = removeWechatImportQueueItem(wechatImportBatch.value, current.token);
+    wechatImportQueue.value = queueUpdate.items;
+    wechatImportBatch.value = batchUpdate.items;
+    wechatImportCompletedTokens.value = wechatImportCompletedTokens.value.filter(
+      token => token !== current.token
+    );
+    activeWechatImportToken.value = queueUpdate.nextToken;
   }
   await handleOrderChanged(change);
   if (!current || change?.wechatImportToken !== current.token) return;
