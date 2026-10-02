@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from ..mouse import click, press_escape
+from ..mouse import click
 from ..results import OperationResult, ResultCode
 from ..screenshot import Screenshot, capture_window
 from ..state_detector import conversation_header
@@ -12,7 +12,7 @@ from ..window import WeChatWindow, activate_wechat, main_wechat_window
 
 
 class FocusConversationFlow:
-    """Open one exact visible WeChat conversation and verify its header."""
+    """Open one exact visible WeChat conversation without dismissing the current chat."""
 
     def __init__(
         self,
@@ -54,8 +54,6 @@ class FocusConversationFlow:
     def run(self) -> OperationResult:
         try:
             activate_wechat()
-            for _ in range(2):
-                press_escape(0.1)
             self._window = main_wechat_window()
             shot, items = self._window_shot("conversation-before")
             if self._header_matches(shot, items):

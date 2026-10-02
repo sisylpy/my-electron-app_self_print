@@ -177,6 +177,7 @@ const bundledMacFocusFlow = fs.readFileSync(
 assert.match(bundledMacFocusFlow, /from \.\.state_detector import conversation_header/);
 assert.match(bundledMacFocusFlow, /return conversation_header\(/);
 assert.doesNotMatch(bundledMacFocusFlow, /exact_chat_header/);
+assert.doesNotMatch(bundledMacFocusFlow, /press_escape/);
 
 const bundledMacFlow = fs.readFileSync(
   path.join(

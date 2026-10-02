@@ -87,7 +87,7 @@
                     class="wechat-import-modal__refresh"
                     :disabled="refreshing"
                     @click="$emit('refresh')"
-                  >{{ refreshing ? '正在手动同步…' : '手动同步当前会话' }}</button>
+                  >{{ refreshing ? '正在获取最新消息…' : '手动获取最新消息' }}</button>
                   <button
                     v-if="activeItem.lateMessageCount"
                     type="button"

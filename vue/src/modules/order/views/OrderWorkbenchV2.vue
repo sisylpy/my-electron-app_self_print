@@ -402,6 +402,9 @@ async function refreshActiveWechatImport(options = {}) {
   if (!item || wechatImportRefreshing.value || !wechatImportModalOpen.value) return false;
   wechatImportRefreshing.value = true;
   try {
+    if (options.manual) {
+      wechatWorkspaceWarning.value = await focusWechatImportConversation(item);
+    }
     const result = await prepareWechatOrderImport({
       customerId: item.customerId,
       binding: item.binding,
@@ -472,6 +475,20 @@ function mergeActiveWechatImport() {
   activeWechatImportToken.value = refreshed.token;
 }
 
+async function focusWechatImportConversation(item) {
+  const conversationTitle = String(item?.conversationTitle || '').trim();
+  const focusApi = window.electronAPI?.wechatUi?.focusConversation;
+  if (!conversationTitle || !focusApi) return '';
+  try {
+    const result = await focusApi(conversationTitle);
+    return result?.ok
+      ? ''
+      : result?.error?.message || '左侧微信未能自动切换到对应会话';
+  } catch (error) {
+    return error?.message || '左侧微信未能自动切换到对应会话';
+  }
+}
+
 async function openActiveWechatImport() {
   const item = activeWechatImport.value;
   if (!item) return false;
@@ -497,24 +514,10 @@ async function openActiveWechatImport() {
   } catch (error) {
     wechatWorkspaceWarning.value = error?.message || '微信窗口未能停靠到左侧';
   }
-  const conversationTitle = String(item.conversationTitle || '').trim();
-  const focusApi = window.electronAPI?.wechatUi?.focusConversation;
-  if (conversationTitle && focusApi) {
-    try {
-      const focusResult = await focusApi(conversationTitle);
-      if (!focusResult?.ok) {
-        const message = focusResult?.error?.message || '左侧微信未能自动切换到对应会话';
-        wechatWorkspaceWarning.value = [wechatWorkspaceWarning.value, message]
-          .filter(Boolean)
-          .join('；');
-      }
-    } catch (error) {
-      wechatWorkspaceWarning.value = [
-        wechatWorkspaceWarning.value,
-        error?.message || '左侧微信未能自动切换到对应会话',
-      ].filter(Boolean).join('；');
-    }
-  }
+  const focusWarning = await focusWechatImportConversation(item);
+  wechatWorkspaceWarning.value = [wechatWorkspaceWarning.value, focusWarning]
+    .filter(Boolean)
+    .join('；');
   wechatImportModalOpen.value = true;
   return true;
 }
