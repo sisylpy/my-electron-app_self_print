@@ -108,8 +108,126 @@ try {
   assert.equal(retried.status, 'ready');
   assert.equal(retried.payload.text, '咖啡10袋');
   assert.equal(participantCalls, 1);
-  assert.equal(messageCalls, 3);
-  assert.deepEqual(retryWaits, [2000, 4000]);
+  assert.equal(messageCalls, 4);
+  assert.deepEqual(retryWaits, [2000, 4000, 7000]);
+} finally {
+  Date.now = originalDateNow;
+}
+
+let delayedWriteReads = 0;
+let delayedWritePrepares = 0;
+const delayedWriteWaits = [];
+const delayedWriteBinding = {
+  ...binding,
+  cursorTimeMs: Date.parse('2026-10-01T02:00:00.000Z'),
+};
+const delayedWrite = await prepareWechatOrderImport({
+  customerId: 7,
+  binding: delayedWriteBinding,
+  now: Date.parse('2026-10-01T02:02:00.000Z'),
+  retryDelaysMs: [1000],
+  sleep: async delayMs => delayedWriteWaits.push(delayMs),
+  electronAPI: {
+    customerWechatOrders: {
+      prepareMessages: async (_customerId, messages) => {
+        delayedWritePrepares += 1;
+        const pending = messages
+          .map(message => message.messageFingerprint)
+          .filter(messageId => messageId === 'msg:late-write');
+        return {
+          ok: true,
+          data: {
+            binding: delayedWriteBinding,
+            pendingMessageFingerprints: pending,
+          },
+        };
+      },
+    },
+    wechatReader: {
+      getParticipants: electronAPI.wechatReader.getParticipants,
+      getMessages: async () => {
+        delayedWriteReads += 1;
+        const items = [{
+          id: 'msg:already-processed',
+          senderId: 'friend',
+          type: 'text',
+          text: '旧订单',
+          timestamp: '2026-10-01T01:59:30.000Z',
+        }];
+        if (delayedWriteReads > 1) items.push({
+          id: 'msg:late-write',
+          senderId: 'friend',
+          type: 'text',
+          text: '刚写入本地库的新订单',
+          timestamp: '2026-10-01T02:01:30.000Z',
+        });
+        return { ok: true, result: { items } };
+      },
+    },
+  },
+});
+assert.equal(delayedWrite.status, 'ready');
+assert.equal(delayedWrite.payload.text, '刚写入本地库的新订单');
+assert.equal(delayedWriteReads, 2);
+assert.equal(delayedWritePrepares, 2);
+assert.deepEqual(delayedWriteWaits, [1000]);
+
+let partialWriteReads = 0;
+let partialWritePrepares = 0;
+const partialWriteWaits = [];
+const partialWriteBinding = {
+  ...binding,
+  cursorTimeMs: Date.parse('2026-10-01T03:00:00.000Z'),
+};
+Date.now = () => Date.parse('2026-10-01T03:02:00.000Z');
+try {
+  const partialWrite = await prepareWechatOrderImport({
+    customerId: 7,
+    binding: partialWriteBinding,
+    retryDelaysMs: [1000, 1000, 1000, 1000],
+    sleep: async delayMs => partialWriteWaits.push(delayMs),
+    electronAPI: {
+      customerWechatOrders: {
+        prepareMessages: async (_customerId, messages) => {
+          partialWritePrepares += 1;
+          return {
+            ok: true,
+            data: {
+              binding: partialWriteBinding,
+              pendingMessageFingerprints: messages.map(message => message.messageFingerprint),
+            },
+          };
+        },
+      },
+      wechatReader: {
+        getParticipants: electronAPI.wechatReader.getParticipants,
+        getMessages: async () => {
+          partialWriteReads += 1;
+          const items = [{
+            id: 'msg:vegetable-old',
+            senderId: 'friend',
+            type: 'text',
+            text: '西葫芦5斤',
+            timestamp: '2026-10-01T03:00:30.000Z',
+          }];
+          if (partialWriteReads >= 3) items.push({
+            id: 'msg:vegetable-late',
+            senderId: 'friend',
+            type: 'text',
+            text: '油菜8斤',
+            timestamp: '2026-10-01T03:01:30.000Z',
+          });
+          return { ok: true, result: { items } };
+        },
+      },
+    },
+  });
+  assert.equal(partialWrite.status, 'ready');
+  assert.equal(partialWrite.payload.text, '西葫芦5斤\n油菜8斤');
+  assert.equal(partialWrite.pendingCount, 2);
+  assert.equal(partialWriteReads, 5);
+  assert.equal(partialWritePrepares, 5);
+  assert.deepEqual(partialWriteWaits, [1000, 1000, 1000, 1000]);
 } finally {
   Date.now = originalDateNow;
 }

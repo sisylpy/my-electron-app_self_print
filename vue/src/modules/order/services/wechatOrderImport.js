@@ -56,7 +56,7 @@ export async function prepareWechatOrderImport({
   customerId,
   binding,
   now = null,
-  retryDelaysMs = [2000, 4000, 7000],
+  retryDelaysMs = [2000, 4000, 7000, 12000, 20000],
   sleep = (delayMs) => new Promise(resolve => setTimeout(resolve, delayMs)),
   electronAPI = window.electronAPI,
 }) {
@@ -86,6 +86,11 @@ export async function prepareWechatOrderImport({
     ? retryDelaysMs.filter(delayMs => Number.isFinite(Number(delayMs)) && Number(delayMs) >= 0)
     : [];
   let incoming = [];
+  let pending = [];
+  let prepared = null;
+  let nextBinding = normalizedBinding;
+  let pendingSignature = '';
+  let stablePendingReads = 0;
 
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
     if (attempt > 0) await sleep(Number(retryDelays[attempt - 1]));
@@ -105,7 +110,26 @@ export async function prepareWechatOrderImport({
         left.messageTimeMs - right.messageTimeMs
         || String(left.id).localeCompare(String(right.id))
       ));
-    if (incoming.length) break;
+    if (!incoming.length) continue;
+
+    prepared = unwrapWechatServer(await orderApi.prepareMessages(
+      id,
+      incoming.map((message) => ({
+        messageFingerprint: message.id,
+        messageTimeMs: message.messageTimeMs,
+      }))
+    ));
+    const pendingIds = new Set(prepared?.pendingMessageFingerprints || []);
+    pending = incoming.filter((message) => pendingIds.has(message.id));
+    nextBinding = normalizeWechatBinding(prepared?.binding || nextBinding);
+    // 微信窗口被点开后，客户端可能先写入一部分旧消息，再延迟写入最新消息。
+    // 生产读取必须等候待处理消息连续两次保持稳定，避免只生成半张订单。
+    if (pending.length) {
+      const signature = pending.map(message => message.id).sort().join('|');
+      stablePendingReads = signature === pendingSignature ? stablePendingReads + 1 : 0;
+      pendingSignature = signature;
+      if (hasFixedNow || stablePendingReads >= 2 || attempt === retryDelays.length) break;
+    }
   }
 
   if (!incoming.length) {
@@ -118,16 +142,6 @@ export async function prepareWechatOrderImport({
     };
   }
 
-  const prepared = unwrapWechatServer(await orderApi.prepareMessages(
-    id,
-    incoming.map((message) => ({
-      messageFingerprint: message.id,
-      messageTimeMs: message.messageTimeMs,
-    }))
-  ));
-  const pendingIds = new Set(prepared?.pendingMessageFingerprints || []);
-  const pending = incoming.filter((message) => pendingIds.has(message.id));
-  const nextBinding = normalizeWechatBinding(prepared?.binding || normalizedBinding);
   if (!pending.length) {
     return {
       status: 'duplicate',
