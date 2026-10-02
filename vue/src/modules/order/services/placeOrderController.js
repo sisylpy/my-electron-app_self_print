@@ -5249,7 +5249,18 @@ import api from '../services/orderApi';
                 const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
                 const sourceItems = Array.isArray(result?.items) ? result.items : [];
                 const rows = sourceItems
-                    .filter(item => item && typeof item === 'object' && String(item.name || item.rawName || '').trim())
+                    // A conservative vision result may intentionally leave an
+                    // unreadable product name blank.  Keep that visual row when
+                    // another field proves it is an order line so the user can
+                    // correct it; never force the model to invent a name just
+                    // to make the row appear in the editor.
+                    .filter(item => item && typeof item === 'object' && [
+                        item.name,
+                        item.rawName,
+                        item.quantity,
+                        item.unit,
+                        item.note,
+                    ].some(value => String(value == null ? '' : value).trim()))
                     .map(item => {
                         const name = String(item.name || item.rawName || '').trim();
                         const rawName = String(item.rawName || name).trim();
