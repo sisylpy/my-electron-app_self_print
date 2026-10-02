@@ -121,17 +121,26 @@ watch(
     workspaceKey.value,
   ],
   async ([token, importCustomerId, selectedCustomerId]) => {
+    const pendingImport = props.pendingWechatImport;
     if (!token || appliedWechatImportToken.value === token) return;
     if (String(importCustomerId) !== String(selectedCustomerId)) return;
+    // Keep the payload that belongs to this watcher run. The user can switch
+    // from a text task to an image task while the next tick or OCR is pending.
+    if (!pendingImport || pendingImport.token !== token) return;
+    const payload = pendingImport.payload;
     try {
       selectedMode.value = 'wechat';
       await nextTick();
+      if (props.pendingWechatImport?.token !== token) return;
       const workspace = placeOrderRef.value;
       if (!workspace?.applyWechatImport) throw new Error('订单录入区尚未就绪');
-      await workspace.applyWechatImport(props.pendingWechatImport.payload);
+      await workspace.applyWechatImport(payload);
+      if (props.pendingWechatImport?.token !== token) return;
       appliedWechatImportToken.value = token;
     } catch (error) {
-      emit('wechat-import-error', { token, message: error?.message || '微信订单载入失败' });
+      if (props.pendingWechatImport?.token === token) {
+        emit('wechat-import-error', { token, message: error?.message || '微信订单载入失败' });
+      }
     }
   },
   { flush: 'post', immediate: true }

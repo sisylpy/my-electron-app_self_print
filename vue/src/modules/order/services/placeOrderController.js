@@ -16,6 +16,7 @@ import api from '../services/orderApi';
     import OrderModeSelector from '../components/OrderModeSelector.vue';
     import WechatOrderSource from '../components/workbench/WechatOrderSource.vue';
     import {createPlaceOrderState} from '../stores/orderWorkspaceState';
+    import {formatWechatImageRecognition as formatWechatImageRecognitionText} from './wechatImageRecognition';
 
     export default {
         name: 'PlaceOrder',
@@ -369,6 +370,10 @@ import api from '../services/orderApi';
 
             // 处理上传方式切换
             handleUploadTypeChange(type) {
+                // A pending WeChat image OCR request belongs to the previous
+                // workspace. Ignore its result after a mode switch.
+                this.invalidateWechatOrderLoad();
+                this.showDeepSeekLoading = false;
                 this.stopAllReading();
                 this.clearTaskStatusPollTimer();
                 // 切换上传类型时清空订单数据，避免 paste 的订单显示在 excel-paste 等模式
@@ -5148,52 +5153,71 @@ import api from '../services/orderApi';
             },
 
             async loadWechatOrderTask(payload) {
+                const requestId = this.beginWechatOrderLoad();
+                const images = Array.isArray(payload.images) ? payload.images.slice() : [];
+                const text = typeof payload.text === 'string' ? payload.text.trim() : '';
+                const isImageTask = images.length > 0;
+
                 this.wechatOrderSource = payload.source;
-                this.wechatOrderImages = Array.isArray(payload.images) ? payload.images : [];
-                this.pasteInputText = payload.text;
-                this.pasteInputContent = payload.text;
-                this.pasteOriginText = payload.text;
+                this.wechatOrderImages = images;
+                // Text and image tasks are deliberately separate. An image
+                // task starts empty and receives only its own OCR result.
+                const initialText = isImageTask ? '' : text;
+                this.pasteInputText = initialText;
+                this.pasteInputContent = initialText;
+                this.pasteOriginText = initialText;
                 this.pasteSaveCount = null;
                 this.orderItems = [];
                 this.pasteInvalidLineIndices = [];
                 this.pasteInvalidSegments = [];
                 this.pasteNoValidOrder = false;
-                const recognizedImageText = await this.recognizeWechatOrderImages(this.wechatOrderImages);
-                const combinedText = [payload.text.trim(), recognizedImageText.trim()].filter(Boolean).join('\n');
+                const recognizedImageText = isImageTask
+                    ? await this.recognizeWechatOrderImages(images, requestId)
+                    : '';
+                // A later task may have opened while OCR was in flight. Its
+                // text and order list must remain untouched by this request.
+                if (!this.isCurrentWechatOrderLoad(requestId)) return;
+                const combinedText = isImageTask ? recognizedImageText.trim() : text;
                 this.pasteInputText = combinedText;
                 this.pasteInputContent = combinedText;
                 this.pasteOriginText = combinedText;
                 if (combinedText) await this.handlePasteLocalParse();
             },
 
-            formatWechatImageRecognition(data) {
-                const items = Array.isArray(data?.items) ? data.items : [];
-                if (items.length) {
-                    return items.map((item) => {
-                        const name = String(item?.name || item?.rawName || '').trim();
-                        const quantity = String(item?.quantity ?? item?.qty ?? '').trim();
-                        const unit = String(item?.spec || item?.unit || '').trim();
-                        const note = String(item?.note || item?.remark || '').trim();
-                        if (!name) return '';
-                        const displayName = note ? `${name}(${note})` : name;
-                        return [displayName, `${quantity}${unit}`.trim()].filter(Boolean).join(' ');
-                    }).filter(Boolean).join('\n');
-                }
-                return String(data?.ocrText || '').trim();
+            beginWechatOrderLoad() {
+                this.wechatOrderLoadSequence = Number(this.wechatOrderLoadSequence || 0) + 1;
+                return this.wechatOrderLoadSequence;
             },
 
-            async recognizeWechatOrderImages(images) {
+            invalidateWechatOrderLoad() {
+                this.wechatOrderLoadSequence = Number(this.wechatOrderLoadSequence || 0) + 1;
+            },
+
+            isCurrentWechatOrderLoad(requestId) {
+                return requestId === this.wechatOrderLoadSequence;
+            },
+
+            formatWechatImageRecognition(data) {
+                return formatWechatImageRecognitionText(data);
+            },
+
+            async recognizeWechatOrderImages(images, requestId = null) {
                 const rows = Array.isArray(images) ? images : [];
                 if (!rows.length) return '';
-                this.showDeepSeekLoading = true;
+                const isCurrentRequest = () => (
+                    requestId == null || this.isCurrentWechatOrderLoad(requestId)
+                );
+                if (isCurrentRequest()) this.showDeepSeekLoading = true;
                 try {
                     const recognized = [];
                     for (const image of rows) {
+                        if (!isCurrentRequest()) return '';
                         const dataUrl = String(image?.dataUrl || '');
                         const commaIndex = dataUrl.indexOf(',');
                         const imageBase64 = commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl;
                         if (!imageBase64) throw new Error('微信图片内容为空');
                         const response = await api.recognizeWechatOrderImage({ ImageBase64: imageBase64 });
+                        if (!isCurrentRequest()) return '';
                         if (!response?.data || response.data.code !== 0) {
                             throw new Error(response?.data?.msg || response?.data?.message || '图片识别失败');
                         }
@@ -5203,10 +5227,12 @@ import api from '../services/orderApi';
                     if (!recognized.length) throw new Error('图片中没有识别到有效订单内容');
                     return recognized.join('\n');
                 } catch (error) {
-                    await this.$refs.alertDialog.alert(error?.message || '微信图片识别失败，请重试');
+                    if (isCurrentRequest()) {
+                        await this.$refs.alertDialog.alert(error?.message || '微信图片识别失败，请重试');
+                    }
                     return '';
                 } finally {
-                    this.showDeepSeekLoading = false;
+                    if (isCurrentRequest()) this.showDeepSeekLoading = false;
                 }
             },
 

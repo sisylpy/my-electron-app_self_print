@@ -3,6 +3,33 @@ export const CONVERSATION_GROUP = 'group';
 export const GROUP_ALL_MEMBER_MESSAGES = 'ALL_MEMBER_MESSAGES';
 export const GROUP_MENTION_SELF_ONLY = 'MENTION_SELF_ONLY';
 
+// The reader must never turn a media/blob payload into a paste-order task.
+// Keep normal order separators (tabs and line breaks), but reject replacement
+// characters and the binary control range that cannot occur in customer text.
+const UNREADABLE_TEXT = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFFFD]/u;
+const MEANINGFUL_TEXT = /[\p{L}\p{N}]/u;
+const VISIBLE_TEXT = /[^\s]/u;
+const WECHAT_MEDIA_PLACEHOLDER = /^\s*\[(?:图片|动画表情|表情|文件|视频|语音)\]\s*$/u;
+
+/**
+ * A conservative last-line guard for reader data. Message type alone is not
+ * enough: malformed local records can present binary/attachment content as a
+ * type=1 string. Do not reject ordinary Chinese order text, punctuation, or
+ * multi-line messages; only discard objectively unreadable payloads.
+ */
+export function isReadableWechatOrderText(value) {
+  if (typeof value !== 'string') return false;
+  const text = value.trim();
+  if (!text || UNREADABLE_TEXT.test(text) || WECHAT_MEDIA_PLACEHOLDER.test(text)) return false;
+
+  const visible = Array.from(text).filter(character => VISIBLE_TEXT.test(character));
+  if (!visible.length) return false;
+  const meaningfulCount = visible.filter(character => MEANINGFUL_TEXT.test(character)).length;
+  // A lone ASCII letter wrapped by punctuation (for example "‹/›y") is a
+  // common symptom of a binary payload decoded as UTF-8, not an order line.
+  return meaningfulCount > 0 && meaningfulCount / visible.length >= 0.35;
+}
+
 export function normalizeConversationKind(value) {
   return value === CONVERSATION_GROUP ? CONVERSATION_GROUP : CONVERSATION_DIRECT;
 }
@@ -49,7 +76,7 @@ export function selectWechatOrderMessages(items, participants, binding) {
   const groupMode = normalizeGroupMode(conversationKind, binding?.groupMode);
   let candidates = (Array.isArray(items) ? items : [])
     .filter((message) => message?.type === 'image'
-      || (message?.type === 'text' && typeof message.text === 'string' && message.text.trim()))
+      || (message?.type === 'text' && isReadableWechatOrderText(message.text)))
     .filter((message) => !selfIds.has(message.senderId));
 
   if (conversationKind === CONVERSATION_GROUP && groupMode === GROUP_MENTION_SELF_ONLY) {
@@ -60,13 +87,13 @@ export function selectWechatOrderMessages(items, participants, binding) {
   }
 
   return candidates
-    .map((message) => ({
-      ...message,
-      orderText: message.type === 'text'
+    .map((message) => {
+      const orderText = message.type === 'text'
         ? conversationKind === CONVERSATION_GROUP && groupMode === GROUP_MENTION_SELF_ONLY
           ? stripCurrentAccountMentions(message.text, selfNames)
           : message.text.trim()
-        : '',
-    }))
-    .filter((message) => message.type === 'image' || message.orderText);
+        : '';
+      return { ...message, orderText };
+    })
+    .filter((message) => message.type === 'image' || isReadableWechatOrderText(message.orderText));
 }

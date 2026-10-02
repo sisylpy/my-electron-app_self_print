@@ -52,4 +52,20 @@ assert.match(
   '工作台必须把直接读取的任务放入统一可切换队列'
 );
 
+assert.match(
+  workbench,
+  /async function selectWechatImport\(token\)\s*\{.*?await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: false \}\);/s,
+  '切换任务卡只能切换右侧任务，不能重新操作微信窗口'
+);
+assert.match(
+  workbench,
+  /async function removeWechatImport\(token\)\s*\{.*?await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: false \}\);/s,
+  '移除当前任务后进入下一项时不能重新操作微信窗口'
+);
+assert.match(
+  workbench,
+  /async function handleTaskAdded\(change\)\s*\{.*?await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: false \}\);/s,
+  '保存当前任务后自动进入下一项时不能重新操作微信窗口'
+);
+
 console.log('WeChat image/text task routing passed');

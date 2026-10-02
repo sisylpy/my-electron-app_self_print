@@ -60,13 +60,21 @@
                                  style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
                                 <div class="paste-textarea-wrap" style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;">
                                     <div v-if="sourceImages.length" class="wechat-source-image mb-2">
+                                        <div class="wechat-source-image-title">
+                                            微信原图 <span>· 图片识别任务</span>
+                                        </div>
                                         <img :src="activeSourceImage.dataUrl" alt="微信订单图片">
                                         <div v-if="sourceImages.length > 1" class="wechat-source-image-nav">
                                             <button type="button" class="btn btn-sm btn-light" @click="showPreviousSourceImage">‹</button>
                                             <span>{{ sourceImageIndex + 1 }} / {{ sourceImages.length }}</span>
                                             <button type="button" class="btn btn-sm btn-light" @click="showNextSourceImage">›</button>
                                         </div>
-                                        <div class="small text-muted text-center py-1">微信图片已获取</div>
+                                        <div class="small text-muted text-center py-1">原图仅用于本图片识别任务</div>
+                                    </div>
+                                    <div v-if="(!sourceImages.length || pasteInputText) && wechatInputLabel"
+                                         class="wechat-input-label">
+                                        <span>{{ wechatInputLabel }}</span>
+                                        <small v-if="isWechatImageRecognitionTask">可编辑</small>
                                     </div>
                                     <textarea
                                             v-if="!sourceImages.length || pasteInputText"
@@ -355,6 +363,13 @@
             activeSourceImage() {
                 return this.sourceImages[this.sourceImageIndex] || this.sourceImages[0] || {};
             },
+            isWechatImageRecognitionTask() {
+                return this.compactSource && this.sourceImages.length > 0;
+            },
+            wechatInputLabel() {
+                if (this.isWechatImageRecognitionTask) return '图片识别结果';
+                return this.compactSource ? '微信文字原文' : '';
+            },
             /** 校验不合格片段高亮 HTML（只显示不合格的行） */
             pasteInvalidOverlayHtml() {
                 const text = this.pasteInputText || '';
@@ -626,6 +641,22 @@
         background: #f7faf8;
     }
 
+    .wechat-source-image-title {
+        flex: 0 0 auto;
+        padding: 5px 8px;
+        color: #176c46;
+        font-size: 12px;
+        font-weight: 700;
+        text-align: center;
+        background: #edf8f1;
+        border-bottom: 1px solid #d8e8df;
+    }
+
+    .wechat-source-image-title span {
+        color: #6d8578;
+        font-weight: 500;
+    }
+
     .wechat-source-image > img {
         display: block;
         width: 100%;
@@ -636,7 +667,7 @@
 
     .wechat-source-image-nav {
         position: absolute;
-        top: 6px;
+        top: 34px;
         left: 50%;
         z-index: 2;
         display: flex;
@@ -651,6 +682,23 @@
 
     .paste-textarea--with-image {
         flex: 1 1 54% !important;
+    }
+
+    .wechat-input-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex: 0 0 auto;
+        padding: 3px 2px 5px;
+        color: #476656;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .wechat-input-label small {
+        color: #7a8d82;
+        font-size: 11px;
+        font-weight: 400;
     }
 
     /* 显示 overlay 时隐藏 textarea 文字，避免重影；仅保留光标可见 */
