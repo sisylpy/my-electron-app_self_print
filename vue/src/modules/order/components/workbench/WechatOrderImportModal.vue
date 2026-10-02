@@ -35,10 +35,10 @@
           </header>
 
           <div class="wechat-import-modal__body">
-            <nav class="wechat-import-modal__queue" aria-label="微信会话处理队列">
+            <nav class="wechat-import-modal__queue" aria-label="微信订单任务队列">
               <div class="wechat-import-modal__queue-heading">
                 <div>
-                  <strong>{{ busy ? '正在扫描微信' : '微信会话' }}</strong>
+                  <strong>{{ busy ? '正在扫描微信' : '微信订单任务' }}</strong>
                   <span>{{ busy ? '请在左侧查看读取过程' : `剩余 ${remainingCount} 个` }}</span>
                 </div>
                 <em>{{ currentPosition }}/{{ items.length }}</em>
@@ -57,7 +57,7 @@
                     <span class="wechat-import-modal__index">{{ index + 1 }}</span>
                     <div class="wechat-import-modal__conversation">
                       <strong>{{ item.conversationTitle || item.customerName }}</strong>
-                      <span>{{ item.customerName }} · {{ item.messageCount }} 条</span>
+                      <span>{{ item.customerName }} · {{ item.taskLabel || '微信订单任务' }} · {{ item.messageCount }} 条</span>
                     </div>
                     <div class="wechat-import-modal__item-actions">
                       <span class="wechat-import-modal__state">{{ itemStateLabel(item) }}</span>
@@ -85,7 +85,7 @@
                 {{ selectedImportBusy ? '正在转订单…' : '查询现在选择的好友转订单' }}
               </button>
               <p class="wechat-import-modal__queue-tip">
-                {{ items.length ? '点击切换会话，保存后自动进入下一条' : (busy ? '正在读取未读会话' : '本轮没有待处理会话') }}
+                {{ items.length ? '点击切换任务，保存后自动进入下一项任务' : (busy ? '正在读取未读会话' : '本轮没有待处理任务') }}
               </p>
             </nav>
 
@@ -93,12 +93,13 @@
               <p v-if="workspaceWarning" class="wechat-import-modal__warning">{{ workspaceWarning }}</p>
               <div v-if="activeItem" class="wechat-import-modal__current">
                 <div>
-                  <span>当前微信会话</span>
+                  <span>当前转订单任务</span>
                   <strong>{{ activeItem.conversationTitle || activeItem.customerName }}</strong>
                 </div>
                 <div class="wechat-import-modal__current-actions">
                   <p>
                     对应门店 <strong>{{ activeItem.customerName }}</strong>
+                    <span>{{ activeItem.taskLabel || '微信订单任务' }}</span>
                     <span>{{ activeItem.messageCount }} 条新消息</span>
                     <span class="wechat-import-modal__policy">{{ activePolicyLabel }}</span>
                   </p>

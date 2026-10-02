@@ -137,10 +137,12 @@ watch(
 
 function handleTaskAdded(event) {
   const token = appliedWechatImportToken.value;
+  const preserveWorkspace = Boolean(event?.preserveWorkspace);
   emit('task-added', token
     ? { ...(event && typeof event === 'object' ? event : {}), wechatImportToken: token }
     : event);
   appliedWechatImportToken.value = null;
+  if (preserveWorkspace) return;
   clearTimeout(workspaceResetTimer);
   workspaceResetTimer = setTimeout(() => {
     selectedMode.value = 'paste';

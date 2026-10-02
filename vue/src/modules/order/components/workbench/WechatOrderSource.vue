@@ -85,6 +85,7 @@ import {
   unwrapWechatReader,
   unwrapWechatServer,
 } from '../../services/wechatOrderImport';
+import { splitWechatOrderPayloads } from '../../services/wechatOrderTaskSplit';
 
 const props = defineProps({
   customerId: { type: [Number, String], required: true },
@@ -251,7 +252,8 @@ async function pullMessages() {
     binding.value = prepared.binding;
     setStatus(prepared.message, ['ready', 'duplicate'].includes(prepared.status) ? 'success' : 'info');
     if (!prepared.payload) return false;
-    emit('messages-loaded', prepared.payload);
+    const tasks = splitWechatOrderPayloads(prepared.payload);
+    emit('messages-loaded', tasks.length ? tasks : [prepared.payload]);
     return true;
   } catch (error) {
     setStatus(error.message, 'error');

@@ -213,6 +213,10 @@ import {
   removeWechatImportQueueItem,
 } from '../services/wechatOrderImport';
 import {
+  splitWechatOrderPayloads,
+  wechatOrderTaskLabel,
+} from '../services/wechatOrderTaskSplit';
+import {
   buildWechatCustomerAssociationDirectory,
   ensureWechatCustomerBinding,
   findWechatCustomerProfileMatches,
@@ -471,8 +475,28 @@ async function refreshActiveWechatImport(options = {}) {
       }
       return false;
     }
+    const incomingItems = createWechatImportItems({
+      customerId: item.customerId,
+      customerName: item.customerName,
+      binding: item.binding,
+    }, item.conversationTitle, result);
+    const matchingItem = incomingItems.find(candidate => (
+      wechatImportTaskKey(candidate) === wechatImportTaskKey(item)
+    ));
+    const otherItems = incomingItems.filter(candidate => candidate !== matchingItem);
+    if (otherItems.length) enqueueWechatImportItems(otherItems, { activate: false });
+    if (!matchingItem) {
+      if (options.manual) {
+        replaceWechatImportItem(item.token, {
+          ...item,
+          refreshNote: otherItems.length ? '发现另一类微信订单任务，已加入待处理列表' : '当前任务没有新增订单消息',
+          refreshError: '',
+        });
+      }
+      return otherItems.length > 0;
+    }
     const existing = messageFingerprints(item.payload);
-    const incoming = messageFingerprints(result.payload);
+    const incoming = messageFingerprints(matchingItem.payload);
     const lateMessageCount = Array.from(incoming).filter(id => !existing.has(id)).length;
     if (!lateMessageCount) {
       if (options.manual) {
@@ -484,7 +508,7 @@ async function refreshActiveWechatImport(options = {}) {
       }
       return false;
     }
-    const mergedPayload = mergeWechatOrderPayload(item.payload, result.payload);
+    const mergedPayload = mergeWechatOrderPayload(item.payload, matchingItem.payload);
     replaceWechatImportItem(item.token, {
       ...item,
       binding: result.binding || item.binding,
@@ -667,21 +691,39 @@ async function loadBoundWechatCustomers({ refreshCustomers = false } = {}) {
   return { unique, byTitle, failedCount, ambiguousCount, associationDirectory };
 }
 
-function createWechatImportItem(row, title, result) {
-  return {
-    token: `wechat:${Date.now()}:${++wechatImportSequence}`,
-    customerId: customerId(row.customer),
-    customerName: row.customer.nxDepartmentAttrName
-      || row.customer.nxDepartmentName
-      || title,
-    conversationTitle: title,
-    messageCount: result.pendingCount,
-    payload: result.payload,
-    binding: result.binding || row.binding,
-    lateMessageCount: 0,
-    refreshNote: '',
-    refreshError: '',
-  };
+function wechatImportTaskKey(item) {
+  const conversationFingerprint = item?.payload?.source?.conversationFingerprint
+    || item?.binding?.conversationFingerprint
+    || item?.conversationTitle
+    || '';
+  return [item?.customerId, conversationFingerprint, item?.taskType || 'mixed'].join('|');
+}
+
+function createWechatImportItems(row, title, result) {
+  const customerName = row.customerName
+    || row.customer?.nxDepartmentAttrName
+    || row.customer?.nxDepartmentName
+    || title;
+  const customer = row.customer || { nxDepartmentId: row.customerId };
+  const binding = result.binding || row.binding;
+  const payloads = splitWechatOrderPayloads(result.payload);
+  return payloads.map((payload) => {
+    const taskType = payload.taskType || 'mixed';
+    return {
+      token: `wechat:${Date.now()}:${++wechatImportSequence}`,
+      customerId: customerId(customer) || row.customerId,
+      customerName,
+      conversationTitle: title,
+      taskType,
+      taskLabel: wechatOrderTaskLabel(taskType),
+      messageCount: payload?.source?.messages?.length || result.pendingCount,
+      payload,
+      binding,
+      lateMessageCount: 0,
+      refreshNote: '',
+      refreshError: '',
+    };
+  });
 }
 
 function rememberWechatCustomerMatch(customer, conversationTitle) {
@@ -695,26 +737,40 @@ function rememberWechatCustomerMatch(customer, conversationTitle) {
   customer.nxDepartmentWechatDisplayName = conversationTitle;
 }
 
+function enqueueWechatImportItems(incomingItems, { activate = true } = {}) {
+  let firstToken = null;
+  (Array.isArray(incomingItems) ? incomingItems : []).forEach((incomingItem) => {
+    const existing = wechatImportQueue.value.find(item => (
+      wechatImportTaskKey(item) === wechatImportTaskKey(incomingItem)
+    ));
+    if (existing) {
+      const payload = mergeWechatOrderPayload(existing.payload, incomingItem.payload);
+      const replacement = {
+        ...existing,
+        ...incomingItem,
+        // Keep the queue identity stable: refreshes must not make the active
+        // task disappear merely because a newer payload was merged into it.
+        token: existing.token,
+        payload,
+        messageCount: payload?.source?.messages?.length || incomingItem.messageCount,
+      };
+      replaceWechatImportItem(existing.token, replacement);
+      if (!firstToken) firstToken = replacement.token;
+      return;
+    }
+    wechatImportQueue.value = [...wechatImportQueue.value, incomingItem];
+    wechatImportBatch.value = [...wechatImportBatch.value, incomingItem];
+    if (!firstToken) firstToken = incomingItem.token;
+  });
+  // `splitWechatOrderPayloads` deliberately returns text before images, so
+  // manual conversion should begin with the instant text task rather than
+  // blocking it behind a potentially slow OCR request.
+  if (activate && firstToken) activeWechatImportToken.value = firstToken;
+  return firstToken;
+}
+
 function enqueueWechatImport(row, title, result) {
-  const incomingItem = createWechatImportItem(row, title, result);
-  const existing = wechatImportQueue.value.find(item => (
-    String(item?.customerId) === String(incomingItem.customerId)
-  ));
-  if (existing) {
-    const payload = mergeWechatOrderPayload(existing.payload, incomingItem.payload);
-    const replacement = {
-      ...existing,
-      ...incomingItem,
-      payload,
-      messageCount: payload?.source?.messages?.length || incomingItem.messageCount,
-    };
-    replaceWechatImportItem(existing.token, replacement);
-    activeWechatImportToken.value = replacement.token;
-    return;
-  }
-  wechatImportQueue.value = [...wechatImportQueue.value, incomingItem];
-  wechatImportBatch.value = [...wechatImportBatch.value, incomingItem];
-  activeWechatImportToken.value = incomingItem.token;
+  return enqueueWechatImportItems(createWechatImportItems(row, title, result));
 }
 
 async function importWechatConversationForCustomer(customer, title) {
@@ -905,7 +961,7 @@ async function readUnreadWechatOrders() {
           retryDelaysMs: candidate.opened ? undefined : [],
         });
         if (!result.payload) continue;
-        imports.push(createWechatImportItem(row, title, result));
+        imports.push(...createWechatImportItems(row, title, result));
       } catch {
         prepareFailedCount += 1;
       }
@@ -925,8 +981,9 @@ async function readUnreadWechatOrders() {
     wechatImportCompletedTokens.value = [];
     activeWechatImportToken.value = imports[0]?.token || null;
     const totalMessages = imports.reduce((sum, item) => sum + item.messageCount, 0);
+    const customerCount = new Set(imports.map(item => String(item.customerId))).size;
     setWechatScanStatus(
-      `发现 ${imports.length} 位客户的 ${totalMessages} 条新订单消息；请确认并保存，保存后会自动进入下一位客户`,
+      `发现 ${customerCount} 位客户的 ${imports.length} 个订单任务（${totalMessages} 条新消息）；请确认并保存，保存后会自动进入下一项任务`,
       'success'
     );
     await openActiveWechatImport();
