@@ -78,7 +78,11 @@
       :items="wechatImportBatch"
       :active-item="activeWechatImport"
       :completed-tokens="wechatImportCompletedTokens"
+      :refreshing="wechatImportRefreshing"
+      :workspace-warning="wechatWorkspaceWarning"
       @close="closeWechatImportModal"
+      @refresh="refreshActiveWechatImport({ manual: true })"
+      @merge-new="mergeActiveWechatImport"
     >
       <AiOrderPanel
         v-if="activeWechatImport"
@@ -155,7 +159,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { useStore } from 'vuex';
 import AiOrderPanel from '../components/workbench/AiOrderPanel.vue';
 import OrderFlowInbox from '../components/workbench/OrderFlowInbox.vue';
@@ -166,6 +170,7 @@ import { customerVisibleInStage } from '../services/orderWorkbenchStage';
 import { blockingCustomerDirectoryError } from '../services/smartReplenishmentComparison';
 import {
   loadCustomerWechatBinding,
+  mergeWechatOrderPayload,
   prepareWechatOrderImport,
 } from '../services/wechatOrderImport';
 import {
@@ -194,7 +199,10 @@ const wechatImportQueue = ref([]);
 const wechatImportBatch = ref([]);
 const wechatImportCompletedTokens = ref([]);
 const wechatImportModalOpen = ref(false);
+const wechatImportRefreshing = ref(false);
+const wechatWorkspaceWarning = ref('');
 let wechatImportSequence = 0;
+let wechatImportRefreshTimer = null;
 const overview = reactive({
   customers: [],
   totals: { all: 0, needsReview: 0, needsPrice: 0, inProgress: 0, readyToPrint: 0 },
@@ -368,7 +376,105 @@ function setWechatScanStatus(message, status = 'info') {
   wechatScanStatus.value = status;
 }
 
-function openActiveWechatImport() {
+function stopWechatImportRefresh() {
+  if (wechatImportRefreshTimer) window.clearInterval(wechatImportRefreshTimer);
+  wechatImportRefreshTimer = null;
+}
+
+function messageFingerprints(payload) {
+  return new Set((payload?.source?.messages || []).map(message => String(message.messageFingerprint)));
+}
+
+function replaceWechatImportItem(token, replacement) {
+  wechatImportQueue.value = wechatImportQueue.value.map(item => (
+    item.token === token ? replacement : item
+  ));
+  wechatImportBatch.value = wechatImportBatch.value.map(item => (
+    item.token === token ? replacement : item
+  ));
+}
+
+async function refreshActiveWechatImport(options = {}) {
+  const item = activeWechatImport.value;
+  if (!item || wechatImportRefreshing.value || !wechatImportModalOpen.value) return false;
+  wechatImportRefreshing.value = true;
+  try {
+    const result = await prepareWechatOrderImport({
+      customerId: item.customerId,
+      binding: item.binding,
+      retryDelaysMs: [],
+    });
+    if (!result.payload) {
+      if (options.manual) {
+        replaceWechatImportItem(item.token, {
+          ...item,
+          refreshNote: '当前会话没有新增订单消息',
+          refreshError: '',
+        });
+      }
+      return false;
+    }
+    const existing = messageFingerprints(item.payload);
+    const incoming = messageFingerprints(result.payload);
+    const lateMessageCount = Array.from(incoming).filter(id => !existing.has(id)).length;
+    if (!lateMessageCount) {
+      if (options.manual) {
+        replaceWechatImportItem(item.token, {
+          ...item,
+          refreshNote: '当前会话已经是最新内容',
+          refreshError: '',
+        });
+      }
+      return false;
+    }
+    const mergedPayload = mergeWechatOrderPayload(item.payload, result.payload);
+    replaceWechatImportItem(item.token, {
+      ...item,
+      binding: result.binding || item.binding,
+      pendingRefreshPayload: mergedPayload,
+      pendingMessageCount: mergedPayload.source.messages.length,
+      lateMessageCount,
+      refreshNote: `发现 ${lateMessageCount} 条后来到达的新消息`,
+      refreshError: '',
+    });
+    return true;
+  } catch (error) {
+    replaceWechatImportItem(item.token, {
+      ...item,
+      refreshError: error?.message || '同步当前微信会话失败',
+      refreshNote: '',
+    });
+    return false;
+  } finally {
+    wechatImportRefreshing.value = false;
+  }
+}
+
+function mergeActiveWechatImport() {
+  const item = activeWechatImport.value;
+  if (!item?.pendingRefreshPayload) return;
+  const refreshed = {
+    ...item,
+    token: `wechat:${Date.now()}:${++wechatImportSequence}`,
+    payload: item.pendingRefreshPayload,
+    messageCount: Number(item.pendingMessageCount) || item.messageCount,
+    pendingRefreshPayload: null,
+    pendingMessageCount: 0,
+    lateMessageCount: 0,
+    refreshNote: '已合并新增消息并重新解析订单',
+    refreshError: '',
+  };
+  replaceWechatImportItem(item.token, refreshed);
+}
+
+function startWechatImportRefresh() {
+  stopWechatImportRefresh();
+  wechatImportRefreshTimer = window.setInterval(() => {
+    void refreshActiveWechatImport();
+  }, 5000);
+}
+
+async function openActiveWechatImport() {
   const item = activeWechatImport.value;
   if (!item) return false;
   smartModeActive.value = false;
@@ -382,14 +488,37 @@ function openActiveWechatImport() {
   }
   customerContext.selectCustomer(customer);
   wechatScanMessage.value = '';
+  wechatWorkspaceWarning.value = '';
+  try {
+    const result = await window.electronAPI?.wechatUi?.openWorkspace?.();
+    if (result && !result.ok) {
+      wechatWorkspaceWarning.value = result.error?.message || '微信窗口未能停靠到左侧';
+    } else if (result?.result?.message) {
+      wechatWorkspaceWarning.value = result.result.message;
+    }
+  } catch (error) {
+    wechatWorkspaceWarning.value = error?.message || '微信窗口未能停靠到左侧';
+  }
   wechatImportModalOpen.value = true;
+  startWechatImportRefresh();
   return true;
 }
 
-function closeWechatImportModal() {
+async function closeWechatImportModal() {
+  stopWechatImportRefresh();
   wechatImportModalOpen.value = false;
   activeView.value = 'overview';
+  try {
+    await window.electronAPI?.wechatUi?.closeWorkspace?.();
+  } catch {
+    // 窗口恢复失败不影响订单数据；主进程退出时仍会再做一次兜底恢复。
+  }
 }
+
+onBeforeUnmount(() => {
+  stopWechatImportRefresh();
+  void window.electronAPI?.wechatUi?.closeWorkspace?.();
+});
 
 async function loadBoundWechatCustomers() {
   if (!customerContext.customers.value.length) await customerContext.reload();
@@ -427,7 +556,7 @@ async function loadBoundWechatCustomers() {
 async function handleWechatScan() {
   if (wechatScanBusy.value) return;
   if (wechatImportQueue.value.length) {
-    openActiveWechatImport();
+    await openActiveWechatImport();
     return;
   }
 
@@ -471,6 +600,10 @@ async function handleWechatScan() {
           conversationTitle: title,
           messageCount: result.pendingCount,
           payload: result.payload,
+          binding: result.binding || row.binding,
+          lateMessageCount: 0,
+          refreshNote: '',
+          refreshError: '',
         });
       } catch {
         prepareFailedCount += 1;
@@ -496,7 +629,7 @@ async function handleWechatScan() {
       `发现 ${imports.length} 位客户的 ${totalMessages} 条新订单消息；请确认并保存，保存后会自动进入下一位客户`,
       'success'
     );
-    openActiveWechatImport();
+    await openActiveWechatImport();
   } catch (error) {
     setWechatScanStatus(error?.message || '读取微信订单失败', 'error');
   } finally {
@@ -516,10 +649,9 @@ async function handleTaskAdded(change) {
   await handleOrderChanged(change);
   if (!current || change?.wechatImportToken !== current.token) return;
   if (wechatImportQueue.value.length) {
-    openActiveWechatImport();
+    await openActiveWechatImport();
   } else {
-    wechatImportModalOpen.value = false;
-    activeView.value = 'overview';
+    await closeWechatImportModal();
     setWechatScanStatus('本轮微信订单已全部确认保存', 'success');
   }
 }

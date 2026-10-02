@@ -1,0 +1,231 @@
+const path = require('path');
+
+const MIN_DOCK_WIDTH = 1280;
+
+function clamp(value, minimum, maximum) {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
+function computeWorkspaceLayout(workArea) {
+  const area = {
+    x: Math.round(Number(workArea?.x) || 0),
+    y: Math.round(Number(workArea?.y) || 0),
+    width: Math.round(Number(workArea?.width) || 0),
+    height: Math.round(Number(workArea?.height) || 0),
+  };
+  if (area.width < MIN_DOCK_WIDTH || area.height < 680) {
+    return { mode: 'app-only', workArea: area };
+  }
+  const gap = 8;
+  const wechatWidth = clamp(Math.round(area.width * 0.42), 540, area.width - 760);
+  return {
+    mode: 'docked',
+    workArea: area,
+    wechat: {
+      x: area.x,
+      y: area.y,
+      width: wechatWidth,
+      height: area.height,
+    },
+    app: {
+      x: area.x + wechatWidth + gap,
+      y: area.y,
+      width: area.width - wechatWidth - gap,
+      height: area.height,
+    },
+  };
+}
+
+function parseBounds(text) {
+  const values = String(text || '').trim().split(',').map(Number);
+  if (values.length !== 4 || values.some(value => !Number.isFinite(value))) {
+    throw new Error('无法读取微信窗口位置');
+  }
+  const [x, y, width, height] = values.map(Math.round);
+  return { x, y, width, height };
+}
+
+function macDockArgs(bounds) {
+  return [
+    '-e', 'tell application "WeChat" to activate',
+    '-e', 'tell application "System Events" to tell process "WeChat"',
+    '-e', 'set frontmost to true',
+    '-e', 'if not (exists window "微信") then error "WECHAT_MAIN_WINDOW_NOT_FOUND"',
+    '-e', 'set targetWindow to window "微信"',
+    '-e', 'set oldPosition to position of targetWindow',
+    '-e', 'set oldSize to size of targetWindow',
+    '-e', `set position of targetWindow to {${bounds.x}, ${bounds.y}}`,
+    '-e', `set size of targetWindow to {${bounds.width}, ${bounds.height}}`,
+    '-e', 'perform action "AXRaise" of targetWindow',
+    '-e', 'return (item 1 of oldPosition as text) & "," & (item 2 of oldPosition as text) & "," & (item 1 of oldSize as text) & "," & (item 2 of oldSize as text)',
+    '-e', 'end tell',
+  ];
+}
+
+function macRestoreArgs(bounds) {
+  return [
+    '-e', 'tell application "System Events" to tell process "WeChat"',
+    '-e', 'if exists window "微信" then',
+    '-e', 'set targetWindow to window "微信"',
+    '-e', `set position of targetWindow to {${bounds.x}, ${bounds.y}}`,
+    '-e', `set size of targetWindow to {${bounds.width}, ${bounds.height}}`,
+    '-e', 'end if',
+    '-e', 'end tell',
+  ];
+}
+
+function windowsScript(moduleDir) {
+  return path.join(moduleDir, 'ui-automation', 'windows', 'dock-window.ps1');
+}
+
+function windowsArgs(script, mode, bounds) {
+  return [
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    script,
+    '-Mode',
+    mode,
+    '-X',
+    String(bounds.x),
+    '-Y',
+    String(bounds.y),
+    '-Width',
+    String(bounds.width),
+    '-Height',
+    String(bounds.height),
+  ];
+}
+
+function createWechatWorkspaceWindowService(options = {}) {
+  const platform = options.platform || process.platform;
+  const moduleDir = options.moduleDir || __dirname;
+  const execFileAsync = options.execFileAsync;
+  const screen = options.screen;
+  const getMainWindow = options.getMainWindow;
+  const powershell = options.powershell || process.env.JCYX_WECHAT_UI_POWERSHELL || 'powershell.exe';
+  let session = null;
+
+  if (typeof execFileAsync !== 'function' || !screen || typeof getMainWindow !== 'function') {
+    throw new Error('微信订单工作台窗口服务配置不完整');
+  }
+
+  async function dockWechat(bounds) {
+    if (platform === 'darwin') {
+      const result = await execFileAsync('osascript', macDockArgs(bounds), {
+        encoding: 'utf8',
+        timeout: 10000,
+      });
+      return parseBounds(result.stdout);
+    }
+    if (platform === 'win32') {
+      const result = await execFileAsync(
+        powershell,
+        windowsArgs(windowsScript(moduleDir), 'Dock', bounds),
+        { encoding: 'utf8', timeout: 10000, windowsHide: true }
+      );
+      return parseBounds(result.stdout);
+    }
+    throw new Error('当前系统暂不支持微信窗口停靠');
+  }
+
+  async function restoreWechat(bounds) {
+    if (!bounds) return;
+    if (platform === 'darwin') {
+      await execFileAsync('osascript', macRestoreArgs(bounds), {
+        encoding: 'utf8',
+        timeout: 10000,
+      });
+      return;
+    }
+    if (platform === 'win32') {
+      await execFileAsync(
+        powershell,
+        windowsArgs(windowsScript(moduleDir), 'Restore', bounds),
+        { encoding: 'utf8', timeout: 10000, windowsHide: true }
+      );
+    }
+  }
+
+  function restoreMainWindow(saved) {
+    const window = getMainWindow();
+    if (!window || window.isDestroyed()) return;
+    if (saved.bounds) window.setBounds(saved.bounds);
+    if (saved.maximized) window.maximize();
+    if (saved.fullScreen) window.setFullScreen(true);
+    window.show();
+    window.focus();
+  }
+
+  return Object.freeze({
+    async open() {
+      if (session) return { ok: true, result: session.layout };
+      const window = getMainWindow();
+      if (!window || window.isDestroyed()) {
+        return { ok: false, error: { code: 'APP_WINDOW_MISSING', message: '订单工作台窗口不可用' } };
+      }
+      const saved = {
+        bounds: window.getBounds(),
+        maximized: window.isMaximized(),
+        fullScreen: window.isFullScreen(),
+      };
+      const display = screen.getDisplayMatching(saved.bounds);
+      const layout = computeWorkspaceLayout(display?.workArea || display?.bounds);
+      if (layout.mode !== 'docked') {
+        return {
+          ok: true,
+          result: { ...layout, message: '当前屏幕空间不足，微信保持为独立窗口' },
+        };
+      }
+      try {
+        const wechatBounds = await dockWechat(layout.wechat);
+        if (saved.fullScreen) window.setFullScreen(false);
+        if (saved.maximized) window.unmaximize();
+        window.setBounds(layout.app);
+        window.show();
+        window.focus();
+        session = { saved, wechatBounds, layout };
+        return { ok: true, result: layout };
+      } catch (error) {
+        restoreMainWindow(saved);
+        return {
+          ok: false,
+          error: {
+            code: 'WECHAT_DOCK_FAILED',
+            message: /WECHAT_MAIN_WINDOW_NOT_FOUND/u.test(String(error?.stderr || error?.message || ''))
+              ? '没有找到微信主窗口，请先打开已登录的微信'
+              : '微信窗口停靠失败，已保留普通订单工作台',
+          },
+        };
+      }
+    },
+
+    async close() {
+      const current = session;
+      session = null;
+      if (!current) return { ok: true };
+      let warning = '';
+      try {
+        await restoreWechat(current.wechatBounds);
+      } catch {
+        warning = '微信窗口位置未能自动恢复';
+      }
+      restoreMainWindow(current.saved);
+      return { ok: true, warning };
+    },
+
+    async dispose() {
+      await this.close();
+    },
+  });
+}
+
+module.exports = {
+  MIN_DOCK_WIDTH,
+  computeWorkspaceLayout,
+  createWechatWorkspaceWindowService,
+  parseBounds,
+};

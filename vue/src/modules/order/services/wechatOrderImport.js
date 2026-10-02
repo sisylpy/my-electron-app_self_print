@@ -34,6 +34,56 @@ function requireCustomerId(customerId) {
   return value;
 }
 
+function payloadEntries(payload) {
+  if (Array.isArray(payload?.entries)) return payload.entries;
+  const messages = Array.isArray(payload?.source?.messages) ? payload.source.messages : [];
+  if (messages.length !== 1 || typeof payload?.text !== 'string') return [];
+  return [{ ...messages[0], text: payload.text }];
+}
+
+export function mergeWechatOrderPayload(currentPayload, incomingPayload) {
+  if (!currentPayload?.source) return incomingPayload;
+  if (!incomingPayload?.source) return currentPayload;
+  const currentMessages = Array.isArray(currentPayload.source.messages)
+    ? currentPayload.source.messages : [];
+  const incomingMessages = Array.isArray(incomingPayload.source.messages)
+    ? incomingPayload.source.messages : [];
+  const messageMap = new Map();
+  [...currentMessages, ...incomingMessages].forEach((message) => {
+    const id = String(message?.messageFingerprint || '');
+    if (id) messageMap.set(id, message);
+  });
+  const messages = Array.from(messageMap.values()).sort((left, right) => (
+    Number(left.messageTimeMs) - Number(right.messageTimeMs)
+    || String(left.messageFingerprint).localeCompare(String(right.messageFingerprint))
+  ));
+  const entryMap = new Map();
+  [...payloadEntries(currentPayload), ...payloadEntries(incomingPayload)].forEach((entry) => {
+    const id = String(entry?.messageFingerprint || '');
+    if (id) entryMap.set(id, entry);
+  });
+  const entries = messages
+    .map(message => entryMap.get(String(message.messageFingerprint)))
+    .filter(Boolean);
+  const incomingIds = new Set(incomingMessages.map(message => String(message.messageFingerprint)));
+  const currentIds = new Set(currentMessages.map(message => String(message.messageFingerprint)));
+  const incomingContainsCurrent = Array.from(currentIds).every(id => incomingIds.has(id));
+  const text = entries.length === messages.length
+    ? entries.map(entry => entry.text).join('\n')
+    : incomingContainsCurrent
+      ? incomingPayload.text
+      : [currentPayload.text, incomingPayload.text].filter(Boolean).join('\n');
+  return {
+    ...incomingPayload,
+    text,
+    entries,
+    source: {
+      ...incomingPayload.source,
+      messages,
+    },
+  };
+}
+
 function noIncomingMessage(binding) {
   if (binding.conversationKind === CONVERSATION_GROUP
       && binding.groupMode === GROUP_MENTION_SELF_ONLY) {
@@ -161,6 +211,11 @@ export async function prepareWechatOrderImport({
     skippedCount,
     payload: {
       text: pending.map((message) => message.orderText).join('\n'),
+      entries: pending.map((message) => ({
+        messageFingerprint: message.id,
+        messageTimeMs: message.messageTimeMs,
+        text: message.orderText,
+      })),
       source: {
         customerId: id,
         accountFingerprint: nextBinding.accountFingerprint,

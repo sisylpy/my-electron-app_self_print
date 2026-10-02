@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   loadCustomerWechatBinding,
+  mergeWechatOrderPayload,
   prepareWechatOrderImport,
 } from './wechatOrderImport.js';
 
@@ -61,6 +62,33 @@ assert.equal(prepared.skippedCount, 1);
 assert.equal(prepared.payload.text, '西兰花2件');
 assert.deepEqual(prepared.payload.source.messages, [
   { messageFingerprint: 'msg:00000002', messageTimeMs: Date.parse('2026-10-01T00:27:00.000Z') },
+]);
+assert.deepEqual(prepared.payload.entries, [{
+  messageFingerprint: 'msg:00000002',
+  messageTimeMs: Date.parse('2026-10-01T00:27:00.000Z'),
+  text: '西兰花2件',
+}]);
+
+const mergedPayload = mergeWechatOrderPayload(
+  {
+    text: '油菜8斤',
+    entries: [{ messageFingerprint: 'msg:old', messageTimeMs: 1000, text: '油菜8斤' }],
+    source: { conversationFingerprint: 'fp:conversation123', messages: [
+      { messageFingerprint: 'msg:old', messageTimeMs: 1000 },
+    ] },
+  },
+  {
+    text: '土豆8斤',
+    entries: [{ messageFingerprint: 'msg:new', messageTimeMs: 2000, text: '土豆8斤' }],
+    source: { conversationFingerprint: 'fp:conversation123', messages: [
+      { messageFingerprint: 'msg:new', messageTimeMs: 2000 },
+    ] },
+  }
+);
+assert.equal(mergedPayload.text, '油菜8斤\n土豆8斤');
+assert.deepEqual(mergedPayload.source.messages.map(message => message.messageFingerprint), [
+  'msg:old',
+  'msg:new',
 ]);
 
 let participantCalls = 0;

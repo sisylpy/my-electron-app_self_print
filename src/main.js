@@ -59,6 +59,7 @@ const { createOrderWriteGateway } = require('./order/order-write-gateway');
 const { createOrderSessionGateway } = require('./order/order-session-gateway');
 const { createWechatReaderService, shutdownReader } = require('./wechat/reader-service');
 const { createWechatUiAutomationService } = require('./wechat/ui-automation-service');
+const { createWechatWorkspaceWindowService } = require('./wechat/workspace-window-service');
 const { PRODUCTION_API_BASE_URL } = require('./api-runtime');
 
 // MCP 服务器模块
@@ -105,6 +106,7 @@ let orderWriteGateway = null;
 let orderSessionGateway = null;
 let wechatReaderService = null;
 let wechatUiAutomationService = null;
+let wechatWorkspaceWindowService = null;
 let quitAfterReaderShutdown = false;
 let beforeQuitReaderPromise = null;
 const selectedFolderCapabilities = new Set();
@@ -303,6 +305,24 @@ async function shutdownWechatUiAutomation() {
   const service = wechatUiAutomationService;
   if (!service) return;
   wechatUiAutomationService = null;
+  await service.dispose();
+}
+
+function getWechatWorkspaceWindowService() {
+  if (!wechatWorkspaceWindowService) {
+    wechatWorkspaceWindowService = createWechatWorkspaceWindowService({
+      screen,
+      execFileAsync,
+      getMainWindow: () => mainWindow,
+    });
+  }
+  return wechatWorkspaceWindowService;
+}
+
+async function shutdownWechatWorkspaceWindow() {
+  const service = wechatWorkspaceWindowService;
+  if (!service) return;
+  wechatWorkspaceWindowService = null;
   await service.dispose();
 }
 
@@ -647,6 +667,14 @@ function setupIpcHandlers() {
         mainWindow.focus();
       }
     }
+  });
+  ipcMain.handle('wechat-ui-workspace-open', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getWechatWorkspaceWindowService().open();
+  });
+  ipcMain.handle('wechat-ui-workspace-close', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getWechatWorkspaceWindowService().close();
   });
 
   // 桌面调度：token 只存在主进程，渲染进程仅能调用以下白名单能力。
@@ -1270,6 +1298,7 @@ async function createWindow() {
   });
   const mainWindowWebContentsId = mainWindow.webContents.id;
   mainWindow.on('closed', () => {
+    void shutdownWechatWorkspaceWindow();
     clearMcpPrintDeliveriesForWebContents(mainWindowWebContentsId);
     mainWindow = null;
     mainWindowRef = null;
@@ -4158,6 +4187,11 @@ app.on('before-quit', (event) => {
           message: error?.message,
         });
       }),
+      shutdownWechatWorkspaceWindow().catch((error) => {
+        appLogger.append('error', 'wechat-ui', 'workspace window restore failed during before-quit', {
+          message: error?.message,
+        });
+      }),
     ])
       .finally(() => {
         quitAfterReaderShutdown = true;
@@ -4170,6 +4204,7 @@ app.on('will-quit', () => {
   // before-quit 已等待 Reader；这里保留幂等兜底，禁止遗漏自身启动的 child。
   void shutdownReader();
   void shutdownWechatUiAutomation();
+  void shutdownWechatWorkspaceWindow();
   if (dispatchGateway) {
     dispatchGateway.dispose();
     dispatchGateway = null;
@@ -4190,7 +4225,7 @@ app.on('will-quit', () => {
 
 app.on('window-all-closed', () => {
   // macOS 关闭最后一个窗口也释放 Reader 和 UI 自动化 child；下次按请求懒启动。
-  Promise.all([shutdownReader(), shutdownWechatUiAutomation()])
+  Promise.all([shutdownReader(), shutdownWechatUiAutomation(), shutdownWechatWorkspaceWindow()])
     .catch((error) => {
       appLogger.append('error', 'wechat-runtime', 'wechat child stop failed after window-all-closed', {
         message: error?.message,

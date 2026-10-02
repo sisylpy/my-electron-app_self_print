@@ -18,7 +18,7 @@
             <div class="wechat-import-modal__heading">
               <span>微信订单工作台</span>
               <h2 id="wechat-import-modal-title">确认微信消息并转换为订单</h2>
-              <p>共 {{ items.length }} 个微信会话 · {{ totalMessages }} 条新消息</p>
+              <p>左侧微信原窗口 · 中间会话队列 · 右侧订单，共 {{ items.length }} 个会话</p>
             </div>
             <div class="wechat-import-modal__progress">
               <span>处理进度</span>
@@ -54,21 +54,40 @@
                 </li>
               </ol>
               <p class="wechat-import-modal__queue-tip">
-                保存当前订单后会自动进入下一条微信会话。
+                请在屏幕左侧微信中核对原消息；保存当前订单后会自动进入下一条会话。
               </p>
             </aside>
 
             <main class="wechat-import-modal__workspace">
+              <p v-if="workspaceWarning" class="wechat-import-modal__warning">{{ workspaceWarning }}</p>
               <div v-if="activeItem" class="wechat-import-modal__current">
                 <div>
                   <span>当前微信会话</span>
                   <strong>{{ activeItem.conversationTitle || activeItem.customerName }}</strong>
                 </div>
-                <p>
-                  对应门店 <strong>{{ activeItem.customerName }}</strong>
-                  <span>{{ activeItem.messageCount }} 条新消息</span>
-                </p>
+                <div class="wechat-import-modal__current-actions">
+                  <p>
+                    对应门店 <strong>{{ activeItem.customerName }}</strong>
+                    <span>{{ activeItem.messageCount }} 条新消息</span>
+                  </p>
+                  <button
+                    type="button"
+                    class="wechat-import-modal__refresh"
+                    :disabled="refreshing"
+                    @click="$emit('refresh')"
+                  >{{ refreshing ? '同步中…' : '同步当前会话' }}</button>
+                  <button
+                    v-if="activeItem.lateMessageCount"
+                    type="button"
+                    class="wechat-import-modal__merge"
+                    @click="$emit('merge-new')"
+                  >合并 {{ activeItem.lateMessageCount }} 条新消息并重新解析</button>
+                </div>
               </div>
+              <p
+                v-if="activeItem?.refreshNote || activeItem?.refreshError"
+                :class="['wechat-import-modal__sync-note', { 'is-error': activeItem?.refreshError }]"
+              >{{ activeItem.refreshError || activeItem.refreshNote }}</p>
               <div class="wechat-import-modal__content">
                 <slot />
               </div>
@@ -88,9 +107,11 @@ const props = defineProps({
   items: { type: Array, default: () => [] },
   activeItem: { type: Object, default: null },
   completedTokens: { type: Array, default: () => [] },
+  refreshing: { type: Boolean, default: false },
+  workspaceWarning: { type: String, default: '' },
 });
 
-defineEmits(['close']);
+defineEmits(['close', 'refresh', 'merge-new']);
 
 const completedTokenSet = computed(() => new Set(props.completedTokens.map(String)));
 const completedCount = computed(() => completedTokenSet.value.size);
@@ -243,18 +264,44 @@ function itemStateLabel(item) {
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   padding: 14px;
   background: #f8fbf9;
 }
-.wechat-import-modal__current { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 16px; padding: 0 4px 12px; }
+.wechat-import-modal__warning {
+  grid-row: 1;
+  margin: 0 4px 10px;
+  padding: 8px 10px;
+  border: 1px solid #efd39c;
+  border-radius: 9px;
+  color: #8a5b10;
+  background: #fff8e9;
+  font-size: 10px;
+}
+.wechat-import-modal__current { display: flex; min-width: 0; grid-row: 2; align-items: center; justify-content: space-between; gap: 16px; padding: 0 4px 12px; }
 .wechat-import-modal__current > div { display: grid; min-width: 0; gap: 2px; }
 .wechat-import-modal__current span { color: #778980; font-size: 10px; }
 .wechat-import-modal__current > div strong { overflow: hidden; color: #183d2d; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
 .wechat-import-modal__current p { display: flex; align-items: center; gap: 7px; margin: 0; color: #668076; font-size: 11px; }
 .wechat-import-modal__current p strong { color: #246044; }
 .wechat-import-modal__current p span { padding: 4px 8px; border-radius: 10px; color: #0d7a49; background: #e1f5ea; font-weight: 800; }
-.wechat-import-modal__content { min-width: 0; min-height: 0; overflow: hidden; }
+.wechat-import-modal__current-actions { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 7px; }
+.wechat-import-modal__refresh,
+.wechat-import-modal__merge {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.wechat-import-modal__refresh { border: 1px solid #b9d5c7; color: #176a48; background: #fff; }
+.wechat-import-modal__refresh:disabled { cursor: wait; opacity: .65; }
+.wechat-import-modal__merge { border: 1px solid #e3a647; color: #fff; background: #d98b13; box-shadow: 0 4px 10px rgba(179, 107, 4, .18); }
+.wechat-import-modal__sync-note { grid-row: 3; margin: -5px 4px 9px; color: #1b7d51; font-size: 10px; text-align: right; }
+.wechat-import-modal__sync-note.is-error { color: #b23c45; }
+.wechat-import-modal__content { min-width: 0; min-height: 0; grid-row: 4; overflow: hidden; }
 
 .wechat-import-modal-enter-active,
 .wechat-import-modal-leave-active { transition: opacity .2s ease; }
@@ -268,5 +315,6 @@ function itemStateLabel(item) {
 @media (max-width: 1080px) {
   .wechat-import-modal__body { grid-template-columns: 220px minmax(0, 1fr); }
   .wechat-import-modal__current p { display: none; }
+  .wechat-import-modal__current-actions { flex-wrap: wrap; }
 }
 </style>

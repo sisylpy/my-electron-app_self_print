@@ -193,6 +193,8 @@ const electronAPI = Object.freeze({
   wechatUi: Object.freeze({
     readUnread: (allowedTitles) =>
       ipcRenderer.invoke('wechat-ui-read-unread', { allowedTitles }),
+    openWorkspace: () => ipcRenderer.invoke('wechat-ui-workspace-open'),
+    closeWorkspace: () => ipcRenderer.invoke('wechat-ui-workspace-close'),
   }),
 
   // 正式包只暴露扫码轮询及两个固定订单读取动作；会话 Cookie 留在主进程。

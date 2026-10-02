@@ -63,6 +63,8 @@ check(preload.includes('wechatReader: Object.freeze')
   && preload.includes('customerWechatOrders: Object.freeze')
   && main.includes("ipcMain.handle('wechat-reader-get-messages'")
   && main.includes("ipcMain.handle('wechat-ui-read-unread'")
+  && main.includes("ipcMain.handle('wechat-ui-workspace-open'")
+  && main.includes("ipcMain.handle('wechat-ui-workspace-close'")
   && main.includes("ipcMain.handle('customer-wechat-messages-prepare'")
   && !preload.includes('wechatReaderRequest:'),
   '微信好友订单仅通过 Reader 与业务白名单动作访问');
