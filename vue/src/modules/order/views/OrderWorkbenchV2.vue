@@ -204,6 +204,11 @@ import {
   removeWechatImportQueueItem,
 } from '../services/wechatOrderImport';
 import {
+  buildWechatCustomerAssociationDirectory,
+  ensureWechatCustomerBinding,
+  resolveWechatCustomerAssociation,
+} from '../services/wechatCustomerAssociation';
+import {
   customerId,
   loadSmartReplenishmentCustomerDirectory,
   loadOrderWorkbenchOverview,
@@ -611,8 +616,8 @@ onBeforeUnmount(() => {
   void window.electronAPI?.wechatUi?.closeWorkspace?.();
 });
 
-async function loadBoundWechatCustomers() {
-  if (!customerContext.customers.value.length) await customerContext.reload();
+async function loadBoundWechatCustomers({ refreshCustomers = false } = {}) {
+  if (refreshCustomers || !customerContext.customers.value.length) await customerContext.reload();
   const customersById = new Map();
   customerContext.customers.value.forEach((customer) => {
     const id = customerId(customer);
@@ -622,14 +627,15 @@ async function loadBoundWechatCustomers() {
   const rows = await Promise.all(Array.from(customersById.values()).map(async (customer) => {
     try {
       const binding = await loadCustomerWechatBinding(customerId(customer));
-      return binding.bound ? { customer, binding } : null;
+      return { customer, binding };
     } catch (error) {
       return { customer, error };
     }
   }));
   const failedCount = rows.filter(row => row?.error).length;
+  const associationDirectory = buildWechatCustomerAssociationDirectory(rows);
   const byTitle = new Map();
-  rows.filter(row => row?.binding).forEach((row) => {
+  rows.filter(row => row?.binding?.bound).forEach((row) => {
     const title = String(row.binding.displayName || '').trim();
     if (!title) return;
     if (!byTitle.has(title)) byTitle.set(title, []);
@@ -641,7 +647,7 @@ async function loadBoundWechatCustomers() {
     if (items.length === 1) unique.set(title, items[0]);
     else ambiguousCount += items.length;
   });
-  return { unique, byTitle, failedCount, ambiguousCount };
+  return { unique, byTitle, failedCount, ambiguousCount, associationDirectory };
 }
 
 function createWechatImportItem(row, title, result) {
@@ -667,8 +673,8 @@ async function importSelectedWechatConversation() {
   wechatSelectedImportMessage.value = '';
   wechatSelectedImportStatus.value = 'warning';
   try {
-    const { byTitle } = await loadBoundWechatCustomers();
-    const allowedTitles = Array.from(byTitle.keys());
+    const { associationDirectory } = await loadBoundWechatCustomers({ refreshCustomers: true });
+    const allowedTitles = associationDirectory.allowedTitles;
     if (!allowedTitles.length) throw new Error('此微信好友没有关联客户');
 
     const currentConversationApi = window.electronAPI?.wechatUi?.currentConversation;
@@ -681,13 +687,12 @@ async function importSelectedWechatConversation() {
     }
 
     const title = String(selected.result?.title || '').trim();
-    const matchingCustomers = byTitle.get(title) || [];
-    if (!matchingCustomers.length) throw new Error('此微信好友没有关联客户');
-    if (matchingCustomers.length > 1) {
-      throw new Error('当前微信好友关联了多个客户，请先检查微信绑定');
-    }
-
-    const row = matchingCustomers[0];
+    const row = resolveWechatCustomerAssociation(associationDirectory, title);
+    row.binding = await ensureWechatCustomerBinding({
+      row,
+      selectedTitle: title,
+      directory: associationDirectory,
+    });
     const result = await prepareWechatOrderImport({
       customerId: customerId(row.customer),
       binding: row.binding,

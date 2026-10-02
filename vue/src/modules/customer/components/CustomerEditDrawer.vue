@@ -30,7 +30,7 @@
               maxlength="255"
               placeholder="与微信中的好友昵称或群名称一致"
             />
-            <small class="field-tip">用于微信聊天订单搜索；更换已绑定好友或群聊请在订单录入页操作。</small>
+            <small class="field-tip">用于微信聊天订单搜索；保存后可在订单录入页通过“转所选微信好友订单”自动完成关联或迁移。</small>
           </label>
           <label>拣货名称<input v-model.trim="form.nxDepartmentPickName" /></label>
           <label>每日录音时长（分钟）<input v-model.number="form.nxDepartmentRecordMinutes" type="number" min="0" /></label>
