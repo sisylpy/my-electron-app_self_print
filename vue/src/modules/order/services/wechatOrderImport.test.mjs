@@ -79,6 +79,64 @@ const electronAPI = {
 const loaded = await loadCustomerWechatBinding(7, electronAPI);
 assert.equal(loaded.bound, true);
 
+const noPendingReader = {
+  getParticipants: electronAPI.wechatReader.getParticipants,
+  getMessages: async () => ({
+    ok: true,
+    result: {
+      items: [{
+        id: 'msg:no-pending',
+        senderId: 'friend',
+        type: 'text',
+        text: '土豆3件',
+        timestamp: '2026-10-01T00:29:00.000Z',
+      }],
+    },
+  }),
+};
+const duplicate = await prepareWechatOrderImport({
+  customerId: 7,
+  binding: loaded,
+  now: Date.parse('2026-10-01T00:30:00.000Z'),
+  retryDelaysMs: [],
+  electronAPI: {
+    wechatReader: noPendingReader,
+    customerWechatOrders: {
+      prepareMessages: async () => ({
+        ok: true,
+        data: {
+          binding,
+          pendingMessageFingerprints: [],
+          processedCount: 1,
+        },
+      }),
+    },
+  },
+});
+assert.equal(duplicate.status, 'duplicate');
+
+const incompleteState = await prepareWechatOrderImport({
+  customerId: 7,
+  binding: loaded,
+  now: Date.parse('2026-10-01T00:30:00.000Z'),
+  retryDelaysMs: [],
+  electronAPI: {
+    wechatReader: noPendingReader,
+    customerWechatOrders: {
+      prepareMessages: async () => ({
+        ok: true,
+        data: {
+          binding,
+          pendingMessageFingerprints: [],
+          processedCount: 0,
+        },
+      }),
+    },
+  },
+});
+assert.equal(incompleteState.status, 'conflict');
+assert.match(incompleteState.message, /没有返回完整的处理状态/);
+
 let queriedTimeRange = null;
 const prepared = await prepareWechatOrderImport({
   customerId: 7,

@@ -235,9 +235,14 @@ export async function prepareWechatOrderImport({
   }
 
   if (!pending.length) {
+    const processedCount = Number(prepared?.processedCount);
+    const allMessagesProcessed = Number.isFinite(processedCount)
+      && processedCount >= incoming.length;
     return {
-      status: 'duplicate',
-      message: '读取到的消息都已经生成过订单，没有重复导入',
+      status: allMessagesProcessed ? 'duplicate' : 'conflict',
+      message: allMessagesProcessed
+        ? '读取到的消息都已经生成过订单，没有重复导入'
+        : '读取到了微信消息，但后台没有返回完整的处理状态，请重新关联客户后重试',
       binding: nextBinding,
       pendingCount: 0,
       skippedCount: incoming.length,
