@@ -602,7 +602,12 @@ async function openActiveWechatImport(options = {}) {
   }
   customerContext.selectCustomer(customer);
   wechatScanMessage.value = '';
-  await openWechatWorkspace();
+  // Opening the workspace raises WeChat on macOS. A task-card change only
+  // changes the right-side draft, so keep the existing side-by-side windows
+  // untouched unless this is an initial/manual workspace entry.
+  if (options.openWorkspace !== false) {
+    await openWechatWorkspace();
+  }
   const focusWarning = options.focusConversation === false
     ? ''
     : await focusWechatImportConversation(item);
@@ -617,7 +622,7 @@ async function selectWechatImport(token) {
   const item = wechatImportQueue.value.find(candidate => candidate?.token === token);
   if (!item || item.token === activeWechatImport.value?.token) return;
   activeWechatImportToken.value = item.token;
-  await openActiveWechatImport();
+  await openActiveWechatImport({ openWorkspace: false, focusConversation: false });
 }
 
 async function removeWechatImport(token) {
@@ -638,7 +643,9 @@ async function removeWechatImport(token) {
     setWechatScanStatus(`已从本轮列表移除“${item?.conversationTitle || item?.customerName || '该会话'}”`, 'success');
     return;
   }
-  if (wasActive) await openActiveWechatImport();
+  if (wasActive) {
+    await openActiveWechatImport({ openWorkspace: false, focusConversation: false });
+  }
 }
 
 async function closeWechatImportModal() {
@@ -1058,7 +1065,7 @@ async function handleTaskAdded(change) {
   await handleOrderChanged(change);
   if (!current || change?.wechatImportToken !== current.token) return;
   if (wechatImportQueue.value.length) {
-    await openActiveWechatImport();
+    await openActiveWechatImport({ openWorkspace: false, focusConversation: false });
   } else {
     activeWechatImportToken.value = null;
     setWechatScanStatus('本轮微信订单已全部确认保存', 'success');
