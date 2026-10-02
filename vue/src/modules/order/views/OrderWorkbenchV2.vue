@@ -704,7 +704,11 @@ function wechatImportTaskKey(item) {
     || item?.binding?.conversationFingerprint
     || item?.conversationTitle
     || '';
-  return [item?.customerId, conversationFingerprint, item?.taskType || 'mixed'].join('|');
+  // Text messages intentionally remain one paste task per conversation. Each
+  // image carries its source-message fingerprint so independently editable
+  // visual recognition tasks never merge into one another.
+  const taskFingerprint = item?.payload?.taskFingerprint || '';
+  return [item?.customerId, conversationFingerprint, item?.taskType || 'mixed', taskFingerprint].join('|');
 }
 
 function createWechatImportItemsFromTasks(row, title, taskPayloads, options = {}) {

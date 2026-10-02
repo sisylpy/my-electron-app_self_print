@@ -16,7 +16,6 @@ import api from '../services/orderApi';
     import OrderModeSelector from '../components/OrderModeSelector.vue';
     import WechatOrderSource from '../components/workbench/WechatOrderSource.vue';
     import {createPlaceOrderState} from '../stores/orderWorkspaceState';
-    import {formatWechatImageRecognition as formatWechatImageRecognitionText} from './wechatImageRecognition';
 
     export default {
         name: 'PlaceOrder',
@@ -5171,17 +5170,16 @@ import api from '../services/orderApi';
                 this.pasteInvalidLineIndices = [];
                 this.pasteInvalidSegments = [];
                 this.pasteNoValidOrder = false;
-                const recognizedImageText = isImageTask
-                    ? await this.recognizeWechatOrderImages(images, requestId)
-                    : '';
                 // A later task may have opened while OCR was in flight. Its
                 // text and order list must remain untouched by this request.
+                if (isImageTask) {
+                    const imageAnalysis = await this.recognizeWechatOrderImages(images, payload, requestId);
+                    if (!this.isCurrentWechatOrderLoad(requestId)) return;
+                    if (imageAnalysis) this.applyWechatImageRecognition(imageAnalysis);
+                    return;
+                }
                 if (!this.isCurrentWechatOrderLoad(requestId)) return;
-                const combinedText = isImageTask ? recognizedImageText.trim() : text;
-                this.pasteInputText = combinedText;
-                this.pasteInputContent = combinedText;
-                this.pasteOriginText = combinedText;
-                if (combinedText) await this.handlePasteLocalParse();
+                if (text) await this.handlePasteLocalParse();
             },
 
             beginWechatOrderLoad() {
@@ -5197,42 +5195,97 @@ import api from '../services/orderApi';
                 return requestId === this.wechatOrderLoadSequence;
             },
 
-            formatWechatImageRecognition(data) {
-                return formatWechatImageRecognitionText(data);
-            },
-
-            async recognizeWechatOrderImages(images, requestId = null) {
+            async recognizeWechatOrderImages(images, payload, requestId = null) {
                 const rows = Array.isArray(images) ? images : [];
-                if (!rows.length) return '';
+                if (!rows.length) return null;
                 const isCurrentRequest = () => (
                     requestId == null || this.isCurrentWechatOrderLoad(requestId)
                 );
                 if (isCurrentRequest()) this.showDeepSeekLoading = true;
                 try {
-                    const recognized = [];
-                    for (const image of rows) {
-                        if (!isCurrentRequest()) return '';
-                        const dataUrl = String(image?.dataUrl || '');
-                        const commaIndex = dataUrl.indexOf(',');
-                        const imageBase64 = commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl;
-                        if (!imageBase64) throw new Error('微信图片内容为空');
-                        const response = await api.recognizeWechatOrderImage({ ImageBase64: imageBase64 });
-                        if (!isCurrentRequest()) return '';
-                        if (!response?.data || response.data.code !== 0) {
-                            throw new Error(response?.data?.msg || response?.data?.message || '图片识别失败');
-                        }
-                        const text = this.formatWechatImageRecognition(response.data);
-                        if (text) recognized.push(text);
+                    const customerId = Number(this.selectedSubDepartment || this.selectedAllCustomer);
+                    const wechatApi = window.electronAPI?.customerWechatOrders;
+                    if (!Number.isSafeInteger(customerId) || customerId <= 0) {
+                        throw new Error('当前客户信息无效，无法识别微信订单图片');
                     }
-                    if (!recognized.length) throw new Error('图片中没有识别到有效订单内容');
-                    return recognized.join('\n');
+                    if (!wechatApi?.analyzeImage) {
+                        throw new Error('当前桌面程序版本不支持微信图片识别，请退出后重新打开程序');
+                    }
+                    const combined = {
+                        items: [],
+                        warnings: [],
+                        needsReview: false,
+                    };
+                    for (const image of rows) {
+                        if (!isCurrentRequest()) return null;
+                        const dataUrl = String(image?.dataUrl || '');
+                        if (!dataUrl) throw new Error('微信图片内容为空');
+                        const response = await wechatApi.analyzeImage({
+                            customerId,
+                            imageBase64: dataUrl,
+                            messageFingerprint: image?.messageFingerprint || payload?.taskFingerprint,
+                        });
+                        if (!isCurrentRequest()) return null;
+                        if (!response?.ok || !response.data || typeof response.data !== 'object') {
+                            throw new Error(response?.message || '微信图片识别失败，请稍后重试');
+                        }
+                        const result = response.data;
+                        if (Array.isArray(result.items)) combined.items.push(...result.items);
+                        if (Array.isArray(result.warnings)) combined.warnings.push(...result.warnings);
+                        combined.needsReview = combined.needsReview || Boolean(result.needsReview);
+                    }
+                    return combined;
                 } catch (error) {
                     if (isCurrentRequest()) {
                         await this.$refs.alertDialog.alert(error?.message || '微信图片识别失败，请重试');
                     }
-                    return '';
+                    return null;
                 } finally {
                     if (isCurrentRequest()) this.showDeepSeekLoading = false;
+                }
+            },
+
+            applyWechatImageRecognition(result) {
+                const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
+                const sourceItems = Array.isArray(result?.items) ? result.items : [];
+                const rows = sourceItems
+                    .filter(item => item && typeof item === 'object' && String(item.name || item.rawName || '').trim())
+                    .map(item => {
+                        const name = String(item.name || item.rawName || '').trim();
+                        const rawName = String(item.rawName || name).trim();
+                        const remark = String(item.note || '').trim();
+                        return {
+                            nxDoGoodsName: name,
+                            nxDoGoodsNameOriginal: rawName,
+                            nxDoQuantity: item.quantity == null ? '' : String(item.quantity),
+                            nxDoStandard: item.unit == null ? '' : String(item.unit),
+                            nxDoRemark: remark,
+                            nxDoAddRemark: Boolean(remark),
+                            nxDoStatus: -2,
+                            nxDoDepartmentId: targetDepId,
+                            nxDoDepartmentFatherId: this.selectedAllCustomer,
+                            nxDoDisGoodsId: null,
+                            nxDoStandardWarn: 0,
+                            goodsNameWarn: 0,
+                            nxDoDistributerId: this.disUser?.nxDiuDistributerId,
+                            nxDoPurchaseUserId: -1,
+                            nxDoOrderUserId: this.disUser?.nxDistributerUserId || this.disUser?.nxDiuDistributerId,
+                            nxDoIsAgent: -1,
+                            wechatImageColumn: Number(item.column) || 1,
+                            wechatImageLineNo: Number(item.lineNo) || 0,
+                            wechatImageConfidence: Number(item.confidence) || 0,
+                            wechatImageNeedsReview: Boolean(item.needsReview),
+                        };
+                    });
+                this.resetSearchAndMatchedGoodsState();
+                this.orderItems = rows;
+                const warnings = Array.isArray(result?.warnings)
+                    ? result.warnings.map(item => String(item || '').trim()).filter(Boolean)
+                    : [];
+                if (!rows.length) {
+                    this.showToast(warnings[0] || '图片中没有识别到可编辑订单行，请核对原图后重试', 'warning', 6000);
+                } else if (result?.needsReview || rows.some(item => item.wechatImageNeedsReview)) {
+                    this.showToast(warnings[0] || '图片识别结果需要核对，请编辑确认后再保存订单', 'warning', 6000);
                 }
             },
 

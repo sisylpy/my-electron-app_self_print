@@ -175,6 +175,7 @@ const electronAPI = Object.freeze({
     clearBinding: (customerId) => ipcRenderer.invoke('customer-wechat-binding-clear', { customerId }),
     prepareMessages: (customerId, messages) =>
       ipcRenderer.invoke('customer-wechat-messages-prepare', { customerId, messages }),
+    analyzeImage: (payload) => ipcRenderer.invoke('customer-wechat-image-analyze', payload),
   }),
 
   // Reader 只返回不可逆 ID 和业务 DTO；绝不暴露启动命令、路径、stdio 或 access material。

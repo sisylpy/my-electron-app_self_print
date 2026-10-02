@@ -23,7 +23,7 @@ function sourceMessages(payload, messageIds) {
     .sort(compareByMessageTime);
 }
 
-function createTaskPayload(payload, taskType, entries, images) {
+function createTaskPayload(payload, taskType, entries, images, taskFingerprint = '') {
   const messageIds = new Set([
     ...entries.map(messageId),
     ...images.map(messageId),
@@ -32,6 +32,7 @@ function createTaskPayload(payload, taskType, entries, images) {
   return {
     ...payload,
     taskType,
+    ...(taskFingerprint ? { taskFingerprint } : {}),
     text: taskType === TEXT_TASK
       ? entries.map(entry => String(entry?.text || '').trim()).filter(Boolean).join('\n')
       : '',
@@ -86,11 +87,17 @@ export function splitWechatOrderPayloads(payload) {
   )).sort(compareByMessageTime);
 
   // Text can be parsed locally at once. Put it first so a long-running image
-  // OCR request never blocks an already-readable text order, while retaining
-  // the image as its own task immediately after it.
+  // recognition request never blocks an already-readable text order. Each
+  // source image is deliberately its own task: different photos may be a
+  // single-column list, a multi-column list, or an unrelated attachment.
   const tasks = [];
   if (textEntries.length) tasks.push(createTaskPayload(payload, TEXT_TASK, textEntries, []));
-  if (imageEntries.length) tasks.push(createTaskPayload(payload, IMAGE_TASK, imageEntries, images));
+  imageEntries.forEach((entry) => {
+    const fingerprint = messageId(entry);
+    const image = imageById.get(fingerprint);
+    if (!fingerprint || !image) return;
+    tasks.push(createTaskPayload(payload, IMAGE_TASK, [entry], [image], fingerprint));
+  });
   return tasks;
 }
 
