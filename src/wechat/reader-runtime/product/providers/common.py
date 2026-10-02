@@ -58,6 +58,7 @@ class WechatReadOnlyDB:
         self._integrity_checked = set()
         # 会话时间的批量缓存（见 session_last_times 的 N+1 说明）
         self._session_cache: Optional[Dict[str, int]] = None
+        self._message_table_columns_cache: Dict[Tuple[str, str], set] = {}
 
     # ---- 底层执行 ----
     def _run(self, db_path: str, sql: str) -> List[List[Optional[str]]]:
@@ -163,20 +164,39 @@ class WechatReadOnlyDB:
         offset: int,
         like: Optional[str] = None,
     ) -> List[list]:
+        packed_column = self._packed_info_column(shard, table)
+        packed_select = "hex(%s)" % packed_column if packed_column else "NULL"
         sql = (
-            "SELECT local_id, create_time, real_sender_id, message_content, local_type "
+            "SELECT local_id, create_time, real_sender_id, message_content, local_type, %s "
             "FROM %s%s ORDER BY create_time DESC LIMIT %d OFFSET %d"
-            % (table, self._where(tr, like), limit, offset)
+            % (packed_select, table, self._where(tr, like), limit, offset)
         )
         return self._run(shard, sql)
 
     def message_by_local_id(self, shard: str, table: str, local_id: int) -> Optional[list]:
+        packed_column = self._packed_info_column(shard, table)
+        packed_select = "hex(%s)" % packed_column if packed_column else "NULL"
         sql = (
-            "SELECT local_id, create_time, real_sender_id, message_content, local_type "
-            "FROM %s WHERE local_id = %d" % (table, local_id)
+            "SELECT local_id, create_time, real_sender_id, message_content, local_type, %s "
+            "FROM %s WHERE local_id = %d" % (packed_select, table, local_id)
         )
         rows = self._run(shard, sql)
         return rows[0] if rows else None
+
+    def _packed_info_column(self, shard: str, table: str) -> Optional[str]:
+        """Return the media metadata column when this WeChat schema provides it."""
+        cache_key = (shard, table)
+        columns = self._message_table_columns_cache.get(cache_key)
+        if columns is None:
+            columns = {
+                str(row[1]) for row in self._run(shard, "PRAGMA table_info(%s)" % table)
+                if len(row) > 1 and row[1]
+            }
+            self._message_table_columns_cache[cache_key] = columns
+        for candidate in ("packed_info_data", "packed_info"):
+            if candidate in columns:
+                return candidate
+        return None
 
     def distinct_senders(self, shard: str, table: str) -> List[int]:
         sql = "SELECT DISTINCT real_sender_id FROM %s WHERE real_sender_id IS NOT NULL" % table

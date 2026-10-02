@@ -59,7 +59,17 @@
                             <div v-show="!(source === 'taskOrder' && selectTaskLoading)"
                                  style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
                                 <div class="paste-textarea-wrap" style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;">
+                                    <div v-if="sourceImages.length" class="wechat-source-image mb-2">
+                                        <img :src="activeSourceImage.dataUrl" alt="微信订单图片">
+                                        <div v-if="sourceImages.length > 1" class="wechat-source-image-nav">
+                                            <button type="button" class="btn btn-sm btn-light" @click="showPreviousSourceImage">‹</button>
+                                            <span>{{ sourceImageIndex + 1 }} / {{ sourceImages.length }}</span>
+                                            <button type="button" class="btn btn-sm btn-light" @click="showNextSourceImage">›</button>
+                                        </div>
+                                        <div class="small text-muted text-center py-1">微信图片已获取</div>
+                                    </div>
                                     <textarea
+                                            v-if="!sourceImages.length || pasteInputText"
                                             ref="pasteTextareaRef"
                                             :value="pasteInputText"
                                             @input="onPasteInput"
@@ -67,6 +77,7 @@
                                             :disabled="pasteHasCache || showDeepSeekLoading || selectTaskLoading"
                                             class="form-control mb-2 paste-textarea"
                                             :class="{
+                                                'paste-textarea--with-image': sourceImages.length,
                                                 'bg-light': pasteHasCache,
                                                 'paste-textarea--just-updated': contentJustUpdated,
                                                 'paste-textarea--has-invalid': (pasteInvalidSegments.length > 0 || pasteInvalidLineIndices.length > 0) && pasteInputText
@@ -240,6 +251,10 @@
                 type: Boolean,
                 default: false
             },
+            sourceImages: {
+                type: Array,
+                default: () => []
+            },
             depId: {
                 type: Number,
                 default: null
@@ -332,10 +347,14 @@
                 lastInputEmitAt: 0,
                 /** 为 true 时文本框显示“内容已更新”高亮动画 */
                 contentJustUpdated: false,
-                contentUpdatedTimer: null
+                contentUpdatedTimer: null,
+                sourceImageIndex: 0
             };
         },
         computed: {
+            activeSourceImage() {
+                return this.sourceImages[this.sourceImageIndex] || this.sourceImages[0] || {};
+            },
             /** 校验不合格片段高亮 HTML（只显示不合格的行） */
             pasteInvalidOverlayHtml() {
                 const text = this.pasteInputText || '';
@@ -407,6 +426,9 @@
                 if (val && val.length > 0) {
                     this.$nextTick(() => this.syncInvalidOverlayScroll());
                 }
+            },
+            sourceImages() {
+                this.sourceImageIndex = 0;
             }
         },
         emits: [
@@ -428,6 +450,14 @@
             'finish-task'
         ],
         methods: {
+            showPreviousSourceImage() {
+                if (!this.sourceImages.length) return;
+                this.sourceImageIndex = (this.sourceImageIndex - 1 + this.sourceImages.length) % this.sourceImages.length;
+            },
+            showNextSourceImage() {
+                if (!this.sourceImages.length) return;
+                this.sourceImageIndex = (this.sourceImageIndex + 1) % this.sourceImages.length;
+            },
             /**
              * @param {number|null} [selectTaskId] - 刷新后要选中的任务 ID，不传则选中第一个并 emit select-task
              */
@@ -581,6 +611,46 @@
     /* 粘贴框“内容已更新”提示：柔和背景高亮 + 边框淡出，不干扰阅读 */
     .paste-textarea {
         transition: background-color 0.35s ease-out, box-shadow 0.35s ease-out;
+    }
+
+    .wechat-source-image {
+        position: relative;
+        display: flex;
+        flex: 0 1 46%;
+        min-height: 130px;
+        overflow: hidden;
+        flex-direction: column;
+        justify-content: center;
+        border: 1px solid #d8e8df;
+        border-radius: 8px;
+        background: #f7faf8;
+    }
+
+    .wechat-source-image > img {
+        display: block;
+        width: 100%;
+        min-height: 0;
+        flex: 1;
+        object-fit: contain;
+    }
+
+    .wechat-source-image-nav {
+        position: absolute;
+        top: 6px;
+        left: 50%;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 3px 6px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+        transform: translateX(-50%);
+    }
+
+    .paste-textarea--with-image {
+        flex: 1 1 54% !important;
     }
 
     /* 显示 overlay 时隐藏 textarea 文字，避免重影；仅保留光标可见 */

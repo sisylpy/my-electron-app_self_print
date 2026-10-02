@@ -657,6 +657,10 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     return getWechatReaderService().getMessages(input);
   });
+  ipcMain.handle('wechat-reader-get-attachment', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    return getWechatReaderService().getAttachment(input);
+  });
   ipcMain.handle('wechat-ui-read-unread', async (event, input) => {
     assertTrustedRendererEvent(event);
     try {

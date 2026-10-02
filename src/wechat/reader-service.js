@@ -1,5 +1,6 @@
 const { ReaderBridge } = require('./reader-bridge');
 const { ReaderError, transportError, TRANSPORT_ERROR } = require('./reader-errors');
+const { decodeWechatImageEnvelope } = require('./image-container-decoder');
 
 let bridge = null;
 let shutdownPromise = null;
@@ -61,6 +62,25 @@ function createWechatReaderService(appLogger) {
       const timeRange = normalizeTimeRange(input?.timeRange);
       if (timeRange) params.timeRange = timeRange;
       return request('getMessages', params);
+    }),
+    getAttachment: (input) => run(async () => {
+      const attachmentId = requireString(input?.attachmentId, 'attachmentId');
+      const envelope = await request('getAttachment', { attachmentId }, 90_000);
+      try {
+        const decoded = decodeWechatImageEnvelope(envelope);
+        return {
+          attachmentId,
+          mimeType: decoded.mimeType,
+          size: decoded.size,
+          dataUrl: `data:${decoded.mimeType};base64,${decoded.base64}`,
+        };
+      } catch (error) {
+        throw transportError(
+          TRANSPORT_ERROR.PROTOCOL_ERROR,
+          error?.message || '微信图片解码失败，请在微信中打开原图后重试',
+          true
+        );
+      }
     }),
   });
 }

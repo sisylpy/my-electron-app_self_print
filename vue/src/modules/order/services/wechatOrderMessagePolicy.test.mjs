@@ -23,7 +23,7 @@ const messages = [
 assert.deepEqual(
   selectWechatOrderMessages(messages, participants, { conversationKind: CONVERSATION_DIRECT })
     .map((item) => item.id),
-  ['plain', 'mention-self', 'mention-other'],
+  ['plain', 'mention-self', 'mention-other', 'image'],
 );
 
 assert.deepEqual(
@@ -31,7 +31,7 @@ assert.deepEqual(
     conversationKind: CONVERSATION_GROUP,
     groupMode: GROUP_ALL_MEMBER_MESSAGES,
   }).map((item) => item.id),
-  ['plain', 'mention-self', 'mention-other'],
+  ['plain', 'mention-self', 'mention-other', 'image'],
 );
 
 const mentioned = selectWechatOrderMessages(messages, participants, {

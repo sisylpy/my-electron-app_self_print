@@ -228,6 +228,17 @@ const apiMethods = {
       ...config // 合并传入的配置（如 showLoading: false）
     });
   },
+  // 微信图片消息只做 OCR 和结构化解析；不提前创建任务或订单。
+  recognizeWechatOrderImage(data, config = {}) {
+    return axiosInstance.post('ocr/recognize', data, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 300000,
+      showLoading: false,
+      ...config
+    });
+  },
   // 保存订单项（备用接口）
   saveOrderItems(data) {
     return axiosInstance.post('nxdepartmentorders/saveOrderItems', data, {

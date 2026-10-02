@@ -187,6 +187,8 @@ const electronAPI = Object.freeze({
       ipcRenderer.invoke('wechat-reader-get-participants', { conversationId }),
     getMessages: (conversationId, timeRange, page) =>
       ipcRenderer.invoke('wechat-reader-get-messages', { conversationId, timeRange, page }),
+    getAttachment: (attachmentId) =>
+      ipcRenderer.invoke('wechat-reader-get-attachment', { attachmentId }),
   }),
 
   // 只允许扫描渲染层提交的已绑定会话标题；主进程负责启动、超时和退出回收。

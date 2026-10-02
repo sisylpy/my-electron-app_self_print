@@ -35,6 +35,7 @@ from .domain import (
 from .errors.codes import ErrorCode, ServiceError, WechatServiceError
 from .providers.DatabaseAccessProvider import AccessMaterial, AccountMeta, DatabaseAccessProvider
 from .providers.common import WechatReadOnlyDB, _iso_to_epoch
+from .attachments import build_image_envelope
 
 
 def _hex(s: str, n: int) -> str:
@@ -104,6 +105,7 @@ class WechatLocalDataService:
         self._accounts: Dict[AccountId, AccountMeta] = {}
         self._conv_index: Dict[ConversationId, _ConversationMeta] = {}
         self._materials: Dict[AccountId, AccessMaterial] = {}
+        self._attachment_index: Dict[str, dict] = {}
         # 连续分页必须复用同一份会话快照，否则每页都会重新扫描数千联系人。
         self._conv_snapshot: Dict[str, Tuple[float, List[Tuple[_ConversationMeta, Conversation]]]] = {}
         self._conv_snapshot_ttl = 10.0
@@ -282,6 +284,19 @@ class WechatLocalDataService:
             ServiceError(ErrorCode.INTERNAL_ERROR, "无法解析消息发送者", diagnosticId="resolveSender")
         )
 
+    def getAttachment(self, attachment_id: AttachmentId) -> dict:
+        """Return an encrypted image envelope for main-process-only decoding."""
+        record = self._attachment_index.get(str(attachment_id))
+        if not record or record.get("kind") != "image":
+            raise WechatServiceError(ServiceError(ErrorCode.NO_DATA, "没有找到对应的微信图片，请重新读取消息。"))
+        acct = self._account_meta(record["account_id"])
+        return build_image_envelope(
+            acct.db_root,
+            acct.wxid,
+            record["conversation_username"],
+            record.get("packed_hex"),
+        )
+
     # ===================== 内部 =====================
     def _read_messages(
         self, conversation: ConversationId, timeRange, page: Page, like: Optional[str]
@@ -328,6 +343,12 @@ class WechatLocalDataService:
         att: Optional[AttachmentRef] = None
         if mtype != "text":
             att = AttachmentRef(id=AttachmentId(_fp("%s:%d" % (conv_id, local_id))), kind=mtype)
+            self._attachment_index[str(att.id)] = {
+                "kind": mtype,
+                "account_id": self._conv_meta(conv_id).account_id,
+                "conversation_username": self._conv_meta(conv_id).username,
+                "packed_hex": row[-1] if len(row) > 5 else None,
+            }
         return Message(
             id=MessageId("%s:%d" % (conv_id, local_id)),
             conversationId=conv_id,

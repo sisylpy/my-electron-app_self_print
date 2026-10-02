@@ -164,8 +164,62 @@ assert.deepEqual(prepared.payload.source.messages, [
 assert.deepEqual(prepared.payload.entries, [{
   messageFingerprint: 'msg:00000002',
   messageTimeMs: Date.parse('2026-10-01T00:27:00.000Z'),
+  type: 'text',
   text: '西兰花2件',
 }]);
+
+const imagePrepared = await prepareWechatOrderImport({
+  customerId: 7,
+  binding: loaded,
+  now: Date.parse('2026-10-01T00:30:00.000Z'),
+  retryDelaysMs: [],
+  electronAPI: {
+    customerWechatOrders: {
+      prepareMessages: async (_customerId, messages) => ({
+        ok: true,
+        data: {
+          binding,
+          pendingMessageFingerprints: messages.map(message => message.messageFingerprint),
+        },
+      }),
+    },
+    wechatReader: {
+      getParticipants: electronAPI.wechatReader.getParticipants,
+      getMessages: async () => ({
+        ok: true,
+        result: {
+          items: [{
+            id: 'msg:image-1',
+            senderId: 'friend',
+            type: 'image',
+            text: '',
+            timestamp: '2026-10-01T00:29:00.000Z',
+            attachmentRef: { id: 'attachment:image-1', kind: 'image' },
+          }],
+        },
+      }),
+      getAttachment: async (attachmentId) => ({
+        ok: true,
+        result: {
+          attachmentId,
+          mimeType: 'image/jpeg',
+          size: 4,
+          dataUrl: 'data:image/jpeg;base64,/9j/2Q==',
+        },
+      }),
+    },
+  },
+});
+assert.equal(imagePrepared.status, 'ready');
+assert.equal(imagePrepared.payload.text, '');
+assert.deepEqual(imagePrepared.payload.images, [{
+  messageFingerprint: 'msg:image-1',
+  messageTimeMs: Date.parse('2026-10-01T00:29:00.000Z'),
+  mimeType: 'image/jpeg',
+  size: 4,
+  dataUrl: 'data:image/jpeg;base64,/9j/2Q==',
+}]);
+assert.equal(imagePrepared.payload.entries[0].type, 'image');
 
 const mergedPayload = mergeWechatOrderPayload(
   {
@@ -188,6 +242,36 @@ assert.deepEqual(mergedPayload.source.messages.map(message => message.messageFin
   'msg:old',
   'msg:new',
 ]);
+
+const mergedImages = mergeWechatOrderPayload(
+  {
+    text: '',
+    images: [{ messageFingerprint: 'msg:image-old', dataUrl: 'data:image/jpeg;base64,old' }],
+    entries: [{ messageFingerprint: 'msg:image-old', messageTimeMs: 1000, type: 'image', text: '' }],
+    source: { conversationFingerprint: 'fp:conversation123', messages: [
+      { messageFingerprint: 'msg:image-old', messageTimeMs: 1000 },
+    ] },
+  },
+  {
+    text: '',
+    images: [
+      { messageFingerprint: 'msg:image-old', dataUrl: 'data:image/jpeg;base64,old' },
+      { messageFingerprint: 'msg:image-new', dataUrl: 'data:image/png;base64,new' },
+    ],
+    entries: [
+      { messageFingerprint: 'msg:image-old', messageTimeMs: 1000, type: 'image', text: '' },
+      { messageFingerprint: 'msg:image-new', messageTimeMs: 2000, type: 'image', text: '' },
+    ],
+    source: { conversationFingerprint: 'fp:conversation123', messages: [
+      { messageFingerprint: 'msg:image-old', messageTimeMs: 1000 },
+      { messageFingerprint: 'msg:image-new', messageTimeMs: 2000 },
+    ] },
+  },
+);
+assert.deepEqual(
+  mergedImages.images.map(image => image.messageFingerprint),
+  ['msg:image-old', 'msg:image-new'],
+);
 
 let participantCalls = 0;
 let messageCalls = 0;

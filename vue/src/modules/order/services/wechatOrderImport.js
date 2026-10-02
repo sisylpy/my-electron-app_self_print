@@ -80,6 +80,10 @@ function payloadEntries(payload) {
   return [{ ...messages[0], text: payload.text }];
 }
 
+function payloadImages(payload) {
+  return Array.isArray(payload?.images) ? payload.images : [];
+}
+
 export function mergeWechatOrderPayload(currentPayload, incomingPayload) {
   if (!currentPayload?.source) return incomingPayload;
   if (!incomingPayload?.source) return currentPayload;
@@ -108,7 +112,7 @@ export function mergeWechatOrderPayload(currentPayload, incomingPayload) {
   const currentIds = new Set(currentMessages.map(message => String(message.messageFingerprint)));
   const incomingContainsCurrent = Array.from(currentIds).every(id => incomingIds.has(id));
   const text = entries.length === messages.length
-    ? entries.map(entry => entry.text).join('\n')
+    ? entries.map(entry => entry.text).filter(Boolean).join('\n')
     : incomingContainsCurrent
       ? incomingPayload.text
       : [currentPayload.text, incomingPayload.text].filter(Boolean).join('\n');
@@ -116,6 +120,11 @@ export function mergeWechatOrderPayload(currentPayload, incomingPayload) {
     ...incomingPayload,
     text,
     entries,
+    images: Array.from(new Map(
+      [...payloadImages(currentPayload), ...payloadImages(incomingPayload)]
+        .map(image => [String(image?.messageFingerprint || ''), image])
+        .filter(([id]) => id)
+    ).values()),
     source: {
       ...incomingPayload.source,
       messages,
@@ -129,9 +138,9 @@ function noIncomingMessage(binding) {
     return '所选时间范围内没有 @ 当前微信账号的新群消息';
   }
   if (binding.conversationKind === CONVERSATION_GROUP) {
-    return '所选时间范围内没有新的群成员文字消息';
+    return '所选时间范围内没有新的群成员文字或图片消息';
   }
-  return '所选时间范围内没有新的好友文字消息';
+  return '所选时间范围内没有新的好友文字或图片消息';
 }
 
 export async function loadCustomerWechatBinding(customerId, electronAPI = window.electronAPI) {
@@ -250,6 +259,23 @@ export async function prepareWechatOrderImport({
   }
 
   const skippedCount = incoming.length - pending.length;
+  const pendingImages = pending.filter(message => message.type === 'image');
+  let images = [];
+  if (pendingImages.length) {
+    if (!reader.getAttachment) throw new Error('当前安装包不支持读取微信图片，请升级后重试');
+    images = await Promise.all(pendingImages.map(async (message) => {
+      const attachmentId = message?.attachmentRef?.id;
+      if (!attachmentId) throw new Error('微信图片缺少附件标识，请重新读取消息');
+      const attachment = unwrapWechatReader(await reader.getAttachment(attachmentId));
+      return {
+        messageFingerprint: message.id,
+        messageTimeMs: message.messageTimeMs,
+        mimeType: attachment.mimeType,
+        size: attachment.size,
+        dataUrl: attachment.dataUrl,
+      };
+    }));
+  }
   return {
     status: 'ready',
     message: `已载入 ${pending.length} 条新消息${skippedCount ? `，跳过 ${skippedCount} 条已处理消息` : ''}`,
@@ -257,10 +283,12 @@ export async function prepareWechatOrderImport({
     pendingCount: pending.length,
     skippedCount,
     payload: {
-      text: pending.map((message) => message.orderText).join('\n'),
+      text: pending.map((message) => message.orderText).filter(Boolean).join('\n'),
+      images,
       entries: pending.map((message) => ({
         messageFingerprint: message.id,
         messageTimeMs: message.messageTimeMs,
+        type: message.type,
         text: message.orderText,
       })),
       source: {

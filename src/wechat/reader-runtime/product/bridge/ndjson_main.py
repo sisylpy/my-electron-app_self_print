@@ -162,6 +162,10 @@ def _dispatch(svc, method, params):
         return _page_result_messages(pr)
     if method == "getParticipants":
         return [_participant(x) for x in svc.getParticipants(p["conversationId"])]
+    if method == "getAttachment":
+        # This envelope is consumed only by Electron's main process. It contains
+        # no filesystem path or raw account identifier.
+        return svc.getAttachment(p["attachmentId"])
     if method == "resolveSender":
         return _participant(svc.resolveSender(p["messageId"]))
     if method == "listConversations":

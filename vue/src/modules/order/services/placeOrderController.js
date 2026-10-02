@@ -376,6 +376,7 @@ import api from '../services/orderApi';
                 this.pasteInputContent = '';
                 this.pasteOriginText = '';
                 this.wechatOrderSource = null;
+                this.wechatOrderImages = [];
                 this.excelPasteSaveCount = null;
                 this.excelPasteTableData = Array.from({ length: 50 }, () => ({
                     goodsName: '', quantity: '', specification: '', specificationWeight: '',
@@ -405,7 +406,9 @@ import api from '../services/orderApi';
             },
 
             async applyWechatImport(payload) {
-                if (!payload || typeof payload.text !== 'string' || !payload.source) {
+                if (!payload || typeof payload.text !== 'string' || !payload.source
+                    || (!payload.text.trim()
+                        && !(Array.isArray(payload.images) && payload.images.length > 0))) {
                     throw new Error('微信订单导入内容无效');
                 }
                 if (this.uploadType !== 'wechat') {
@@ -3572,6 +3575,7 @@ import api from '../services/orderApi';
                         this.resetSearchAndMatchedGoodsState();
 
                         this.wechatOrderSource = null;
+                        this.wechatOrderImages = [];
 
                         this.$emit('task-added');
                     } else {
@@ -3774,6 +3778,8 @@ import api from '../services/orderApi';
                 this.pasteInvalidLineIndices = [];
                 this.pasteInvalidSegments = [];
                 this.pasteNoValidOrder = false;
+                this.wechatOrderSource = null;
+                this.wechatOrderImages = [];
 
                 // 重置搜索和匹配商品列表状态
                 this.resetSearchAndMatchedGoodsState();
@@ -5118,6 +5124,7 @@ import api from '../services/orderApi';
             async handleWechatMessagesLoaded(payload) {
                 if (!payload || typeof payload.text !== 'string' || !payload.source) return;
                 this.wechatOrderSource = payload.source;
+                this.wechatOrderImages = Array.isArray(payload.images) ? payload.images : [];
                 this.pasteInputText = payload.text;
                 this.pasteInputContent = payload.text;
                 this.pasteOriginText = payload.text;
@@ -5126,7 +5133,56 @@ import api from '../services/orderApi';
                 this.pasteInvalidLineIndices = [];
                 this.pasteInvalidSegments = [];
                 this.pasteNoValidOrder = false;
-                await this.handlePasteLocalParse();
+                const recognizedImageText = await this.recognizeWechatOrderImages(this.wechatOrderImages);
+                const combinedText = [payload.text.trim(), recognizedImageText.trim()].filter(Boolean).join('\n');
+                this.pasteInputText = combinedText;
+                this.pasteInputContent = combinedText;
+                this.pasteOriginText = combinedText;
+                if (combinedText) await this.handlePasteLocalParse();
+            },
+
+            formatWechatImageRecognition(data) {
+                const items = Array.isArray(data?.items) ? data.items : [];
+                if (items.length) {
+                    return items.map((item) => {
+                        const name = String(item?.name || item?.rawName || '').trim();
+                        const quantity = String(item?.quantity ?? item?.qty ?? '').trim();
+                        const unit = String(item?.spec || item?.unit || '').trim();
+                        const note = String(item?.note || item?.remark || '').trim();
+                        if (!name) return '';
+                        const displayName = note ? `${name}(${note})` : name;
+                        return [displayName, `${quantity}${unit}`.trim()].filter(Boolean).join(' ');
+                    }).filter(Boolean).join('\n');
+                }
+                return String(data?.ocrText || '').trim();
+            },
+
+            async recognizeWechatOrderImages(images) {
+                const rows = Array.isArray(images) ? images : [];
+                if (!rows.length) return '';
+                this.showDeepSeekLoading = true;
+                try {
+                    const recognized = [];
+                    for (const image of rows) {
+                        const dataUrl = String(image?.dataUrl || '');
+                        const commaIndex = dataUrl.indexOf(',');
+                        const imageBase64 = commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl;
+                        if (!imageBase64) throw new Error('微信图片内容为空');
+                        const response = await api.recognizeWechatOrderImage({ ImageBase64: imageBase64 });
+                        if (!response?.data || response.data.code !== 0) {
+                            throw new Error(response?.data?.msg || response?.data?.message || '图片识别失败');
+                        }
+                        const text = this.formatWechatImageRecognition(response.data);
+                        if (text) recognized.push(text);
+                    }
+                    if (!recognized.length) throw new Error('图片中没有识别到有效订单内容');
+                    return recognized.join('\n');
+                } catch (error) {
+                    await this.$refs.alertDialog.alert(error?.message || '微信图片识别失败，请重试');
+                    return '';
+                } finally {
+                    this.showDeepSeekLoading = false;
+                }
             },
 
             // DraftOrderList 组件的事件适配器（Paste 模式草稿状态）
@@ -5971,6 +6027,9 @@ data[] 中每条订单对象必须包含字段：
             // 清除粘贴文本
             clearPasteText() {
                 this.pasteInputText = '';
+                this.pasteInputContent = '';
+                this.pasteOriginText = '';
+                this.wechatOrderImages = [];
             },
 
             // 重新粘贴（清空草稿订单和文本内容）
@@ -5982,6 +6041,7 @@ data[] 中每条订单对象必须包含字段：
                 this.pasteInvalidLineIndices = [];
                 this.pasteInvalidSegments = [];
                 this.pasteNoValidOrder = false;
+                this.wechatOrderImages = [];
 
             },
 
