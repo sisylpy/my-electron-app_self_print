@@ -121,12 +121,17 @@ def conversation_header(
 
     The conversation list displays ``测试`` while the opened group header may
     display ``测试 (3)``.  Only that trailing numeric suffix is ignored; no
-    substring or fuzzy matching is performed.
+    substring or fuzzy matching is performed.  WeChat's conversation column
+    keeps an almost fixed pixel width while the whole window is resized, so a
+    pure percentage boundary wrongly rejects the header in a narrow docked
+    window.  Cap the boundary at 320 physical pixels to keep list rows out
+    while still accepting the real chat header.
     """
     target_value = target.strip().casefold()
+    header_min_x = min(image_width * 0.45, 320.0)
     matched: list[str] = []
     for item in items:
-        if not (item.rect.y < image_height * 0.14 and item.rect.x > image_width * 0.45):
+        if not (item.rect.y < image_height * 0.14 and item.rect.x > header_min_x):
             continue
         raw = item.text.strip()
         normalized = re.sub(r"\s*[（(]\d+[）)]\s*$", "", raw).strip().casefold()

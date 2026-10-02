@@ -179,6 +179,21 @@ assert.match(bundledMacFocusFlow, /return conversation_header\(/);
 assert.doesNotMatch(bundledMacFocusFlow, /exact_chat_header/);
 assert.doesNotMatch(bundledMacFocusFlow, /press_escape/);
 
+const bundledMacStateDetector = fs.readFileSync(
+  path.join(
+    __dirname,
+    '..',
+    'src',
+    'wechat',
+    'ui-automation',
+    'mac',
+    'automation',
+    'state_detector.py'
+  ),
+  'utf8'
+);
+assert.match(bundledMacStateDetector, /header_min_x = min\(image_width \* 0\.45, 320\.0\)/);
+
 const bundledMacFlow = fs.readFileSync(
   path.join(
     __dirname,
