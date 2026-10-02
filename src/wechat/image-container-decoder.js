@@ -36,7 +36,11 @@ function decodeVersioned(buffer, key, xorKey) {
   if (buffer.length < 15) throw new Error('微信图片容器不完整');
   const aesSize = buffer.readUInt32LE(6);
   const xorSize = buffer.readUInt32LE(10);
-  const encryptedSize = Math.ceil(aesSize / 16) * 16;
+  // WeChat pads this AES segment with PKCS#7. Even when aesSize is already a
+  // multiple of 16 (the common V2 value is 1024), PKCS#7 adds one complete
+  // block. Using a normal ceil here drops that final block and makes every
+  // aligned V2 image look as though its key were wrong.
+  const encryptedSize = (Math.floor(aesSize / 16) + 1) * 16;
   const encryptedStart = 15;
   const encryptedEnd = encryptedStart + encryptedSize;
   if (encryptedEnd > buffer.length || xorSize > buffer.length - encryptedEnd) {

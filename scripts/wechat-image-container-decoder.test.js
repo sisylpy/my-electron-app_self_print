@@ -45,4 +45,17 @@ assert.deepEqual(
   jpeg,
 );
 
+// Production V2 files normally encrypt exactly 1024 plaintext bytes. PKCS#7
+// therefore contributes an additional 16-byte ciphertext block; this case
+// previously failed even with the correct account key.
+const alignedPayload = Buffer.concat([jpeg, Buffer.alloc(1200, 0xab)]);
+const alignedV2 = encodeVersioned(alignedPayload, V2_MAGIC, v2Key, 31, 1024, 27);
+assert.deepEqual(
+  Buffer.from(decodeWechatImageEnvelope({
+    encryptedBase64: alignedV2.toString('base64'),
+    v2Candidates: [{ aesKey: v2Key, xorKey: 31 }],
+  }).base64, 'base64'),
+  alignedPayload,
+);
+
 console.log('WeChat image container decoder tests passed');
