@@ -169,6 +169,7 @@ import { useTodayOrderInbox } from '../composables/useTodayOrderInbox';
 import { customerVisibleInStage } from '../services/orderWorkbenchStage';
 import { blockingCustomerDirectoryError } from '../services/smartReplenishmentComparison';
 import {
+  buildWechatReconciliationPlan,
   loadCustomerWechatBinding,
   mergeWechatOrderPayload,
   prepareWechatOrderImport,
@@ -580,15 +581,20 @@ async function handleWechatScan() {
     const openedTitles = Array.isArray(scan.result?.openedTitles)
       ? scan.result.openedTitles
       : [];
+    const reconciliationPlan = buildWechatReconciliationPlan(allowedTitles, openedTitles);
     const imports = [];
     let prepareFailedCount = 0;
-    for (const title of openedTitles) {
+    for (const candidate of reconciliationPlan) {
+      const { title } = candidate;
       const row = unique.get(title);
       if (!row) continue;
       try {
         const result = await prepareWechatOrderImport({
           customerId: customerId(row.customer),
           binding: row.binding,
+          // 已经由界面打开的会话需要等待微信本地库稳定；其余绑定会话做即时
+          // 补查，避免当前选中会话在微信激活时先被标成已读而漏单。
+          retryDelaysMs: candidate.opened ? undefined : [],
         });
         if (!result.payload) continue;
         imports.push({
@@ -613,9 +619,7 @@ async function handleWechatScan() {
     if (!imports.length) {
       const warningCount = failedCount + ambiguousCount + prepareFailedCount;
       setWechatScanStatus(
-        openedTitles.length
-          ? `已检查 ${openedTitles.length} 个未读会话，未发现可生成的新订单${warningCount ? `；另有 ${warningCount} 项需检查` : ''}`
-          : '没有未读信息',
+        `已核对 ${reconciliationPlan.length} 个已绑定微信会话，没有发现未处理的新订单${warningCount ? `；另有 ${warningCount} 项需检查` : ''}`,
         warningCount ? 'warning' : 'success'
       );
       return;

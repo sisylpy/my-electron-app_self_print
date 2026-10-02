@@ -1,9 +1,21 @@
 import assert from 'node:assert/strict';
 import {
+  buildWechatReconciliationPlan,
   loadCustomerWechatBinding,
   mergeWechatOrderPayload,
   prepareWechatOrderImport,
 } from './wechatOrderImport.js';
+
+assert.deepEqual(
+  buildWechatReconciliationPlan(
+    [' 金调料 ', '测试', '金调料'],
+    ['未绑定', '金调料', '金调料']
+  ),
+  [
+    { title: '金调料', opened: true },
+    { title: '测试', opened: false },
+  ]
+);
 
 const binding = {
   enabled: 1,

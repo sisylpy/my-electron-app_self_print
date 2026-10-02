@@ -158,6 +158,8 @@ const bundledMacFlow = fs.readFileSync(
 assert.doesNotMatch(bundledMacFlow, /scroll_vertical/);
 assert.doesNotMatch(bundledMacFlow, /CURRENT_BOUND|current_bound_title/);
 assert.match(bundledMacFlow, /top-unread-/);
+assert.match(bundledMacFlow, /CHAT_TAB_DOUBLE_CLICKED/);
+assert.match(bundledMacFlow, /chat_tab_point/);
 assert.match(bundledMacFlow, /self\._opened_titles\.add\(candidate\.title\)/);
 assert.match(bundledMacFlow, /ResultCode\.NO_UNREAD/);
 assert.match(bundledMacFlow, /SCREEN_RECORDING_PERMISSION_REQUIRED/);

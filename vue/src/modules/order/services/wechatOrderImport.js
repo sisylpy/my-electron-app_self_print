@@ -28,6 +28,25 @@ export function normalizeWechatBinding(data) {
   };
 }
 
+export function buildWechatReconciliationPlan(boundTitles, openedTitles) {
+  const bound = Array.from(new Set(
+    (Array.isArray(boundTitles) ? boundTitles : [])
+      .map(title => String(title || '').trim())
+      .filter(Boolean)
+  ));
+  const boundSet = new Set(bound);
+  const opened = Array.from(new Set(
+    (Array.isArray(openedTitles) ? openedTitles : [])
+      .map(title => String(title || '').trim())
+      .filter(title => boundSet.has(title))
+  ));
+  const openedSet = new Set(opened);
+  return [
+    ...opened.map(title => ({ title, opened: true })),
+    ...bound.filter(title => !openedSet.has(title)).map(title => ({ title, opened: false })),
+  ];
+}
+
 function requireCustomerId(customerId) {
   const value = Number(customerId);
   if (!Number.isSafeInteger(value) || value <= 0) throw new Error('客户 ID 无效');
