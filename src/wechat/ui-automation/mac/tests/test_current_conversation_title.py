@@ -23,12 +23,13 @@ class CurrentConversationTitleTest(unittest.TestCase):
         items = [
             item("搜索", 40, 20),
             item("金调料", 130, 86),
-            item("Fangfang", 365, 21, 120),
-            item("昨天 19:27", 600, 180),
+            item("14:14", 395, 137, 70),
+            item("Fangfang", 483, 42, 158),
+            item("星期三 08:31", 760, 133, 154),
         ]
 
         self.assertEqual(
-            current_conversation_title(items, image_width=900, image_height=700),
+            current_conversation_title(items, image_width=1200, image_height=1650),
             "Fangfang",
         )
 
@@ -41,10 +42,15 @@ class CurrentConversationTitleTest(unittest.TestCase):
         )
 
     def test_returns_empty_when_header_is_not_visible(self) -> None:
-        items = [item("搜索", 40, 20), item("金调料", 130, 86)]
+        items = [
+            item("搜索", 157, 42),
+            item("金调料", 228, 86),
+            item("14:14", 395, 72, 70),
+            item("星期三 08:31", 760, 75, 154),
+        ]
 
         self.assertEqual(
-            current_conversation_title(items, image_width=900, image_height=700),
+            current_conversation_title(items, image_width=1200, image_height=1650),
             "",
         )
 

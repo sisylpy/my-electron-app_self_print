@@ -156,17 +156,24 @@ def current_conversation_title(
     so the returned value matches the name shown in the conversation list.
     """
     header_min_x = min(image_width * 0.45, 320.0)
+    header_max_y = min(image_height * 0.075, 120.0)
+    timestamp = re.compile(
+        r"^(?:(?:今天|昨天|前天|星期[一二三四五六日天]|周[一二三四五六日天])\s*)?"
+        r"(?:(?:上午|下午)\s*)?\d{1,2}:\d{2}$"
+    )
     candidates: list[OCRItem] = []
     for item in items:
         raw = item.text.strip()
-        if not raw or item.rect.y >= image_height * 0.14 or item.rect.x <= header_min_x:
+        if not raw or item.rect.y >= header_max_y or item.rect.x <= header_min_x:
+            continue
+        if timestamp.fullmatch(raw):
             continue
         if not any(character.isalnum() or "\u4e00" <= character <= "\u9fff" for character in raw):
             continue
         candidates.append(item)
     if not candidates:
         return ""
-    raw = min(candidates, key=lambda item: (item.rect.x, item.rect.y)).text.strip()
+    raw = min(candidates, key=lambda item: (item.rect.y, item.rect.x)).text.strip()
     normalized = re.sub(r"\s*[（(]\d+[）)]\s*$", "", raw).strip()
     return re.sub(r"^[\u2460-\u2473\u24ea]\s*", "", normalized).strip()
 
