@@ -80,13 +80,14 @@
                   <p>
                     对应门店 <strong>{{ activeItem.customerName }}</strong>
                     <span>{{ activeItem.messageCount }} 条新消息</span>
+                    <span class="wechat-import-modal__policy">{{ activePolicyLabel }}</span>
                   </p>
                   <button
                     type="button"
                     class="wechat-import-modal__refresh"
                     :disabled="refreshing"
                     @click="$emit('refresh')"
-                  >{{ refreshing ? '同步中…' : '同步当前会话' }}</button>
+                  >{{ refreshing ? '正在手动同步…' : '手动同步当前会话' }}</button>
                   <button
                     v-if="activeItem.lateMessageCount"
                     type="button"
@@ -135,6 +136,12 @@ const currentPosition = computed(() => {
   if (!props.items.length) return 0;
   const activeIndex = props.items.findIndex(item => item?.token === props.activeItem?.token);
   return activeIndex >= 0 ? activeIndex + 1 : Math.min(props.items.length, completedCount.value + 1);
+});
+const activePolicyLabel = computed(() => {
+  if (props.activeItem?.binding?.conversationKind !== 'group') return '好友单聊';
+  return props.activeItem?.binding?.groupMode === 'ALL_MEMBER_MESSAGES'
+    ? '群聊：接收全部成员消息'
+    : '群聊：仅接收 @ 当前账号';
 });
 
 function itemState(item) {
@@ -326,6 +333,7 @@ function removeItem(item) {
 .wechat-import-modal__current p { display: flex; align-items: center; gap: 7px; margin: 0; color: #668076; font-size: 11px; }
 .wechat-import-modal__current p strong { color: #246044; }
 .wechat-import-modal__current p span { padding: 4px 8px; border-radius: 10px; color: #0d7a49; background: #e1f5ea; font-weight: 800; }
+.wechat-import-modal__current p span.wechat-import-modal__policy { color: #7b560e; background: #fff3d8; }
 .wechat-import-modal__current-actions { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 7px; }
 .wechat-import-modal__refresh,
 .wechat-import-modal__merge {

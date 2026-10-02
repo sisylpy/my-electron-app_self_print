@@ -207,7 +207,6 @@ const wechatImportModalOpen = ref(false);
 const wechatImportRefreshing = ref(false);
 const wechatWorkspaceWarning = ref('');
 let wechatImportSequence = 0;
-let wechatImportRefreshTimer = null;
 const overview = reactive({
   customers: [],
   totals: { all: 0, needsReview: 0, needsPrice: 0, inProgress: 0, readyToPrint: 0 },
@@ -385,11 +384,6 @@ function setWechatScanStatus(message, status = 'info') {
   wechatScanStatus.value = status;
 }
 
-function stopWechatImportRefresh() {
-  if (wechatImportRefreshTimer) window.clearInterval(wechatImportRefreshTimer);
-  wechatImportRefreshTimer = null;
-}
-
 function messageFingerprints(payload) {
   return new Set((payload?.source?.messages || []).map(message => String(message.messageFingerprint)));
 }
@@ -411,7 +405,8 @@ async function refreshActiveWechatImport(options = {}) {
     const result = await prepareWechatOrderImport({
       customerId: item.customerId,
       binding: item.binding,
-      retryDelaysMs: [],
+      // 用户手动触发时做一次短暂、有限的稳定性复查；页面不再后台轮询。
+      retryDelaysMs: [800, 1600],
     });
     if (!result.payload) {
       if (options.manual) {
@@ -477,13 +472,6 @@ function mergeActiveWechatImport() {
   activeWechatImportToken.value = refreshed.token;
 }
 
-function startWechatImportRefresh() {
-  stopWechatImportRefresh();
-  wechatImportRefreshTimer = window.setInterval(() => {
-    void refreshActiveWechatImport();
-  }, 5000);
-}
-
 async function openActiveWechatImport() {
   const item = activeWechatImport.value;
   if (!item) return false;
@@ -528,7 +516,6 @@ async function openActiveWechatImport() {
     }
   }
   wechatImportModalOpen.value = true;
-  startWechatImportRefresh();
   return true;
 }
 
@@ -562,7 +549,6 @@ async function removeWechatImport(token) {
 }
 
 async function closeWechatImportModal() {
-  stopWechatImportRefresh();
   wechatImportModalOpen.value = false;
   activeView.value = 'overview';
   try {
@@ -573,7 +559,6 @@ async function closeWechatImportModal() {
 }
 
 onBeforeUnmount(() => {
-  stopWechatImportRefresh();
   void window.electronAPI?.wechatUi?.closeWorkspace?.();
 });
 

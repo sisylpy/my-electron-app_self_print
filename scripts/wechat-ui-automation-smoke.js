@@ -160,6 +160,24 @@ const bundledMacFocusScript = fs.readFileSync(
 );
 assert.match(bundledMacFocusScript, /from automation\.api import focus_conversation/);
 
+const bundledMacFocusFlow = fs.readFileSync(
+  path.join(
+    __dirname,
+    '..',
+    'src',
+    'wechat',
+    'ui-automation',
+    'mac',
+    'automation',
+    'flows',
+    'focus_conversation.py'
+  ),
+  'utf8'
+);
+assert.match(bundledMacFocusFlow, /from \.\.state_detector import conversation_header/);
+assert.match(bundledMacFocusFlow, /return conversation_header\(/);
+assert.doesNotMatch(bundledMacFocusFlow, /exact_chat_header/);
+
 const bundledMacFlow = fs.readFileSync(
   path.join(
     __dirname,

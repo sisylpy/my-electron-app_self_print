@@ -6,7 +6,7 @@ from pathlib import Path
 from ..mouse import click, press_escape
 from ..results import OperationResult, ResultCode
 from ..screenshot import Screenshot, capture_window
-from ..state_detector import exact_chat_header
+from ..state_detector import conversation_header
 from ..vision import OCRItem, find_text, recognize_text, save_ocr
 from ..window import WeChatWindow, activate_wechat, main_wechat_window
 
@@ -44,7 +44,7 @@ class FocusConversationFlow:
         return shot, self._read(shot)
 
     def _header_matches(self, shot: Screenshot, items: list[OCRItem]) -> bool:
-        return exact_chat_header(
+        return conversation_header(
             items,
             self.target,
             image_width=shot.image.width,
