@@ -2,7 +2,7 @@
     <div class="upload-section" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
         <div class="row g-3" style="flex: 1; min-height: 0; overflow: hidden; margin: 0; align-items: stretch;">
             <!-- 左侧：粘贴输入框 -->
-            <div class="col-md-4">
+            <div :class="compactSource ? 'col-md-2' : 'col-md-4'">
                 <div class="card h-100">
                     <!-- 任务：添加新内容 + 部门任务列表 同一行 -->
                     <div v-if="!newTaskOnly && depId && source === 'placeOrder' && taskList.length > 0"
@@ -117,7 +117,7 @@
             </div>
 
             <!-- 右侧：订单列表（复制粘贴独立） -->
-            <div class="col-md-8 order-items-section"
+            <div :class="[compactSource ? 'col-md-10' : 'col-md-8', 'order-items-section']"
                  style="display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;">
                 <div class="card h-100 p-3"
                      style="display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
@@ -232,6 +232,11 @@
                 validator: (v) => !v || v === 'placeOrder' || v === 'taskOrder'
             },
             newTaskOnly: {
+                type: Boolean,
+                default: false
+            },
+            /** 微信工作台压缩订单原文栏，把主要宽度留给右侧商品明细 */
+            compactSource: {
                 type: Boolean,
                 default: false
             },
