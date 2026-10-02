@@ -50,6 +50,7 @@
         initial-upload-type="paste"
         new-task-only
         :show-mode-selector="false"
+        :show-wechat-order-source="!wechatImportMode"
         @upload-type-change="selectedMode = $event"
         @order-saved="$emit('order-saved', $event)"
         @task-added="handleTaskAdded"

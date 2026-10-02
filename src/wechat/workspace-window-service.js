@@ -1,6 +1,6 @@
 const path = require('path');
 
-const MIN_DOCK_WIDTH = 1280;
+const MIN_DOCK_WIDTH = 1440;
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
@@ -17,7 +17,7 @@ function computeWorkspaceLayout(workArea) {
     return { mode: 'app-only', workArea: area };
   }
   const gap = 8;
-  const wechatWidth = clamp(Math.round(area.width * 0.42), 540, area.width - 760);
+  const wechatWidth = clamp(Math.round(area.width * 0.38), 540, area.width - 900);
   return {
     mode: 'docked',
     workArea: area,

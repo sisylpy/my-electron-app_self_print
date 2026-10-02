@@ -193,6 +193,8 @@ const electronAPI = Object.freeze({
   wechatUi: Object.freeze({
     readUnread: (allowedTitles) =>
       ipcRenderer.invoke('wechat-ui-read-unread', { allowedTitles }),
+    focusConversation: (title) =>
+      ipcRenderer.invoke('wechat-ui-focus-conversation', { title }),
     openWorkspace: () => ipcRenderer.invoke('wechat-ui-workspace-open'),
     closeWorkspace: () => ipcRenderer.invoke('wechat-ui-workspace-close'),
   }),

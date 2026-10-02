@@ -42,7 +42,11 @@
                 <li
                   v-for="(item, index) in items"
                   :key="item.token"
-                  :class="`is-${itemState(item)}`"
+                  :class="[`is-${itemState(item)}`, { 'is-selectable': itemState(item) !== 'completed' }]"
+                  :tabindex="itemState(item) === 'completed' ? -1 : 0"
+                  @click="selectItem(item)"
+                  @keydown.enter.prevent="selectItem(item)"
+                  @keydown.space.prevent="selectItem(item)"
                 >
                   <span class="wechat-import-modal__index">{{ index + 1 }}</span>
                   <div class="wechat-import-modal__conversation">
@@ -50,7 +54,15 @@
                     <span>门店：{{ item.customerName }}</span>
                     <small>{{ item.messageCount }} 条新消息</small>
                   </div>
-                  <span class="wechat-import-modal__state">{{ itemStateLabel(item) }}</span>
+                  <div class="wechat-import-modal__item-actions">
+                    <span class="wechat-import-modal__state">{{ itemStateLabel(item) }}</span>
+                    <button
+                      v-if="itemState(item) !== 'completed'"
+                      type="button"
+                      title="仅从本轮待处理列表移除，不会删除微信消息或客户绑定"
+                      @click.stop="removeItem(item)"
+                    >移除</button>
+                  </div>
                 </li>
               </ol>
               <p class="wechat-import-modal__queue-tip">
@@ -111,7 +123,7 @@ const props = defineProps({
   workspaceWarning: { type: String, default: '' },
 });
 
-defineEmits(['close', 'refresh', 'merge-new']);
+const emit = defineEmits(['close', 'refresh', 'merge-new', 'select-item', 'remove-item']);
 
 const completedTokenSet = computed(() => new Set(props.completedTokens.map(String)));
 const completedCount = computed(() => completedTokenSet.value.size);
@@ -138,6 +150,16 @@ function itemStateLabel(item) {
   if (state === 'active') return '处理中';
   return '待处理';
 }
+
+function selectItem(item) {
+  if (itemState(item) === 'completed') return;
+  emit('select-item', item?.token);
+}
+
+function removeItem(item) {
+  if (itemState(item) === 'completed') return;
+  emit('remove-item', item?.token);
+}
 </script>
 
 <style scoped>
@@ -147,37 +169,37 @@ function itemStateLabel(item) {
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 28px;
+  padding: 16px;
   background: rgba(18, 39, 30, .48);
   backdrop-filter: blur(4px);
 }
 
 .wechat-import-modal {
   display: grid;
-  width: min(1480px, calc(100vw - 56px));
-  height: min(880px, calc(100vh - 56px));
+  width: min(1480px, calc(100vw - 32px));
+  height: min(900px, calc(100vh - 32px));
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid rgba(166, 207, 187, .9);
-  border-radius: 20px;
+  border-radius: 16px;
   background: #f6faf8;
   box-shadow: 0 30px 90px rgba(9, 35, 24, .34), 0 4px 16px rgba(9, 35, 24, .12);
 }
 
 .wechat-import-modal__header {
   display: flex;
-  min-height: 82px;
+  min-height: 68px;
   align-items: center;
   gap: 14px;
-  padding: 14px 18px;
+  padding: 10px 14px;
   border-bottom: 1px solid #dcebe3;
   background: #fff;
 }
 
 .wechat-import-modal__brand {
   display: grid;
-  width: 48px;
-  height: 48px;
+  width: 42px;
+  height: 42px;
   flex: none;
   place-items: center;
   border-radius: 15px;
@@ -185,10 +207,10 @@ function itemStateLabel(item) {
   background: linear-gradient(145deg, #10a762, #087749);
   box-shadow: 0 8px 18px rgba(11, 128, 75, .22);
 }
-.wechat-import-modal__brand svg { width: 26px; height: 26px; }
+.wechat-import-modal__brand svg { width: 23px; height: 23px; }
 .wechat-import-modal__heading { min-width: 0; }
 .wechat-import-modal__heading > span { color: #138454; font-size: 10px; font-weight: 900; letter-spacing: .12em; }
-.wechat-import-modal__heading h2 { margin: 2px 0 0; color: #183c2d; font-size: 19px; line-height: 1.3; }
+.wechat-import-modal__heading h2 { margin: 2px 0 0; color: #183c2d; font-size: 17px; line-height: 1.3; }
 .wechat-import-modal__heading p { margin: 3px 0 0; color: #6b7d74; font-size: 11px; }
 
 .wechat-import-modal__progress {
@@ -217,14 +239,14 @@ function itemStateLabel(item) {
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-columns: 270px minmax(0, 1fr);
+  grid-template-columns: 230px minmax(0, 1fr);
 }
 
 .wechat-import-modal__queue {
   display: grid;
   min-height: 0;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  padding: 16px 13px 13px;
+  padding: 12px 10px 10px;
   border-right: 1px solid #dcebe3;
   background: #f2f8f5;
 }
@@ -245,7 +267,11 @@ function itemStateLabel(item) {
   border: 1px solid transparent;
   border-radius: 11px;
   background: rgba(255, 255, 255, .72);
+  outline: none;
 }
+.wechat-import-modal__queue li.is-selectable { cursor: pointer; }
+.wechat-import-modal__queue li.is-selectable:hover,
+.wechat-import-modal__queue li.is-selectable:focus-visible { border-color: #9fd0b6; background: #fff; }
 .wechat-import-modal__queue li.is-active { border-color: #70bd94; background: #fff; box-shadow: 0 5px 14px rgba(27, 99, 67, .09); }
 .wechat-import-modal__queue li.is-completed { opacity: .7; background: #eaf4ee; }
 .wechat-import-modal__index { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 9px; color: #5f7469; background: #e6efea; font-size: 11px; font-weight: 900; }
@@ -258,6 +284,18 @@ function itemStateLabel(item) {
 .wechat-import-modal__state { padding: 3px 6px; border-radius: 8px; color: #6e7d76; background: #edf1ef; font-size: 9px; font-weight: 800; white-space: nowrap; }
 .is-active .wechat-import-modal__state { color: #0d7848; background: #dff5e9; }
 .is-completed .wechat-import-modal__state { color: #3d7459; background: #d8eadf; }
+.wechat-import-modal__item-actions { display: grid; justify-items: end; gap: 5px; }
+.wechat-import-modal__item-actions > button {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 7px;
+  color: #a13f46;
+  background: #fff0f1;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.wechat-import-modal__item-actions > button:hover { color: #fff; background: #c44750; }
 .wechat-import-modal__queue-tip { margin: 10px 2px 0; padding: 10px; border-radius: 9px; color: #668076; background: #e5f2eb; font-size: 10px; line-height: 1.5; }
 
 .wechat-import-modal__workspace {
@@ -265,7 +303,7 @@ function itemStateLabel(item) {
   min-width: 0;
   min-height: 0;
   grid-template-rows: auto auto auto minmax(0, 1fr);
-  padding: 14px;
+  padding: 10px;
   background: #f8fbf9;
 }
 .wechat-import-modal__warning {
@@ -278,7 +316,7 @@ function itemStateLabel(item) {
   background: #fff8e9;
   font-size: 10px;
 }
-.wechat-import-modal__current { display: flex; min-width: 0; grid-row: 2; align-items: center; justify-content: space-between; gap: 16px; padding: 0 4px 12px; }
+.wechat-import-modal__current { display: flex; min-width: 0; grid-row: 2; align-items: center; justify-content: space-between; gap: 12px; padding: 0 4px 8px; }
 .wechat-import-modal__current > div { display: grid; min-width: 0; gap: 2px; }
 .wechat-import-modal__current span { color: #778980; font-size: 10px; }
 .wechat-import-modal__current > div strong { overflow: hidden; color: #183d2d; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
@@ -312,9 +350,18 @@ function itemStateLabel(item) {
 .wechat-import-modal-enter-from .wechat-import-modal,
 .wechat-import-modal-leave-to .wechat-import-modal { opacity: 0; transform: translateY(12px) scale(.98); }
 
-@media (max-width: 1080px) {
-  .wechat-import-modal__body { grid-template-columns: 220px minmax(0, 1fr); }
+@media (max-width: 1280px) {
+  .wechat-import-modal__body { grid-template-columns: 205px minmax(0, 1fr); }
+  .wechat-import-modal__heading p { display: none; }
+  .wechat-import-modal__queue-tip { padding: 8px; font-size: 9px; }
   .wechat-import-modal__current p { display: none; }
   .wechat-import-modal__current-actions { flex-wrap: wrap; }
+  .wechat-import-modal__content :deep(.upload-section > .row) { --bs-gutter-x: .6rem; --bs-gutter-y: .6rem; }
+  .wechat-import-modal__content :deep(.upload-section > .row > .col-md-4) { width: 40%; }
+  .wechat-import-modal__content :deep(.upload-section > .row > .col-md-8) { width: 60%; }
+  .wechat-import-modal__content :deep(.upload-section .card.h-100.p-3) { padding: .65rem !important; }
+  .wechat-import-modal__content :deep(.upload-section .d-flex.gap-2.mt-2.flex-wrap) { margin-bottom: 6px !important; }
+  .wechat-import-modal__content :deep(.upload-section .d-flex.gap-2.w-100) { display: grid !important; grid-template-columns: 1fr; gap: 5px !important; }
+  .wechat-import-modal__content :deep(.upload-section .d-flex.gap-2.w-100 > button) { min-height: 29px; font-size: 10px; white-space: nowrap; }
 }
 </style>

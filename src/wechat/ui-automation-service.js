@@ -37,6 +37,17 @@ function normalizeAllowedTitles(input) {
   return unique;
 }
 
+function normalizeConversationTitle(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('微信会话切换参数无效');
+  }
+  if (Object.keys(input).some(key => key !== 'title')) {
+    throw new Error('微信会话切换包含未允许的参数');
+  }
+  const [title] = normalizeAllowedTitles({ allowedTitles: [input.title] });
+  return title;
+}
+
 function resolveMacAutomationRoot(options = {}) {
   const existsSync = options.existsSync || fs.existsSync;
   const moduleDir = options.moduleDir || __dirname;
@@ -255,6 +266,22 @@ function createWechatUiAutomationService(options = {}) {
     });
   }
 
+  function runMacFocus(root, title) {
+    const script = path.join(root, 'scripts', 'focus_conversation.py');
+    if (!fs.existsSync(script)) {
+      return Promise.resolve({
+        ok: false,
+        error: { code: 'FOCUS_SCRIPT_MISSING', message: '安装包内未找到微信会话切换组件' },
+      });
+    }
+    const python = resolveMacPythonCommand(options);
+    const args = [script, '--title', title];
+    if (artifactRoot) args.push('--artifact-root', artifactRoot);
+    return runProcess(python, args, root, [title], {
+      classifyEmptyOutput: classifyMacPythonFailure,
+    });
+  }
+
   function runWindows(script, allowedTitles) {
     const powershell = options.powershell || process.env.JCYX_WECHAT_UI_POWERSHELL || 'powershell.exe';
     const args = [
@@ -278,6 +305,45 @@ function createWechatUiAutomationService(options = {}) {
   }
 
   return Object.freeze({
+    async focusConversation(input) {
+      if (platform !== 'darwin') {
+        return {
+          ok: false,
+          error: { code: 'UNSUPPORTED_PLATFORM', message: '当前系统暂不支持自动切换微信会话' },
+        };
+      }
+      if (activePromise) {
+        return { ok: false, error: { code: 'BUSY', message: '微信界面自动化正在运行' } };
+      }
+      try {
+        const title = normalizeConversationTitle(input);
+        if (typeof options.ensureMacAccessibility === 'function'
+            && !options.ensureMacAccessibility()) {
+          return {
+            ok: false,
+            error: {
+              code: 'MAC_ACCESSIBILITY_PERMISSION_REQUIRED',
+              message: '请在“系统设置 → 隐私与安全性 → 辅助功能”中允许 GrainPrint 控制电脑',
+            },
+          };
+        }
+        if (typeof options.getMacScreenAccessStatus === 'function') {
+          const status = String(options.getMacScreenAccessStatus() || 'unknown');
+          if (status === 'denied' || status === 'restricted') {
+            return {
+              ok: false,
+              error: {
+                code: 'MAC_SCREEN_RECORDING_PERMISSION_REQUIRED',
+                message: '请在“系统设置 → 隐私与安全性 → 屏幕录制”中允许 GrainPrint',
+              },
+            };
+          }
+        }
+        return await runMacFocus(resolveMacAutomationRoot(options), title);
+      } catch (error) {
+        return { ok: false, error: { code: 'INVALID_ARGUMENT', message: error.message } };
+      }
+    },
     async readUnread(input) {
       if (platform !== 'darwin' && platform !== 'win32') {
         return {
@@ -345,6 +411,7 @@ function createWechatUiAutomationService(options = {}) {
 module.exports = {
   createWechatUiAutomationService,
   normalizeAllowedTitles,
+  normalizeConversationTitle,
   parseAutomationOutput,
   classifyMacPythonFailure,
   resolveMacAutomationRoot,

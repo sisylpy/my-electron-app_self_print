@@ -47,6 +47,26 @@ export function buildWechatReconciliationPlan(boundTitles, openedTitles) {
   ];
 }
 
+export function removeWechatImportQueueItem(items, token) {
+  const queue = Array.isArray(items) ? items : [];
+  const target = String(token || '');
+  const index = queue.findIndex(item => String(item?.token || '') === target);
+  if (index < 0) {
+    return {
+      items: queue,
+      nextToken: queue[0]?.token || null,
+      removed: false,
+    };
+  }
+  const remaining = queue.filter((_item, itemIndex) => itemIndex !== index);
+  const nextItem = remaining[Math.min(index, Math.max(0, remaining.length - 1))] || null;
+  return {
+    items: remaining,
+    nextToken: nextItem?.token || null,
+    removed: true,
+  };
+}
+
 function requireCustomerId(customerId) {
   const value = Number(customerId);
   if (!Number.isSafeInteger(value) || value <= 0) throw new Error('客户 ID 无效');

@@ -6,12 +6,16 @@ const { PassThrough } = require('stream');
 const {
   createWechatUiAutomationService,
   normalizeAllowedTitles,
+  normalizeConversationTitle,
   parseAutomationOutput,
   classifyMacPythonFailure,
   resolveMacAutomationRoot,
   resolveMacPythonCommand,
   resolveWindowsAutomationScript,
 } = require('../src/wechat/ui-automation-service');
+
+assert.strictEqual(normalizeConversationTitle({ title: ' 金调料 ' }), '金调料');
+assert.throws(() => normalizeConversationTitle({ title: '测试', command: 'bad' }), /未允许/);
 
 assert.deepStrictEqual(
   normalizeAllowedTitles({ allowedTitles: [' 金调料 ', '测试', '金调料'] }),
@@ -141,6 +145,21 @@ const bundledMacScript = fs.readFileSync(
 );
 assert.match(bundledMacScript, /from automation\.api import read_unread_conversations/);
 
+const bundledMacFocusScript = fs.readFileSync(
+  path.join(
+    __dirname,
+    '..',
+    'src',
+    'wechat',
+    'ui-automation',
+    'mac',
+    'scripts',
+    'focus_conversation.py'
+  ),
+  'utf8'
+);
+assert.match(bundledMacFocusScript, /from automation\.api import focus_conversation/);
+
 const bundledMacFlow = fs.readFileSync(
   path.join(
     __dirname,
@@ -235,8 +254,36 @@ async function verifyMacScreenPermissionStopsBeforeAutomation() {
   assert.strictEqual(spawnCalls, 0);
 }
 
+async function verifyMacConversationFocus() {
+  let spawnedArgs = [];
+  const service = createWechatUiAutomationService({
+    platform: 'darwin',
+    moduleDir: path.join(__dirname, '..', 'src', 'wechat'),
+    ensureMacAccessibility: () => true,
+    getMacScreenAccessStatus: () => 'granted',
+    spawnProcess: (_command, args) => {
+      spawnedArgs = args;
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => {};
+      process.nextTick(() => {
+        child.stdout.end(JSON.stringify({ code: 'SUCCESS', message: 'focused' }));
+        child.stderr.end();
+        child.emit('close', 0);
+      });
+      return child;
+    },
+  });
+  const result = await service.focusConversation({ title: '金调料' });
+  assert.strictEqual(result.ok, true);
+  assert.ok(spawnedArgs.some(arg => String(arg).endsWith('focus_conversation.py')));
+  assert.ok(spawnedArgs.includes('金调料'));
+}
+
 verifyMacAccessibilityStopsBeforeAutomation()
   .then(() => verifyMacScreenPermissionStopsBeforeAutomation())
+  .then(() => verifyMacConversationFocus())
   .then(() => verifyWindowsNoUnreadStopsImmediately())
   .then(() => console.log('WeChat UI automation smoke passed.'))
   .catch((error) => {

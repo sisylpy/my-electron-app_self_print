@@ -4,6 +4,7 @@ from collections.abc import Collection
 from pathlib import Path
 
 from .flows.add_contact_tag import AddContactTagFlow
+from .flows.focus_conversation import FocusConversationFlow
 from .flows.send_message import SendMessageFlow
 from .flows.read_unread import HydrationProbe, ReadUnreadConversationsFlow
 from .results import OperationResult, ResultCode
@@ -11,6 +12,26 @@ from .results import OperationResult, ResultCode
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PRIVATE_ARTIFACT_ROOT = PROJECT_ROOT / "artifacts" / "private"
+
+
+def focus_conversation(
+    target: str,
+    *,
+    artifact_root: Path | None = None,
+) -> OperationResult:
+    """Open one exact visible conversation without sending or changing data."""
+    target = target.strip()
+    if not target:
+        return OperationResult(
+            code=ResultCode.INVALID_ARGUMENT,
+            action="focus_conversation",
+            target=target,
+            message="target 不能为空",
+        )
+    return FocusConversationFlow(
+        target=target,
+        artifact_root=artifact_root or DEFAULT_PRIVATE_ARTIFACT_ROOT,
+    ).run()
 
 
 def add_contact_tag(

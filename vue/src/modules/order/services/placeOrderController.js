@@ -67,6 +67,10 @@ import api from '../services/orderApi';
                 type: Boolean,
                 default: true
             },
+            showWechatOrderSource: {
+                type: Boolean,
+                default: true
+            },
             newTaskOnly: {
                 type: Boolean,
                 default: false

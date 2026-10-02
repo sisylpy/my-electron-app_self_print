@@ -20,6 +20,8 @@ assert.strictEqual(layout.wechat.y, 25);
 assert.strictEqual(layout.wechat.width + 8 + layout.app.width, 1920);
 assert.strictEqual(layout.app.x, layout.wechat.width + 8);
 assert.strictEqual(layout.app.height, 1055);
+assert.ok(layout.app.width >= 900);
+assert.ok(layout.app.width > layout.wechat.width);
 assert.strictEqual(
   computeWorkspaceLayout({ x: 0, y: 0, width: 1100, height: 700 }).mode,
   'app-only'

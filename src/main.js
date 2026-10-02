@@ -668,6 +668,17 @@ function setupIpcHandlers() {
       }
     }
   });
+  ipcMain.handle('wechat-ui-focus-conversation', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    try {
+      return await getWechatUiAutomationService().focusConversation(input);
+    } finally {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
   ipcMain.handle('wechat-ui-workspace-open', async (event) => {
     assertTrustedRendererEvent(event);
     return getWechatWorkspaceWindowService().open();

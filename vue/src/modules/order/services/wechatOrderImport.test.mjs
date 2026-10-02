@@ -4,6 +4,7 @@ import {
   loadCustomerWechatBinding,
   mergeWechatOrderPayload,
   prepareWechatOrderImport,
+  removeWechatImportQueueItem,
 } from './wechatOrderImport.js';
 
 assert.deepEqual(
@@ -15,6 +16,22 @@ assert.deepEqual(
     { title: '金调料', opened: true },
     { title: '测试', opened: false },
   ]
+);
+
+assert.deepEqual(
+  removeWechatImportQueueItem(
+    [{ token: 'wechat:a' }, { token: 'wechat:b' }, { token: 'wechat:c' }],
+    'wechat:b'
+  ),
+  {
+    items: [{ token: 'wechat:a' }, { token: 'wechat:c' }],
+    nextToken: 'wechat:c',
+    removed: true,
+  }
+);
+assert.equal(
+  removeWechatImportQueueItem([{ token: 'wechat:a' }], 'wechat:a').nextToken,
+  null
 );
 
 const binding = {

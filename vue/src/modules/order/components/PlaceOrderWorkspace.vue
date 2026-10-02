@@ -12,7 +12,7 @@
         <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
 
             <WechatOrderSource
-                    v-if="uploadType === 'wechat'"
+                    v-if="uploadType === 'wechat' && showWechatOrderSource"
                     ref="wechatOrderSourceRef"
                     :customer-id="selectedAllCustomer"
                     :customer-name="selectedCustomerName"

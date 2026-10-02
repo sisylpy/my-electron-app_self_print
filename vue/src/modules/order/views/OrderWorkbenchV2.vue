@@ -83,6 +83,8 @@
       @close="closeWechatImportModal"
       @refresh="refreshActiveWechatImport({ manual: true })"
       @merge-new="mergeActiveWechatImport"
+      @select-item="selectWechatImport"
+      @remove-item="removeWechatImport"
     >
       <AiOrderPanel
         v-if="activeWechatImport"
@@ -173,6 +175,7 @@ import {
   loadCustomerWechatBinding,
   mergeWechatOrderPayload,
   prepareWechatOrderImport,
+  removeWechatImportQueueItem,
 } from '../services/wechatOrderImport';
 import {
   customerId,
@@ -199,6 +202,7 @@ const wechatScanStatus = ref('info');
 const wechatImportQueue = ref([]);
 const wechatImportBatch = ref([]);
 const wechatImportCompletedTokens = ref([]);
+const activeWechatImportToken = ref(null);
 const wechatImportModalOpen = ref(false);
 const wechatImportRefreshing = ref(false);
 const wechatWorkspaceWarning = ref('');
@@ -235,7 +239,11 @@ const smartModeCustomersError = computed(() => blockingCustomerDirectoryError(
   smartCustomersError.value,
   overviewError.value
 ));
-const activeWechatImport = computed(() => wechatImportQueue.value[0] || null);
+const activeWechatImport = computed(() => (
+  wechatImportQueue.value.find(item => item?.token === activeWechatImportToken.value)
+  || wechatImportQueue.value[0]
+  || null
+));
 const wechatScanLabel = computed(() => {
   if (wechatScanBusy.value) return '正在读微信…';
   if (wechatImportQueue.value.length) return '继续微信订单';
@@ -466,6 +474,7 @@ function mergeActiveWechatImport() {
     refreshError: '',
   };
   replaceWechatImportItem(item.token, refreshed);
+  activeWechatImportToken.value = refreshed.token;
 }
 
 function startWechatImportRefresh() {
@@ -500,9 +509,56 @@ async function openActiveWechatImport() {
   } catch (error) {
     wechatWorkspaceWarning.value = error?.message || '微信窗口未能停靠到左侧';
   }
+  const conversationTitle = String(item.conversationTitle || '').trim();
+  const focusApi = window.electronAPI?.wechatUi?.focusConversation;
+  if (conversationTitle && focusApi) {
+    try {
+      const focusResult = await focusApi(conversationTitle);
+      if (!focusResult?.ok) {
+        const message = focusResult?.error?.message || '左侧微信未能自动切换到对应会话';
+        wechatWorkspaceWarning.value = [wechatWorkspaceWarning.value, message]
+          .filter(Boolean)
+          .join('；');
+      }
+    } catch (error) {
+      wechatWorkspaceWarning.value = [
+        wechatWorkspaceWarning.value,
+        error?.message || '左侧微信未能自动切换到对应会话',
+      ].filter(Boolean).join('；');
+    }
+  }
   wechatImportModalOpen.value = true;
   startWechatImportRefresh();
   return true;
+}
+
+async function selectWechatImport(token) {
+  const item = wechatImportQueue.value.find(candidate => candidate?.token === token);
+  if (!item || item.token === activeWechatImport.value?.token) return;
+  activeWechatImportToken.value = item.token;
+  await openActiveWechatImport();
+}
+
+async function removeWechatImport(token) {
+  const item = wechatImportBatch.value.find(candidate => candidate?.token === token);
+  const wasActive = activeWechatImport.value?.token === token;
+  const update = removeWechatImportQueueItem(wechatImportQueue.value, token);
+  if (!update.removed) return;
+
+  wechatImportQueue.value = update.items;
+  wechatImportBatch.value = wechatImportBatch.value.filter(candidate => candidate?.token !== token);
+  wechatImportCompletedTokens.value = wechatImportCompletedTokens.value.filter(
+    completedToken => completedToken !== token
+  );
+  if (wasActive) activeWechatImportToken.value = update.nextToken;
+
+  if (!wechatImportQueue.value.length) {
+    activeWechatImportToken.value = null;
+    await closeWechatImportModal();
+    setWechatScanStatus(`已从本轮列表移除“${item?.conversationTitle || item?.customerName || '该会话'}”`, 'success');
+    return;
+  }
+  if (wasActive) await openActiveWechatImport();
 }
 
 async function closeWechatImportModal() {
@@ -628,6 +684,7 @@ async function handleWechatScan() {
     wechatImportQueue.value = imports;
     wechatImportBatch.value = imports;
     wechatImportCompletedTokens.value = [];
+    activeWechatImportToken.value = imports[0]?.token || null;
     const totalMessages = imports.reduce((sum, item) => sum + item.messageCount, 0);
     setWechatScanStatus(
       `发现 ${imports.length} 位客户的 ${totalMessages} 条新订单消息；请确认并保存，保存后会自动进入下一位客户`,
@@ -648,13 +705,16 @@ async function handleTaskAdded(change) {
       ...wechatImportCompletedTokens.value,
       current.token,
     ];
-    wechatImportQueue.value = wechatImportQueue.value.slice(1);
+    const update = removeWechatImportQueueItem(wechatImportQueue.value, current.token);
+    wechatImportQueue.value = update.items;
+    activeWechatImportToken.value = update.nextToken;
   }
   await handleOrderChanged(change);
   if (!current || change?.wechatImportToken !== current.token) return;
   if (wechatImportQueue.value.length) {
     await openActiveWechatImport();
   } else {
+    activeWechatImportToken.value = null;
     await closeWechatImportModal();
     setWechatScanStatus('本轮微信订单已全部确认保存', 'success');
   }
