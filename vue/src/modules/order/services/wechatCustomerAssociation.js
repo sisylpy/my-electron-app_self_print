@@ -14,6 +14,14 @@ function addRow(index, key, row) {
   index.get(key).push(row);
 }
 
+export function findWechatCustomerProfileMatches(customers, selectedTitle) {
+  const normalizedTitle = title(selectedTitle);
+  if (!normalizedTitle) return [];
+  return (Array.isArray(customers) ? customers : []).filter(
+    customer => title(customer?.nxDepartmentWechatDisplayName) === normalizedTitle
+  );
+}
+
 export function buildWechatCustomerAssociationDirectory(rows) {
   const allRows = (Array.isArray(rows) ? rows : [])
     .filter(row => row?.customer)

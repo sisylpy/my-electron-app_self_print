@@ -32,13 +32,13 @@ def build_output(result) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Identify the visible WeChat conversation among bound titles."
+        description="Identify the visible WeChat conversation title."
     )
     parser.add_argument("--include-title", action="append", dest="allowed_titles")
     parser.add_argument("--artifact-root", type=Path)
     args = parser.parse_args()
     result = current_conversation(
-        args.allowed_titles or [],
+        args.allowed_titles,
         artifact_root=args.artifact_root,
     )
     print(json.dumps(build_output(result), ensure_ascii=False, indent=2))

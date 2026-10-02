@@ -1,29 +1,24 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Collection
 from datetime import datetime
 from pathlib import Path
 
 from ..results import OperationResult, ResultCode
 from ..screenshot import capture_window
-from ..state_detector import conversation_header
+from ..state_detector import current_conversation_title
 from ..vision import recognize_text, save_ocr
 from ..window import WindowError, activate_wechat, main_wechat_window
 
 
 class CurrentConversationFlow:
-    """Identify the visible chat by exact comparison with bound titles."""
+    """Identify the visible chat title without requiring customer bindings."""
 
     def __init__(
         self,
         *,
-        allowed_titles: Collection[str],
         artifact_root: Path = Path("artifacts/private"),
     ) -> None:
-        self.allowed_titles = tuple(dict.fromkeys(
-            title.strip() for title in allowed_titles if title.strip()
-        ))
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         self.artifact_dir = artifact_root / timestamp
         self.artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -46,27 +41,24 @@ class CurrentConversationFlow:
                 code = ResultCode.SCREEN_RECORDING_PERMISSION_REQUIRED
                 message = "无法识别当前微信会话，请检查 GrainPrint 的屏幕录制权限"
             else:
-                matches = [
-                    title
-                    for title in self.allowed_titles
-                    if conversation_header(
-                        items,
-                        title,
-                        image_width=screenshot.image.width,
-                        image_height=screenshot.image.height,
-                    ).matched
-                ]
-                self.details.append(f"BOUND_HEADER_MATCHES={len(matches)}")
-                if len(matches) == 1:
-                    self.conversation_title = matches[0]
+                # Unlike conversation_header, this detector does not need a
+                # customer-title whitelist and can surface an unmatched friend.
+                # The renderer decides whether that friend means
+                # “此微信好友没有关联客户” after the visible title is returned.
+                self.conversation_title = current_conversation_title(
+                    items,
+                    image_width=screenshot.image.width,
+                    image_height=screenshot.image.height,
+                )
+                self.details.append(
+                    f"VISIBLE_HEADER_FOUND={1 if self.conversation_title else 0}"
+                )
+                if self.conversation_title:
                     code = ResultCode.SUCCESS
                     message = f"已识别当前微信会话“{self.conversation_title}”"
-                elif len(matches) > 1:
-                    code = ResultCode.TARGET_AMBIGUOUS
-                    message = "当前微信好友关联了多个客户，请先检查微信绑定"
                 else:
                     code = ResultCode.TARGET_NOT_FOUND
-                    message = "此微信好友没有关联客户"
+                    message = "没有识别到当前微信好友名称，请确认微信聊天窗口已打开"
         except WindowError as exc:
             code = ResultCode.VERIFY_FAILED
             message = "微信聊天主窗口未能打开，请确认微信已经登录"

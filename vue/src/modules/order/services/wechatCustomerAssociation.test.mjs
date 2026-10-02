@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   buildWechatCustomerAssociationDirectory,
   ensureWechatCustomerBinding,
+  findWechatCustomerProfileMatches,
   resolveWechatCustomerAssociation,
 } from './wechatCustomerAssociation.js';
 
@@ -20,6 +21,18 @@ const newCustomer = {
   binding: { enabled: 0, displayName: '金调料' },
 };
 const directory = buildWechatCustomerAssociationDirectory([oldCustomer, newCustomer]);
+
+assert.deepEqual(
+  findWechatCustomerProfileMatches(
+    [oldCustomer.customer, newCustomer.customer],
+    '金调料'
+  ).map(customer => customer.nxDepartmentId),
+  [7, 8]
+);
+assert.deepEqual(
+  findWechatCustomerProfileMatches([oldCustomer.customer], 'Fangfang'),
+  []
+);
 
 assert.deepEqual(directory.allowedTitles, ['金调料']);
 assert.equal(

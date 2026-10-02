@@ -27,5 +27,17 @@ assert.match(modal, /读未读订单/);
 assert.match(modal, /查询现在选择的好友转订单/);
 assert.match(modal, /\$emit\('scan-unread'\)/);
 assert.match(modal, /页面不会自动扫描/);
+assert.match(modal, /去跟客户匹配/);
+assert.match(modal, /关联并继续转订单/);
+assert.match(modal, /unmatchedConversationTitle/);
+
+const selectedAction = workbench.match(
+  /async function importSelectedWechatConversation\(\) \{([\s\S]*?)\n\}\n\nasync function openWechatCustomerMatcher/,
+)?.[1] || '';
+assert.match(selectedAction, /currentConversationApi\(\)/);
+assert.match(selectedAction, /findWechatCustomerProfileMatches/);
+assert.doesNotMatch(selectedAction, /loadBoundWechatCustomers|allowedTitles/);
+assert.match(workbench, /async function importWechatConversationForCustomer/);
+assert.match(workbench, /loadCustomerWechatBinding\(customerId\(customer\)\)/);
 
 console.log('WeChat order workspace entry passed');

@@ -16,21 +16,13 @@ DEFAULT_PRIVATE_ARTIFACT_ROOT = PROJECT_ROOT / "artifacts" / "private"
 
 
 def current_conversation(
-    allowed_titles: Collection[str],
+    allowed_titles: Collection[str] | None = None,
     *,
     artifact_root: Path | None = None,
 ) -> OperationResult:
-    """Identify the currently visible chat among exact customer bindings."""
-    titles = [title.strip() for title in allowed_titles if title.strip()]
-    if not titles:
-        return OperationResult(
-            code=ResultCode.TARGET_NOT_FOUND,
-            action="current_conversation",
-            target="wechat_current",
-            message="此微信好友没有关联客户",
-        )
+    """Identify the currently visible chat independently of customer bindings."""
+    del allowed_titles  # Kept for CLI/backward compatibility; matching happens later.
     return CurrentConversationFlow(
-        allowed_titles=titles,
         artifact_root=artifact_root or DEFAULT_PRIVATE_ARTIFACT_ROOT,
     ).run()
 

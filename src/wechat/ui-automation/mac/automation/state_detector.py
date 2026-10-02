@@ -144,6 +144,33 @@ def conversation_header(
     return StateResult(bool(matched), tuple(matched))
 
 
+def current_conversation_title(
+    items: list[OCRItem], *, image_width: int, image_height: int
+) -> str:
+    """Return the visible chat title without needing a customer-name whitelist.
+
+    The opened conversation header is the left-most OCR text in WeChat's
+    right-hand header area. Conversation-list rows stay left of ``header_min_x``;
+    call and menu icons normally produce no alphanumeric OCR text. Group member
+    counts and Vision's occasional leading circled-number artifact are removed
+    so the returned value matches the name shown in the conversation list.
+    """
+    header_min_x = min(image_width * 0.45, 320.0)
+    candidates: list[OCRItem] = []
+    for item in items:
+        raw = item.text.strip()
+        if not raw or item.rect.y >= image_height * 0.14 or item.rect.x <= header_min_x:
+            continue
+        if not any(character.isalnum() or "\u4e00" <= character <= "\u9fff" for character in raw):
+            continue
+        candidates.append(item)
+    if not candidates:
+        return ""
+    raw = min(candidates, key=lambda item: (item.rect.x, item.rect.y)).text.strip()
+    normalized = re.sub(r"\s*[（(]\d+[）)]\s*$", "", raw).strip()
+    return re.sub(r"^[\u2460-\u2473\u24ea]\s*", "", normalized).strip()
+
+
 def profile(items: list[OCRItem]) -> StateResult:
     context = profile_context(items)
     evidence = tuple(context.keys()) if context else ()

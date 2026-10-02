@@ -37,6 +37,21 @@ function normalizeAllowedTitles(input) {
   return unique;
 }
 
+function normalizeCurrentConversationInput(input) {
+  if (input == null) return [];
+  if (typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('当前微信会话识别参数无效');
+  }
+  const keys = Object.keys(input);
+  if (keys.some((key) => key !== 'allowedTitles')) {
+    throw new Error('当前微信会话识别包含未允许的参数');
+  }
+  // Older renderers may still send allowedTitles. Validate them, but title
+  // extraction no longer depends on loading every customer's binding first.
+  if (input.allowedTitles !== undefined) return normalizeAllowedTitles(input);
+  return [];
+}
+
 function normalizeConversationTitle(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('微信会话切换参数无效');
@@ -141,7 +156,7 @@ function parseAutomationOutput(stdout, allowedTitles) {
   };
 }
 
-function parseCurrentConversationOutput(stdout, allowedTitles) {
+function parseCurrentConversationOutput(stdout, allowedTitles = []) {
   let payload;
   try {
     payload = JSON.parse(String(stdout || '').trim());
@@ -154,7 +169,8 @@ function parseCurrentConversationOutput(stdout, allowedTitles) {
   const title = typeof payload.conversationTitle === 'string'
     ? payload.conversationTitle.trim()
     : '';
-  if (title && !new Set(allowedTitles).has(title)) {
+  if (payload.code === 'SUCCESS' && !title) throw new Error('当前微信会话名称为空');
+  if (title && allowedTitles.length && !new Set(allowedTitles).has(title)) {
     throw new Error('当前微信会话不在客户绑定范围内');
   }
   return {
@@ -322,7 +338,7 @@ function createWechatUiAutomationService(options = {}) {
     });
   }
 
-  function runMacCurrentConversation(root, allowedTitles) {
+  function runMacCurrentConversation(root, legacyAllowedTitles = []) {
     const script = path.join(root, 'scripts', 'current_conversation.py');
     if (!fs.existsSync(script)) {
       return Promise.resolve({
@@ -332,9 +348,9 @@ function createWechatUiAutomationService(options = {}) {
     }
     const python = resolveMacPythonCommand(options);
     const args = [script];
-    allowedTitles.forEach((title) => args.push('--include-title', title));
+    legacyAllowedTitles.forEach((title) => args.push('--include-title', title));
     if (artifactRoot) args.push('--artifact-root', artifactRoot);
-    return runProcess(python, args, root, allowedTitles, {
+    return runProcess(python, args, root, legacyAllowedTitles, {
       classifyEmptyOutput: classifyMacPythonFailure,
       parseOutput: parseCurrentConversationOutput,
     });
@@ -374,7 +390,7 @@ function createWechatUiAutomationService(options = {}) {
         return { ok: false, error: { code: 'BUSY', message: '微信界面自动化正在运行' } };
       }
       try {
-        const allowedTitles = normalizeAllowedTitles(input);
+        const legacyAllowedTitles = normalizeCurrentConversationInput(input);
         if (typeof options.ensureMacAccessibility === 'function'
             && !options.ensureMacAccessibility()) {
           return {
@@ -397,7 +413,10 @@ function createWechatUiAutomationService(options = {}) {
             };
           }
         }
-        return await runMacCurrentConversation(resolveMacAutomationRoot(options), allowedTitles);
+        return await runMacCurrentConversation(
+          resolveMacAutomationRoot(options),
+          legacyAllowedTitles
+        );
       } catch (error) {
         return { ok: false, error: { code: 'INVALID_ARGUMENT', message: error.message } };
       }
@@ -508,6 +527,7 @@ function createWechatUiAutomationService(options = {}) {
 module.exports = {
   createWechatUiAutomationService,
   normalizeAllowedTitles,
+  normalizeCurrentConversationInput,
   normalizeConversationTitle,
   parseAutomationOutput,
   parseCurrentConversationOutput,

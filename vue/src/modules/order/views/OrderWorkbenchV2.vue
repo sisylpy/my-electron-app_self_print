@@ -104,6 +104,11 @@
       :selected-import-busy="wechatSelectedImportBusy"
       :action-message="wechatSelectedImportMessage"
       :action-status="wechatSelectedImportStatus"
+      :unmatched-conversation-title="wechatUnmatchedConversationTitle"
+      :customer-match-open="wechatCustomerMatchOpen"
+      :customer-match-customers="customerContext.customers.value"
+      :customer-match-busy="wechatCustomerMatchBusy"
+      :customer-match-error="wechatCustomerMatchError"
       @close="closeWechatImportModal"
       @refresh="refreshActiveWechatImport({ manual: true })"
       @merge-new="mergeActiveWechatImport"
@@ -111,7 +116,10 @@
       @remove-item="removeWechatImport"
       @scan-unread="readUnreadWechatOrders"
       @import-selected="importSelectedWechatConversation"
-      @dismiss-action-message="wechatSelectedImportMessage = ''"
+      @start-customer-match="openWechatCustomerMatcher"
+      @cancel-customer-match="closeWechatCustomerMatcher"
+      @confirm-customer-match="confirmWechatCustomerMatch"
+      @dismiss-action-message="dismissWechatSelectedAction"
     >
       <AiOrderPanel
         v-if="activeWechatImport"
@@ -207,7 +215,7 @@ import {
 import {
   buildWechatCustomerAssociationDirectory,
   ensureWechatCustomerBinding,
-  resolveWechatCustomerAssociation,
+  findWechatCustomerProfileMatches,
 } from '../services/wechatCustomerAssociation';
 import {
   customerId,
@@ -242,6 +250,10 @@ const wechatWorkspaceReady = ref(false);
 const wechatSelectedImportBusy = ref(false);
 const wechatSelectedImportMessage = ref('');
 const wechatSelectedImportStatus = ref('warning');
+const wechatUnmatchedConversationTitle = ref('');
+const wechatCustomerMatchOpen = ref(false);
+const wechatCustomerMatchBusy = ref(false);
+const wechatCustomerMatchError = ref('');
 let wechatImportSequence = 0;
 const overview = reactive({
   customers: [],
@@ -608,7 +620,7 @@ async function closeWechatImportModal() {
   wechatImportModalOpen.value = false;
   wechatWorkspaceReady.value = false;
   wechatScanMessage.value = '';
-  wechatSelectedImportMessage.value = '';
+  dismissWechatSelectedAction();
   activeView.value = 'overview';
   try {
     await window.electronAPI?.wechatUi?.closeWorkspace?.();
@@ -672,68 +684,153 @@ function createWechatImportItem(row, title, result) {
   };
 }
 
+function rememberWechatCustomerMatch(customer, conversationTitle) {
+  const selectedCustomerId = customerId(customer);
+  customerContext.customers.value.forEach((candidate) => {
+    if (String(candidate?.nxDepartmentWechatDisplayName || '').trim() !== conversationTitle) return;
+    if (String(customerId(candidate)) !== String(selectedCustomerId)) {
+      candidate.nxDepartmentWechatDisplayName = '';
+    }
+  });
+  customer.nxDepartmentWechatDisplayName = conversationTitle;
+}
+
+function enqueueWechatImport(row, title, result) {
+  const incomingItem = createWechatImportItem(row, title, result);
+  const existing = wechatImportQueue.value.find(item => (
+    String(item?.customerId) === String(incomingItem.customerId)
+  ));
+  if (existing) {
+    const payload = mergeWechatOrderPayload(existing.payload, incomingItem.payload);
+    const replacement = {
+      ...existing,
+      ...incomingItem,
+      payload,
+      messageCount: payload?.source?.messages?.length || incomingItem.messageCount,
+    };
+    replaceWechatImportItem(existing.token, replacement);
+    activeWechatImportToken.value = replacement.token;
+    return;
+  }
+  wechatImportQueue.value = [...wechatImportQueue.value, incomingItem];
+  wechatImportBatch.value = [...wechatImportBatch.value, incomingItem];
+  activeWechatImportToken.value = incomingItem.token;
+}
+
+async function importWechatConversationForCustomer(customer, title) {
+  const binding = await loadCustomerWechatBinding(customerId(customer));
+  const row = { customer, binding };
+  const directory = buildWechatCustomerAssociationDirectory([row]);
+  row.binding = await ensureWechatCustomerBinding({
+    row,
+    selectedTitle: title,
+    directory,
+  });
+  rememberWechatCustomerMatch(customer, title);
+  const result = await prepareWechatOrderImport({
+    customerId: customerId(customer),
+    binding: row.binding,
+    retryDelaysMs: [350, 700],
+  });
+  if (!result.payload) {
+    throw new Error(result.message || '已关联该微信好友，但当前没有未处理的新订单');
+  }
+  enqueueWechatImport(row, title, result);
+  wechatSelectedImportMessage.value = '';
+  wechatUnmatchedConversationTitle.value = '';
+  wechatCustomerMatchOpen.value = false;
+  wechatCustomerMatchError.value = '';
+  await openActiveWechatImport({ focusConversation: false });
+}
+
 async function importSelectedWechatConversation() {
   if (wechatSelectedImportBusy.value || wechatScanBusy.value) return;
   wechatSelectedImportBusy.value = true;
   wechatSelectedImportMessage.value = '';
   wechatSelectedImportStatus.value = 'warning';
+  wechatUnmatchedConversationTitle.value = '';
+  wechatCustomerMatchOpen.value = false;
+  wechatCustomerMatchError.value = '';
   try {
-    const { associationDirectory } = await loadBoundWechatCustomers({ refreshCustomers: true });
-    const allowedTitles = associationDirectory.allowedTitles;
-    if (!allowedTitles.length) throw new Error('此微信好友没有关联客户');
-
     const currentConversationApi = window.electronAPI?.wechatUi?.currentConversation;
     if (!currentConversationApi) {
       throw new Error('当前安装包不支持识别所选微信好友');
     }
-    const selected = await currentConversationApi(allowedTitles);
+    const selected = await currentConversationApi();
     if (!selected?.ok) {
-      throw new Error(selected?.error?.message || '此微信好友没有关联客户');
+      throw new Error(selected?.error?.message || '没有识别到当前微信好友');
     }
 
     const title = String(selected.result?.title || '').trim();
-    const row = resolveWechatCustomerAssociation(associationDirectory, title);
-    row.binding = await ensureWechatCustomerBinding({
-      row,
-      selectedTitle: title,
-      directory: associationDirectory,
-    });
-    const result = await prepareWechatOrderImport({
-      customerId: customerId(row.customer),
-      binding: row.binding,
-      retryDelaysMs: [350, 700],
-    });
-    if (!result.payload) {
-      throw new Error(result.message || '当前微信好友没有未处理的新订单');
+    if (!title) throw new Error('没有识别到当前微信好友名称');
+    if (!customerContext.customers.value.length) await customerContext.reload();
+    let matches = findWechatCustomerProfileMatches(customerContext.customers.value, title);
+    // 客户资料可能刚在客户中心修改过；仅在首次未命中时刷新一次目录，
+    // 不再逐个查询所有客户的微信技术绑定。
+    if (!matches.length) {
+      await customerContext.reload();
+      matches = findWechatCustomerProfileMatches(customerContext.customers.value, title);
     }
-
-    const incomingItem = createWechatImportItem(row, title, result);
-    const existing = wechatImportQueue.value.find(item => (
-      String(item?.customerId) === String(incomingItem.customerId)
-    ));
-    if (existing) {
-      const payload = mergeWechatOrderPayload(existing.payload, incomingItem.payload);
-      const replacement = {
-        ...existing,
-        ...incomingItem,
-        payload,
-        messageCount: payload?.source?.messages?.length || incomingItem.messageCount,
-      };
-      replaceWechatImportItem(existing.token, replacement);
-      activeWechatImportToken.value = replacement.token;
-    } else {
-      wechatImportQueue.value = [...wechatImportQueue.value, incomingItem];
-      wechatImportBatch.value = [...wechatImportBatch.value, incomingItem];
-      activeWechatImportToken.value = incomingItem.token;
+    if (matches.length === 1) {
+      await importWechatConversationForCustomer(matches[0], title);
+      return;
     }
-    wechatSelectedImportMessage.value = '';
-    await openActiveWechatImport({ focusConversation: false });
+    wechatUnmatchedConversationTitle.value = title;
+    if (matches.length > 1) {
+      wechatCustomerMatchError.value = '多个客户使用了这个微信好友名，请选择本次订单对应的客户';
+    }
   } catch (error) {
     wechatSelectedImportStatus.value = 'warning';
     wechatSelectedImportMessage.value = error?.message || '转所选微信好友订单失败';
   } finally {
     wechatSelectedImportBusy.value = false;
   }
+}
+
+async function openWechatCustomerMatcher() {
+  if (!wechatUnmatchedConversationTitle.value) return;
+  wechatCustomerMatchError.value = '';
+  if (!customerContext.customers.value.length) await customerContext.reload();
+  if (!customerContext.customers.value.length) {
+    wechatCustomerMatchError.value = customerContext.error.value || '没有可关联的客户';
+    return;
+  }
+  wechatCustomerMatchOpen.value = true;
+}
+
+function closeWechatCustomerMatcher() {
+  if (wechatCustomerMatchBusy.value) return;
+  wechatCustomerMatchOpen.value = false;
+  wechatCustomerMatchError.value = '';
+}
+
+async function confirmWechatCustomerMatch(selectedCustomerId) {
+  if (wechatCustomerMatchBusy.value) return;
+  const customer = customerContext.customers.value.find(candidate => (
+    String(customerId(candidate)) === String(selectedCustomerId)
+  ));
+  if (!customer) {
+    wechatCustomerMatchError.value = '请选择要关联的客户';
+    return;
+  }
+  const title = wechatUnmatchedConversationTitle.value;
+  wechatCustomerMatchBusy.value = true;
+  wechatCustomerMatchError.value = '';
+  try {
+    await importWechatConversationForCustomer(customer, title);
+  } catch (error) {
+    wechatCustomerMatchError.value = error?.message || '关联客户并转订单失败';
+  } finally {
+    wechatCustomerMatchBusy.value = false;
+  }
+}
+
+function dismissWechatSelectedAction() {
+  if (wechatSelectedImportBusy.value || wechatCustomerMatchBusy.value) return;
+  wechatSelectedImportMessage.value = '';
+  wechatUnmatchedConversationTitle.value = '';
+  wechatCustomerMatchOpen.value = false;
+  wechatCustomerMatchError.value = '';
 }
 
 async function handleWechatScan() {

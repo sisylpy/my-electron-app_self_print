@@ -27,7 +27,7 @@
             <button
               type="button"
               class="wechat-import-modal__later"
-              :disabled="busy || selectedImportBusy"
+              :disabled="busy || selectedImportBusy || customerMatchBusy"
               @click="$emit('close')"
             >
               {{ closeLabel }}
@@ -75,7 +75,7 @@
                 v-if="items.length"
                 type="button"
                 class="wechat-import-modal__selected-import"
-                :disabled="busy || selectedImportBusy"
+                :disabled="busy || selectedImportBusy || customerMatchBusy"
                 @click="$emit('import-selected')"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -197,11 +197,110 @@
 
           <Transition name="wechat-import-action">
             <div
-              v-if="selectedImportBusy || actionMessage"
+              v-if="selectedImportBusy || actionMessage || unmatchedConversationTitle || customerMatchOpen"
               class="wechat-import-modal__action-mask"
               @click.self="$emit('dismiss-action-message')"
             >
               <section
+                v-if="customerMatchOpen"
+                class="wechat-import-modal__match-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="wechat-customer-match-title"
+              >
+                <header>
+                  <div>
+                    <small>微信好友转订单</small>
+                    <h3 id="wechat-customer-match-title">把微信好友关联到客户</h3>
+                    <p>以后选择这个微信好友时，会直接进入对应客户的转订单页面。</p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="返回"
+                    :disabled="customerMatchBusy"
+                    @click="$emit('cancel-customer-match')"
+                  >×</button>
+                </header>
+                <div class="wechat-import-modal__detected-friend">
+                  <span aria-hidden="true">微</span>
+                  <div>
+                    <small>当前识别到的微信好友</small>
+                    <strong>{{ unmatchedConversationTitle }}</strong>
+                  </div>
+                </div>
+                <label class="wechat-import-modal__customer-search">
+                  <span aria-hidden="true">⌕</span>
+                  <input
+                    v-model.trim="customerMatchQuery"
+                    type="search"
+                    placeholder="搜索客户名称或代号"
+                    :disabled="customerMatchBusy"
+                  >
+                </label>
+                <div class="wechat-import-modal__customer-list" role="radiogroup" aria-label="选择关联客户">
+                  <button
+                    v-for="customer in filteredMatchCustomers"
+                    :key="matchCustomerId(customer)"
+                    type="button"
+                    :class="{ 'is-selected': String(selectedMatchCustomerId) === String(matchCustomerId(customer)) }"
+                    :disabled="customerMatchBusy"
+                    @click="selectedMatchCustomerId = matchCustomerId(customer)"
+                  >
+                    <span class="wechat-import-modal__customer-avatar">{{ matchCustomerName(customer).slice(0, 1) }}</span>
+                    <span class="wechat-import-modal__customer-copy">
+                      <strong>{{ matchCustomerName(customer) }}</strong>
+                      <em>{{ matchCustomerCode(customer) }}</em>
+                    </span>
+                    <span v-if="matchCustomerWechatName(customer)" class="wechat-import-modal__customer-binding">
+                      当前关联：{{ matchCustomerWechatName(customer) }}
+                    </span>
+                    <i aria-hidden="true"></i>
+                  </button>
+                  <p v-if="!filteredMatchCustomers.length">没有找到符合条件的客户</p>
+                </div>
+                <p v-if="selectedMatchCustomerWarning" class="wechat-import-modal__replace-warning">
+                  {{ selectedMatchCustomerWarning }}
+                </p>
+                <p v-if="customerMatchError" class="wechat-import-modal__match-error">{{ customerMatchError }}</p>
+                <footer>
+                  <button type="button" :disabled="customerMatchBusy" @click="$emit('cancel-customer-match')">取消</button>
+                  <button
+                    type="button"
+                    class="is-primary"
+                    :disabled="customerMatchBusy || !selectedMatchCustomerId"
+                    @click="confirmCustomerMatch"
+                  >{{ customerMatchBusy ? '正在关联并读取订单…' : '关联并继续转订单' }}</button>
+                </footer>
+              </section>
+              <section
+                v-else-if="unmatchedConversationTitle && !selectedImportBusy"
+                class="wechat-import-modal__unmatched-dialog"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="wechat-unmatched-title"
+              >
+                <span class="wechat-import-modal__action-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3 2.8 19h18.4L12 3Z" />
+                    <path d="M12 9v4M12 17h.01" />
+                  </svg>
+                </span>
+                <div>
+                  <small>微信好友转订单</small>
+                  <h3 id="wechat-unmatched-title">没有找到关联客户</h3>
+                  <p>已经识别到当前微信好友，但客户资料里还没有对应关系。</p>
+                  <div class="wechat-import-modal__unmatched-name">
+                    <span>微信好友</span>
+                    <strong>{{ unmatchedConversationTitle }}</strong>
+                  </div>
+                </div>
+                <footer>
+                  <button type="button" @click="$emit('dismiss-action-message')">稍后处理</button>
+                  <button type="button" class="is-primary" @click="$emit('start-customer-match')">去跟客户匹配</button>
+                </footer>
+              </section>
+              <section
+                v-else
                 :class="['wechat-import-modal__action-dialog', `is-${actionStatus}`, { 'is-busy': selectedImportBusy }]"
                 role="alertdialog"
                 aria-modal="true"
@@ -234,7 +333,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -249,6 +348,11 @@ const props = defineProps({
   selectedImportBusy: { type: Boolean, default: false },
   actionMessage: { type: String, default: '' },
   actionStatus: { type: String, default: 'warning' },
+  unmatchedConversationTitle: { type: String, default: '' },
+  customerMatchOpen: { type: Boolean, default: false },
+  customerMatchCustomers: { type: Array, default: () => [] },
+  customerMatchBusy: { type: Boolean, default: false },
+  customerMatchError: { type: String, default: '' },
 });
 
 const emit = defineEmits([
@@ -259,8 +363,14 @@ const emit = defineEmits([
   'remove-item',
   'scan-unread',
   'import-selected',
+  'start-customer-match',
+  'cancel-customer-match',
+  'confirm-customer-match',
   'dismiss-action-message',
 ]);
+
+const customerMatchQuery = ref('');
+const selectedMatchCustomerId = ref('');
 
 const completedTokenSet = computed(() => new Set(props.completedTokens.map(String)));
 const completedCount = computed(() => completedTokenSet.value.size);
@@ -281,7 +391,7 @@ const progressLabel = computed(() => {
   return `${currentPosition.value} / ${props.items.length}`;
 });
 const closeLabel = computed(() => {
-  if (props.busy || props.selectedImportBusy) return '处理中';
+  if (props.busy || props.selectedImportBusy || props.customerMatchBusy) return '处理中';
   if (!props.activeItem) return '关闭';
   return '稍后处理';
 });
@@ -302,6 +412,59 @@ const activePolicyLabel = computed(() => {
     ? '群聊：接收全部成员消息'
     : '群聊：仅接收 @ 当前账号';
 });
+const filteredMatchCustomers = computed(() => {
+  const query = customerMatchQuery.value.toLocaleLowerCase();
+  if (!query) return props.customerMatchCustomers;
+  return props.customerMatchCustomers.filter((customer) => [
+    matchCustomerName(customer),
+    matchCustomerCode(customer),
+    matchCustomerWechatName(customer),
+  ].some(value => value.toLocaleLowerCase().includes(query)));
+});
+const selectedMatchCustomer = computed(() => props.customerMatchCustomers.find(customer => (
+  String(matchCustomerId(customer)) === String(selectedMatchCustomerId.value)
+)) || null);
+const selectedMatchCustomerWarning = computed(() => {
+  const current = matchCustomerWechatName(selectedMatchCustomer.value);
+  if (!current || current === props.unmatchedConversationTitle) return '';
+  return `该客户当前关联“${current}”，确认后将改为“${props.unmatchedConversationTitle}”。`;
+});
+
+watch(
+  () => [props.customerMatchOpen, props.unmatchedConversationTitle],
+  ([open]) => {
+    if (!open) return;
+    customerMatchQuery.value = '';
+    selectedMatchCustomerId.value = '';
+  }
+);
+
+function matchCustomerId(customer) {
+  return customer?.nxDepartmentId ?? customer?.departmentId ?? '';
+}
+
+function matchCustomerName(customer) {
+  return String(
+    customer?.nxDepartmentAttrName
+    || customer?.nxDepartmentName
+    || customer?.departmentName
+    || '未命名客户'
+  ).trim();
+}
+
+function matchCustomerCode(customer) {
+  const code = String(customer?.nxDepartmentEntityId || customer?.nxDepartmentCode || '').trim();
+  return code ? `客户代号：${code}` : '暂无客户代号';
+}
+
+function matchCustomerWechatName(customer) {
+  return String(customer?.nxDepartmentWechatDisplayName || '').trim();
+}
+
+function confirmCustomerMatch() {
+  if (!selectedMatchCustomerId.value || props.customerMatchBusy) return;
+  emit('confirm-customer-match', selectedMatchCustomerId.value);
+}
 
 function itemState(item) {
   if (completedTokenSet.value.has(String(item?.token))) return 'completed';
@@ -659,6 +822,160 @@ function removeItem(item) {
   cursor: pointer;
 }
 .wechat-import-modal__action-dialog.is-success > button { background: #118555; }
+
+.wechat-import-modal__unmatched-dialog,
+.wechat-import-modal__match-dialog {
+  width: min(620px, calc(100vw - 40px));
+  border: 1px solid #dfbc77;
+  border-radius: 22px;
+  background: #fffdf8;
+  box-shadow: 0 28px 80px rgba(18, 48, 34, .28);
+}
+.wechat-import-modal__unmatched-dialog {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 17px;
+  padding: 26px;
+  color: #85570f;
+}
+.wechat-import-modal__unmatched-dialog > div { min-width: 0; }
+.wechat-import-modal__unmatched-dialog small,
+.wechat-import-modal__match-dialog small { color: #a56c15; font-size: 10px; font-weight: 900; letter-spacing: .1em; }
+.wechat-import-modal__unmatched-dialog h3,
+.wechat-import-modal__match-dialog h3 { margin: 4px 0 7px; color: #382c18; font-size: 21px; }
+.wechat-import-modal__unmatched-dialog p,
+.wechat-import-modal__match-dialog header p { margin: 0; color: #735e3a; font-size: 12px; line-height: 1.65; }
+.wechat-import-modal__unmatched-name {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #ead3a8;
+  border-radius: 12px;
+  background: #fff8e9;
+}
+.wechat-import-modal__unmatched-name span { color: #907044; font-size: 10px; font-weight: 800; }
+.wechat-import-modal__unmatched-name strong { overflow: hidden; color: #3c2b0d; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.wechat-import-modal__unmatched-dialog footer {
+  display: flex;
+  grid-column: 2;
+  gap: 9px;
+  margin-top: 2px;
+}
+.wechat-import-modal__unmatched-dialog footer button,
+.wechat-import-modal__match-dialog footer button {
+  min-height: 38px;
+  padding: 0 17px;
+  border: 1px solid #d8c8a9;
+  border-radius: 10px;
+  color: #705728;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.wechat-import-modal__unmatched-dialog footer button.is-primary,
+.wechat-import-modal__match-dialog footer button.is-primary { border-color: #118555; color: #fff; background: #118555; }
+
+.wechat-import-modal__match-dialog {
+  display: grid;
+  max-height: min(720px, calc(100vh - 40px));
+  grid-template-rows: auto auto auto minmax(120px, 1fr) auto auto;
+  gap: 13px;
+  padding: 24px;
+  overflow: hidden;
+}
+.wechat-import-modal__match-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.wechat-import-modal__match-dialog > header > div { min-width: 0; }
+.wechat-import-modal__match-dialog > header > button {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border: 0;
+  border-radius: 10px;
+  color: #6f7e76;
+  background: #edf3f0;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.wechat-import-modal__detected-friend {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  border: 1px solid #b9ddca;
+  border-radius: 12px;
+  background: #f1faf5;
+}
+.wechat-import-modal__detected-friend > span,
+.wechat-import-modal__customer-avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  place-items: center;
+  border-radius: 10px;
+  color: #fff;
+  background: #12935a;
+  font-size: 13px;
+  font-weight: 900;
+}
+.wechat-import-modal__detected-friend > div { display: grid; gap: 1px; min-width: 0; }
+.wechat-import-modal__detected-friend small { color: #628072; font-size: 9px; letter-spacing: 0; }
+.wechat-import-modal__detected-friend strong { overflow: hidden; color: #173c2c; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.wechat-import-modal__customer-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid #cbdcd3;
+  border-radius: 10px;
+  color: #668076;
+  background: #fff;
+}
+.wechat-import-modal__customer-search:focus-within { border-color: #4baa78; box-shadow: 0 0 0 3px rgba(29, 151, 91, .1); }
+.wechat-import-modal__customer-search input { width: 100%; min-height: 40px; border: 0; outline: 0; color: #223d31; background: transparent; font-size: 12px; }
+.wechat-import-modal__customer-list {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-height: 0;
+  padding-right: 3px;
+  overflow-y: auto;
+}
+.wechat-import-modal__customer-list > button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) minmax(0, auto) 17px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid #d9e5df;
+  border-radius: 11px;
+  color: #385247;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+.wechat-import-modal__customer-list > button:hover { border-color: #8bc5a7; background: #f7fcf9; }
+.wechat-import-modal__customer-list > button.is-selected { border-color: #15915a; background: #effaf4; box-shadow: 0 0 0 2px rgba(21, 145, 90, .1); }
+.wechat-import-modal__customer-copy { display: grid; min-width: 0; gap: 2px; }
+.wechat-import-modal__customer-copy strong { overflow: hidden; color: #213e31; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.wechat-import-modal__customer-copy em { color: #7b8a83; font-size: 9px; font-style: normal; }
+.wechat-import-modal__customer-binding { max-width: 190px; overflow: hidden; color: #8a661e; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.wechat-import-modal__customer-list > button > i { width: 15px; height: 15px; border: 1px solid #b9c9c1; border-radius: 50%; background: #fff; }
+.wechat-import-modal__customer-list > button.is-selected > i { border: 4px solid #15915a; }
+.wechat-import-modal__customer-list > p { margin: 24px 0; color: #7c8d85; font-size: 12px; text-align: center; }
+.wechat-import-modal__replace-warning,
+.wechat-import-modal__match-error { margin: 0; padding: 9px 11px; border-radius: 9px; font-size: 10px; line-height: 1.5; }
+.wechat-import-modal__replace-warning { color: #805916; background: #fff5df; }
+.wechat-import-modal__match-error { color: #a4383f; background: #fff0f1; }
+.wechat-import-modal__match-dialog footer { display: flex; justify-content: flex-end; gap: 9px; }
+.wechat-import-modal__match-dialog footer button:disabled,
+.wechat-import-modal__unmatched-dialog footer button:disabled { cursor: wait; opacity: .55; }
 
 .wechat-import-action-enter-active,
 .wechat-import-action-leave-active { transition: opacity .16s ease; }
