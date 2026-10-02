@@ -109,6 +109,7 @@
       @merge-new="mergeActiveWechatImport"
       @select-item="selectWechatImport"
       @remove-item="removeWechatImport"
+      @scan-unread="readUnreadWechatOrders"
       @import-selected="importSelectedWechatConversation"
       @dismiss-action-message="wechatSelectedImportMessage = ''"
     >
@@ -237,6 +238,7 @@ const activeWechatImportToken = ref(null);
 const wechatImportModalOpen = ref(false);
 const wechatImportRefreshing = ref(false);
 const wechatWorkspaceWarning = ref('');
+const wechatWorkspaceReady = ref(false);
 const wechatSelectedImportBusy = ref(false);
 const wechatSelectedImportMessage = ref('');
 const wechatSelectedImportStatus = ref('warning');
@@ -527,6 +529,7 @@ async function focusWechatImportConversation(item) {
 
 async function openWechatWorkspace() {
   wechatWorkspaceWarning.value = '';
+  wechatWorkspaceReady.value = false;
   try {
     const openWorkspace = window.electronAPI?.wechatUi?.openWorkspace;
     if (!openWorkspace) {
@@ -540,6 +543,7 @@ async function openWechatWorkspace() {
     } else if (result?.result?.message) {
       wechatWorkspaceWarning.value = result.result.message;
     }
+    wechatWorkspaceReady.value = true;
     return true;
   } catch (error) {
     wechatWorkspaceWarning.value = error?.message || '微信窗口未能停靠到左侧';
@@ -602,6 +606,7 @@ async function removeWechatImport(token) {
 
 async function closeWechatImportModal() {
   wechatImportModalOpen.value = false;
+  wechatWorkspaceReady.value = false;
   wechatScanMessage.value = '';
   wechatSelectedImportMessage.value = '';
   activeView.value = 'overview';
@@ -732,12 +737,23 @@ async function importSelectedWechatConversation() {
 }
 
 async function handleWechatScan() {
-  if (wechatScanBusy.value) return;
+  if (wechatScanBusy.value || wechatSelectedImportBusy.value) return;
   if (wechatImportQueue.value.length) {
     await openActiveWechatImport();
     return;
   }
 
+  wechatSelectedImportMessage.value = '';
+  wechatScanMessage.value = '';
+  wechatScanStatus.value = 'info';
+  smartModeActive.value = false;
+  activeView.value = 'overview';
+  wechatImportModalOpen.value = true;
+  await openWechatWorkspace();
+}
+
+async function readUnreadWechatOrders() {
+  if (wechatScanBusy.value || wechatSelectedImportBusy.value) return;
   wechatScanBusy.value = true;
   wechatSelectedImportMessage.value = '';
   wechatImportQueue.value = [];
@@ -747,8 +763,7 @@ async function handleWechatScan() {
   setWechatScanStatus('正在核对客户微信绑定，请稍候…');
   wechatImportModalOpen.value = true;
   try {
-    const workspaceReady = await openWechatWorkspace();
-    if (!workspaceReady) {
+    if (!wechatWorkspaceReady.value && !await openWechatWorkspace()) {
       throw new Error(wechatWorkspaceWarning.value || '微信窗口未能停靠到屏幕左侧');
     }
     const { unique, failedCount, ambiguousCount } = await loadBoundWechatCustomers();
