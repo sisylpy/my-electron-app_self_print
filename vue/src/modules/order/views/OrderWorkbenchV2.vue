@@ -6,9 +6,26 @@
           v-for="stage in stageOptions"
           :key="stage.key"
           type="button"
-          :class="[`is-${stage.key}`, { 'is-active': stageFilter === stage.key }]"
+          :class="[`is-${stage.key}`, { 'is-active': !smartModeActive && stageFilter === stage.key }]"
           @click="selectStage(stage.key)"
         >
+          <span class="order-workbench__stage-icon" :class="`is-${stage.key}`" aria-hidden="true">
+            <svg v-if="stage.key === 'review'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3.2 2" />
+            </svg>
+            <svg v-else-if="stage.key === 'progress'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7h11v9H3z" />
+              <path d="M14 10h4l3 3v3h-7z" />
+              <circle cx="7.5" cy="18.5" r="1.6" />
+              <circle cx="16.5" cy="18.5" r="1.6" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M7 8V4h10v4" />
+              <rect x="4" y="8" width="16" height="8" rx="2" />
+              <path d="M7 13h10v7H7z" />
+            </svg>
+          </span>
           <strong>{{ stage.label }}</strong>
           <em>{{ stage.count }}</em>
         </button>
@@ -56,6 +73,7 @@
       :all-customers="smartModeCustomers"
       :all-customers-loading="smartCustomersLoading || overviewLoading"
       :all-customers-error="smartModeCustomersError"
+      :smart-mode="smartModeActive"
       :distributer-id="disUser?.nxDiuDistributerId"
       :selected-customer="todayInbox.selectedCustomer.value"
       :snapshot="todayInbox.snapshot.value"
@@ -68,23 +86,31 @@
       @refresh-list="refreshAll"
       @refresh-detail="todayInbox.refreshSelected"
       @continue-order="openCreateOrder"
+      @smart-mode-change="handleSmartModeChange"
       @new-order="openCreateOrder"
       @data-changed="handleOrderChanged"
-      @smart-mode-change="handleSmartModeChange"
     />
 
     <WechatOrderImportModal
-      :open="wechatImportModalOpen && Boolean(activeWechatImport)"
+      :open="wechatImportModalOpen"
       :items="wechatImportBatch"
       :active-item="activeWechatImport"
       :completed-tokens="wechatImportCompletedTokens"
+      :busy="wechatScanBusy"
+      :scan-message="wechatScanMessage"
+      :scan-status="wechatScanStatus"
       :refreshing="wechatImportRefreshing"
       :workspace-warning="wechatWorkspaceWarning"
+      :selected-import-busy="wechatSelectedImportBusy"
+      :action-message="wechatSelectedImportMessage"
+      :action-status="wechatSelectedImportStatus"
       @close="closeWechatImportModal"
       @refresh="refreshActiveWechatImport({ manual: true })"
       @merge-new="mergeActiveWechatImport"
       @select-item="selectWechatImport"
       @remove-item="removeWechatImport"
+      @import-selected="importSelectedWechatConversation"
+      @dismiss-action-message="wechatSelectedImportMessage = ''"
     >
       <AiOrderPanel
         v-if="activeWechatImport"
@@ -112,7 +138,7 @@
     <Teleport to="body">
       <Transition name="wechat-status-pop">
         <div
-          v-if="wechatScanMessage"
+          v-if="wechatScanMessage && !wechatImportModalOpen"
           :class="['order-workbench__wechat-status-mask', { 'is-blocking': wechatScanBusy }]"
           @click.stop
         >
@@ -206,6 +232,9 @@ const activeWechatImportToken = ref(null);
 const wechatImportModalOpen = ref(false);
 const wechatImportRefreshing = ref(false);
 const wechatWorkspaceWarning = ref('');
+const wechatSelectedImportBusy = ref(false);
+const wechatSelectedImportMessage = ref('');
+const wechatSelectedImportStatus = ref('warning');
 let wechatImportSequence = 0;
 const overview = reactive({
   customers: [],
@@ -359,8 +388,10 @@ async function handleSmartModeChange(active) {
   if (!smartCustomers.value.length && !smartCustomersLoading.value) {
     await refreshSmartCustomers();
   }
-  if (!todayInbox.selectedCustomer.value && smartModeCustomers.value.length) {
-    await todayInbox.selectCustomer(smartModeCustomers.value[0]);
+  if (!smartModeActive.value) return;
+  const selectedId = customerId(todayInbox.selectedCustomer.value);
+  if (!smartModeCustomers.value.some(customer => String(customerId(customer)) === String(selectedId))) {
+    await todayInbox.selectCustomer(smartModeCustomers.value[0] || null);
   }
 }
 
@@ -409,7 +440,7 @@ async function refreshActiveWechatImport(options = {}) {
       customerId: item.customerId,
       binding: item.binding,
       // 用户手动触发时做一次短暂、有限的稳定性复查；页面不再后台轮询。
-      retryDelaysMs: [800, 1600],
+      retryDelaysMs: [350, 700],
     });
     if (!result.payload) {
       if (options.manual) {
@@ -489,7 +520,29 @@ async function focusWechatImportConversation(item) {
   }
 }
 
-async function openActiveWechatImport() {
+async function openWechatWorkspace() {
+  wechatWorkspaceWarning.value = '';
+  try {
+    const openWorkspace = window.electronAPI?.wechatUi?.openWorkspace;
+    if (!openWorkspace) {
+      wechatWorkspaceWarning.value = '当前安装包不支持微信窗口停靠';
+      return false;
+    }
+    const result = await openWorkspace();
+    if (result && !result.ok) {
+      wechatWorkspaceWarning.value = result.error?.message || '微信窗口未能停靠到左侧';
+      return false;
+    } else if (result?.result?.message) {
+      wechatWorkspaceWarning.value = result.result.message;
+    }
+    return true;
+  } catch (error) {
+    wechatWorkspaceWarning.value = error?.message || '微信窗口未能停靠到左侧';
+    return false;
+  }
+}
+
+async function openActiveWechatImport(options = {}) {
   const item = activeWechatImport.value;
   if (!item) return false;
   smartModeActive.value = false;
@@ -503,18 +556,10 @@ async function openActiveWechatImport() {
   }
   customerContext.selectCustomer(customer);
   wechatScanMessage.value = '';
-  wechatWorkspaceWarning.value = '';
-  try {
-    const result = await window.electronAPI?.wechatUi?.openWorkspace?.();
-    if (result && !result.ok) {
-      wechatWorkspaceWarning.value = result.error?.message || '微信窗口未能停靠到左侧';
-    } else if (result?.result?.message) {
-      wechatWorkspaceWarning.value = result.result.message;
-    }
-  } catch (error) {
-    wechatWorkspaceWarning.value = error?.message || '微信窗口未能停靠到左侧';
-  }
-  const focusWarning = await focusWechatImportConversation(item);
+  await openWechatWorkspace();
+  const focusWarning = options.focusConversation === false
+    ? ''
+    : await focusWechatImportConversation(item);
   wechatWorkspaceWarning.value = [wechatWorkspaceWarning.value, focusWarning]
     .filter(Boolean)
     .join('；');
@@ -544,7 +589,6 @@ async function removeWechatImport(token) {
 
   if (!wechatImportQueue.value.length) {
     activeWechatImportToken.value = null;
-    await closeWechatImportModal();
     setWechatScanStatus(`已从本轮列表移除“${item?.conversationTitle || item?.customerName || '该会话'}”`, 'success');
     return;
   }
@@ -553,6 +597,8 @@ async function removeWechatImport(token) {
 
 async function closeWechatImportModal() {
   wechatImportModalOpen.value = false;
+  wechatScanMessage.value = '';
+  wechatSelectedImportMessage.value = '';
   activeView.value = 'overview';
   try {
     await window.electronAPI?.wechatUi?.closeWorkspace?.();
@@ -595,7 +641,89 @@ async function loadBoundWechatCustomers() {
     if (items.length === 1) unique.set(title, items[0]);
     else ambiguousCount += items.length;
   });
-  return { unique, failedCount, ambiguousCount };
+  return { unique, byTitle, failedCount, ambiguousCount };
+}
+
+function createWechatImportItem(row, title, result) {
+  return {
+    token: `wechat:${Date.now()}:${++wechatImportSequence}`,
+    customerId: customerId(row.customer),
+    customerName: row.customer.nxDepartmentAttrName
+      || row.customer.nxDepartmentName
+      || title,
+    conversationTitle: title,
+    messageCount: result.pendingCount,
+    payload: result.payload,
+    binding: result.binding || row.binding,
+    lateMessageCount: 0,
+    refreshNote: '',
+    refreshError: '',
+  };
+}
+
+async function importSelectedWechatConversation() {
+  if (wechatSelectedImportBusy.value || wechatScanBusy.value) return;
+  wechatSelectedImportBusy.value = true;
+  wechatSelectedImportMessage.value = '';
+  wechatSelectedImportStatus.value = 'warning';
+  try {
+    const { byTitle } = await loadBoundWechatCustomers();
+    const allowedTitles = Array.from(byTitle.keys());
+    if (!allowedTitles.length) throw new Error('此微信好友没有关联客户');
+
+    const currentConversationApi = window.electronAPI?.wechatUi?.currentConversation;
+    if (!currentConversationApi) {
+      throw new Error('当前安装包不支持识别所选微信好友');
+    }
+    const selected = await currentConversationApi(allowedTitles);
+    if (!selected?.ok) {
+      throw new Error(selected?.error?.message || '此微信好友没有关联客户');
+    }
+
+    const title = String(selected.result?.title || '').trim();
+    const matchingCustomers = byTitle.get(title) || [];
+    if (!matchingCustomers.length) throw new Error('此微信好友没有关联客户');
+    if (matchingCustomers.length > 1) {
+      throw new Error('当前微信好友关联了多个客户，请先检查微信绑定');
+    }
+
+    const row = matchingCustomers[0];
+    const result = await prepareWechatOrderImport({
+      customerId: customerId(row.customer),
+      binding: row.binding,
+      retryDelaysMs: [350, 700],
+    });
+    if (!result.payload) {
+      throw new Error(result.message || '当前微信好友没有未处理的新订单');
+    }
+
+    const incomingItem = createWechatImportItem(row, title, result);
+    const existing = wechatImportQueue.value.find(item => (
+      String(item?.customerId) === String(incomingItem.customerId)
+    ));
+    if (existing) {
+      const payload = mergeWechatOrderPayload(existing.payload, incomingItem.payload);
+      const replacement = {
+        ...existing,
+        ...incomingItem,
+        payload,
+        messageCount: payload?.source?.messages?.length || incomingItem.messageCount,
+      };
+      replaceWechatImportItem(existing.token, replacement);
+      activeWechatImportToken.value = replacement.token;
+    } else {
+      wechatImportQueue.value = [...wechatImportQueue.value, incomingItem];
+      wechatImportBatch.value = [...wechatImportBatch.value, incomingItem];
+      activeWechatImportToken.value = incomingItem.token;
+    }
+    wechatSelectedImportMessage.value = '';
+    await openActiveWechatImport({ focusConversation: false });
+  } catch (error) {
+    wechatSelectedImportStatus.value = 'warning';
+    wechatSelectedImportMessage.value = error?.message || '转所选微信好友订单失败';
+  } finally {
+    wechatSelectedImportBusy.value = false;
+  }
 }
 
 async function handleWechatScan() {
@@ -606,8 +734,18 @@ async function handleWechatScan() {
   }
 
   wechatScanBusy.value = true;
+  wechatSelectedImportMessage.value = '';
+  wechatImportQueue.value = [];
+  wechatImportBatch.value = [];
+  wechatImportCompletedTokens.value = [];
+  activeWechatImportToken.value = null;
   setWechatScanStatus('正在核对客户微信绑定，请稍候…');
+  wechatImportModalOpen.value = true;
   try {
+    const workspaceReady = await openWechatWorkspace();
+    if (!workspaceReady) {
+      throw new Error(wechatWorkspaceWarning.value || '微信窗口未能停靠到屏幕左侧');
+    }
     const { unique, failedCount, ambiguousCount } = await loadBoundWechatCustomers();
     const allowedTitles = Array.from(unique.keys());
     if (!allowedTitles.length) {
@@ -618,16 +756,25 @@ async function handleWechatScan() {
     const scanApi = window.electronAPI?.wechatUi?.readUnread;
     if (!scanApi) throw new Error('当前安装包不支持可见地读取微信未读会话');
 
-    setWechatScanStatus(`即将切换到微信，逐个读取 ${allowedTitles.length} 个已绑定会话…`);
+    setWechatScanStatus('即将切换到微信，只检查本次未读的已绑定会话…');
     const scan = await scanApi(allowedTitles);
     if (!scan?.ok) throw new Error(scan?.error?.message || '微信未读会话扫描失败');
 
     const openedTitles = Array.isArray(scan.result?.openedTitles)
       ? scan.result.openedTitles
       : [];
-    const reconciliationPlan = buildWechatReconciliationPlan(allowedTitles, openedTitles);
+    // macOS reports the exact unread chats it opened plus the single chat that
+    // was selected before scanning. Reconcile only those candidates so a run
+    // with 2 unread customers does not query every bound customer.
+    const candidateTitles = Array.isArray(scan.result?.candidateTitles)
+      ? scan.result.candidateTitles
+      : allowedTitles;
+    const reconciliationPlan = buildWechatReconciliationPlan(candidateTitles, openedTitles);
     const imports = [];
     let prepareFailedCount = 0;
+    setWechatScanStatus(
+      `微信读取完成，正在整理 ${reconciliationPlan.length} 个会话的订单…`
+    );
     for (const candidate of reconciliationPlan) {
       const { title } = candidate;
       const row = unique.get(title);
@@ -641,20 +788,7 @@ async function handleWechatScan() {
           retryDelaysMs: candidate.opened ? undefined : [],
         });
         if (!result.payload) continue;
-        imports.push({
-          token: `wechat:${Date.now()}:${++wechatImportSequence}`,
-          customerId: customerId(row.customer),
-          customerName: row.customer.nxDepartmentAttrName
-            || row.customer.nxDepartmentName
-            || title,
-          conversationTitle: title,
-          messageCount: result.pendingCount,
-          payload: result.payload,
-          binding: result.binding || row.binding,
-          lateMessageCount: 0,
-          refreshNote: '',
-          refreshError: '',
-        });
+        imports.push(createWechatImportItem(row, title, result));
       } catch {
         prepareFailedCount += 1;
       }
@@ -703,7 +837,6 @@ async function handleTaskAdded(change) {
     await openActiveWechatImport();
   } else {
     activeWechatImportToken.value = null;
-    await closeWechatImportModal();
     setWechatScanStatus('本轮微信订单已全部确认保存', 'success');
   }
 }
@@ -715,6 +848,7 @@ function handleWechatImportError(event) {
 }
 
 async function selectStage(stage) {
+  smartModeActive.value = false;
   stageFilter.value = stage;
   if (customerVisibleInStage(todayInbox.selectedCustomer.value, stage)
     && todayInbox.selectedCustomer.value) return;
@@ -723,6 +857,7 @@ async function selectStage(stage) {
 }
 
 function openCreateOrder(customer) {
+  smartModeActive.value = false;
   activeView.value = 'create';
   if (!customer) return;
   const matchingCustomer = customerContext.customers.value.find(
@@ -755,7 +890,7 @@ async function returnToOverview() {
   min-width: 0;
   min-height: 0;
   grid-template-rows: minmax(0, 1fr);
-  padding: 14px 16px 16px;
+  padding: 0;
   overflow: hidden;
   color: var(--product-text);
   background: var(--product-bg);
@@ -766,56 +901,75 @@ async function returnToOverview() {
   min-width: 0;
   flex: 1;
   align-items: center;
-  justify-content: flex-end;
-  gap: 20px;
+  justify-content: flex-start;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.order-workbench__header-stages::-webkit-scrollbar { display: none; }
+.order-workbench__header-stages > button:first-child { margin-left: auto; }
 
 .order-workbench__header-stages > button {
-  position: relative;
   display: flex;
-  min-width: 92px;
+  flex: none;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px 4px 7px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
+  gap: 7px;
+  padding: 4px 13px 4px 5px;
+  border: 1px solid #e7edea;
+  border-radius: 999px;
   color: var(--product-text-secondary);
-  background: transparent;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(14, 34, 26, .06);
+  cursor: pointer;
+  transition: border-color .16s ease, color .16s ease, background .16s ease;
 }
 
-.order-workbench__header-stages > button:hover { color: var(--product-text); }
-.order-workbench__header-stages > button.is-active { border-bottom-color: var(--product-primary); color: var(--product-primary-strong); }
-.order-workbench__header-stages strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
-.order-workbench__header-stages em {
-  min-width: auto;
-  padding: 0;
-  border-radius: 0;
-  text-align: center;
-  color: inherit;
-  background: transparent;
-  font-size: 9px;
-  font-style: normal;
-  font-weight: 900;
+.order-workbench__header-stages > button:hover { border-color: #d5e2db; color: var(--product-text); }
+.order-workbench__header-stages > button.is-active {
+  border-color: var(--product-primary);
+  color: var(--product-primary-strong);
+  background: #f3fbf7;
+}
+.order-workbench__header-stages > button.is-reminder.is-active {
+  border-color: #dfaa42;
+  color: #966008;
+  background: #fff8e9;
 }
 
-.order-workbench__stage-icon.is-wechat-scan {
+.order-workbench__stage-icon {
   display: grid;
   width: 22px;
   height: 22px;
   flex: none;
   place-items: center;
   border-radius: 7px;
-  color: #116a45;
-  background: #e5f7ed;
 }
-.order-workbench__stage-icon.is-wechat-scan svg { width: 13px; height: 13px; }
+
+.order-workbench__stage-icon svg { width: 13px; height: 13px; }
+.order-workbench__stage-icon.is-review { color: #d97a16; background: #fff3e3; }
+.order-workbench__stage-icon.is-progress { color: #2f6fd0; background: #e8f1fe; }
+.order-workbench__stage-icon.is-ready { color: var(--product-primary-strong); background: #e6f6ee; }
+.order-workbench__stage-icon.is-reminder { color: #966008; background: #fff3de; }
+.order-workbench__stage-icon.is-wechat-scan { color: #116a45; background: #e5f7ed; }
 .order-workbench__header-stages > button.is-wechat-scan { border-color: #b9dacb; color: #116a45; }
 .order-workbench__header-stages > button.is-wechat-scan:hover { border-color: #178454; background: #f3fbf7; }
 .order-workbench__header-stages > button:disabled { cursor: wait; opacity: .65; }
 
-.order-workbench__content { min-width: 0; min-height: 0; }
+.order-workbench__header-stages strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-workbench__header-stages em {
+  color: inherit;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.order-workbench__content { min-width: 0; min-height: 0; border-radius: 0; box-shadow: none; border-top: 0; border-left: 0; }
 
 .order-workbench__wechat-status-mask {
   position: fixed;
@@ -905,8 +1059,4 @@ async function returnToOverview() {
 .wechat-status-pop-leave-to .order-workbench__wechat-status { opacity: 0; transform: translateY(8px) scale(.97); }
 
 @keyframes wechat-status-spin { to { transform: rotate(360deg); } }
-
-@media (max-width: 1250px) {
-  .order-workbench__header-stages { gap: 10px; }
-}
 </style>

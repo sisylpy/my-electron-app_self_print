@@ -4,6 +4,7 @@ from collections.abc import Collection
 from pathlib import Path
 
 from .flows.add_contact_tag import AddContactTagFlow
+from .flows.current_conversation import CurrentConversationFlow
 from .flows.focus_conversation import FocusConversationFlow
 from .flows.send_message import SendMessageFlow
 from .flows.read_unread import HydrationProbe, ReadUnreadConversationsFlow
@@ -12,6 +13,26 @@ from .results import OperationResult, ResultCode
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PRIVATE_ARTIFACT_ROOT = PROJECT_ROOT / "artifacts" / "private"
+
+
+def current_conversation(
+    allowed_titles: Collection[str],
+    *,
+    artifact_root: Path | None = None,
+) -> OperationResult:
+    """Identify the currently visible chat among exact customer bindings."""
+    titles = [title.strip() for title in allowed_titles if title.strip()]
+    if not titles:
+        return OperationResult(
+            code=ResultCode.TARGET_NOT_FOUND,
+            action="current_conversation",
+            target="wechat_current",
+            message="此微信好友没有关联客户",
+        )
+    return CurrentConversationFlow(
+        allowed_titles=titles,
+        artifact_root=artifact_root or DEFAULT_PRIVATE_ARTIFACT_ROOT,
+    ).run()
 
 
 def focus_conversation(
@@ -107,12 +128,12 @@ def read_unread_conversations(
     ``allowed_titles`` should contain exact customer-bound friend/group names;
     unrelated unread rows remain untouched.
     """
-    if max_pages < 1 or max_pages > 50:
+    if max_pages < 1 or max_pages > 200:
         return OperationResult(
             code=ResultCode.INVALID_ARGUMENT,
             action="read_unread_conversations",
             target="wechat_unread",
-            message="max_pages 必须在 1 到 50 之间",
+            message="max_pages 必须在 1 到 200 之间",
         )
     if dwell_seconds < 0.5 or dwell_seconds > 30:
         return OperationResult(

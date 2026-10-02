@@ -17,15 +17,20 @@
             </div>
             <div class="wechat-import-modal__heading">
               <span>微信订单工作台</span>
-              <h2 id="wechat-import-modal-title">确认微信消息并转换为订单</h2>
-              <p>左侧微信原窗口 · 顶部会话切换 · 下方订单，共 {{ items.length }} 个会话</p>
+              <h2 id="wechat-import-modal-title">{{ modalTitle }}</h2>
+              <p>{{ modalSubtitle }}</p>
             </div>
             <div class="wechat-import-modal__progress">
               <span>处理进度</span>
-              <strong>{{ completedCount }} / {{ items.length }}</strong>
+              <strong>{{ progressLabel }}</strong>
             </div>
-            <button type="button" class="wechat-import-modal__later" @click="$emit('close')">
-              稍后处理
+            <button
+              type="button"
+              class="wechat-import-modal__later"
+              :disabled="busy || selectedImportBusy"
+              @click="$emit('close')"
+            >
+              {{ closeLabel }}
             </button>
           </header>
 
@@ -33,8 +38,8 @@
             <nav class="wechat-import-modal__queue" aria-label="微信会话处理队列">
               <div class="wechat-import-modal__queue-heading">
                 <div>
-                  <strong>微信会话</strong>
-                  <span>剩余 {{ remainingCount }} 个</span>
+                  <strong>{{ busy ? '正在扫描微信' : '微信会话' }}</strong>
+                  <span>{{ busy ? '请在左侧查看读取过程' : `剩余 ${remainingCount} 个` }}</span>
                 </div>
                 <em>{{ currentPosition }}/{{ items.length }}</em>
               </div>
@@ -66,7 +71,21 @@
                   </li>
                 </ol>
               </div>
-              <p class="wechat-import-modal__queue-tip">点击切换会话，保存后自动进入下一条</p>
+              <button
+                type="button"
+                class="wechat-import-modal__selected-import"
+                :disabled="busy || selectedImportBusy"
+                @click="$emit('import-selected')"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 11a7 7 0 0 1-7 7H8l-4 3 1.2-4.2A7 7 0 1 1 20 11Z" />
+                  <path d="M12 8v6m-3-3h6" />
+                </svg>
+                {{ selectedImportBusy ? '正在转订单…' : '转所选微信好友订单' }}
+              </button>
+              <p class="wechat-import-modal__queue-tip">
+                {{ items.length ? '点击切换会话，保存后自动进入下一条' : (busy ? '正在读取未读会话' : '本轮没有待处理会话') }}
+              </p>
             </nav>
 
             <main class="wechat-import-modal__workspace">
@@ -85,7 +104,7 @@
                   <button
                     type="button"
                     class="wechat-import-modal__refresh"
-                    :disabled="refreshing"
+                    :disabled="refreshing || selectedImportBusy"
                     @click="$emit('refresh')"
                   >{{ refreshing ? '正在获取最新消息…' : '手动获取最新消息' }}</button>
                   <button
@@ -100,11 +119,72 @@
                 v-if="activeItem?.refreshNote || activeItem?.refreshError"
                 :class="['wechat-import-modal__sync-note', { 'is-error': activeItem?.refreshError }]"
               >{{ activeItem.refreshError || activeItem.refreshNote }}</p>
-              <div class="wechat-import-modal__content">
+              <div
+                v-if="!activeItem"
+                :class="['wechat-import-modal__scan-state', `is-${scanStatus}`, { 'is-busy': busy }]"
+                role="status"
+                aria-live="polite"
+                :aria-busy="busy"
+              >
+                <span class="wechat-import-modal__scan-icon" aria-hidden="true">
+                  <i v-if="busy"></i>
+                  <svg v-else-if="scanStatus === 'error'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="m9 9 6 6m0-6-6 6" />
+                  </svg>
+                  <svg v-else-if="scanStatus === 'warning'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3 2.8 19h18.4L12 3Z" />
+                    <path d="M12 9v4M12 17h.01" />
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m5 12 4 4L19 6" />
+                  </svg>
+                </span>
+                <div>
+                  <small>微信订单</small>
+                  <h3>{{ scanStateTitle }}</h3>
+                  <p>{{ scanMessage || '准备读取微信未读订单…' }}</p>
+                  <em v-if="busy">读取期间请不要操作左侧微信，完成后将在这里显示订单。</em>
+                </div>
+              </div>
+              <div v-else class="wechat-import-modal__content">
                 <slot />
               </div>
             </main>
           </div>
+
+          <Transition name="wechat-import-action">
+            <div
+              v-if="selectedImportBusy || actionMessage"
+              class="wechat-import-modal__action-mask"
+              @click.self="$emit('dismiss-action-message')"
+            >
+              <section
+                :class="['wechat-import-modal__action-dialog', `is-${actionStatus}`, { 'is-busy': selectedImportBusy }]"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="wechat-import-action-title"
+                aria-describedby="wechat-import-action-message"
+              >
+                <span class="wechat-import-modal__action-icon" aria-hidden="true">
+                  <i v-if="selectedImportBusy"></i>
+                  <svg v-else-if="actionStatus === 'success'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m5 12 4 4L19 6" />
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3 2.8 19h18.4L12 3Z" />
+                    <path d="M12 9v4M12 17h.01" />
+                  </svg>
+                </span>
+                <div>
+                  <small>微信好友转订单</small>
+                  <h3 id="wechat-import-action-title">{{ selectedImportBusy ? '正在识别当前微信好友' : (actionStatus === 'success' ? '已加入转订单' : '无法转订单') }}</h3>
+                  <p id="wechat-import-action-message">{{ selectedImportBusy ? '正在查找关联客户并读取订单消息…' : actionMessage }}</p>
+                </div>
+                <button v-if="!selectedImportBusy" type="button" @click="$emit('dismiss-action-message')">知道了</button>
+              </section>
+            </div>
+          </Transition>
         </section>
       </div>
     </Transition>
@@ -119,19 +199,55 @@ const props = defineProps({
   items: { type: Array, default: () => [] },
   activeItem: { type: Object, default: null },
   completedTokens: { type: Array, default: () => [] },
+  busy: { type: Boolean, default: false },
+  scanMessage: { type: String, default: '' },
+  scanStatus: { type: String, default: 'info' },
   refreshing: { type: Boolean, default: false },
   workspaceWarning: { type: String, default: '' },
+  selectedImportBusy: { type: Boolean, default: false },
+  actionMessage: { type: String, default: '' },
+  actionStatus: { type: String, default: 'warning' },
 });
 
-const emit = defineEmits(['close', 'refresh', 'merge-new', 'select-item', 'remove-item']);
+const emit = defineEmits([
+  'close',
+  'refresh',
+  'merge-new',
+  'select-item',
+  'remove-item',
+  'import-selected',
+  'dismiss-action-message',
+]);
 
 const completedTokenSet = computed(() => new Set(props.completedTokens.map(String)));
 const completedCount = computed(() => completedTokenSet.value.size);
 const remainingCount = computed(() => Math.max(0, props.items.length - completedCount.value));
-const totalMessages = computed(() => props.items.reduce(
-  (sum, item) => sum + (Number(item?.messageCount) || 0),
-  0
-));
+const modalTitle = computed(() => {
+  if (props.busy) return '正在读取微信订单';
+  if (props.activeItem) return '确认微信消息并转换为订单';
+  return '微信订单读取结果';
+});
+const modalSubtitle = computed(() => {
+  if (props.busy) return '左侧微信正在逐个检查未读会话 · 读取结果将在右侧显示';
+  if (props.activeItem) return `左侧微信原窗口 · 顶部会话切换 · 下方订单，共 ${props.items.length} 个会话`;
+  return '左侧保留微信原窗口 · 右侧显示本轮读取结果';
+});
+const progressLabel = computed(() => {
+  if (props.busy) return '读取中';
+  if (!props.items.length) return props.scanStatus === 'error' ? '失败' : '完成';
+  return `${completedCount.value} / ${props.items.length}`;
+});
+const closeLabel = computed(() => {
+  if (props.busy || props.selectedImportBusy) return '处理中';
+  if (!props.activeItem) return '完成';
+  return '稍后处理';
+});
+const scanStateTitle = computed(() => {
+  if (props.busy) return '正在读取微信';
+  if (props.scanStatus === 'error') return '读取失败';
+  if (props.scanStatus === 'warning') return '读取完成，需要检查';
+  return '读取完成';
+});
 const currentPosition = computed(() => {
   if (!props.items.length) return 0;
   const activeIndex = props.items.findIndex(item => item?.token === props.activeItem?.token);
@@ -181,6 +297,7 @@ function removeItem(item) {
 }
 
 .wechat-import-modal {
+  position: relative;
   display: grid;
   width: 100vw;
   height: 100vh;
@@ -240,6 +357,7 @@ function removeItem(item) {
   cursor: pointer;
 }
 .wechat-import-modal__later:hover { border-color: #82b89c; background: #edf8f2; }
+.wechat-import-modal__later:disabled { cursor: wait; opacity: .6; }
 
 .wechat-import-modal__body {
   display: grid;
@@ -251,7 +369,7 @@ function removeItem(item) {
 .wechat-import-modal__queue {
   display: grid;
   min-width: 0;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   padding: 7px 12px;
@@ -264,8 +382,28 @@ function removeItem(item) {
 .wechat-import-modal__queue-heading span { color: #7b8c84; font-size: 10px; }
 .wechat-import-modal__queue-heading em { padding: 4px 8px; border-radius: 10px; color: #147a4e; background: #dff2e8; font-size: 10px; font-style: normal; font-weight: 900; }
 
-.wechat-import-modal__queue-scroll { min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: #a9c8b8 transparent; }
+.wechat-import-modal__queue-scroll { display: flex; min-width: 0; align-items: center; gap: 5px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: #a9c8b8 transparent; }
 .wechat-import-modal__queue ol { display: flex; width: max-content; margin: 0; padding: 0 0 2px; list-style: none; }
+.wechat-import-modal__selected-import {
+  display: inline-flex;
+  min-height: 36px;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 13px;
+  border: 1px solid #118755;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(145deg, #16a466, #0b7e4c);
+  box-shadow: 0 5px 12px rgba(14, 126, 76, .18);
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.wechat-import-modal__selected-import svg { width: 16px; height: 16px; }
+.wechat-import-modal__selected-import:hover { background: linear-gradient(145deg, #0d965a, #086d42); }
+.wechat-import-modal__selected-import:disabled { cursor: wait; opacity: .6; }
 .wechat-import-modal__queue li {
   display: grid;
   width: 190px;
@@ -352,6 +490,129 @@ function removeItem(item) {
 .wechat-import-modal__sync-note.is-error { color: #b23c45; }
 .wechat-import-modal__content { min-width: 0; min-height: 0; grid-row: 4; overflow: hidden; }
 
+.wechat-import-modal__action-mask {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(19, 43, 32, .36);
+  backdrop-filter: blur(4px);
+}
+.wechat-import-modal__action-dialog {
+  display: grid;
+  width: min(480px, calc(100vw - 40px));
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid #edc06d;
+  border-radius: 20px;
+  color: #8a5b10;
+  background: #fffcf4;
+  box-shadow: 0 24px 70px rgba(18, 48, 34, .25);
+}
+.wechat-import-modal__action-dialog.is-success { border-color: #8ec9aa; color: #137047; background: #f7fffa; }
+.wechat-import-modal__action-icon {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  grid-row: 1 / 3;
+  place-items: center;
+  border-radius: 17px;
+  color: #fff;
+  background: #d18a1d;
+}
+.wechat-import-modal__action-dialog.is-success .wechat-import-modal__action-icon { background: #118555; }
+.wechat-import-modal__action-icon svg { width: 30px; height: 30px; }
+.wechat-import-modal__action-icon i {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255, 255, 255, .42);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: wechat-import-spin .8s linear infinite;
+}
+.wechat-import-modal__action-dialog > div { min-width: 0; }
+.wechat-import-modal__action-dialog small { font-size: 10px; font-weight: 900; letter-spacing: .1em; opacity: .78; }
+.wechat-import-modal__action-dialog h3 { margin: 3px 0 6px; color: #3c2d13; font-size: 21px; }
+.wechat-import-modal__action-dialog.is-success h3 { color: #183e2e; }
+.wechat-import-modal__action-dialog p { margin: 0; color: #71552a; font-size: 13px; line-height: 1.7; }
+.wechat-import-modal__action-dialog.is-success p { color: #38644f; }
+.wechat-import-modal__action-dialog > button {
+  min-height: 36px;
+  grid-column: 2;
+  justify-self: start;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 9px;
+  color: #fff;
+  background: #b87512;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.wechat-import-modal__action-dialog.is-success > button { background: #118555; }
+
+.wechat-import-action-enter-active,
+.wechat-import-action-leave-active { transition: opacity .16s ease; }
+.wechat-import-action-enter-active .wechat-import-modal__action-dialog,
+.wechat-import-action-leave-active .wechat-import-modal__action-dialog { transition: transform .16s ease, opacity .16s ease; }
+.wechat-import-action-enter-from,
+.wechat-import-action-leave-to { opacity: 0; }
+.wechat-import-action-enter-from .wechat-import-modal__action-dialog,
+.wechat-import-action-leave-to .wechat-import-modal__action-dialog { opacity: 0; transform: translateY(8px) scale(.98); }
+
+.wechat-import-modal__scan-state {
+  display: flex;
+  width: min(520px, calc(100% - 32px));
+  min-height: 176px;
+  grid-row: 2 / 5;
+  align-self: center;
+  justify-self: center;
+  align-items: center;
+  gap: 20px;
+  padding: 26px 30px;
+  border: 1px solid #b9dacb;
+  border-radius: 18px;
+  color: #146844;
+  background: #fff;
+  box-shadow: 0 18px 45px rgba(20, 73, 49, .11);
+}
+.wechat-import-modal__scan-state.is-warning { border-color: #ead095; color: #94620b; background: #fffbf1; }
+.wechat-import-modal__scan-state.is-error { border-color: #efbaba; color: #a93636; background: #fff8f8; }
+.wechat-import-modal__scan-icon {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  flex: none;
+  place-items: center;
+  border-radius: 18px;
+  color: #fff;
+  background: currentColor;
+}
+.wechat-import-modal__scan-icon svg { width: 30px; height: 30px; color: #fff; }
+.wechat-import-modal__scan-icon i {
+  width: 27px;
+  height: 27px;
+  border: 3px solid rgba(255, 255, 255, .4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: wechat-import-spin .8s linear infinite;
+}
+.wechat-import-modal__scan-state > div { min-width: 0; }
+.wechat-import-modal__scan-state small { display: block; opacity: .72; font-size: 10px; font-weight: 900; letter-spacing: .1em; }
+.wechat-import-modal__scan-state h3 { margin: 4px 0 7px; color: #1c3d2f; font-size: 20px; }
+.wechat-import-modal__scan-state p { margin: 0; color: #536a5f; font-size: 13px; line-height: 1.7; }
+.wechat-import-modal__scan-state em { display: block; margin-top: 9px; color: #7b8d84; font-size: 10px; font-style: normal; }
+.wechat-import-modal__scan-state.is-warning h3,
+.wechat-import-modal__scan-state.is-warning p { color: #76500d; }
+.wechat-import-modal__scan-state.is-error h3,
+.wechat-import-modal__scan-state.is-error p { color: #8e3535; }
+
+@keyframes wechat-import-spin { to { transform: rotate(360deg); } }
+
 .wechat-import-modal-enter-active,
 .wechat-import-modal-leave-active { transition: opacity .2s ease; }
 .wechat-import-modal-enter-active .wechat-import-modal,
@@ -363,7 +624,7 @@ function removeItem(item) {
 
 @media (max-width: 1280px) {
   .wechat-import-modal__heading p { display: none; }
-  .wechat-import-modal__queue { grid-template-columns: auto minmax(0, 1fr); }
+  .wechat-import-modal__queue { grid-template-columns: auto minmax(0, 1fr) auto; }
   .wechat-import-modal__queue-tip { display: none; }
   .wechat-import-modal__queue li { width: 174px; }
   .wechat-import-modal__current p { display: none; }

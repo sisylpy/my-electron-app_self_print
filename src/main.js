@@ -668,15 +668,35 @@ function setupIpcHandlers() {
       }
     }
   });
-  ipcMain.handle('wechat-ui-focus-conversation', async (event, input) => {
+  ipcMain.handle('wechat-ui-current-conversation', async (event, input) => {
     assertTrustedRendererEvent(event);
     try {
-      return await getWechatUiAutomationService().focusConversation(input);
+      return await getWechatUiAutomationService().currentConversation(input);
     } finally {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.show();
         mainWindow.focus();
       }
+    }
+  });
+  ipcMain.handle('wechat-ui-focus-conversation', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    try {
+      const result = await getWechatUiAutomationService().focusConversation(input);
+      // A successful switch intentionally leaves WeChat in front so the user
+      // can see the selected friend and the unread badge disappear. Only bring
+      // GrainPrint back when automation failed and the error needs attention.
+      if (!result?.ok && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+      return result;
+    } catch (error) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+      throw error;
     }
   });
   ipcMain.handle('wechat-ui-workspace-open', async (event) => {

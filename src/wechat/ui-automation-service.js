@@ -125,12 +125,42 @@ function parseAutomationOutput(stdout, allowedTitles) {
     openedSeen.add(title);
     openedTitles.push(title);
   });
+  const selectedTitle = typeof payload.selectedTitle === 'string'
+    && allowed.has(payload.selectedTitle.trim())
+    ? payload.selectedTitle.trim()
+    : '';
+  const candidateTitles = [...openedTitles];
+  if (selectedTitle && !openedSeen.has(selectedTitle)) candidateTitles.push(selectedTitle);
 
   return {
     code: payload.code,
     message: typeof payload.message === 'string' ? payload.message : '',
     metrics: payload.metrics && typeof payload.metrics === 'object' ? payload.metrics : {},
     openedTitles,
+    candidateTitles,
+  };
+}
+
+function parseCurrentConversationOutput(stdout, allowedTitles) {
+  let payload;
+  try {
+    payload = JSON.parse(String(stdout || '').trim());
+  } catch {
+    throw new Error('当前微信会话识别返回了无效结果');
+  }
+  if (!payload || typeof payload !== 'object' || typeof payload.code !== 'string') {
+    throw new Error('当前微信会话识别结果不完整');
+  }
+  const title = typeof payload.conversationTitle === 'string'
+    ? payload.conversationTitle.trim()
+    : '';
+  if (title && !new Set(allowedTitles).has(title)) {
+    throw new Error('当前微信会话不在客户绑定范围内');
+  }
+  return {
+    code: payload.code,
+    message: typeof payload.message === 'string' ? payload.message : '',
+    title,
   };
 }
 
@@ -224,10 +254,14 @@ function createWechatUiAutomationService(options = {}) {
           return;
         }
         try {
-          const result = parseAutomationOutput(stdout, allowedTitles);
+          const parseOutput = processOptions.parseOutput || parseAutomationOutput;
+          const result = parseOutput(stdout, allowedTitles);
           if (processOptions.mapOpenedCountToAllowedTitles) {
             const openedCount = Number(result.metrics?.openedCount || 0);
             result.openedTitles = openedCount > 0 ? [...allowedTitles] : [];
+            // The Windows helper does not yet return exact opened titles. Keep
+            // its conservative reconciliation behavior until it does.
+            result.candidateTitles = [...allowedTitles];
           }
           if (!ACCEPTED_RESULT_CODES.has(result.code)) {
             finish({
@@ -258,7 +292,13 @@ function createWechatUiAutomationService(options = {}) {
   function runMac(root, allowedTitles) {
     const script = path.join(root, 'scripts', 'read_unread.py');
     const python = resolveMacPythonCommand(options);
-    const args = [script, '--max-pages', '8', '--dwell-seconds', '1.8'];
+    const args = [
+      script,
+      '--max-pages',
+      String(Math.min(200, Math.max(8, allowedTitles.length))),
+      '--dwell-seconds',
+      '0.5',
+    ];
     allowedTitles.forEach((title) => args.push('--include-title', title));
     if (artifactRoot) args.push('--artifact-root', artifactRoot);
     return runProcess(python, args, root, allowedTitles, {
@@ -282,6 +322,24 @@ function createWechatUiAutomationService(options = {}) {
     });
   }
 
+  function runMacCurrentConversation(root, allowedTitles) {
+    const script = path.join(root, 'scripts', 'current_conversation.py');
+    if (!fs.existsSync(script)) {
+      return Promise.resolve({
+        ok: false,
+        error: { code: 'CURRENT_CONVERSATION_SCRIPT_MISSING', message: '安装包内未找到当前微信会话识别组件' },
+      });
+    }
+    const python = resolveMacPythonCommand(options);
+    const args = [script];
+    allowedTitles.forEach((title) => args.push('--include-title', title));
+    if (artifactRoot) args.push('--artifact-root', artifactRoot);
+    return runProcess(python, args, root, allowedTitles, {
+      classifyEmptyOutput: classifyMacPythonFailure,
+      parseOutput: parseCurrentConversationOutput,
+    });
+  }
+
   function runWindows(script, allowedTitles) {
     const powershell = options.powershell || process.env.JCYX_WECHAT_UI_POWERSHELL || 'powershell.exe';
     const args = [
@@ -293,7 +351,7 @@ function createWechatUiAutomationService(options = {}) {
       '-File',
       script,
       '-MaxIterations',
-      '50',
+      '200',
       '-DwellMilliseconds',
       '1000',
     ];
@@ -305,6 +363,45 @@ function createWechatUiAutomationService(options = {}) {
   }
 
   return Object.freeze({
+    async currentConversation(input) {
+      if (platform !== 'darwin') {
+        return {
+          ok: false,
+          error: { code: 'UNSUPPORTED_PLATFORM', message: '当前系统暂不支持识别所选微信好友' },
+        };
+      }
+      if (activePromise) {
+        return { ok: false, error: { code: 'BUSY', message: '微信界面自动化正在运行' } };
+      }
+      try {
+        const allowedTitles = normalizeAllowedTitles(input);
+        if (typeof options.ensureMacAccessibility === 'function'
+            && !options.ensureMacAccessibility()) {
+          return {
+            ok: false,
+            error: {
+              code: 'MAC_ACCESSIBILITY_PERMISSION_REQUIRED',
+              message: '请在“系统设置 → 隐私与安全性 → 辅助功能”中允许 GrainPrint 控制电脑',
+            },
+          };
+        }
+        if (typeof options.getMacScreenAccessStatus === 'function') {
+          const status = String(options.getMacScreenAccessStatus() || 'unknown');
+          if (status === 'denied' || status === 'restricted') {
+            return {
+              ok: false,
+              error: {
+                code: 'MAC_SCREEN_RECORDING_PERMISSION_REQUIRED',
+                message: '请在“系统设置 → 隐私与安全性 → 屏幕录制”中允许 GrainPrint',
+              },
+            };
+          }
+        }
+        return await runMacCurrentConversation(resolveMacAutomationRoot(options), allowedTitles);
+      } catch (error) {
+        return { ok: false, error: { code: 'INVALID_ARGUMENT', message: error.message } };
+      }
+    },
     async focusConversation(input) {
       if (platform !== 'darwin') {
         return {
@@ -413,6 +510,7 @@ module.exports = {
   normalizeAllowedTitles,
   normalizeConversationTitle,
   parseAutomationOutput,
+  parseCurrentConversationOutput,
   classifyMacPythonFailure,
   resolveMacAutomationRoot,
   resolveMacPythonCommand,

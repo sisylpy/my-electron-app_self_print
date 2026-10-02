@@ -8,6 +8,7 @@ const {
   normalizeAllowedTitles,
   normalizeConversationTitle,
   parseAutomationOutput,
+  parseCurrentConversationOutput,
   classifyMacPythonFailure,
   resolveMacAutomationRoot,
   resolveMacPythonCommand,
@@ -43,6 +44,20 @@ const parsed = parseAutomationOutput(JSON.stringify({
 }), ['金调料']);
 assert.deepStrictEqual(parsed.openedTitles, ['金调料']);
 assert.strictEqual(parsed.metrics.UNREAD_OPENED, '2');
+
+const currentConversation = parseCurrentConversationOutput(JSON.stringify({
+  code: 'SUCCESS',
+  message: 'matched',
+  conversationTitle: '金调料',
+}), ['金调料', '测试']);
+assert.strictEqual(currentConversation.title, '金调料');
+assert.throws(
+  () => parseCurrentConversationOutput(JSON.stringify({
+    code: 'SUCCESS',
+    conversationTitle: '未绑定',
+  }), ['金调料']),
+  /不在客户绑定范围/
+);
 
 const macModuleDir = path.join('/tmp', 'app', 'src', 'wechat');
 const expectedRoot = path.join(macModuleDir, 'ui-automation', 'mac');
@@ -160,6 +175,38 @@ const bundledMacFocusScript = fs.readFileSync(
 );
 assert.match(bundledMacFocusScript, /from automation\.api import focus_conversation/);
 
+const bundledMacCurrentConversationScript = fs.readFileSync(
+  path.join(
+    __dirname,
+    '..',
+    'src',
+    'wechat',
+    'ui-automation',
+    'mac',
+    'scripts',
+    'current_conversation.py'
+  ),
+  'utf8'
+);
+assert.match(bundledMacCurrentConversationScript, /from automation\.api import current_conversation/);
+
+const bundledMacCurrentConversationFlow = fs.readFileSync(
+  path.join(
+    __dirname,
+    '..',
+    'src',
+    'wechat',
+    'ui-automation',
+    'mac',
+    'automation',
+    'flows',
+    'current_conversation.py'
+  ),
+  'utf8'
+);
+assert.match(bundledMacCurrentConversationFlow, /conversation_header/);
+assert.match(bundledMacCurrentConversationFlow, /此微信好友没有关联客户/);
+
 const bundledMacFocusFlow = fs.readFileSync(
   path.join(
     __dirname,
@@ -176,8 +223,15 @@ const bundledMacFocusFlow = fs.readFileSync(
 );
 assert.match(bundledMacFocusFlow, /from \.\.state_detector import conversation_header/);
 assert.match(bundledMacFocusFlow, /return conversation_header\(/);
+assert.match(bundledMacFocusFlow, /SEARCH_QUERY_ENTERED/);
+assert.match(bundledMacFocusFlow, /SEARCH_RESULT_CLICKED/);
+assert.match(bundledMacFocusFlow, /SEARCH_RESULT_FIRST_EXACT_SELECTED/);
+assert.match(bundledMacFocusFlow, /SEARCH_BOX_POSITION_FALLBACK/);
+assert.match(bundledMacFocusFlow, /find_text\(items, "搜索", exact=True\)/);
+assert.match(bundledMacFocusFlow, /set_clipboard\(self\.target\)/);
+assert.match(bundledMacFocusFlow, /paste_clipboard\(0\.9\)/);
+assert.match(bundledMacFocusFlow, /press_escape\(0\.3\)/);
 assert.doesNotMatch(bundledMacFocusFlow, /exact_chat_header/);
-assert.doesNotMatch(bundledMacFocusFlow, /press_escape/);
 
 const bundledMacStateDetector = fs.readFileSync(
   path.join(
@@ -193,6 +247,23 @@ const bundledMacStateDetector = fs.readFileSync(
   'utf8'
 );
 assert.match(bundledMacStateDetector, /header_min_x = min\(image_width \* 0\.45, 320\.0\)/);
+
+const bundledMacWindow = fs.readFileSync(
+  path.join(
+    __dirname,
+    '..',
+    'src',
+    'wechat',
+    'ui-automation',
+    'mac',
+    'automation',
+    'window.py'
+  ),
+  'utf8'
+);
+assert.match(bundledMacWindow, /tell application "WeChat" to reopen/);
+assert.match(bundledMacWindow, /WECHAT_MAIN_WINDOW_NOT_FOUND/);
+assert.match(bundledMacWindow, /repeat 30 times/);
 
 const bundledMacFlow = fs.readFileSync(
   path.join(
@@ -213,9 +284,17 @@ assert.doesNotMatch(bundledMacFlow, /CURRENT_BOUND|current_bound_title/);
 assert.match(bundledMacFlow, /top-unread-/);
 assert.match(bundledMacFlow, /CHAT_TAB_DOUBLE_CLICKED/);
 assert.match(bundledMacFlow, /chat_tab_point/);
-assert.match(bundledMacFlow, /self\._opened_titles\.add\(candidate\.title\)/);
+assert.match(bundledMacFlow, /CHAT_TAB_LOGICAL_X = 30/);
+assert.match(bundledMacFlow, /CHAT_TAB_LOGICAL_Y = 122/);
+assert.match(bundledMacFlow, /shot\.transform\.scale_x, shot\.transform\.scale_y/);
+assert.doesNotMatch(bundledMacFlow, /image_height \* 0\.205/);
+assert.match(bundledMacFlow, /self\._opened_titles\.add\(saved\.title\)/);
+assert.doesNotMatch(bundledMacFlow, /page-\{page:02d\}-item-\{index:02d\}-before/);
+assert.match(bundledMacFlow, /selectedTitle/);
 assert.match(bundledMacFlow, /ResultCode\.NO_UNREAD/);
 assert.match(bundledMacFlow, /SCREEN_RECORDING_PERMISSION_REQUIRED/);
+assert.match(bundledMacFlow, /except WindowError as exc/);
+assert.match(bundledMacFlow, /微信聊天主窗口未能打开/);
 
 const serviceSource = fs.readFileSync(
   path.join(__dirname, '..', 'src', 'wechat', 'ui-automation-service.js'),
@@ -251,6 +330,7 @@ async function verifyWindowsNoUnreadStopsImmediately() {
   assert.strictEqual(result.ok, true);
   assert.strictEqual(result.result.code, 'NO_UNREAD');
   assert.deepStrictEqual(result.result.openedTitles, []);
+  assert.deepStrictEqual(result.result.candidateTitles, ['金调料', '测试']);
 }
 
 async function verifyMacAccessibilityStopsBeforeAutomation() {
@@ -315,9 +395,77 @@ async function verifyMacConversationFocus() {
   assert.ok(spawnedArgs.includes('金调料'));
 }
 
+async function verifyMacCurrentConversation() {
+  let spawnedArgs = [];
+  const service = createWechatUiAutomationService({
+    platform: 'darwin',
+    moduleDir: path.join(__dirname, '..', 'src', 'wechat'),
+    ensureMacAccessibility: () => true,
+    getMacScreenAccessStatus: () => 'granted',
+    spawnProcess: (_command, args) => {
+      spawnedArgs = args;
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => {};
+      process.nextTick(() => {
+        child.stdout.end(JSON.stringify({
+          code: 'SUCCESS',
+          message: 'matched',
+          conversationTitle: '金调料',
+        }));
+        child.stderr.end();
+        child.emit('close', 0);
+      });
+      return child;
+    },
+  });
+  const result = await service.currentConversation({ allowedTitles: ['金调料', '测试'] });
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.result.title, '金调料');
+  assert.ok(spawnedArgs.some(arg => String(arg).endsWith('current_conversation.py')));
+  assert.ok(spawnedArgs.includes('金调料'));
+  assert.ok(spawnedArgs.includes('测试'));
+}
+
+async function verifyMacReturnsOnlyExactCandidates() {
+  const service = createWechatUiAutomationService({
+    platform: 'darwin',
+    moduleDir: path.join(__dirname, '..', 'src', 'wechat'),
+    ensureMacAccessibility: () => true,
+    getMacScreenAccessStatus: () => 'granted',
+    spawnProcess: () => {
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => {};
+      process.nextTick(() => {
+        child.stdout.end(JSON.stringify({
+          code: 'SUCCESS',
+          message: 'ok',
+          selectedTitle: '测试',
+          conversations: [
+            { title: '金调料', status: 'OPENED', hydration: 'NOT_CHECKED' },
+          ],
+          metrics: { openedCount: 1 },
+        }));
+        child.stderr.end();
+        child.emit('close', 0);
+      });
+      return child;
+    },
+  });
+  const result = await service.readUnread({ allowedTitles: ['金调料', '测试', '其他客户'] });
+  assert.strictEqual(result.ok, true);
+  assert.deepStrictEqual(result.result.openedTitles, ['金调料']);
+  assert.deepStrictEqual(result.result.candidateTitles, ['金调料', '测试']);
+}
+
 verifyMacAccessibilityStopsBeforeAutomation()
   .then(() => verifyMacScreenPermissionStopsBeforeAutomation())
   .then(() => verifyMacConversationFocus())
+  .then(() => verifyMacCurrentConversation())
+  .then(() => verifyMacReturnsOnlyExactCandidates())
   .then(() => verifyWindowsNoUnreadStopsImmediately())
   .then(() => console.log('WeChat UI automation smoke passed.'))
   .catch((error) => {

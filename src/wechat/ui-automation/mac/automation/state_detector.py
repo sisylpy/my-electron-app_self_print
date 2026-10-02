@@ -134,7 +134,11 @@ def conversation_header(
         if not (item.rect.y < image_height * 0.14 and item.rect.x > header_min_x):
             continue
         raw = item.text.strip()
-        normalized = re.sub(r"\s*[（(]\d+[）)]\s*$", "", raw).strip().casefold()
+        normalized = re.sub(r"\s*[（(]\d+[）)]\s*$", "", raw).strip()
+        # Vision occasionally combines WeChat's small leading header glyph
+        # with the title and recognizes it as a circled digit. Keep the exact
+        # raw match first, then discard only that known one-character artifact.
+        normalized = re.sub(r"^[\u2460-\u2473\u24ea]\s*", "", normalized).casefold()
         if raw.casefold() == target_value or normalized == target_value:
             matched.append(raw)
     return StateResult(bool(matched), tuple(matched))
