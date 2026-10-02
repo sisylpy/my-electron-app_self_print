@@ -79,13 +79,24 @@ const electronAPI = {
 const loaded = await loadCustomerWechatBinding(7, electronAPI);
 assert.equal(loaded.bound, true);
 
+let queriedTimeRange = null;
 const prepared = await prepareWechatOrderImport({
   customerId: 7,
   binding: loaded,
   now: Date.parse('2026-10-01T00:30:00.000Z'),
-  electronAPI,
+  electronAPI: {
+    ...electronAPI,
+    wechatReader: {
+      ...electronAPI.wechatReader,
+      getMessages: async (_conversationId, timeRange) => {
+        queriedTimeRange = timeRange;
+        return electronAPI.wechatReader.getMessages();
+      },
+    },
+  },
 });
 assert.equal(prepared.status, 'ready');
+assert.equal(queriedTimeRange.end, '2026-10-01T00:32:00.000Z');
 assert.equal(prepared.pendingCount, 1);
 assert.equal(prepared.skippedCount, 1);
 assert.equal(prepared.payload.text, '西兰花2件');

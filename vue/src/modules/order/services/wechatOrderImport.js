@@ -187,9 +187,12 @@ export async function prepareWechatOrderImport({
     const startMs = Number.isFinite(cursor) && cursor > 0
       ? Math.max(0, cursor - 2 * 60 * 1000)
       : attemptNow - 24 * 60 * 60 * 1000;
+    // 微信消息使用服务端时间，刚到达的消息可能比电脑当前时间快几十秒。
+    // 如果查询上限严格等于点击时刻，界面中已经可见的未读消息仍会被排除。
+    const endMs = attemptNow + 2 * 60 * 1000;
     const page = unwrapWechatReader(await reader.getMessages(
       normalizedBinding.conversationFingerprint,
-      { start: new Date(startMs).toISOString(), end: new Date(attemptNow).toISOString() },
+      { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() },
       { offset: 0, limit: 200 }
     ));
     incoming = selectWechatOrderMessages(page?.items, participants, normalizedBinding)
