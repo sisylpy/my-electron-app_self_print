@@ -62,6 +62,7 @@
       @retry-customers="customerContext.reload"
       @order-saved="handleOrderChanged"
       @task-added="handleTaskAdded"
+      @wechat-tasks-loaded="handleDirectWechatTasks"
       @wechat-import-error="handleWechatImportError"
       @show-today-orders="returnToOverview"
     />
@@ -699,15 +700,15 @@ function wechatImportTaskKey(item) {
   return [item?.customerId, conversationFingerprint, item?.taskType || 'mixed'].join('|');
 }
 
-function createWechatImportItems(row, title, result) {
+function createWechatImportItemsFromTasks(row, title, taskPayloads, options = {}) {
   const customerName = row.customerName
     || row.customer?.nxDepartmentAttrName
     || row.customer?.nxDepartmentName
     || title;
   const customer = row.customer || { nxDepartmentId: row.customerId };
-  const binding = result.binding || row.binding;
-  const payloads = splitWechatOrderPayloads(result.payload);
-  return payloads.map((payload) => {
+  const binding = options.binding || row.binding;
+  const pendingCount = options.pendingCount;
+  return (Array.isArray(taskPayloads) ? taskPayloads : []).map((payload) => {
     const taskType = payload.taskType || 'mixed';
     return {
       token: `wechat:${Date.now()}:${++wechatImportSequence}`,
@@ -716,7 +717,7 @@ function createWechatImportItems(row, title, result) {
       conversationTitle: title,
       taskType,
       taskLabel: wechatOrderTaskLabel(taskType),
-      messageCount: payload?.source?.messages?.length || result.pendingCount,
+      messageCount: payload?.source?.messages?.length || pendingCount,
       payload,
       binding,
       lateMessageCount: 0,
@@ -724,6 +725,15 @@ function createWechatImportItems(row, title, result) {
       refreshError: '',
     };
   });
+}
+
+function createWechatImportItems(row, title, result) {
+  return createWechatImportItemsFromTasks(
+    row,
+    title,
+    splitWechatOrderPayloads(result.payload),
+    { binding: result.binding || row.binding, pendingCount: result.pendingCount }
+  );
 }
 
 function rememberWechatCustomerMatch(customer, conversationTitle) {
@@ -771,6 +781,45 @@ function enqueueWechatImportItems(incomingItems, { activate = true } = {}) {
 
 function enqueueWechatImport(row, title, result) {
   return enqueueWechatImportItems(createWechatImportItems(row, title, result));
+}
+
+async function handleDirectWechatTasks(event) {
+  const tasks = Array.isArray(event?.tasks) ? event.tasks : [];
+  const customer = event?.customer || customerContext.selectedCustomer.value;
+  const selectedCustomerId = event?.customerId ?? customerId(customer);
+  if (!tasks.length || selectedCustomerId === null || selectedCustomerId === undefined) {
+    setWechatScanStatus('当前客户信息不完整，无法创建微信订单任务', 'error');
+    return;
+  }
+
+  const conversationTitle = String(
+    event?.conversationTitle
+    || event?.binding?.displayName
+    || customer?.nxDepartmentWechatDisplayName
+    || event?.customerName
+    || ''
+  ).trim();
+  const row = {
+    customer,
+    customerId: selectedCustomerId,
+    customerName: event?.customerName,
+    binding: event?.binding || null,
+  };
+  const imports = createWechatImportItemsFromTasks(row, conversationTitle, tasks, {
+    binding: event?.binding || null,
+    pendingCount: event?.pendingCount,
+  });
+  if (!imports.length) {
+    setWechatScanStatus('当前微信会话没有可处理的订单消息', 'info');
+    return;
+  }
+
+  enqueueWechatImportItems(imports);
+  setWechatScanStatus(
+    `已生成 ${imports.length} 个微信订单任务，请在任务列表中切换处理`,
+    'success'
+  );
+  await openActiveWechatImport();
 }
 
 async function importWechatConversationForCustomer(customer, title) {

@@ -253,7 +253,12 @@ async function pullMessages() {
     setStatus(prepared.message, ['ready', 'duplicate'].includes(prepared.status) ? 'success' : 'info');
     if (!prepared.payload) return false;
     const tasks = splitWechatOrderPayloads(prepared.payload);
-    emit('messages-loaded', tasks.length ? tasks : [prepared.payload]);
+    emit('messages-loaded', {
+      tasks: tasks.length ? tasks : [prepared.payload],
+      binding: prepared.binding,
+      conversationTitle: prepared.binding?.displayName || binding.value?.displayName || '',
+      pendingCount: prepared.pendingCount,
+    });
     return true;
   } catch (error) {
     setStatus(error.message, 'error');

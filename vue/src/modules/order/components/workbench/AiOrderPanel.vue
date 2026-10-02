@@ -54,6 +54,7 @@
         @upload-type-change="selectedMode = $event"
         @order-saved="$emit('order-saved', $event)"
         @task-added="handleTaskAdded"
+        @wechat-tasks-loaded="handleWechatTasksLoaded"
         @switch-to-today-orders="$emit('show-today-orders')"
       />
     </div>
@@ -94,6 +95,7 @@ const emit = defineEmits([
   'task-added',
   'show-today-orders',
   'wechat-import-error',
+  'wechat-tasks-loaded',
 ]);
 
 const newTaskSequence = ref(0);
@@ -137,18 +139,28 @@ watch(
 
 function handleTaskAdded(event) {
   const token = appliedWechatImportToken.value;
-  const preserveWorkspace = Boolean(event?.preserveWorkspace);
   emit('task-added', token
     ? { ...(event && typeof event === 'object' ? event : {}), wechatImportToken: token }
     : event);
   appliedWechatImportToken.value = null;
-  if (preserveWorkspace) return;
   clearTimeout(workspaceResetTimer);
   workspaceResetTimer = setTimeout(() => {
     selectedMode.value = 'paste';
     newTaskSequence.value += 1;
     workspaceResetTimer = null;
   }, 0);
+}
+
+function handleWechatTasksLoaded(event) {
+  const tasks = Array.isArray(event?.tasks) ? event.tasks : [];
+  if (!tasks.length) return;
+  emit('wechat-tasks-loaded', {
+    ...event,
+    tasks,
+    customer: props.selectedCustomer,
+    customerId: props.selectedCustomerId,
+    customerName: props.selectedCustomerName,
+  });
 }
 
 onBeforeUnmount(() => clearTimeout(workspaceResetTimer));

@@ -34,7 +34,13 @@ import api from '../services/orderApi';
             OrderModeSelector,
             WechatOrderSource
         },
-        emits: ['order-saved', 'upload-type-change', 'switch-to-today-orders', 'task-added'],
+        emits: [
+            'order-saved',
+            'upload-type-change',
+            'switch-to-today-orders',
+            'task-added',
+            'wechat-tasks-loaded'
+        ],
         props: {
             // 从父组件传递的客户信息
             selectedAllCustomer: {
@@ -377,7 +383,6 @@ import api from '../services/orderApi';
                 this.pasteOriginText = '';
                 this.wechatOrderSource = null;
                 this.wechatOrderImages = [];
-                this.wechatOrderTaskQueue = [];
                 this.excelPasteSaveCount = null;
                 this.excelPasteTableData = Array.from({ length: 50 }, () => ({
                     goodsName: '', quantity: '', specification: '', specificationWeight: '',
@@ -407,18 +412,19 @@ import api from '../services/orderApi';
             },
 
             async applyWechatImport(payload) {
-                const payloads = (Array.isArray(payload) ? payload : [payload]).filter((item) => (
-                    item && typeof item.text === 'string' && item.source
-                    && (item.text.trim() || (Array.isArray(item.images) && item.images.length > 0))
-                ));
-                if (!payloads.length) {
+                if (Array.isArray(payload)) {
+                    throw new Error('微信订单任务应从任务列表中逐项打开');
+                }
+                if (!payload || typeof payload.text !== 'string' || !payload.source
+                    || (!payload.text.trim()
+                        && !(Array.isArray(payload.images) && payload.images.length > 0))) {
                     throw new Error('微信订单导入内容无效');
                 }
                 if (this.uploadType !== 'wechat') {
                     this.handleUploadTypeChange('wechat');
                     await this.$nextTick();
                 }
-                await this.handleWechatMessagesLoaded(payloads);
+                await this.loadWechatOrderTask(payload);
             },
 
             // 停止所有正在进行的朗读
@@ -3580,26 +3586,7 @@ import api from '../services/orderApi';
                         this.wechatOrderSource = null;
                         this.wechatOrderImages = [];
 
-                        const nextWechatTask = this.wechatOrderTaskQueue.shift();
-                        if (nextWechatTask) {
-                            // A direct WeChat import can contain a text task followed by
-                            // an image-OCR task. Notify the surrounding list that the
-                            // first order saved, but keep this workspace mounted so the
-                            // queued image task is not discarded before it is recognized.
-                            this.$emit('task-added', { preserveWorkspace: true });
-                            // Start OCR after the successful save is reported. Do not keep
-                            // the completed text task in a saving state while the next image
-                            // is being recognized.
-                            void this.loadWechatOrderTask(nextWechatTask).catch(async (error) => {
-                                console.error('加载下一条微信订单失败:', error);
-                                await this.$refs.alertDialog.alert(
-                                    error?.message || '加载下一条微信订单失败',
-                                    'error'
-                                );
-                            });
-                        } else {
-                            this.$emit('task-added');
-                        }
+                        this.$emit('task-added');
                     } else {
                         const errorMsg = res?.data?.msg || '保存失败';
                         await this.$refs.alertDialog.alert(errorMsg, 'error');
@@ -5143,14 +5130,21 @@ import api from '../services/orderApi';
                 this.onPasteInput(e);
             },
 
-            async handleWechatMessagesLoaded(payload) {
-                const tasks = (Array.isArray(payload) ? payload : [payload]).filter((item) => (
+            handleWechatMessagesLoaded(result) {
+                const taskSource = Array.isArray(result) ? result : result?.tasks;
+                const tasks = (Array.isArray(taskSource) ? taskSource : []).filter((item) => (
                     item && typeof item.text === 'string' && item.source
                     && (item.text.trim() || (Array.isArray(item.images) && item.images.length > 0))
                 ));
                 if (!tasks.length) return;
-                this.wechatOrderTaskQueue = tasks.slice(1);
-                await this.loadWechatOrderTask(tasks[0]);
+                // The workbench owns the shared task queue. Emitting all tasks here
+                // makes text and image batches visible and switchable in one place.
+                this.$emit('wechat-tasks-loaded', {
+                    tasks,
+                    binding: result?.binding || null,
+                    conversationTitle: result?.conversationTitle || '',
+                    pendingCount: result?.pendingCount || tasks.length,
+                });
             },
 
             async loadWechatOrderTask(payload) {
@@ -6061,7 +6055,6 @@ data[] 中每条订单对象必须包含字段：
                 this.pasteInputContent = '';
                 this.pasteOriginText = '';
                 this.wechatOrderImages = [];
-                this.wechatOrderTaskQueue = [];
             },
 
             // 重新粘贴（清空草稿订单和文本内容）
@@ -6074,7 +6067,6 @@ data[] 中每条订单对象必须包含字段：
                 this.pasteInvalidSegments = [];
                 this.pasteNoValidOrder = false;
                 this.wechatOrderImages = [];
-                this.wechatOrderTaskQueue = [];
 
             },
 
