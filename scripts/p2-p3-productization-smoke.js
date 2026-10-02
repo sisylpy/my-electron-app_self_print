@@ -54,7 +54,12 @@ for (const requiredFile of [
 }
 
 const orderApi = read('vue/src/modules/order/services/orderApi.js');
-for (const apiMethod of ['recognizeOrderFromExcel', 'recognizeOrderOCR', 'saveManulOrder']) {
+for (const apiMethod of [
+  'recognizeOrderFromExcel',
+  'recognizeOrderOCR',
+  'recognizeWechatOrderImage',
+  'saveManulOrder',
+]) {
   check(orderApi.includes(apiMethod), `订单 API 门面保留 ${apiMethod}`);
 }
 
