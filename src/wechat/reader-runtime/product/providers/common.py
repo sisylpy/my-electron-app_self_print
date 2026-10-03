@@ -8,6 +8,7 @@ SQL 仅在本文件内构造；调用方（Service）只传领域参数，绝不
 时间过滤值在写入 SQL 前已转成整数 epoch，搜索词会转义单引号以防注入。
 """
 import hashlib
+import io
 import json
 import os
 import subprocess
@@ -15,6 +16,48 @@ from typing import Dict, List, Optional, Tuple
 
 from .DatabaseAccessProvider import AccessMaterial
 from ..errors.codes import ErrorCode, ServiceError, WechatServiceError
+
+
+_ZSTD_FRAME_MAGIC = b"\x28\xb5\x2f\xfd"
+_MAX_DECOMPRESSED_MESSAGE_BYTES = 8 * 1024 * 1024
+
+
+def _decode_message_content(value: Optional[str]) -> str:
+    """Decode a ``hex(message_content)`` value without losing binary bytes.
+
+    WeChat 4.x stores some group text messages as Zstandard-compressed BLOBs.
+    Reading ``message_content`` directly makes the native queryer's JSON/stdout
+    conversion replace the binary bytes before Python can inspect them. The
+    query therefore returns hex and this function restores the original bytes,
+    decompressing only a real Zstandard frame. Ordinary TEXT/BLOB messages
+    continue to be decoded as UTF-8.
+    """
+    if not value:
+        return ""
+    try:
+        payload = bytes.fromhex(str(value))
+    except (TypeError, ValueError):
+        # Keep compatibility with custom/fake query providers that already
+        # return decoded text instead of SQLite hex().
+        return str(value)
+
+    if payload.startswith(_ZSTD_FRAME_MAGIC):
+        try:
+            import zstandard
+        except ImportError:
+            return ""
+        try:
+            with zstandard.ZstdDecompressor().stream_reader(io.BytesIO(payload)) as reader:
+                decoded = reader.read(_MAX_DECOMPRESSED_MESSAGE_BYTES + 1)
+            if len(decoded) > _MAX_DECOMPRESSED_MESSAGE_BYTES:
+                return ""
+            payload = decoded
+        except (OSError, zstandard.ZstdError):
+            # Never turn compressed binary into replacement-character garbage.
+            # An empty value is safer and lets callers reject this one message.
+            return ""
+
+    return payload.decode("utf-8", "replace")
 
 
 def _msg_table_name(username: str) -> str:
@@ -167,20 +210,26 @@ class WechatReadOnlyDB:
         packed_column = self._packed_info_column(shard, table)
         packed_select = "hex(%s)" % packed_column if packed_column else "NULL"
         sql = (
-            "SELECT local_id, create_time, real_sender_id, message_content, local_type, %s "
+            "SELECT local_id, create_time, real_sender_id, hex(message_content), local_type, %s "
             "FROM %s%s ORDER BY create_time DESC LIMIT %d OFFSET %d"
             % (packed_select, table, self._where(tr, like), limit, offset)
         )
-        return self._run(shard, sql)
+        rows = self._run(shard, sql)
+        for row in rows:
+            if len(row) > 3:
+                row[3] = _decode_message_content(row[3])
+        return rows
 
     def message_by_local_id(self, shard: str, table: str, local_id: int) -> Optional[list]:
         packed_column = self._packed_info_column(shard, table)
         packed_select = "hex(%s)" % packed_column if packed_column else "NULL"
         sql = (
-            "SELECT local_id, create_time, real_sender_id, message_content, local_type, %s "
+            "SELECT local_id, create_time, real_sender_id, hex(message_content), local_type, %s "
             "FROM %s WHERE local_id = %d" % (packed_select, table, local_id)
         )
         rows = self._run(shard, sql)
+        if rows and len(rows[0]) > 3:
+            rows[0][3] = _decode_message_content(rows[0][3])
         return rows[0] if rows else None
 
     def _packed_info_column(self, shard: str, table: str) -> Optional[str]:
