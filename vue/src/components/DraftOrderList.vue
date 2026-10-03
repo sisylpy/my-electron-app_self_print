@@ -19,7 +19,7 @@
             </div>
             <div style="width: 80px; flex-shrink: 0;" class="text-center table-cell">规格
             </div>
-            <div style="width: 240px; flex-shrink: 0;" class="text-center table-cell">操作
+            <div style="width: 82px; flex-shrink: 0;" class="text-center table-cell">操作
             </div>
         </div>
         <!-- 订单列表 -->
@@ -29,7 +29,10 @@
                 :key="orderIndex"
                 ref="orderItemRefs"
                 class="order-item-card mb-1 p-1 bg-white rounded border-bottom"
-                :class="{ 'order-item-selected': selectedOrderIndex === orderIndex }"
+                :class="{
+                    'order-item-selected': selectedOrderIndex === orderIndex,
+                    'is-actions-open': openActionIndex === orderIndex
+                }"
                 style="position: relative;">
 
                 <!-- 第一行：序号、商品名称、数量、规格 -->
@@ -76,20 +79,45 @@
                         />
                     </div>
                     <!-- 操作按钮 -->
-                    <div class="draft-actions" style="width: 240px; flex-shrink: 0;">
-                        <button type="button" class="draft-btn draft-btn-delete"
-                                @click="$emit('delete-order', { item, orderIndex })">
-                            <span class="draft-btn-icon">×</span> 删除
+                    <div class="draft-actions">
+                        <button
+                            type="button"
+                            class="draft-actions-trigger"
+                            aria-haspopup="menu"
+                            :aria-expanded="openActionIndex === orderIndex"
+                            :aria-controls="`draft-actions-menu-${orderIndex}`"
+                            @click.stop="toggleActionMenu(orderIndex)"
+                            @keydown.esc.stop="closeActionMenu"
+                        >
+                            <span>操作</span>
+                            <span class="draft-actions-chevron" aria-hidden="true">⌄</span>
                         </button>
-                        <button type="button" class="draft-btn draft-btn-add"
-                                @click="handleAddOrderBefore(orderIndex)">
-                            <span class="draft-btn-icon">+</span> 新订单
-                        </button>
-                        <button type="button" class="draft-btn draft-btn-remark"
-                                :class="{ 'draft-btn-remark-active': item.nxDoAddRemark }"
-                                @click="handleRemarkClick(orderIndex)">
-                            <span class="draft-btn-icon">※</span> 备注
-                        </button>
+                        <div
+                            v-if="openActionIndex === orderIndex"
+                            :id="`draft-actions-menu-${orderIndex}`"
+                            class="draft-actions-menu"
+                            role="menu"
+                            @click.stop
+                            @keydown.esc.stop="closeActionMenu"
+                        >
+                            <button type="button" class="draft-action-item draft-action-item--delete"
+                                    role="menuitem"
+                                    @click="handleDeleteOrder(item, orderIndex)">
+                                <span class="draft-btn-icon">×</span> 删除
+                            </button>
+                            <button type="button" class="draft-action-item draft-action-item--add"
+                                    role="menuitem"
+                                    @click="handleAddOrderBefore(orderIndex)">
+                                <span class="draft-btn-icon">+</span> 新订单
+                            </button>
+                            <button type="button" class="draft-action-item draft-action-item--remark"
+                                    :class="{ 'is-active': item.nxDoAddRemark }"
+                                    role="menuitem"
+                                    @click="handleRemarkClick(orderIndex)">
+                                <span class="draft-btn-icon">※</span>
+                                {{ item.nxDoAddRemark ? '移除备注' : '备注' }}
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <!-- 规格信息显示行（standardWeight/itemUnit/itemsPerCarton/cartonUnit 任一有值则显示） -->
@@ -172,6 +200,11 @@
 <script>
 export default {
     name: 'DraftOrderList',
+    data() {
+        return {
+            openActionIndex: -1
+        };
+    },
     props: {
         orderItems: {
             type: Array,
@@ -228,11 +261,31 @@ export default {
         }
     },
     mounted() {
+        document.addEventListener('pointerdown', this.handleDocumentPointerDown);
         if (this.selectedOrderIndex >= 0) {
             this.$nextTick(() => this.scrollToSelected());
         }
     },
+    beforeUnmount() {
+        document.removeEventListener('pointerdown', this.handleDocumentPointerDown);
+    },
     methods: {
+        toggleActionMenu(orderIndex) {
+            this.openActionIndex = this.openActionIndex === orderIndex ? -1 : orderIndex;
+        },
+        closeActionMenu() {
+            this.openActionIndex = -1;
+        },
+        handleDocumentPointerDown(event) {
+            if (this.openActionIndex < 0) return;
+            if (!event.target?.closest?.('.draft-actions')) {
+                this.closeActionMenu();
+            }
+        },
+        handleDeleteOrder(item, orderIndex) {
+            this.closeActionMenu();
+            this.$emit('delete-order', { item, orderIndex });
+        },
         scrollToSelected() {
             const idx = this.selectedOrderIndex;
             if (idx < 0) return;
@@ -282,6 +335,7 @@ export default {
             event.target.blur();
         },
         handleAddOrderBefore(orderIndex) {
+            this.closeActionMenu();
             console.log('🟢 [DraftOrderList] 点击新订单, orderIndex:', orderIndex);
             this.$emit('add-order-before', { orderIndex });
             this.$nextTick(() => {
@@ -300,6 +354,7 @@ export default {
             });
         },
         handleRemarkClick(orderIndex) {
+            this.closeActionMenu();
             const item = this.orderItems[orderIndex];
             console.log('🟢 [DraftOrderList] 点击备注按钮, orderIndex:', orderIndex, 'nxDoAddRemark:', item.nxDoAddRemark);
 
@@ -368,37 +423,91 @@ export default {
         box-shadow: 0 0 0 1px rgba(0, 86, 179, 0.2);
     }
 
-    /* 草稿行操作按钮 */
+    /* 草稿行操作菜单：常态只占一个紧凑按钮的宽度 */
+    .order-item-card.is-actions-open {
+        z-index: 20;
+    }
+
     .draft-actions {
+        position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
-        width: 200px;
+        width: 82px;
         flex-shrink: 0;
     }
 
-    .draft-btn {
+    .draft-actions-trigger {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 3px;
-        padding: 4px 10px;
+        gap: 5px;
+        min-width: 66px;
+        padding: 5px 10px;
+        color: #40564b;
+        background: #fff;
+        border: 1px solid #bfd2c8;
+        border-radius: 7px;
         font-size: 12px;
-        font-weight: 500;
+        font-weight: 700;
         line-height: 1.3;
-        border: 1px solid transparent;
-        border-radius: 6px;
         cursor: pointer;
-        transition: background-color 0.15s, border-color 0.15s, transform 0.1s;
+        transition: color .15s, background-color .15s, border-color .15s, box-shadow .15s;
     }
 
-    .draft-btn:hover {
-        transform: translateY(-1px);
+    .draft-actions-trigger:hover,
+    .draft-actions-trigger[aria-expanded="true"] {
+        color: #087443;
+        background: #f2fbf6;
+        border-color: #55ae7d;
+        box-shadow: 0 2px 8px rgba(20, 118, 72, .12);
     }
 
-    .draft-btn:active {
-        transform: translateY(0);
+    .draft-actions-chevron {
+        font-size: 14px;
+        line-height: 1;
+        transition: transform .15s ease;
+    }
+
+    .draft-actions-trigger[aria-expanded="true"] .draft-actions-chevron {
+        transform: rotate(180deg);
+    }
+
+    .draft-actions-menu {
+        position: absolute;
+        top: calc(100% + 5px);
+        right: 8px;
+        z-index: 100;
+        display: grid;
+        width: 132px;
+        padding: 5px;
+        background: #fff;
+        border: 1px solid #d7e2dc;
+        border-radius: 9px;
+        box-shadow: 0 9px 24px rgba(30, 61, 46, .18);
+    }
+
+    .draft-action-item {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        width: 100%;
+        padding: 7px 9px;
+        color: #44554d;
+        background: transparent;
+        border: 0;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .draft-action-item:hover,
+    .draft-action-item:focus-visible {
+        color: #0a6f43;
+        background: #eef8f3;
+        outline: none;
     }
 
     .draft-btn-icon {
@@ -407,48 +516,29 @@ export default {
         opacity: 0.85;
     }
 
-    .draft-btn-delete {
+    .draft-action-item--delete {
         color: #c82333;
-        background: #fff;
-        border: 1px solid #e8b4b8;
     }
 
-    .draft-btn-delete:hover {
-        border-color: #c82333;
+    .draft-action-item--delete:hover,
+    .draft-action-item--delete:focus-visible {
+        color: #a91624;
         background: #fff5f5;
     }
 
-    .draft-btn-add {
+    .draft-action-item--add {
         color: #0a58ca;
-        background: #fff;
-        border: 1px solid #a5c8f7;
     }
 
-    .draft-btn-add:hover {
-        border-color: #0a58ca;
+    .draft-action-item--add:hover,
+    .draft-action-item--add:focus-visible {
+        color: #084298;
         background: #f0f7ff;
     }
 
-    .draft-btn-remark {
-        color: #6c757d;
-        background: #fff;
-        border: 1px solid #dee2e6;
-    }
-
-    .draft-btn-remark:hover {
-        border-color: #6c757d;
-        background: #f8f9fa;
-    }
-
-    .draft-btn-remark.draft-btn-remark-active {
+    .draft-action-item--remark.is-active {
         color: #0a58ca;
-        border-color: #0a58ca;
         background: #f0f7ff;
-    }
-
-    .draft-btn-remark.draft-btn-remark-active:hover {
-        border-color: #084298;
-        background: #e7f1ff;
     }
 </style>
 
