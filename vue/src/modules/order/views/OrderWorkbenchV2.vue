@@ -636,9 +636,12 @@ async function openActiveWechatImport(options = {}) {
 
 async function selectWechatImport(token) {
   const item = wechatImportQueue.value.find(candidate => candidate?.token === token);
-  if (!item || item.token === activeWechatImport.value?.token) return;
+  if (!item) return;
   activeWechatImportToken.value = item.token;
-  await openActiveWechatImport({ openWorkspace: false, focusConversation: false });
+  // Keep the native WeChat selection aligned with the task card. Re-clicking
+  // the active card intentionally focuses the conversation again, which gives
+  // the user a quick way to recover if WeChat was changed manually.
+  await openActiveWechatImport({ openWorkspace: false, focusConversation: true });
 }
 
 async function removeWechatImport(token) {

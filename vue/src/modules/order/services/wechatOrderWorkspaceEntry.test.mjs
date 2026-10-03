@@ -72,4 +72,14 @@ assert.match(allCustomerAction, /prepareWechatOrderImport/);
 assert.match(allCustomerAction, /retryDelaysMs: \[250\]/);
 assert.match(workbench, /@scan-all="scanAllBoundWechatOrders"/);
 
+const selectTaskAction = workbench.match(
+  /async function selectWechatImport\(token\) \{([\s\S]*?)\n\}\n\nasync function removeWechatImport/,
+)?.[1] || '';
+assert.match(selectTaskAction, /activeWechatImportToken\.value = item\.token/);
+assert.match(
+  selectTaskAction,
+  /await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: true \}\)/,
+);
+assert.doesNotMatch(selectTaskAction, /item\.token === activeWechatImport\.value\?\.token/);
+
 console.log('WeChat order workspace entry passed');
