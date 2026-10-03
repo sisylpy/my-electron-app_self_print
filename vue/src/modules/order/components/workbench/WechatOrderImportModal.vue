@@ -206,6 +206,118 @@
             </main>
           </div>
 
+          <Transition name="wechat-scan-report">
+            <div
+              v-if="scanReportOpen"
+              class="wechat-import-modal__automation-mask"
+              role="status"
+              aria-live="polite"
+              :aria-busy="busy"
+            >
+              <section :class="['wechat-import-modal__automation-panel', `is-${scanStatus}`, { 'is-complete': !busy }]">
+                <header class="wechat-import-modal__automation-header">
+                  <div class="wechat-import-modal__automation-brand" aria-hidden="true">
+                    <span></span><span></span><span></span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M20 11a7 7 0 0 1-7 7H8l-4 3 1.2-4.2A7 7 0 1 1 20 11Z" />
+                      <path d="m9 11 2 2 4-4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <small>{{ busy ? '自动化正在执行' : '自动化巡查报告' }}</small>
+                    <h3>{{ scanReportTitle }}</h3>
+                    <p>{{ scanMessage || '正在连接微信并核对客户会话…' }}</p>
+                  </div>
+                  <span :class="['wechat-import-modal__automation-state', { 'is-running': busy }]">
+                    <i v-if="busy"></i>
+                    {{ busy ? '请勿操作微信' : '已完成' }}
+                  </span>
+                </header>
+
+                <div class="wechat-import-modal__automation-progress">
+                  <span :style="{ width: `${scanProgressPercent}%` }"></span>
+                </div>
+
+                <div class="wechat-import-modal__automation-content">
+                  <section class="wechat-import-modal__automation-current">
+                    <span :class="['wechat-import-modal__automation-orbit', { 'is-complete': !busy }]" aria-hidden="true">
+                      <template v-if="busy">
+                        <i></i><i></i><i></i>
+                      </template>
+                      <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m6.5 12.5 3.2 3.2 7.8-8" />
+                      </svg>
+                    </span>
+                    <small>{{ busy ? '当前正在检查' : '本次巡查结果' }}</small>
+                    <h4>{{ busy ? (scanProgress.title || '正在加载客户微信关联') : `${orderingCustomerCount} 家订货` }}</h4>
+                    <p v-if="busy && scanProgress.customerName && scanProgress.customerName !== scanProgress.title">
+                      对应客户：{{ scanProgress.customerName }}
+                    </p>
+                    <p v-else-if="!busy">已搜索 {{ finalizedScanResults.length }} 家关联微信</p>
+                    <dl>
+                      <div>
+                        <dt>{{ busy ? '已完成' : '已搜索' }}</dt>
+                        <dd>{{ finalizedScanResults.length }}</dd>
+                      </div>
+                      <div>
+                        <dt>{{ busy ? '总会话' : '订货客户' }}</dt>
+                        <dd>{{ busy ? (scanProgress.total || '—') : orderingCustomerCount }}</dd>
+                      </div>
+                      <div>
+                        <dt>订单任务</dt>
+                        <dd>{{ items.length }}</dd>
+                      </div>
+                    </dl>
+                    <em v-if="busy">系统正在控制左侧微信，请等待当前会话完成后再操作。</em>
+                    <em v-else>结果已经保留，可先检查异常项，再进入订单任务。</em>
+                  </section>
+
+                  <section class="wechat-import-modal__automation-results">
+                    <header>
+                      <div>
+                        <small>实时查询结果</small>
+                        <strong>{{ finalizedScanResults.length }} / {{ scanProgress.total || scanResults.length }}</strong>
+                      </div>
+                      <span v-if="busy">实时更新中</span>
+                    </header>
+                    <ol v-if="scanResults.length">
+                      <li
+                        v-for="item in scanResults"
+                        :key="item.title"
+                        :class="`is-${item.status || 'checking'}`"
+                      >
+                        <span class="wechat-import-modal__result-icon" aria-hidden="true">
+                          <i v-if="item.status === 'checking'"></i>
+                          <template v-else>{{ scanResultSymbol(item) }}</template>
+                        </span>
+                        <div class="wechat-import-modal__result-name">
+                          <strong>{{ item.title }}</strong>
+                          <small v-if="item.customerName && item.customerName !== item.title">{{ item.customerName }}</small>
+                        </div>
+                        <div class="wechat-import-modal__result-status">
+                          <strong>{{ scanResultLabel(item) }}</strong>
+                          <small>{{ item.message }}</small>
+                        </div>
+                      </li>
+                    </ol>
+                    <div v-else class="wechat-import-modal__automation-empty">
+                      <i aria-hidden="true"></i>
+                      <strong>正在准备客户列表</strong>
+                      <span>查询结果会在这里逐条出现</span>
+                    </div>
+                  </section>
+                </div>
+
+                <footer v-if="!busy" class="wechat-import-modal__automation-footer">
+                  <p>{{ scanMessage }}</p>
+                  <button type="button" @click="$emit('dismiss-scan-report')">
+                    {{ scanReportActionLabel }}
+                  </button>
+                </footer>
+              </section>
+            </div>
+          </Transition>
+
           <Transition name="wechat-import-action">
             <div
               v-if="selectedImportBusy || actionMessage || unmatchedConversationTitle || customerMatchOpen || groupModeRequest"
@@ -385,6 +497,9 @@ const props = defineProps({
   busy: { type: Boolean, default: false },
   scanMessage: { type: String, default: '' },
   scanStatus: { type: String, default: 'info' },
+  scanReportOpen: { type: Boolean, default: false },
+  scanProgress: { type: Object, default: () => ({}) },
+  scanResults: { type: Array, default: () => [] },
   refreshing: { type: Boolean, default: false },
   workspaceWarning: { type: String, default: '' },
   selectedImportBusy: { type: Boolean, default: false },
@@ -406,6 +521,7 @@ const emit = defineEmits([
   'remove-item',
   'scan-unread',
   'scan-all',
+  'dismiss-scan-report',
   'import-selected',
   'start-customer-match',
   'cancel-customer-match',
@@ -421,6 +537,28 @@ const selectedMatchCustomerId = ref('');
 const completedTokenSet = computed(() => new Set(props.completedTokens.map(String)));
 const completedCount = computed(() => completedTokenSet.value.size);
 const remainingCount = computed(() => Math.max(0, props.items.length - completedCount.value));
+const finalizedScanResults = computed(() => props.scanResults.filter(item => item?.status !== 'checking'));
+const orderingCustomerCount = computed(() => (
+  finalizedScanResults.value.filter(item => item.status === 'found' && Number(item.itemCount) > 0).length
+));
+const scanProgressPercent = computed(() => {
+  const total = Number(props.scanProgress?.total) || 0;
+  if (!total) return props.busy ? 8 : 100;
+  if (!props.busy) return 100;
+  return Math.max(4, Math.min(100, Math.round((finalizedScanResults.value.length / total) * 100)));
+});
+const scanReportTitle = computed(() => {
+  if (props.busy && props.scanProgress?.total) {
+    return `正在巡查 ${props.scanProgress.current} / ${props.scanProgress.total}`;
+  }
+  if (props.busy) return '正在准备自动化巡查';
+  if (props.scanStatus === 'error') return '巡查未能完成';
+  if (props.scanStatus === 'warning') return '巡查完成，有项目需检查';
+  return '巡查完成';
+});
+const scanReportActionLabel = computed(() => (
+  props.items.length ? `查看 ${props.items.length} 个订单任务` : '返回微信订单工作台'
+));
 const modalTitle = computed(() => {
   if (props.busy) return '正在读取微信订单';
   if (props.activeItem) return '确认微信消息并转换为订单';
@@ -523,6 +661,22 @@ function itemStateLabel(item) {
   if (state === 'completed') return '已保存';
   if (state === 'active') return '处理中';
   return '待处理';
+}
+
+function scanResultLabel(item) {
+  if (item?.status === 'found') return '发现订单';
+  if (item?.status === 'empty') return '没有新订单';
+  if (item?.status === 'not-found') return '微信未找到';
+  if (item?.status === 'error') return '读取失败';
+  return '正在检查';
+}
+
+function scanResultSymbol(item) {
+  if (item?.status === 'found') return '✓';
+  if (item?.status === 'empty') return '—';
+  if (item?.status === 'not-found') return '?';
+  if (item?.status === 'error') return '!';
+  return '';
 }
 
 function selectItem(item) {
@@ -805,6 +959,248 @@ function removeItem(item) {
 .wechat-import-modal__launcher-actions > button.is-selected { border-color: #178a58; color: #fff; background: linear-gradient(145deg, #16a466, #0b7e4c); }
 .wechat-import-modal__launcher-actions > button.is-selected strong { font-size: 15px; }
 .wechat-import-modal__launcher-actions > button.is-all { border-color: #91c8ae; color: #125f40; background: linear-gradient(145deg, #f6fcf9, #e6f6ee); }
+
+.wechat-import-modal__automation-mask {
+  position: absolute;
+  z-index: 15;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 26px;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(31, 168, 103, .2), transparent 34%),
+    rgba(10, 28, 20, .62);
+  backdrop-filter: blur(9px) saturate(.78);
+}
+.wechat-import-modal__automation-panel {
+  display: grid;
+  width: min(980px, calc(100vw - 52px));
+  max-height: calc(100vh - 52px);
+  grid-template-rows: auto 4px minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid rgba(165, 220, 190, .78);
+  border-radius: 24px;
+  color: #214637;
+  background: rgba(249, 253, 251, .98);
+  box-shadow: 0 30px 90px rgba(0, 18, 10, .38), 0 0 0 1px rgba(255, 255, 255, .66) inset;
+}
+.wechat-import-modal__automation-header {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 22px 18px;
+  background: linear-gradient(135deg, #fff, #f1faf5);
+}
+.wechat-import-modal__automation-brand {
+  position: relative;
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border-radius: 19px;
+  color: #fff;
+  background: linear-gradient(145deg, #16aa67, #08794a);
+  box-shadow: 0 10px 24px rgba(11, 130, 77, .24);
+}
+.wechat-import-modal__automation-brand svg { position: relative; z-index: 2; width: 29px; height: 29px; }
+.wechat-import-modal__automation-brand > span {
+  position: absolute;
+  inset: -5px;
+  border: 1px solid rgba(24, 156, 94, .28);
+  border-radius: 23px;
+  opacity: 0;
+  animation: wechat-automation-pulse 2.2s ease-out infinite;
+}
+.wechat-import-modal__automation-brand > span:nth-child(2) { animation-delay: .7s; }
+.wechat-import-modal__automation-brand > span:nth-child(3) { animation-delay: 1.4s; }
+.wechat-import-modal__automation-panel.is-complete .wechat-import-modal__automation-brand > span {
+  opacity: 0;
+  animation: none;
+}
+.wechat-import-modal__automation-header > div:nth-child(2) { min-width: 0; }
+.wechat-import-modal__automation-header small { color: #158353; font-size: 10px; font-weight: 900; letter-spacing: .13em; }
+.wechat-import-modal__automation-header h3 { margin: 3px 0 5px; color: #173c2c; font-size: 23px; line-height: 1.25; }
+.wechat-import-modal__automation-header p { overflow: hidden; margin: 0; color: #60776c; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.wechat-import-modal__automation-state {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid #b8dbc9;
+  border-radius: 18px;
+  color: #17744d;
+  background: #eff9f4;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.wechat-import-modal__automation-state.is-running { color: #8a5a0c; border-color: #ead39e; background: #fff8e9; }
+.wechat-import-modal__automation-state i,
+.wechat-import-modal__result-icon i,
+.wechat-import-modal__automation-empty i {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(188, 119, 17, .25);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: wechat-import-spin .8s linear infinite;
+}
+.wechat-import-modal__automation-progress { height: 4px; overflow: hidden; background: #dcece4; }
+.wechat-import-modal__automation-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(90deg, #0f8f56, #43c987);
+  box-shadow: 0 0 12px rgba(29, 176, 104, .42);
+  transition: width .36s ease;
+}
+.wechat-import-modal__automation-panel.is-complete .wechat-import-modal__automation-progress > span { box-shadow: none; }
+.wechat-import-modal__automation-content {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(260px, .78fr) minmax(390px, 1.22fr);
+  background: #f6faf8;
+}
+.wechat-import-modal__automation-current {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  border-right: 1px solid #dceae3;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 37%, rgba(32, 180, 107, .11), transparent 30%),
+    #fbfefc;
+}
+.wechat-import-modal__automation-orbit {
+  position: relative;
+  display: grid;
+  width: 92px;
+  height: 92px;
+  margin-bottom: 18px;
+  place-items: center;
+  border: 1px solid #b8dfca;
+  border-radius: 50%;
+  background: rgba(235, 249, 242, .88);
+  box-shadow: 0 0 0 12px rgba(229, 246, 237, .6);
+}
+.wechat-import-modal__automation-orbit::before {
+  width: 31px;
+  height: 31px;
+  border-radius: 11px;
+  background: linear-gradient(145deg, #18a967, #087d4c);
+  box-shadow: 0 7px 18px rgba(12, 130, 77, .22);
+  content: '';
+  transition: width .26s ease, height .26s ease, border-radius .26s ease, box-shadow .26s ease;
+}
+.wechat-import-modal__automation-orbit > i {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #19a765;
+  box-shadow: 0 0 0 4px rgba(25, 167, 101, .14);
+  animation: wechat-automation-orbit 2.4s linear infinite;
+}
+.wechat-import-modal__automation-orbit > i:nth-child(2) { animation-delay: -.8s; }
+.wechat-import-modal__automation-orbit > i:nth-child(3) { animation-delay: -1.6s; }
+.wechat-import-modal__automation-orbit > svg {
+  position: absolute;
+  z-index: 1;
+  width: 29px;
+  height: 29px;
+  color: #fff;
+  animation: wechat-automation-finish-check .42s .12s cubic-bezier(.2, .9, .28, 1.25) both;
+}
+.wechat-import-modal__automation-orbit.is-complete {
+  border-color: #8ed2ad;
+  background: #e8f8ef;
+  box-shadow: 0 0 0 12px rgba(224, 245, 234, .72);
+  animation: wechat-automation-finish .58s cubic-bezier(.2, .9, .28, 1.15) both;
+}
+.wechat-import-modal__automation-orbit.is-complete::before {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  box-shadow: 0 9px 22px rgba(12, 130, 77, .2);
+}
+.wechat-import-modal__automation-current > small { color: #168353; font-size: 10px; font-weight: 900; letter-spacing: .1em; }
+.wechat-import-modal__automation-current h4 {
+  max-width: 100%;
+  overflow: hidden;
+  margin: 6px 0;
+  color: #173b2c;
+  font-size: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wechat-import-modal__automation-current > p { margin: 0; color: #74877e; font-size: 11px; }
+.wechat-import-modal__automation-current dl { display: grid; width: 100%; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 24px 0 16px; }
+.wechat-import-modal__automation-current dl > div { display: grid; gap: 3px; padding: 10px 6px; border: 1px solid #d8e9e0; border-radius: 12px; background: #fff; }
+.wechat-import-modal__automation-current dt { color: #7b8e84; font-size: 9px; }
+.wechat-import-modal__automation-current dd { margin: 0; color: #176d49; font-size: 17px; font-weight: 900; }
+.wechat-import-modal__automation-current em { color: #7a8d83; font-size: 10px; font-style: normal; line-height: 1.65; }
+.wechat-import-modal__automation-results { display: grid; min-width: 0; min-height: 0; grid-template-rows: auto minmax(0, 1fr); padding: 22px; }
+.wechat-import-modal__automation-results > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.wechat-import-modal__automation-results > header > div { display: flex; align-items: baseline; gap: 8px; }
+.wechat-import-modal__automation-results > header small { color: #637c70; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
+.wechat-import-modal__automation-results > header strong { color: #174e37; font-size: 14px; }
+.wechat-import-modal__automation-results > header > span { padding: 4px 8px; border-radius: 10px; color: #13754c; background: #e5f5ed; font-size: 9px; font-weight: 900; }
+.wechat-import-modal__automation-results ol { display: grid; min-height: 0; align-content: start; gap: 8px; margin: 0; padding: 0 4px 0 0; overflow-y: auto; list-style: none; }
+.wechat-import-modal__automation-results li {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) minmax(150px, auto);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  border: 1px solid #dbe8e1;
+  border-radius: 12px;
+  background: #fff;
+  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.wechat-import-modal__automation-results li.is-checking { border-color: #e6c98c; background: #fffaf0; box-shadow: 0 5px 16px rgba(152, 100, 13, .08); transform: translateY(-1px); }
+.wechat-import-modal__automation-results li.is-found { border-color: #9ed0b6; background: #f5fcf8; }
+.wechat-import-modal__automation-results li.is-not-found,
+.wechat-import-modal__automation-results li.is-error { border-color: #e9b9bc; background: #fff7f7; }
+.wechat-import-modal__result-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 11px; color: #5d776a; background: #eaf2ee; font-size: 14px; font-weight: 900; }
+.is-checking .wechat-import-modal__result-icon { color: #a06b13; background: #fff0d2; }
+.is-found .wechat-import-modal__result-icon { color: #fff; background: #15935a; }
+.is-not-found .wechat-import-modal__result-icon,
+.is-error .wechat-import-modal__result-icon { color: #fff; background: #c55359; }
+.wechat-import-modal__result-name,
+.wechat-import-modal__result-status { display: grid; min-width: 0; gap: 2px; }
+.wechat-import-modal__result-name strong { overflow: hidden; color: #223f32; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.wechat-import-modal__result-name small { overflow: hidden; color: #7b8b83; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.wechat-import-modal__result-status { justify-items: end; text-align: right; }
+.wechat-import-modal__result-status strong { color: #557064; font-size: 10px; }
+.is-found .wechat-import-modal__result-status strong { color: #137049; }
+.is-not-found .wechat-import-modal__result-status strong,
+.is-error .wechat-import-modal__result-status strong { color: #ad4148; }
+.wechat-import-modal__result-status small { max-width: 220px; overflow: hidden; color: #85928c; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.wechat-import-modal__automation-empty { display: grid; align-self: center; justify-items: center; gap: 6px; color: #799086; text-align: center; }
+.wechat-import-modal__automation-empty i { width: 22px; height: 22px; margin-bottom: 4px; color: #16885a; border-color: rgba(22, 136, 90, .2); }
+.wechat-import-modal__automation-empty strong { color: #3e6251; font-size: 13px; }
+.wechat-import-modal__automation-empty span { font-size: 10px; }
+.wechat-import-modal__automation-footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 22px; border-top: 1px solid #dceae3; background: #fff; }
+.wechat-import-modal__automation-footer p { margin: 0; color: #60776c; font-size: 11px; line-height: 1.55; }
+.wechat-import-modal__automation-footer button {
+  min-height: 40px;
+  flex: none;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 11px;
+  color: #fff;
+  background: linear-gradient(145deg, #16a466, #0b7e4c);
+  box-shadow: 0 7px 18px rgba(13, 126, 76, .2);
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.wechat-import-modal__automation-panel.is-error .wechat-import-modal__automation-progress > span { background: #c84f56; box-shadow: none; }
 
 .wechat-import-modal__action-mask {
   position: absolute;
@@ -1143,6 +1539,32 @@ function removeItem(item) {
 .wechat-import-modal__scan-state.is-error p { color: #8e3535; }
 
 @keyframes wechat-import-spin { to { transform: rotate(360deg); } }
+@keyframes wechat-automation-pulse {
+  0% { opacity: .7; transform: scale(.86); }
+  100% { opacity: 0; transform: scale(1.34); }
+}
+@keyframes wechat-automation-orbit {
+  from { transform: rotate(0deg) translateX(42px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(42px) rotate(-360deg); }
+}
+@keyframes wechat-automation-finish {
+  0% { transform: scale(.82); }
+  55% { transform: scale(1.09); }
+  100% { transform: scale(1); }
+}
+@keyframes wechat-automation-finish-check {
+  from { opacity: 0; transform: scale(.45) rotate(-16deg); }
+  to { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+.wechat-scan-report-enter-active,
+.wechat-scan-report-leave-active { transition: opacity .22s ease; }
+.wechat-scan-report-enter-active .wechat-import-modal__automation-panel,
+.wechat-scan-report-leave-active .wechat-import-modal__automation-panel { transition: transform .24s ease, opacity .2s ease; }
+.wechat-scan-report-enter-from,
+.wechat-scan-report-leave-to { opacity: 0; }
+.wechat-scan-report-enter-from .wechat-import-modal__automation-panel,
+.wechat-scan-report-leave-to .wechat-import-modal__automation-panel { opacity: 0; transform: translateY(12px) scale(.975); }
 
 .wechat-import-modal-enter-active,
 .wechat-import-modal-leave-active { transition: opacity .2s ease; }
@@ -1169,5 +1591,28 @@ function removeItem(item) {
   .wechat-import-modal__content :deep(.upload-section .d-flex.gap-2.w-100 > button) { min-height: 29px; font-size: 10px; white-space: nowrap; }
   .wechat-import-modal__launcher { width: min(940px, calc(100% - 28px)); padding: 22px; }
   .wechat-import-modal__launcher-actions > button { min-height: 112px; padding: 16px; }
+  .wechat-import-modal__automation-mask { padding: 18px; }
+  .wechat-import-modal__automation-panel { width: min(900px, calc(100vw - 36px)); max-height: calc(100vh - 36px); }
+  .wechat-import-modal__automation-content { grid-template-columns: minmax(230px, .68fr) minmax(360px, 1.32fr); }
+  .wechat-import-modal__automation-current { padding: 22px; }
+  .wechat-import-modal__automation-orbit { width: 76px; height: 76px; }
+  .wechat-import-modal__automation-orbit > i { animation-name: wechat-automation-orbit-compact; }
+}
+
+@keyframes wechat-automation-orbit-compact {
+  from { transform: rotate(0deg) translateX(34px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(34px) rotate(-360deg); }
+}
+
+@media (max-width: 760px) {
+  .wechat-import-modal__automation-header { grid-template-columns: 48px minmax(0, 1fr); padding: 16px; }
+  .wechat-import-modal__automation-brand { width: 48px; height: 48px; }
+  .wechat-import-modal__automation-state { display: none; }
+  .wechat-import-modal__automation-content { grid-template-columns: 1fr; }
+  .wechat-import-modal__automation-current { display: none; }
+  .wechat-import-modal__automation-results { padding: 16px; }
+  .wechat-import-modal__automation-results li { grid-template-columns: 32px minmax(0, 1fr); }
+  .wechat-import-modal__result-status { grid-column: 2; justify-items: start; text-align: left; }
+  .wechat-import-modal__automation-footer { align-items: stretch; flex-direction: column; }
 }
 </style>

@@ -12,6 +12,7 @@ export async function scanAllBoundWechatCustomers({
   entries,
   scanEntry,
   onProgress = () => {},
+  onResult = () => {},
 } = {}) {
   if (typeof scanEntry !== 'function') {
     throw new TypeError('scanEntry must be a function');
@@ -35,12 +36,34 @@ export async function scanAllBoundWechatCustomers({
     try {
       const result = await scanEntry(entry, progress);
       const items = Array.isArray(result) ? result : [];
-      if (items.length) imports.push(...items);
-      else emptyCount += 1;
+      if (items.length) {
+        imports.push(...items);
+        onResult({
+          ...progress,
+          status: 'found',
+          itemCount: items.length,
+          message: `发现 ${items.length} 个订单任务`,
+        });
+      } else {
+        emptyCount += 1;
+        onResult({
+          ...progress,
+          status: 'empty',
+          itemCount: 0,
+          message: '没有未处理的新订单',
+        });
+      }
     } catch (error) {
-      failures.push({
+      const failure = {
         title,
         message: error?.message || '巡查该微信会话失败',
+      };
+      failures.push(failure);
+      onResult({
+        ...progress,
+        status: 'error',
+        itemCount: 0,
+        message: failure.message,
       });
     }
   }

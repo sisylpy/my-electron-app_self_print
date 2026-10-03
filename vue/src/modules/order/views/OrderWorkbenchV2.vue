@@ -89,6 +89,9 @@
       :busy="wechatScanBusy"
       :scan-message="wechatScanMessage"
       :scan-status="wechatScanStatus"
+      :scan-report-open="wechatScanReportOpen"
+      :scan-progress="wechatScanProgress"
+      :scan-results="wechatScanResults"
       :refreshing="wechatImportRefreshing"
       :workspace-warning="wechatWorkspaceWarning"
       :selected-import-busy="wechatSelectedImportBusy"
@@ -107,6 +110,7 @@
       @remove-item="removeWechatImport"
       @scan-unread="readUnreadWechatOrders"
       @scan-all="scanAllBoundWechatOrders"
+      @dismiss-scan-report="dismissWechatScanReport"
       @import-selected="importSelectedWechatConversation"
       @start-customer-match="openWechatCustomerMatcher"
       @cancel-customer-match="closeWechatCustomerMatcher"
@@ -244,6 +248,9 @@ const smartModeActive = ref(false);
 const wechatScanBusy = ref(false);
 const wechatScanMessage = ref('');
 const wechatScanStatus = ref('info');
+const wechatScanReportOpen = ref(false);
+const wechatScanProgress = ref({ current: 0, total: 0, title: '', customerName: '' });
+const wechatScanResults = ref([]);
 const wechatImportQueue = ref([]);
 const wechatImportBatch = ref([]);
 const wechatImportCompletedTokens = ref([]);
@@ -441,6 +448,65 @@ function setWechatScanStatus(message, status = 'info') {
   wechatScanStatus.value = status;
 }
 
+function wechatScanCustomerName(row, fallback = '') {
+  return String(
+    row?.customer?.nxDepartmentAttrName
+    || row?.customer?.nxDepartmentName
+    || row?.customer?.departmentName
+    || row?.customerName
+    || fallback
+    || ''
+  ).trim();
+}
+
+function beginWechatScanReport() {
+  wechatScanReportOpen.value = true;
+  wechatScanProgress.value = { current: 0, total: 0, title: '', customerName: '' };
+  wechatScanResults.value = [];
+}
+
+function updateWechatScanResult(result) {
+  const title = String(result?.title || '').trim();
+  if (!title) return;
+  const next = {
+    title,
+    customerName: String(result?.customerName || title).trim(),
+    status: result?.status || 'checking',
+    itemCount: Number(result?.itemCount) || 0,
+    message: String(result?.message || '').trim(),
+  };
+  const index = wechatScanResults.value.findIndex(item => item.title === title);
+  if (index < 0) {
+    wechatScanResults.value = [...wechatScanResults.value, next];
+    return;
+  }
+  wechatScanResults.value = wechatScanResults.value.map((item, itemIndex) => (
+    itemIndex === index ? { ...item, ...next } : item
+  ));
+}
+
+function beginWechatScanStep({ current, total, title, customerName = '' }) {
+  wechatScanProgress.value = { current, total, title, customerName };
+  updateWechatScanResult({
+    title,
+    customerName,
+    status: 'checking',
+    message: '正在打开微信并核对新消息…',
+  });
+}
+
+function completeWechatScanStep({ title, customerName = '', status, itemCount = 0, message = '' }) {
+  const normalizedStatus = status === 'error' && /搜索不到|没有找到|未找到|找不到/.test(message)
+    ? 'not-found'
+    : status;
+  updateWechatScanResult({ title, customerName, status: normalizedStatus, itemCount, message });
+}
+
+function dismissWechatScanReport() {
+  if (wechatScanBusy.value) return;
+  wechatScanReportOpen.value = false;
+}
+
 function messageFingerprints(payload) {
   return new Set((payload?.source?.messages || []).map(message => String(message.messageFingerprint)));
 }
@@ -617,7 +683,7 @@ async function openActiveWechatImport(options = {}) {
     return false;
   }
   customerContext.selectCustomer(customer);
-  wechatScanMessage.value = '';
+  if (options.preserveScanMessage !== true) wechatScanMessage.value = '';
   // Opening the workspace raises WeChat on macOS. A task-card change only
   // changes the right-side draft, so keep the existing side-by-side windows
   // untouched unless this is an initial/manual workspace entry.
@@ -671,6 +737,7 @@ async function closeWechatImportModal() {
   cancelWechatGroupMode();
   const shouldCloseWechatWorkspace = wechatWorkspaceReady.value;
   wechatImportModalOpen.value = false;
+  wechatScanReportOpen.value = false;
   wechatWorkspaceReady.value = false;
   wechatScanMessage.value = '';
   dismissWechatSelectedAction();
@@ -1015,6 +1082,7 @@ function dismissWechatSelectedAction() {
 
 async function handleWechatScan() {
   if (wechatScanBusy.value || wechatSelectedImportBusy.value) return;
+  wechatScanReportOpen.value = false;
   if (wechatImportQueue.value.length) {
     // “继续微信订单”只恢复现有任务界面。不要再次停靠微信窗口，
     // 也不要自动搜索或切换到对应微信会话。
@@ -1034,6 +1102,7 @@ async function handleWechatScan() {
 async function readUnreadWechatOrders() {
   if (wechatScanBusy.value || wechatSelectedImportBusy.value) return;
   wechatScanBusy.value = true;
+  beginWechatScanReport();
   wechatSelectedImportMessage.value = '';
   wechatImportQueue.value = [];
   wechatImportBatch.value = [];
@@ -1079,10 +1148,18 @@ async function readUnreadWechatOrders() {
     setWechatScanStatus(
       `微信读取完成，正在整理 ${reconciliationPlan.length} 个会话的订单…`
     );
-    for (const candidate of reconciliationPlan) {
+    for (let index = 0; index < reconciliationPlan.length; index += 1) {
+      const candidate = reconciliationPlan[index];
       const { title } = candidate;
       const row = unique.get(title);
       if (!row) continue;
+      const customerName = wechatScanCustomerName(row, title);
+      beginWechatScanStep({
+        current: index + 1,
+        total: reconciliationPlan.length,
+        title,
+        customerName,
+      });
       try {
         row.binding = await ensureWechatBindingWithGroupMode({
           row,
@@ -1096,10 +1173,32 @@ async function readUnreadWechatOrders() {
           // 补查，避免当前选中会话在微信激活时先被标成已读而漏单。
           retryDelaysMs: candidate.opened ? undefined : [],
         });
-        if (!result.payload) continue;
-        imports.push(...createWechatImportItems(row, title, result));
-      } catch {
+        if (!result.payload) {
+          completeWechatScanStep({
+            title,
+            customerName,
+            status: 'empty',
+            message: '没有未处理的新订单',
+          });
+          continue;
+        }
+        const items = createWechatImportItems(row, title, result);
+        imports.push(...items);
+        completeWechatScanStep({
+          title,
+          customerName,
+          status: 'found',
+          itemCount: items.length,
+          message: `发现 ${items.length} 个订单任务`,
+        });
+      } catch (error) {
         prepareFailedCount += 1;
+        completeWechatScanStep({
+          title,
+          customerName,
+          status: 'error',
+          message: error?.message || '整理该微信会话失败',
+        });
       }
     }
 
@@ -1122,7 +1221,7 @@ async function readUnreadWechatOrders() {
       `发现 ${customerCount} 位客户的 ${imports.length} 个订单任务（${totalMessages} 条新消息）；请确认并保存，保存后会自动进入下一项任务`,
       'success'
     );
-    await openActiveWechatImport();
+    await openActiveWechatImport({ preserveScanMessage: true });
   } catch (error) {
     setWechatScanStatus(error?.message || '读取微信订单失败', 'error');
   } finally {
@@ -1133,6 +1232,7 @@ async function readUnreadWechatOrders() {
 async function scanAllBoundWechatOrders() {
   if (wechatScanBusy.value || wechatSelectedImportBusy.value) return;
   wechatScanBusy.value = true;
+  beginWechatScanReport();
   wechatSelectedImportMessage.value = '';
   wechatImportQueue.value = [];
   wechatImportBatch.value = [];
@@ -1161,10 +1261,28 @@ async function scanAllBoundWechatOrders() {
       throw new Error('当前安装包不支持逐个打开微信会话');
     }
 
+    const entriesByTitle = new Map(entries.map(entry => [entry.title, entry]));
     const result = await scanAllBoundWechatCustomers({
       entries,
       onProgress: ({ current, total, title }) => {
         setWechatScanStatus(`正在巡查 ${current}/${total}：“${title}”`);
+        const entry = entriesByTitle.get(title);
+        beginWechatScanStep({
+          current,
+          total,
+          title,
+          customerName: wechatScanCustomerName(entry?.row, title),
+        });
+      },
+      onResult: ({ title, status, itemCount, message }) => {
+        const entry = entriesByTitle.get(title);
+        completeWechatScanStep({
+          title,
+          customerName: wechatScanCustomerName(entry?.row, title),
+          status,
+          itemCount,
+          message,
+        });
       },
       scanEntry: async ({ title, row }) => {
         const focusWarning = await focusWechatImportConversation({ conversationTitle: title });
@@ -1210,7 +1328,7 @@ async function scanAllBoundWechatOrders() {
       `${checkedSummary}，发现 ${customerCount} 位客户的 ${result.imports.length} 个订单任务（${totalMessages} 条新消息）${warningSummary}`,
       warningCount ? 'warning' : 'success'
     );
-    await openActiveWechatImport();
+    await openActiveWechatImport({ preserveScanMessage: true });
     if (warningCount) {
       const failedTitles = result.failures.slice(0, 3).map(item => `“${item.title}”`).join('、');
       wechatWorkspaceWarning.value = [

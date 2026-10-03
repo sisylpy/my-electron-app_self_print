@@ -3,6 +3,7 @@ import { scanAllBoundWechatCustomers } from './wechatAllCustomerScan.js';
 
 const calls = [];
 const progress = [];
+const outcomes = [];
 let activeScans = 0;
 let maxActiveScans = 0;
 
@@ -13,6 +14,7 @@ const result = await scanAllBoundWechatCustomers({
     { title: '蔬菜群', row: { customerId: 20 } },
   ],
   onProgress: item => progress.push(`${item.current}/${item.total}:${item.title}`),
+  onResult: item => outcomes.push(`${item.current}/${item.total}:${item.title}:${item.status}:${item.itemCount}`),
   scanEntry: async (entry) => {
     activeScans += 1;
     maxActiveScans = Math.max(maxActiveScans, activeScans);
@@ -36,6 +38,11 @@ assert.deepEqual(calls, [
   'finish:蔬菜群',
 ]);
 assert.deepEqual(progress, ['1/3:调料群', '2/3:失效客户', '3/3:蔬菜群']);
+assert.deepEqual(outcomes, [
+  '1/3:调料群:found:2',
+  '2/3:失效客户:error:0',
+  '3/3:蔬菜群:empty:0',
+]);
 assert.equal(result.checkedCount, 3);
 assert.equal(result.successCount, 2);
 assert.equal(result.emptyCount, 1);
