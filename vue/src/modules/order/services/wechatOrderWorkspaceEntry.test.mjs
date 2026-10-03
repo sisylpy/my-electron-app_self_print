@@ -15,6 +15,7 @@ const openEntry = workbench.match(
 )?.[1] || '';
 assert.match(openEntry, /wechatImportModalOpen\.value = true/);
 assert.match(openEntry, /await openWechatWorkspace\(\)/);
+assert.match(openEntry, /refreshWechatLauncherSummary/);
 assert.match(
   openEntry,
   /await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: false \}\)/,
@@ -39,7 +40,14 @@ assert.match(workbench, /resolveWechatCustomerAssociation/);
 
 assert.match(modal, /查看未读订单/);
 assert.match(modal, /读取当前微信/);
-assert.match(modal, /检查全部客户/);
+assert.match(modal, /当前没有未读客户/);
+assert.match(modal, /launcherUnreadCount === 0/);
+assert.match(modal, /launcherCurrentTitle/);
+assert.match(modal, /检查 \$\{props\.launcherCustomerCount\} 位微信客户/);
+assert.match(workbench, /:launcher-unread-count="wechatLauncherUnreadCount"/);
+assert.match(workbench, /:launcher-current-title="wechatLauncherConversationTitle"/);
+assert.match(workbench, /:launcher-customer-count="wechatLauncherCustomerCount"/);
+assert.match(workbench, /wechatUi\?\.inspectUnread/);
 assert.match(modal, /\$emit\('scan-unread'\)/);
 assert.match(modal, /\$emit\('scan-all'\)/);
 assert.match(modal, /scanReportOpen/);

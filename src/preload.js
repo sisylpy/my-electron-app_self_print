@@ -193,6 +193,8 @@ const electronAPI = Object.freeze({
 
   // 只允许扫描渲染层提交的已绑定会话标题；主进程负责启动、超时和退出回收。
   wechatUi: Object.freeze({
+    inspectUnread: (allowedTitles) =>
+      ipcRenderer.invoke('wechat-ui-inspect-unread', { allowedTitles }),
     readUnread: (allowedTitles) =>
       ipcRenderer.invoke('wechat-ui-read-unread', { allowedTitles }),
     currentConversation: () =>

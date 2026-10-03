@@ -96,6 +96,11 @@
       :workspace-warning="wechatWorkspaceWarning"
       :selected-import-busy="wechatSelectedImportBusy"
       :show-selected-import-action="showCurrentWechatReadButton"
+      :launcher-summary-loading="wechatLauncherSummaryLoading"
+      :launcher-unread-count="wechatLauncherUnreadCount"
+      :launcher-current-title="wechatLauncherConversationTitle"
+      :launcher-customer-count="wechatLauncherCustomerCount"
+      :launcher-summary-error="wechatLauncherSummaryError"
       :action-message="wechatSelectedImportMessage"
       :action-status="wechatSelectedImportStatus"
       :unmatched-conversation-title="wechatUnmatchedConversationTitle"
@@ -261,6 +266,11 @@ const wechatImportModalOpen = ref(false);
 const wechatImportRefreshing = ref(false);
 const wechatWorkspaceWarning = ref('');
 const wechatWorkspaceReady = ref(false);
+const wechatLauncherSummaryLoading = ref(false);
+const wechatLauncherUnreadCount = ref(null);
+const wechatLauncherCustomerCount = ref(null);
+const wechatLauncherConversationTitle = ref('');
+const wechatLauncherSummaryError = ref('');
 const wechatSelectedImportBusy = ref(false);
 const wechatSelectedImportMessage = ref('');
 const wechatSelectedImportStatus = ref('warning');
@@ -272,6 +282,7 @@ const wechatGroupModeRequest = ref(null);
 let wechatGroupModeResolver = null;
 let wechatImportSequence = 0;
 let wechatConversationFocusDepth = 0;
+let wechatLauncherSummaryRequestId = 0;
 const overview = reactive({
   customers: [],
   totals: { all: 0, needsReview: 0, needsPrice: 0, inProgress: 0, readyToPrint: 0 },
@@ -770,6 +781,7 @@ async function syncWechatSelectionFromDesktop(payload) {
   const title = normalizeObservedWechatConversationTitle(payload?.title);
   if (!title) return;
   observedWechatConversationTitle.value = title;
+  wechatLauncherConversationTitle.value = title;
   if (!wechatImportModalOpen.value
       || wechatScanBusy.value
       || wechatSelectedImportBusy.value
@@ -804,6 +816,12 @@ async function closeWechatImportModal() {
   wechatScanReportOpen.value = false;
   wechatWorkspaceReady.value = false;
   observedWechatConversationTitle.value = '';
+  wechatLauncherSummaryRequestId += 1;
+  wechatLauncherSummaryLoading.value = false;
+  wechatLauncherUnreadCount.value = null;
+  wechatLauncherCustomerCount.value = null;
+  wechatLauncherConversationTitle.value = '';
+  wechatLauncherSummaryError.value = '';
   wechatScanMessage.value = '';
   dismissWechatSelectedAction();
   activeView.value = 'overview';
@@ -853,6 +871,67 @@ async function loadBoundWechatCustomers({ refreshCustomers = false } = {}) {
     }
   });
   return { unique, failedCount, ambiguousCount, associationDirectory };
+}
+
+async function identifyWechatLauncherConversation(requestId) {
+  if (wechatLauncherConversationTitle.value || requestId !== wechatLauncherSummaryRequestId) return;
+  const currentConversationApi = window.electronAPI?.wechatUi?.currentConversation;
+  if (!currentConversationApi) return;
+  try {
+    const selected = await currentConversationApi();
+    if (requestId !== wechatLauncherSummaryRequestId || !selected?.ok) return;
+    const title = normalizeObservedWechatConversationTitle(selected.result?.title);
+    if (!title) return;
+    observedWechatConversationTitle.value = title;
+    wechatLauncherConversationTitle.value = title;
+  } catch {
+    // The current-conversation fallback is presentational only. The regular
+    // “读取当前微信” action still performs its own validated lookup on click.
+  }
+}
+
+async function refreshWechatLauncherSummary() {
+  const requestId = ++wechatLauncherSummaryRequestId;
+  wechatLauncherSummaryLoading.value = true;
+  wechatLauncherUnreadCount.value = null;
+  wechatLauncherCustomerCount.value = null;
+  wechatLauncherConversationTitle.value = normalizeObservedWechatConversationTitle(
+    observedWechatConversationTitle.value
+  );
+  wechatLauncherSummaryError.value = '';
+  try {
+    const { unique } = await loadBoundWechatCustomers({ refreshCustomers: true });
+    if (requestId !== wechatLauncherSummaryRequestId) return;
+    const allowedTitles = Array.from(unique.keys());
+    wechatLauncherCustomerCount.value = allowedTitles.length;
+    if (!allowedTitles.length) {
+      wechatLauncherUnreadCount.value = 0;
+      await identifyWechatLauncherConversation(requestId);
+      return;
+    }
+
+    const inspectUnread = window.electronAPI?.wechatUi?.inspectUnread;
+    if (!inspectUnread) throw new Error('当前安装包暂不支持未读数量预览');
+    const summary = await inspectUnread(allowedTitles);
+    if (requestId !== wechatLauncherSummaryRequestId) return;
+    if (!summary?.ok) throw new Error(summary?.error?.message || '未读数量统计失败');
+    wechatLauncherUnreadCount.value = Math.max(0, Number(summary.result?.unreadCount) || 0);
+    const title = normalizeObservedWechatConversationTitle(summary.result?.selectedTitle);
+    if (title) {
+      observedWechatConversationTitle.value = title;
+      wechatLauncherConversationTitle.value = title;
+    } else {
+      await identifyWechatLauncherConversation(requestId);
+    }
+  } catch {
+    if (requestId !== wechatLauncherSummaryRequestId) return;
+    wechatLauncherSummaryError.value = '未读数量暂时无法统计，可直接点击检查';
+    await identifyWechatLauncherConversation(requestId);
+  } finally {
+    if (requestId === wechatLauncherSummaryRequestId) {
+      wechatLauncherSummaryLoading.value = false;
+    }
+  }
 }
 
 function wechatImportTaskKey(item) {
@@ -1166,7 +1245,8 @@ async function handleWechatScan() {
   smartModeActive.value = false;
   activeView.value = 'overview';
   wechatImportModalOpen.value = true;
-  await openWechatWorkspace();
+  const workspaceOpened = await openWechatWorkspace();
+  if (workspaceOpened) void refreshWechatLauncherSummary();
 }
 
 async function readUnreadWechatOrders() {

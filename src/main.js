@@ -661,6 +661,17 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     return getWechatReaderService().getAttachment(input);
   });
+  ipcMain.handle('wechat-ui-inspect-unread', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    try {
+      return await getWechatUiAutomationService().inspectUnread(input);
+    } finally {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
   ipcMain.handle('wechat-ui-read-unread', async (event, input) => {
     assertTrustedRendererEvent(event);
     try {

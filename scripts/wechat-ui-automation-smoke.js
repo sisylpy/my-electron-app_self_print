@@ -8,6 +8,7 @@ const {
   normalizeAllowedTitles,
   normalizeConversationTitle,
   parseAutomationOutput,
+  parseUnreadSummaryOutput,
   parseCurrentConversationOutput,
   classifyMacPythonFailure,
   resolveMacAutomationRoot,
@@ -44,6 +45,21 @@ const parsed = parseAutomationOutput(JSON.stringify({
 }), ['金调料']);
 assert.deepStrictEqual(parsed.openedTitles, ['金调料']);
 assert.strictEqual(parsed.metrics.UNREAD_OPENED, '2');
+
+const unreadSummary = parseUnreadSummaryOutput(JSON.stringify({
+  code: 'SUCCESS',
+  message: '2 unread',
+  selectedTitle: '当前未绑定群',
+  conversations: [
+    { title: '金调料', status: 'UNREAD' },
+    { title: '蔬菜群', status: 'UNREAD' },
+    { title: '未绑定群', status: 'UNREAD' },
+    { title: '金调料', status: 'UNREAD' },
+  ],
+}), ['金调料', '蔬菜群']);
+assert.strictEqual(unreadSummary.unreadCount, 2);
+assert.deepStrictEqual(unreadSummary.unreadTitles, ['金调料', '蔬菜群']);
+assert.strictEqual(unreadSummary.selectedTitle, '当前未绑定群');
 
 const currentConversation = parseCurrentConversationOutput(JSON.stringify({
   code: 'SUCCESS',
@@ -227,7 +243,8 @@ assert.match(bundledMacFocusFlow, /SEARCH_QUERY_ENTERED/);
 assert.match(bundledMacFocusFlow, /SEARCH_RESULT_CLICKED/);
 assert.match(bundledMacFocusFlow, /SEARCH_RESULT_FIRST_EXACT_SELECTED/);
 assert.match(bundledMacFocusFlow, /SEARCH_BOX_POSITION_FALLBACK/);
-assert.match(bundledMacFocusFlow, /find_text\(items, "搜索", exact=True\)/);
+assert.match(bundledMacFocusFlow, /search_box_candidates/);
+assert.match(bundledMacFocusFlow, /"搜索" in _compact_text/);
 assert.match(bundledMacFocusFlow, /set_clipboard\(self\.target\)/);
 assert.match(bundledMacFocusFlow, /paste_clipboard\(0\.9\)/);
 assert.match(bundledMacFocusFlow, /press_escape\(0\.3\)/);
@@ -395,6 +412,41 @@ async function verifyMacConversationFocus() {
   assert.ok(spawnedArgs.includes('金调料'));
 }
 
+async function verifyMacUnreadSummaryDoesNotUseReadFlow() {
+  let spawnedArgs = [];
+  const service = createWechatUiAutomationService({
+    platform: 'darwin',
+    moduleDir: path.join(__dirname, '..', 'src', 'wechat'),
+    ensureMacAccessibility: () => true,
+    getMacScreenAccessStatus: () => 'granted',
+    existsSync: () => true,
+    spawnProcess: (_command, args) => {
+      spawnedArgs = args;
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => {};
+      process.nextTick(() => {
+        child.stdout.end(JSON.stringify({
+          code: 'SUCCESS',
+          message: 'one unread',
+          selectedTitle: '测试',
+          conversations: [{ title: '金调料', status: 'UNREAD' }],
+        }));
+        child.stderr.end();
+        child.emit('close', 0);
+      });
+      return child;
+    },
+  });
+  const result = await service.inspectUnread({ allowedTitles: ['金调料', '测试'] });
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.result.unreadCount, 1);
+  assert.strictEqual(result.result.selectedTitle, '测试');
+  assert.ok(spawnedArgs.some(arg => String(arg).endsWith('inspect_unread.py')));
+  assert.ok(!spawnedArgs.some(arg => String(arg).endsWith('read_unread.py')));
+}
+
 async function verifyMacCurrentConversation() {
   let spawnedArgs = [];
   const service = createWechatUiAutomationService({
@@ -463,6 +515,7 @@ async function verifyMacReturnsOnlyExactCandidates() {
 
 verifyMacAccessibilityStopsBeforeAutomation()
   .then(() => verifyMacScreenPermissionStopsBeforeAutomation())
+  .then(() => verifyMacUnreadSummaryDoesNotUseReadFlow())
   .then(() => verifyMacConversationFocus())
   .then(() => verifyMacCurrentConversation())
   .then(() => verifyMacReturnsOnlyExactCandidates())

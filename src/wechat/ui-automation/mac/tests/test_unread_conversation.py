@@ -5,7 +5,11 @@ import unittest
 from PIL import Image, ImageDraw
 
 from automation.coordinates import Rect
-from automation.locators.unread_conversation import locate_unread_conversations
+from automation.flows.inspect_unread import matching_unread_conversations
+from automation.locators.unread_conversation import (
+    UnreadConversation,
+    locate_unread_conversations,
+)
 from automation.vision import OCRItem
 
 
@@ -14,6 +18,18 @@ def ocr(text: str, x: float, y: float, width: float, height: float) -> OCRItem:
 
 
 class LocateUnreadConversationTests(unittest.TestCase):
+    def test_summary_keeps_only_unique_bound_unread_titles(self) -> None:
+        conversations = [
+            UnreadConversation("调料群", "订单一", Rect(20, 90, 80, 24), Rect(10, 90, 12, 12)),
+            UnreadConversation("未绑定群", "消息", Rect(20, 150, 80, 24), Rect(10, 150, 12, 12)),
+            UnreadConversation("调料群", "订单二", Rect(20, 210, 80, 24), Rect(10, 210, 12, 12)),
+            UnreadConversation("蔬菜群", "订单", Rect(20, 270, 80, 24), Rect(10, 270, 12, 12)),
+        ]
+
+        matched = matching_unread_conversations(conversations, {"调料群", "蔬菜群"})
+
+        self.assertEqual([item.title for item in matched], ["调料群", "蔬菜群"])
+
     def test_red_mention_preview_resolves_to_first_line_group_title(self) -> None:
         image = Image.new("RGB", (1210, 1628), "white")
         draw = ImageDraw.Draw(image)

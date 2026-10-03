@@ -156,6 +156,40 @@ function parseAutomationOutput(stdout, allowedTitles) {
   };
 }
 
+function parseUnreadSummaryOutput(stdout, allowedTitles) {
+  let payload;
+  try {
+    payload = JSON.parse(String(stdout || '').trim());
+  } catch {
+    throw new Error('微信未读统计返回了无效结果');
+  }
+  if (!payload || typeof payload !== 'object' || typeof payload.code !== 'string') {
+    throw new Error('微信未读统计结果不完整');
+  }
+
+  const allowed = new Set(allowedTitles);
+  const unreadTitles = [];
+  const seen = new Set();
+  const rows = Array.isArray(payload.conversations) ? payload.conversations : [];
+  rows.forEach((row) => {
+    if (!row || row.status !== 'UNREAD' || typeof row.title !== 'string') return;
+    const title = row.title.trim();
+    if (!allowed.has(title) || seen.has(title)) return;
+    seen.add(title);
+    unreadTitles.push(title);
+  });
+  return {
+    code: payload.code,
+    message: typeof payload.message === 'string' ? payload.message : '',
+    metrics: payload.metrics && typeof payload.metrics === 'object' ? payload.metrics : {},
+    unreadCount: unreadTitles.length,
+    unreadTitles,
+    selectedTitle: typeof payload.selectedTitle === 'string'
+      ? payload.selectedTitle.trim()
+      : '',
+  };
+}
+
 function parseCurrentConversationOutput(stdout, allowedTitles = []) {
   let payload;
   try {
@@ -322,6 +356,24 @@ function createWechatUiAutomationService(options = {}) {
     });
   }
 
+  function runMacUnreadSummary(root, allowedTitles) {
+    const script = path.join(root, 'scripts', 'inspect_unread.py');
+    if (!fs.existsSync(script)) {
+      return Promise.resolve({
+        ok: false,
+        error: { code: 'UNREAD_SUMMARY_SCRIPT_MISSING', message: '安装包内未找到微信未读统计组件' },
+      });
+    }
+    const python = resolveMacPythonCommand(options);
+    const args = [script];
+    allowedTitles.forEach((title) => args.push('--include-title', title));
+    if (artifactRoot) args.push('--artifact-root', artifactRoot);
+    return runProcess(python, args, root, allowedTitles, {
+      classifyEmptyOutput: classifyMacPythonFailure,
+      parseOutput: parseUnreadSummaryOutput,
+    });
+  }
+
   function runMacFocus(root, title) {
     const script = path.join(root, 'scripts', 'focus_conversation.py');
     if (!fs.existsSync(script)) {
@@ -379,6 +431,45 @@ function createWechatUiAutomationService(options = {}) {
   }
 
   return Object.freeze({
+    async inspectUnread(input) {
+      if (platform !== 'darwin') {
+        return {
+          ok: false,
+          error: { code: 'UNSUPPORTED_PLATFORM', message: '当前系统暂不支持预览微信未读客户数' },
+        };
+      }
+      if (activePromise) {
+        return { ok: false, error: { code: 'BUSY', message: '微信界面自动化正在运行' } };
+      }
+      try {
+        const allowedTitles = normalizeAllowedTitles(input);
+        if (typeof options.ensureMacAccessibility === 'function'
+            && !options.ensureMacAccessibility()) {
+          return {
+            ok: false,
+            error: {
+              code: 'MAC_ACCESSIBILITY_PERMISSION_REQUIRED',
+              message: '请在“系统设置 → 隐私与安全性 → 辅助功能”中允许 GrainPrint 控制电脑',
+            },
+          };
+        }
+        if (typeof options.getMacScreenAccessStatus === 'function') {
+          const status = String(options.getMacScreenAccessStatus() || 'unknown');
+          if (status === 'denied' || status === 'restricted') {
+            return {
+              ok: false,
+              error: {
+                code: 'MAC_SCREEN_RECORDING_PERMISSION_REQUIRED',
+                message: '请在“系统设置 → 隐私与安全性 → 屏幕录制”中允许 GrainPrint',
+              },
+            };
+          }
+        }
+        return await runMacUnreadSummary(resolveMacAutomationRoot(options), allowedTitles);
+      } catch (error) {
+        return { ok: false, error: { code: 'INVALID_REQUEST', message: error.message } };
+      }
+    },
     async currentConversation(input) {
       if (platform !== 'darwin') {
         return {
@@ -530,6 +621,7 @@ module.exports = {
   normalizeCurrentConversationInput,
   normalizeConversationTitle,
   parseAutomationOutput,
+  parseUnreadSummaryOutput,
   parseCurrentConversationOutput,
   classifyMacPythonFailure,
   resolveMacAutomationRoot,

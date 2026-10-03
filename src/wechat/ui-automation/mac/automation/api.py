@@ -6,6 +6,7 @@ from pathlib import Path
 from .flows.add_contact_tag import AddContactTagFlow
 from .flows.current_conversation import CurrentConversationFlow
 from .flows.focus_conversation import FocusConversationFlow
+from .flows.inspect_unread import InspectUnreadConversationsFlow
 from .flows.send_message import SendMessageFlow
 from .flows.read_unread import HydrationProbe, ReadUnreadConversationsFlow
 from .results import OperationResult, ResultCode
@@ -150,3 +151,15 @@ def read_unread_conversations(
         artifact_root=artifact_root or DEFAULT_PRIVATE_ARTIFACT_ROOT,
     )
     return flow.run()
+
+
+def inspect_unread_conversations(
+    *,
+    allowed_titles: Collection[str],
+    artifact_root: Path | None = None,
+) -> OperationResult:
+    """Count bound unread chats without opening or marking any chat as read."""
+    return InspectUnreadConversationsFlow(
+        allowed_titles=allowed_titles,
+        artifact_root=artifact_root or DEFAULT_PRIVATE_ARTIFACT_ROOT,
+    ).run()

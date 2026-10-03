@@ -178,8 +178,8 @@
                 <div class="wechat-import-modal__launcher-actions">
                   <button
                     type="button"
-                    class="is-unread"
-                    :disabled="selectedImportBusy"
+                    :class="['is-unread', { 'is-empty': launcherUnreadCount === 0 }]"
+                    :disabled="selectedImportBusy || launcherSummaryLoading || launcherUnreadCount === 0"
                     @click="$emit('scan-unread')"
                   >
                     <span class="wechat-import-modal__choice-meta">
@@ -189,16 +189,16 @@
                           <circle cx="18" cy="6" r="3" fill="currentColor" stroke="none" />
                         </svg>
                       </i>
-                      <b>日常推荐</b>
+                      <b>{{ launcherUnreadBadge }}</b>
                     </span>
-                    <strong>查看未读订单</strong>
-                    <em>检查所有关联客户中，微信里显示未读的会话</em>
-                    <small>日常收单，速度最快</small>
+                    <strong>{{ launcherUnreadTitle }}</strong>
+                    <em>{{ launcherUnreadDescription }}</em>
+                    <small>{{ launcherUnreadFootnote }}</small>
                   </button>
                   <button
                     type="button"
                     class="is-selected"
-                    :disabled="selectedImportBusy"
+                    :disabled="selectedImportBusy || launcherSummaryLoading"
                     @click="$emit('import-selected')"
                   >
                     <span class="wechat-import-modal__choice-meta">
@@ -208,16 +208,16 @@
                           <circle cx="12" cy="12" r="3" />
                         </svg>
                       </i>
-                      <b>指定一个</b>
+                      <b>当前会话</b>
                     </span>
-                    <strong>{{ selectedImportBusy ? '正在读取当前微信…' : '读取当前微信' }}</strong>
-                    <em>只读取左侧微信当前打开的好友或群聊</em>
+                    <strong>{{ launcherCurrentTitleText }}</strong>
+                    <em>{{ launcherCurrentDescription }}</em>
                     <small>适合补单或单独刷新</small>
                   </button>
                   <button
                     type="button"
-                    class="is-all"
-                    :disabled="selectedImportBusy"
+                    :class="['is-all', { 'is-empty': launcherCustomerCount === 0 }]"
+                    :disabled="selectedImportBusy || launcherSummaryLoading || launcherCustomerCount === 0"
                     @click="$emit('scan-all')"
                   >
                     <span class="wechat-import-modal__choice-meta">
@@ -230,11 +230,11 @@
                           <path d="m6.7 8.1 3.2 2.5m7.4-2.5-3.2 2.5m-2.1 4v3.3" />
                         </svg>
                       </i>
-                      <b>最全面</b>
+                      <b>全面检查</b>
                     </span>
-                    <strong>检查全部客户</strong>
-                    <em>逐个检查所有已关联微信，不管是否显示未读</em>
-                    <small>收单结束前检查，避免遗漏</small>
+                    <strong>{{ launcherAllTitle }}</strong>
+                    <em>{{ launcherAllDescription }}</em>
+                    <small>{{ launcherAllFootnote }}</small>
                   </button>
                 </div>
               </div>
@@ -542,6 +542,11 @@ const props = defineProps({
   workspaceWarning: { type: String, default: '' },
   selectedImportBusy: { type: Boolean, default: false },
   showSelectedImportAction: { type: Boolean, default: true },
+  launcherSummaryLoading: { type: Boolean, default: false },
+  launcherUnreadCount: { type: Number, default: null },
+  launcherCurrentTitle: { type: String, default: '' },
+  launcherCustomerCount: { type: Number, default: null },
+  launcherSummaryError: { type: String, default: '' },
   actionMessage: { type: String, default: '' },
   actionStatus: { type: String, default: 'warning' },
   unmatchedConversationTitle: { type: String, default: '' },
@@ -650,6 +655,54 @@ const selectedMatchCustomerWarning = computed(() => {
   if (!current || current === props.unmatchedConversationTitle) return '';
   return `该客户当前关联“${current}”，确认后将改为“${props.unmatchedConversationTitle}”。`;
 });
+const launcherUnreadBadge = computed(() => {
+  if (props.launcherSummaryLoading) return '正在统计';
+  if (props.launcherUnreadCount === null) return '未读订单';
+  return `${props.launcherUnreadCount} 位未读`;
+});
+const launcherUnreadTitle = computed(() => {
+  if (props.launcherSummaryLoading) return '正在统计未读客户…';
+  if (props.launcherUnreadCount === 0) return '当前没有未读客户';
+  if (props.launcherUnreadCount === null) return '查看未读订单';
+  return `查看 ${props.launcherUnreadCount} 位未读客户`;
+});
+const launcherUnreadDescription = computed(() => (
+  props.launcherUnreadCount === 0
+    ? '微信里暂时没有需要读取的未读客户'
+    : '只检查微信中显示未读的已关联客户'
+));
+const launcherUnreadFootnote = computed(() => {
+  if (props.launcherSummaryError) return props.launcherSummaryError;
+  if (props.launcherUnreadCount === 0) return '无需操作，有新消息后再来检查';
+  return '日常收单，速度最快';
+});
+const launcherCurrentTitleText = computed(() => {
+  if (props.selectedImportBusy) return '正在读取当前微信…';
+  if (props.launcherSummaryLoading && !props.launcherCurrentTitle) return '正在识别当前微信…';
+  if (!props.launcherCurrentTitle) return '读取当前微信';
+  return `读取“${props.launcherCurrentTitle}”`;
+});
+const launcherCurrentDescription = computed(() => (
+  props.launcherCurrentTitle
+    ? '只读取左侧当前打开的这一个好友或群聊'
+    : '只读取左侧微信当前打开的好友或群聊'
+));
+const launcherAllTitle = computed(() => {
+  if (props.launcherSummaryLoading) return '正在统计微信客户…';
+  if (props.launcherCustomerCount === 0) return '暂无关联微信客户';
+  if (props.launcherCustomerCount === null) return '检查已关联微信';
+  return `检查 ${props.launcherCustomerCount} 位微信客户`;
+});
+const launcherAllDescription = computed(() => {
+  if (props.launcherCustomerCount === 0) return '请先在客户中心填写并关联微信名称';
+  if (props.launcherCustomerCount === null) return '逐个检查已关联微信，不管是否显示未读';
+  return `逐个检查这 ${props.launcherCustomerCount} 位客户，不管是否显示未读`;
+});
+const launcherAllFootnote = computed(() => (
+  props.launcherCustomerCount === 0
+    ? '关联客户后即可使用'
+    : '收单结束前检查，避免遗漏'
+));
 
 watch(
   () => [props.customerMatchOpen, props.unmatchedConversationTitle],
@@ -1123,6 +1176,19 @@ function removeItem(item) {
 .wechat-import-modal__launcher-actions > button.is-unread > strong { color: #fff; }
 .wechat-import-modal__launcher-actions > button.is-unread > em { color: rgba(255, 255, 255, .84); }
 .wechat-import-modal__launcher-actions > button.is-unread > small { border-color: rgba(255, 255, 255, .22); color: rgba(255, 255, 255, .72); }
+.wechat-import-modal__launcher-actions > button.is-empty:disabled {
+  cursor: default;
+  opacity: 1;
+  border-color: #d3dfd9;
+  color: #6f8178;
+  background: #f2f6f4;
+  box-shadow: none;
+}
+.wechat-import-modal__launcher-actions > button.is-empty .wechat-import-modal__choice-icon,
+.wechat-import-modal__launcher-actions > button.is-empty .wechat-import-modal__choice-meta b { color: #71847a; background: #e5ece8; }
+.wechat-import-modal__launcher-actions > button.is-empty > strong { color: #40564c; }
+.wechat-import-modal__launcher-actions > button.is-empty > em { color: #72827a; }
+.wechat-import-modal__launcher-actions > button.is-empty > small { border-color: #dbe5e0; color: #86958e; }
 .wechat-import-modal__launcher-actions > button.is-selected { color: #176845; background: rgba(255, 255, 255, .84); }
 .wechat-import-modal__launcher-actions > button.is-selected:hover { border-color: #6bb991; background: #fff; }
 .wechat-import-modal__launcher-actions > button.is-all { border-color: #97cbb1; color: #125f40; background: linear-gradient(145deg, #f4fbf7, #e7f6ee); }
