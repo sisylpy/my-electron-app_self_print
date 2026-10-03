@@ -39,7 +39,9 @@ assert.match(workbench, /resolveWechatCustomerAssociation/);
 
 assert.match(modal, /读未读订单/);
 assert.match(modal, /查询现在选择的好友转订单/);
+assert.match(modal, /巡查全部已关联微信/);
 assert.match(modal, /\$emit\('scan-unread'\)/);
+assert.match(modal, /\$emit\('scan-all'\)/);
 assert.match(modal, /页面不会自动扫描/);
 assert.match(modal, /去跟客户匹配/);
 assert.match(modal, /关联并继续转订单/);
@@ -58,5 +60,16 @@ assert.match(selectedAction, /findWechatCustomerProfileMatches/);
 assert.doesNotMatch(selectedAction, /loadBoundWechatCustomers|allowedTitles/);
 assert.match(workbench, /async function importWechatConversationForCustomer/);
 assert.match(workbench, /loadCustomerWechatBinding\(customerId\(customer\)\)/);
+
+const allCustomerAction = workbench.match(
+  /async function scanAllBoundWechatOrders\(\) \{([\s\S]*?)\n\}\n\nasync function handleTaskAdded/,
+)?.[1] || '';
+assert.match(allCustomerAction, /loadBoundWechatCustomers\(\{ refreshCustomers: true \}\)/);
+assert.match(allCustomerAction, /scanAllBoundWechatCustomers/);
+assert.match(allCustomerAction, /focusWechatImportConversation/);
+assert.match(allCustomerAction, /ensureWechatBindingWithGroupMode/);
+assert.match(allCustomerAction, /prepareWechatOrderImport/);
+assert.match(allCustomerAction, /retryDelaysMs: \[250\]/);
+assert.match(workbench, /@scan-all="scanAllBoundWechatOrders"/);
 
 console.log('WeChat order workspace entry passed');

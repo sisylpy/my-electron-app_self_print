@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+from ..accessibility_focus import focus_conversation_with_accessibility
 from ..coordinates import CoordinateTransformer, Point
 from ..mouse import click, paste_clipboard, press_escape, select_all, set_clipboard
 from ..results import OperationResult, ResultCode
@@ -135,6 +136,35 @@ class FocusConversationFlow:
 
     def run(self) -> OperationResult:
         try:
+            try:
+                fast_focus = focus_conversation_with_accessibility(self.target)
+                if fast_focus.matched:
+                    self.details.append(
+                        "ACCESSIBILITY_CURRENT_CONVERSATION"
+                        if fast_focus.already_open
+                        else "ACCESSIBILITY_SEARCH_VERIFIED"
+                    )
+                    return self._finish(
+                        ResultCode.SUCCESS,
+                        f"微信当前会话“{self.target}”已激活"
+                        if fast_focus.already_open
+                        else f"已搜索并打开微信会话“{self.target}”",
+                    )
+                self.details.append(
+                    f"ACCESSIBILITY_SEARCH_MISMATCH={fast_focus.header}"
+                )
+                return self._finish(
+                    ResultCode.TARGET_NOT_FOUND,
+                    f"微信搜索不到“{self.target}”",
+                )
+            except Exception as exc:
+                # Older WeChat releases may expose a different accessibility
+                # tree. Preserve the proven vision flow as a compatibility
+                # fallback instead of turning an app update into a hard stop.
+                self.details.append(
+                    f"ACCESSIBILITY_FALLBACK: {type(exc).__name__}: {exc}"
+                )
+
             activate_wechat()
             self._window = main_wechat_window()
             # Close a stale search/menu so the standard search placeholder is

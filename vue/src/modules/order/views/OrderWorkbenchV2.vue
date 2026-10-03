@@ -106,6 +106,7 @@
       @select-item="selectWechatImport"
       @remove-item="removeWechatImport"
       @scan-unread="readUnreadWechatOrders"
+      @scan-all="scanAllBoundWechatOrders"
       @import-selected="importSelectedWechatConversation"
       @start-customer-match="openWechatCustomerMatcher"
       @cancel-customer-match="closeWechatCustomerMatcher"
@@ -220,6 +221,7 @@ import {
   GROUP_ALL_MEMBER_MESSAGES,
   GROUP_MENTION_SELF_ONLY,
 } from '../services/wechatOrderMessagePolicy';
+import { scanAllBoundWechatCustomers } from '../services/wechatAllCustomerScan';
 import {
   customerId,
   loadSmartReplenishmentCustomerDirectory,
@@ -1120,6 +1122,101 @@ async function readUnreadWechatOrders() {
     await openActiveWechatImport();
   } catch (error) {
     setWechatScanStatus(error?.message || '读取微信订单失败', 'error');
+  } finally {
+    wechatScanBusy.value = false;
+  }
+}
+
+async function scanAllBoundWechatOrders() {
+  if (wechatScanBusy.value || wechatSelectedImportBusy.value) return;
+  wechatScanBusy.value = true;
+  wechatSelectedImportMessage.value = '';
+  wechatImportQueue.value = [];
+  wechatImportBatch.value = [];
+  wechatImportCompletedTokens.value = [];
+  activeWechatImportToken.value = null;
+  setWechatScanStatus('正在从客户中心加载全部微信关联，请稍候…');
+  wechatImportModalOpen.value = true;
+
+  try {
+    if (!wechatWorkspaceReady.value && !await openWechatWorkspace()) {
+      throw new Error(wechatWorkspaceWarning.value || '微信窗口未能停靠到屏幕左侧');
+    }
+    const {
+      unique,
+      failedCount,
+      ambiguousCount,
+      associationDirectory,
+    } = await loadBoundWechatCustomers({ refreshCustomers: true });
+    const entries = Array.from(unique.entries()).map(([title, row]) => ({ title, row }));
+    if (!entries.length) {
+      throw new Error(ambiguousCount
+        ? '客户中心的微信名称存在重复，无法安全匹配，请先改成唯一名称'
+        : '客户中心还没有关联微信好友或群聊');
+    }
+    if (!window.electronAPI?.wechatUi?.focusConversation) {
+      throw new Error('当前安装包不支持逐个打开微信会话');
+    }
+
+    const result = await scanAllBoundWechatCustomers({
+      entries,
+      onProgress: ({ current, total, title }) => {
+        setWechatScanStatus(`正在巡查 ${current}/${total}：“${title}”`);
+      },
+      scanEntry: async ({ title, row }) => {
+        const focusWarning = await focusWechatImportConversation({ conversationTitle: title });
+        if (focusWarning) throw new Error(focusWarning);
+
+        row.binding = await ensureWechatBindingWithGroupMode({
+          row,
+          selectedTitle: title,
+          directory: associationDirectory,
+        });
+        const prepared = await prepareWechatOrderImport({
+          customerId: customerId(row.customer),
+          binding: row.binding,
+          // The visible focus flow already waits for WeChat to render and
+          // verifies the opened title. One short cached verification read is
+          // enough to catch a final local-database write without adding the
+          // multi-second retry budget used by the unread scanner.
+          retryDelaysMs: [250],
+        });
+        if (!prepared.payload) return [];
+        return createWechatImportItems(row, title, prepared);
+      },
+    });
+
+    const warningCount = failedCount + ambiguousCount + result.failures.length;
+    const checkedSummary = `已巡查 ${result.checkedCount} 个关联微信会话`;
+    const warningSummary = warningCount ? `；另有 ${warningCount} 项需检查` : '';
+    if (!result.imports.length) {
+      setWechatScanStatus(
+        `${checkedSummary}，没有发现未处理的新订单${warningSummary}`,
+        warningCount ? 'warning' : 'success'
+      );
+      return;
+    }
+
+    wechatImportQueue.value = result.imports;
+    wechatImportBatch.value = result.imports;
+    wechatImportCompletedTokens.value = [];
+    activeWechatImportToken.value = result.imports[0]?.token || null;
+    const totalMessages = result.imports.reduce((sum, item) => sum + item.messageCount, 0);
+    const customerCount = new Set(result.imports.map(item => String(item.customerId))).size;
+    setWechatScanStatus(
+      `${checkedSummary}，发现 ${customerCount} 位客户的 ${result.imports.length} 个订单任务（${totalMessages} 条新消息）${warningSummary}`,
+      warningCount ? 'warning' : 'success'
+    );
+    await openActiveWechatImport();
+    if (warningCount) {
+      const failedTitles = result.failures.slice(0, 3).map(item => `“${item.title}”`).join('、');
+      wechatWorkspaceWarning.value = [
+        wechatWorkspaceWarning.value,
+        `巡查已继续完成，但有 ${warningCount} 项需要检查${failedTitles ? `：${failedTitles}` : ''}`,
+      ].filter(Boolean).join('；');
+    }
+  } catch (error) {
+    setWechatScanStatus(error?.message || '巡查全部关联微信失败', 'error');
   } finally {
     wechatScanBusy.value = false;
   }
