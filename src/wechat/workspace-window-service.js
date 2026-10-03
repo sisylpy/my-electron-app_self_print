@@ -74,6 +74,31 @@ function macRestoreArgs(bounds) {
   ];
 }
 
+function macConversationTitleArgs() {
+  return [
+    '-e', 'tell application "System Events"',
+    '-e', 'if not (exists process "WeChat") then return ""',
+    '-e', 'tell process "WeChat"',
+    // Only observe a deliberate click inside WeChat. Reading its accessibility
+    // tree while GrainPrint is active would add needless background work and
+    // could mistake a programmatic transition for a user selection.
+    '-e', 'if frontmost is false then return ""',
+    '-e', 'if not (exists window "微信") then return ""',
+    '-e', 'set rootSplit to first splitter group of first splitter group of first group of window "微信"',
+    '-e', 'set chatHeader to first static text of first group of first splitter group of first group of rootSplit',
+    '-e', 'return name of chatHeader as text',
+    '-e', 'end tell',
+    '-e', 'end tell',
+  ];
+}
+
+function normalizeObservedConversationTitle(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s*[（(]\d+[）)]\s*$/u, '')
+    .trim();
+}
+
 function windowsScript(moduleDir) {
   return path.join(moduleDir, 'ui-automation', 'windows', 'dock-window.ps1');
 }
@@ -108,6 +133,10 @@ function createWechatWorkspaceWindowService(options = {}) {
   const getMainWindow = options.getMainWindow;
   const powershell = options.powershell || process.env.JCYX_WECHAT_UI_POWERSHELL || 'powershell.exe';
   let session = null;
+  let conversationWatcher = null;
+  let conversationWatcherRunning = false;
+  let conversationWatcherGeneration = 0;
+  let lastConversationTitle = '';
 
   if (typeof execFileAsync !== 'function' || !screen || typeof getMainWindow !== 'function') {
     throw new Error('微信订单工作台窗口服务配置不完整');
@@ -160,6 +189,59 @@ function createWechatWorkspaceWindowService(options = {}) {
     window.focus();
   }
 
+  function publishConversationTitle(title) {
+    const window = getMainWindow();
+    if (!window || window.isDestroyed()) return;
+    const webContents = window.webContents;
+    if (!webContents
+        || (typeof webContents.isDestroyed === 'function' && webContents.isDestroyed())) return;
+    webContents.send('wechat-ui-conversation-changed', { title });
+  }
+
+  async function observeConversationTitle(generation) {
+    if (platform !== 'darwin'
+        || !session
+        || conversationWatcherRunning
+        || generation !== conversationWatcherGeneration) return;
+    const appWindow = getMainWindow();
+    if (appWindow?.isFocused?.()) return;
+    const observedSession = session;
+    conversationWatcherRunning = true;
+    try {
+      const result = await execFileAsync('osascript', macConversationTitleArgs(), {
+        encoding: 'utf8',
+        timeout: 1500,
+      });
+      if (generation !== conversationWatcherGeneration || session !== observedSession) return;
+      const title = normalizeObservedConversationTitle(result.stdout);
+      if (!title || title === lastConversationTitle) return;
+      lastConversationTitle = title;
+      publishConversationTitle(title);
+    } catch {
+      // Accessibility can be briefly unavailable while WeChat redraws. The
+      // next lightweight observation will retry without interrupting the user.
+    } finally {
+      conversationWatcherRunning = false;
+    }
+  }
+
+  function stopConversationWatcher() {
+    conversationWatcherGeneration += 1;
+    if (conversationWatcher) clearInterval(conversationWatcher);
+    conversationWatcher = null;
+    lastConversationTitle = '';
+  }
+
+  function startConversationWatcher() {
+    stopConversationWatcher();
+    if (platform !== 'darwin') return;
+    const generation = conversationWatcherGeneration;
+    conversationWatcher = setInterval(() => {
+      void observeConversationTitle(generation);
+    }, 450);
+    conversationWatcher.unref?.();
+  }
+
   return Object.freeze({
     async open() {
       if (session) return { ok: true, result: session.layout };
@@ -188,6 +270,7 @@ function createWechatWorkspaceWindowService(options = {}) {
         window.show();
         window.focus();
         session = { saved, wechatBounds, layout };
+        startConversationWatcher();
         return { ok: true, result: layout };
       } catch (error) {
         restoreMainWindow(saved);
@@ -205,6 +288,7 @@ function createWechatWorkspaceWindowService(options = {}) {
 
     async close() {
       const current = session;
+      stopConversationWatcher();
       session = null;
       if (!current) return { ok: true };
       let warning = '';

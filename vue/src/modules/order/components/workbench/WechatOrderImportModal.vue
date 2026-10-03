@@ -63,7 +63,7 @@
                 </ol>
               </div>
               <button
-                v-if="items.length"
+                v-if="showSelectedImportAction && (items.length || activeItem)"
                 type="button"
                 class="wechat-import-modal__selected-import"
                 :disabled="busy || selectedImportBusy || customerMatchBusy"
@@ -503,6 +503,7 @@ const props = defineProps({
   refreshing: { type: Boolean, default: false },
   workspaceWarning: { type: String, default: '' },
   selectedImportBusy: { type: Boolean, default: false },
+  showSelectedImportAction: { type: Boolean, default: true },
   actionMessage: { type: String, default: '' },
   actionStatus: { type: String, default: 'warning' },
   unmatchedConversationTitle: { type: String, default: '' },

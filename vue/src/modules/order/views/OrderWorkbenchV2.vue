@@ -95,6 +95,7 @@
       :refreshing="wechatImportRefreshing"
       :workspace-warning="wechatWorkspaceWarning"
       :selected-import-busy="wechatSelectedImportBusy"
+      :show-selected-import-action="showCurrentWechatReadButton"
       :action-message="wechatSelectedImportMessage"
       :action-status="wechatSelectedImportStatus"
       :unmatched-conversation-title="wechatUnmatchedConversationTitle"
@@ -255,6 +256,7 @@ const wechatImportQueue = ref([]);
 const wechatImportBatch = ref([]);
 const wechatImportCompletedTokens = ref([]);
 const activeWechatImportToken = ref(null);
+const observedWechatConversationTitle = ref('');
 const wechatImportModalOpen = ref(false);
 const wechatImportRefreshing = ref(false);
 const wechatWorkspaceWarning = ref('');
@@ -269,6 +271,7 @@ const wechatCustomerMatchError = ref('');
 const wechatGroupModeRequest = ref(null);
 let wechatGroupModeResolver = null;
 let wechatImportSequence = 0;
+let wechatConversationFocusDepth = 0;
 const overview = reactive({
   customers: [],
   totals: { all: 0, needsReview: 0, needsPrice: 0, inProgress: 0, readyToPrint: 0 },
@@ -305,6 +308,13 @@ const activeWechatImport = computed(() => (
   || wechatImportQueue.value[0]
   || null
 ));
+const showCurrentWechatReadButton = computed(() => {
+  const title = normalizeObservedWechatConversationTitle(observedWechatConversationTitle.value);
+  if (!title) return true;
+  return !wechatImportBatch.value.some(item => (
+    normalizeObservedWechatConversationTitle(item?.conversationTitle) === title
+  ));
+});
 const wechatScanLabel = computed(() => {
   if (wechatScanBusy.value) return '正在读微信…';
   if (wechatImportQueue.value.length) return '继续微信订单';
@@ -636,6 +646,7 @@ async function focusWechatImportConversation(item) {
   const conversationTitle = String(item?.conversationTitle || '').trim();
   const focusApi = window.electronAPI?.wechatUi?.focusConversation;
   if (!conversationTitle || !focusApi) return '';
+  wechatConversationFocusDepth += 1;
   try {
     const result = await focusApi(conversationTitle);
     return result?.ok
@@ -643,6 +654,8 @@ async function focusWechatImportConversation(item) {
       : result?.error?.message || '左侧微信未能自动切换到对应会话';
   } catch (error) {
     return error?.message || '左侧微信未能自动切换到对应会话';
+  } finally {
+    wechatConversationFocusDepth = Math.max(0, wechatConversationFocusDepth - 1);
   }
 }
 
@@ -690,9 +703,21 @@ async function openActiveWechatImport(options = {}) {
   if (options.openWorkspace !== false) {
     await openWechatWorkspace();
   }
+  if (options.focusConversation !== false) {
+    observedWechatConversationTitle.value = normalizeObservedWechatConversationTitle(
+      item.conversationTitle
+    );
+  }
   const focusWarning = options.focusConversation === false
     ? ''
     : await focusWechatImportConversation(item);
+  const focusedTitle = normalizeObservedWechatConversationTitle(item.conversationTitle);
+  if (options.focusConversation !== false) {
+    if (!focusWarning) observedWechatConversationTitle.value = focusedTitle;
+    else if (observedWechatConversationTitle.value === focusedTitle) {
+      observedWechatConversationTitle.value = '';
+    }
+  }
   wechatWorkspaceWarning.value = [wechatWorkspaceWarning.value, focusWarning]
     .filter(Boolean)
     .join('；');
@@ -733,12 +758,52 @@ async function removeWechatImport(token) {
   }
 }
 
+function normalizeObservedWechatConversationTitle(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .trim()
+    .replace(/\s*\(\d+\)\s*$/u, '')
+    .trim();
+}
+
+async function syncWechatSelectionFromDesktop(payload) {
+  const title = normalizeObservedWechatConversationTitle(payload?.title);
+  if (!title) return;
+  observedWechatConversationTitle.value = title;
+  if (!wechatImportModalOpen.value
+      || wechatScanBusy.value
+      || wechatSelectedImportBusy.value
+      || wechatCustomerMatchBusy.value
+      || wechatConversationFocusDepth > 0) return;
+
+  const currentTitle = normalizeObservedWechatConversationTitle(
+    activeWechatImport.value?.conversationTitle
+  );
+  if (currentTitle === title) return;
+
+  const matchingItem = wechatImportQueue.value.find(item => (
+    normalizeObservedWechatConversationTitle(item?.conversationTitle) === title
+  ));
+  if (!matchingItem) return;
+
+  activeWechatImportToken.value = matchingItem.token;
+  // This event already came from a real WeChat selection. Only update the
+  // right-side draft; focusing WeChat again would create a feedback loop.
+  await openActiveWechatImport({ openWorkspace: false, focusConversation: false });
+}
+
+const removeWechatConversationListener = window.electronAPI?.wechatUi
+  ?.onConversationChanged?.((payload) => {
+    void syncWechatSelectionFromDesktop(payload);
+  });
+
 async function closeWechatImportModal() {
   cancelWechatGroupMode();
   const shouldCloseWechatWorkspace = wechatWorkspaceReady.value;
   wechatImportModalOpen.value = false;
   wechatScanReportOpen.value = false;
   wechatWorkspaceReady.value = false;
+  observedWechatConversationTitle.value = '';
   wechatScanMessage.value = '';
   dismissWechatSelectedAction();
   activeView.value = 'overview';
@@ -752,6 +817,7 @@ async function closeWechatImportModal() {
 
 onBeforeUnmount(() => {
   cancelWechatGroupMode();
+  removeWechatConversationListener?.();
   void window.electronAPI?.wechatUi?.closeWorkspace?.();
 });
 
@@ -999,16 +1065,20 @@ async function importSelectedWechatConversation() {
   wechatCustomerMatchOpen.value = false;
   wechatCustomerMatchError.value = '';
   try {
-    const currentConversationApi = window.electronAPI?.wechatUi?.currentConversation;
-    if (!currentConversationApi) {
-      throw new Error('当前安装包不支持识别所选微信好友');
+    let title = normalizeObservedWechatConversationTitle(
+      observedWechatConversationTitle.value
+    );
+    if (!title) {
+      const currentConversationApi = window.electronAPI?.wechatUi?.currentConversation;
+      if (!currentConversationApi) {
+        throw new Error('当前安装包不支持识别所选微信好友');
+      }
+      const selected = await currentConversationApi();
+      if (!selected?.ok) {
+        throw new Error(selected?.error?.message || '没有识别到当前微信好友');
+      }
+      title = normalizeObservedWechatConversationTitle(selected.result?.title);
     }
-    const selected = await currentConversationApi();
-    if (!selected?.ok) {
-      throw new Error(selected?.error?.message || '没有识别到当前微信好友');
-    }
-
-    const title = String(selected.result?.title || '').trim();
     if (!title) throw new Error('没有识别到当前微信好友名称');
     if (!customerContext.customers.value.length) await customerContext.reload();
     let matches = findWechatCustomerProfileMatches(customerContext.customers.value, title);

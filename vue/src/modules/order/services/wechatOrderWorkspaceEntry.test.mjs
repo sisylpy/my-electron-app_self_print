@@ -53,6 +53,8 @@ assert.match(modal, /unmatchedConversationTitle/);
 assert.match(modal, /选择群订单接收方式/);
 assert.match(modal, /ALL_MEMBER_MESSAGES/);
 assert.match(modal, /MENTION_SELF_ONLY/);
+assert.match(modal, /showSelectedImportAction && \(items\.length \|\| activeItem\)/);
+assert.match(workbench, /:show-selected-import-action="showCurrentWechatReadButton"/);
 assert.match(workbench, /WECHAT_GROUP_MODE_REQUIRED/);
 assert.match(workbench, /ensureWechatBindingWithGroupMode/);
 
@@ -89,5 +91,16 @@ assert.match(
   /await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: true \}\)/,
 );
 assert.doesNotMatch(selectTaskAction, /item\.token === activeWechatImport\.value\?\.token/);
+
+const desktopSelectionAction = workbench.match(
+  /async function syncWechatSelectionFromDesktop\(payload\) \{([\s\S]*?)\n\}\n\nconst removeWechatConversationListener/,
+)?.[1] || '';
+assert.match(workbench, /onConversationChanged/);
+assert.match(desktopSelectionAction, /observedWechatConversationTitle\.value = title/);
+assert.match(desktopSelectionAction, /activeWechatImportToken\.value = matchingItem\.token/);
+assert.match(
+  desktopSelectionAction,
+  /await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: false \}\)/,
+);
 
 console.log('WeChat order workspace entry passed');
