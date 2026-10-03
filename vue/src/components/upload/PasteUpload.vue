@@ -95,7 +95,7 @@
                                 <div
                                         class="d-flex gap-2 mt-2 flex-wrap" style="margin-bottom:40px;">
 
-                                    <div v-if="!pasteHasCache && pasteSaveCount == null && pasteOrderItems.length === 0"
+                                    <div v-if="!pasteHasCache && pasteSaveCount == null"
                                         class="d-flex gap-2 w-100">
                                         <button class="btn btn-sm btn-primary flex-grow-1" @click="$emit('paste-from-clipboard')"
                                                 :disabled="showDeepSeekLoading">从剪贴板粘贴
