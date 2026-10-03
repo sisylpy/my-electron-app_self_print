@@ -243,7 +243,7 @@
                                 </button>
                                 <button class="btn btn-sm"
                                         style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
-                                        @click="handleOrderAction(() => $emit('delete-order', { item, orderIndex }), orderIndex)"
+                                        @click.stop="handleOrderAction(() => $emit('delete-order', { item, orderIndex }), orderIndex)"
                                         title="删除"
                                         @mouseenter="$event.target.style.color='#dc3545'"
                                         @mouseleave="$event.target.style.color='#6c757d'">

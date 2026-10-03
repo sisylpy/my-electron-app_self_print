@@ -1701,7 +1701,6 @@ import api from '../services/orderApi';
 
                     if (res && res.data && res.data.code === 0) {
                         console.log('✅ [handleDeleteOrder] 删除成功，开始更新页面数据');
-                        this.$emit('task-added');
 
                         const updatedTask = res.data.task;
                         if (updatedTask && this.currentTaskId != null && updatedTask.nxOcrTaskId === this.currentTaskId) {
@@ -2729,7 +2728,6 @@ import api from '../services/orderApi';
 
                         if (res && res.data && res.data.code === 0) {
                             console.log('✅ [handleDeleteOrderFromExcel] 删除成功，开始更新页面数据');
-                            this.$emit('task-added');
                             const updatedTask = res.data.task;
                             if (updatedTask && this.currentTaskId != null && updatedTask.nxOcrTaskId === this.currentTaskId) {
                                 this.currentTask = {...this.currentTask, ...updatedTask};
