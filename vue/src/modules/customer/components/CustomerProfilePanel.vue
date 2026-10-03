@@ -11,6 +11,13 @@
         <div><span>定价方式</span><strong>{{ customer.nxDepartmentType === 'fixed' ? '固定价格' : '市场变动' }}</strong></div>
         <div><span>交付方式</span><strong>{{ customer.nxDepartmentDeliveryMode === 'SELF_PICKUP' ? '客户自提' : '配送到店' }}</strong></div>
         <div><span>配送单格式</span><strong>{{ printName }}</strong></div>
+        <div><span>客户微信名称</span><strong>{{ wechatName || '未设置' }}</strong></div>
+        <div>
+          <span>微信订单接收方式</span>
+          <strong :class="{ 'wechat-mode': wechatBinding?.bound }">
+            {{ wechatBindingLoading ? '正在读取…' : wechatTypeLabel }}
+          </strong>
+        </div>
       </div>
     </section>
 
@@ -41,6 +48,11 @@
 </template>
 
 <script>
+import {
+  customerWechatDisplayName,
+  customerWechatTypeLabel,
+} from '../presentation/customerWechatBinding';
+
 const PRINT_NAMES = {
   ApplyPanel: '一张一列', ApplyFiftyPanel: '一张两列', ApplyHalfWholePanel: '半张一列',
   ApplyHalfPanel: '半张两列', ApplyThirtyWholePanel: '三分之一张一列', ApplyThirtyPanel: '三分之一张两列',
@@ -54,11 +66,18 @@ function time(value) {
 }
 export default {
   name: 'CustomerProfilePanel',
-  props: { customer: { type: Object, required: true }, selectedLabels: { type: Array, default: () => [] } },
+  props: {
+    customer: { type: Object, required: true },
+    selectedLabels: { type: Array, default: () => [] },
+    wechatBinding: { type: Object, default: null },
+    wechatBindingLoading: Boolean,
+  },
   emits: ['edit'],
   computed: {
     departments() { return this.customer.nxDepartmentEntities || []; },
     printName() { return PRINT_NAMES[this.customer.nxDepartmentPrintName] || '半张一列'; },
+    wechatName() { return customerWechatDisplayName(this.customer, this.wechatBinding); },
+    wechatTypeLabel() { return customerWechatTypeLabel(this.wechatBinding, Boolean(this.wechatName)); },
     deliveryWindow() {
       const start = time(this.customer.nxDepartmentEarliestDeliveryTime);
       const end = time(this.customer.nxDepartmentLatestDeliveryTime);
@@ -159,6 +178,7 @@ export default {
   color:#26312d;
   overflow-wrap:anywhere;
 }
+.detail-grid strong.wechat-mode{color:#087b48}
 .stacked-details{display:grid;gap:0}
 .tag-list{
   display:flex;

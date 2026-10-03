@@ -24,6 +24,19 @@ function trainingBridge(method, ...args) {
   return bridge[method](...args);
 }
 
+function wechatBindingBridge(method, ...args) {
+  const bridge = window.electronAPI?.customerWechatOrders;
+  if (!bridge || typeof bridge[method] !== 'function') {
+    return Promise.resolve({
+      ok: false,
+      status: 503,
+      errorCode: 'DESKTOP_SESSION_UNAVAILABLE',
+      message: '客户微信资料需要在桌面端安全会话中使用',
+    });
+  }
+  return bridge[method](...args);
+}
+
 export default {
   listCustomers(distributerId, responsibleUserId) {
     return axiosInstance.get(`nxdepartment/disGetAllCustomer/${distributerId}`, {
@@ -36,6 +49,12 @@ export default {
   },
   updateCustomer(customer) {
     return axiosInstance.post('nxdepartment/updateGroupName', customer);
+  },
+  loadWechatBinding(customerId) {
+    return wechatBindingBridge('loadBinding', Number(customerId));
+  },
+  saveWechatBinding(payload) {
+    return wechatBindingBridge('saveBinding', payload);
   },
   deleteCustomer(customer) {
     return axiosInstance.post('nxdepartment/deleteGroupDep', customer);

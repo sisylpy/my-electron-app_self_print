@@ -23,7 +23,7 @@
           <label>客户名称（配送单打印）<input v-model.trim="form.nxDepartmentName" /></label>
           <label>简称（标签打印）<input v-model.trim="form.nxDepartmentAttrName" /></label>
           <label>对外订货代号<input v-model.trim="form.nxDepartmentOrderCode" /></label>
-          <label>微信好友／群昵称
+          <label>客户微信名称（好友／群昵称）
             <input
               v-model.trim="form.nxDepartmentWechatDisplayName"
               type="text"
@@ -32,6 +32,29 @@
             />
             <small class="field-tip">用于微信聊天订单搜索；保存后可在订单录入页通过“转所选微信好友订单”自动完成关联或迁移。</small>
           </label>
+          <div class="wechat-mode-field">
+            <span>微信订单接收方式</span>
+            <template v-if="wechatBinding?.bound && wechatBinding.conversationKind === WECHAT_CONVERSATION_GROUP">
+              <div class="wechat-mode-options">
+                <label :class="{ selected: wechatGroupMode === WECHAT_GROUP_ALL_MEMBERS }">
+                  <input v-model="wechatGroupMode" type="radio" :value="WECHAT_GROUP_ALL_MEMBERS" />
+                  <strong>专属群</strong>
+                  <small>群内其他成员发送的文字和图片都可以作为订单</small>
+                </label>
+                <label :class="{ selected: wechatGroupMode === WECHAT_GROUP_MENTION_SELF }">
+                  <input v-model="wechatGroupMode" type="radio" :value="WECHAT_GROUP_MENTION_SELF" />
+                  <strong>混合群</strong>
+                  <small>只接收明确 @ 当前微信账号的文字消息</small>
+                </label>
+              </div>
+            </template>
+            <div v-else-if="wechatBinding?.bound" class="wechat-mode-readonly">
+              <strong>微信好友</strong><small>当前关联为好友单聊，不需要设置群消息规则</small>
+            </div>
+            <div v-else class="wechat-mode-readonly muted">
+              <strong>尚未关联</strong><small>可先保存微信名称，之后在订单工作台完成微信关联</small>
+            </div>
+          </div>
           <label>拣货名称<input v-model.trim="form.nxDepartmentPickName" /></label>
           <label>每日录音时长（分钟）<input v-model.number="form.nxDepartmentRecordMinutes" type="number" min="0" /></label>
           <label>配送单格式
@@ -131,6 +154,12 @@
 </template>
 
 <script>
+import {
+  WECHAT_CONVERSATION_GROUP,
+  WECHAT_GROUP_ALL_MEMBERS,
+  WECHAT_GROUP_MENTION_SELF,
+} from '../presentation/customerWechatBinding';
+
 const PRINT_OPTIONS = [
   ['ApplyPanel', '一张一列'], ['ApplyFiftyPanel', '一张两列'],
   ['ApplyHalfWholePanel', '半张一列'], ['ApplyHalfPanel', '半张两列'],
@@ -163,10 +192,14 @@ export default {
     initialLabelIds: { type: Array, default: () => [] },
     saving: Boolean,
     errorText: { type: String, default: '' },
+    wechatBinding: { type: Object, default: null },
   },
   emits: ['close', 'save', 'delete', 'manage-users', 'transfer'],
   data() {
     const form = clone(this.customer);
+    if (!form.nxDepartmentWechatDisplayName && this.wechatBinding?.displayName) {
+      form.nxDepartmentWechatDisplayName = this.wechatBinding.displayName;
+    }
     if (!form.nxDepartmentDeliveryMode) form.nxDepartmentDeliveryMode = 'DELIVERY';
     if (!form.nxDepartmentDispatchPriorityWeight) form.nxDepartmentDispatchPriorityWeight = 3;
     return {
@@ -176,7 +209,13 @@ export default {
         { key: 'labels', label: '客户标签' }, { key: 'more', label: '更多' },
       ],
       printOptions: PRINT_OPTIONS.map(([value, label]) => ({ value, label })),
+      WECHAT_CONVERSATION_GROUP,
+      WECHAT_GROUP_ALL_MEMBERS,
+      WECHAT_GROUP_MENTION_SELF,
       form,
+      wechatGroupMode: this.wechatBinding?.groupMode === WECHAT_GROUP_ALL_MEMBERS
+        ? WECHAT_GROUP_ALL_MEMBERS
+        : WECHAT_GROUP_MENTION_SELF,
       earliestTime: secondsToTime(form.nxDepartmentEarliestDeliveryTime),
       latestTime: secondsToTime(form.nxDepartmentLatestDeliveryTime),
       allowEarlyDelivery: form.nxDepartmentAllowEarlyDelivery !== 0,
@@ -192,7 +231,11 @@ export default {
       this.form.nxDepartmentEarliestDeliveryTime = timeToSeconds(this.earliestTime);
       this.form.nxDepartmentLatestDeliveryTime = timeToSeconds(this.latestTime);
       this.form.nxDepartmentAllowEarlyDelivery = this.allowEarlyDelivery ? 1 : 0;
-      this.$emit('save', { customer: clone(this.form), labelIds: this.selectedLabelIds.slice() });
+      this.$emit('save', {
+        customer: clone(this.form),
+        labelIds: this.selectedLabelIds.slice(),
+        wechatGroupMode: this.wechatGroupMode,
+      });
     },
   },
 };
@@ -203,5 +246,7 @@ export default {
 .customer-drawer{width:min(640px,92vw);height:100%;background:#fff;box-shadow:-18px 0 48px rgba(20,55,43,.18);display:flex;flex-direction:column;animation:slide-in .24s ease}
 .drawer-header{padding:25px 28px 18px;display:flex;justify-content:space-between;border-bottom:1px solid #e7efeb}.drawer-header h3{margin:3px 0;font-size:25px}.drawer-header p{margin:0;color:#76847e}.drawer-eyebrow{font-size:12px;font-weight:800;letter-spacing:.12em;color:#139d61}.icon-button{border:0;background:#eff6f2;border-radius:12px;width:40px;height:40px;font-size:28px;color:#52615b}.drawer-tabs{padding:12px 20px;display:flex;gap:7px;border-bottom:1px solid #edf2ef}.drawer-tabs button{border:0;background:transparent;padding:9px 13px;border-radius:10px;color:#66736e;font-weight:700}.drawer-tabs button.active{background:#e7f6ee;color:#087a48}.drawer-body{flex:1;overflow:auto;padding:24px 28px}.form-section h4{font-size:16px;margin:0 0 15px}.form-section h4:not(:first-child){margin-top:28px}.form-section>label{display:flex;flex-direction:column;gap:7px;margin-bottom:15px;color:#53615b;font-size:14px;font-weight:700}.form-section input:not([type=radio]):not([type=checkbox]),.form-section select,.form-section textarea{width:100%;border:1px solid #cfddd5;border-radius:10px;padding:11px 12px;background:#fff;color:#17211d;outline:none}.form-section input:focus,.form-section select:focus,.form-section textarea:focus{border-color:#12a260;box-shadow:0 0 0 3px rgba(18,162,96,.1)}.two-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px}.two-columns label{display:flex;flex-direction:column;gap:7px;font-size:14px;font-weight:700;color:#53615b}.choice-row{display:grid;grid-template-columns:120px 1fr 1fr;align-items:center;padding:13px 0;border-bottom:1px solid #eef2f0}.choice-row>span{font-weight:700}.choice-row label,.switch-line{font-weight:500!important;margin:0!important;display:block!important}.section-tip{font-size:13px;color:#7c8984;margin-top:-7px}.label-grid{display:flex;flex-wrap:wrap;gap:10px}.label-option{border:1px solid #d7e3dd;border-radius:999px;padding:8px 13px;cursor:pointer}.label-option input{display:none}.label-option.selected{background:#e4f6ec;border-color:#19a564;color:#087b48}.department-list{display:grid;gap:9px}.department-list div{display:flex;justify-content:space-between;padding:13px;border:1px solid #e0e8e4;border-radius:10px}.department-list small{color:#8b9691}.empty-note{padding:24px;text-align:center;background:#f7faf8;color:#84908b;border-radius:12px}.danger-zone{margin-top:35px;padding:20px;border:1px solid #f1d6d6;border-radius:14px;background:#fff9f9}.danger-zone p{font-size:13px;color:#8e6868}.danger-button{border:1px solid #dc5962;background:#fff;color:#c63843;border-radius:10px;padding:9px 14px}.drawer-footer{padding:16px 24px;border-top:1px solid #e5ece8;display:flex;align-items:center;gap:10px}.save-error{color:#cf3e49;font-size:13px;margin-right:auto}.primary-button,.secondary-button{border-radius:10px;padding:10px 17px;font-weight:800}.primary-button{border:0;background:#119e5e;color:#fff}.primary-button:disabled{opacity:.55}.secondary-button{border:1px solid #d5dfda;background:#fff;color:#53615b}@keyframes slide-in{from{transform:translateX(40px);opacity:.4}to{transform:none;opacity:1}}@keyframes fade-in{from{opacity:0}to{opacity:1}}@media(max-width:700px){.two-columns{grid-template-columns:1fr}.choice-row{grid-template-columns:1fr;gap:8px}}
 .field-tip{font-size:12px;font-weight:500;color:#87938e;line-height:1.5}
+.wechat-mode-field{margin-bottom:18px;color:#53615b;font-size:14px;font-weight:700}.wechat-mode-field>span{display:block;margin-bottom:8px}.wechat-mode-options{display:grid;grid-template-columns:1fr 1fr;gap:10px}.wechat-mode-options label{position:relative;display:grid;gap:3px;padding:13px 14px;border:1px solid #d4e1da;border-radius:11px;background:#fff;cursor:pointer}.wechat-mode-options label.selected{border-color:#20a866;background:#edf8f2;box-shadow:0 0 0 2px rgba(18,158,94,.08)}.wechat-mode-options input{position:absolute;opacity:0;pointer-events:none}.wechat-mode-options strong,.wechat-mode-readonly strong{color:#26332d}.wechat-mode-options small,.wechat-mode-readonly small{font-size:11px;font-weight:500;line-height:1.45;color:#7d8a84}.wechat-mode-readonly{display:flex;flex-direction:column;gap:3px;padding:12px 14px;border:1px solid #d8e4de;border-radius:10px;background:#f7faf8}.wechat-mode-readonly.muted strong{color:#6f7d76}
 .danger-zone{border-color:#e2e9e5;background:#fafcfb}.danger-zone p{color:#75827c}.rare-actions{display:grid;gap:8px;margin:14px 0 18px}.rare-actions>button{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;padding:11px;border:1px solid #dce6e1;border-radius:10px;background:#fff;text-align:left;color:#33413a}.rare-actions>button>span{width:34px;height:34px;border-radius:9px;background:#edf4f1;display:grid;place-items:center;color:#5f7168;font-weight:900}.rare-actions>button div{min-width:0}.rare-actions strong,.rare-actions small{display:block}.rare-actions small{margin-top:3px;color:#8b9691;font-size:10px}.rare-actions b{font-size:19px;color:#96a19c}.delete-tip{padding-top:15px;border-top:1px solid #eee1e1;color:#8e6868!important}
+@media(max-width:700px){.wechat-mode-options{grid-template-columns:1fr}}
 </style>

@@ -81,6 +81,8 @@
             v-if="activeTab === 'profile'"
             :customer="customer"
             :selected-labels="selectedLabels"
+            :wechat-binding="wechatBinding"
+            :wechat-binding-loading="wechatBindingLoading"
             @edit="editDrawerOpen = true"
           />
           <CustomerGoodsPanel
@@ -124,6 +126,7 @@
       :customer="customer"
       :labels="labels"
       :initial-label-ids="selectedLabelIds"
+      :wechat-binding="wechatBinding"
       :saving="savingCustomer"
       :error-text="saveError"
       @close="closeEditDrawer"
@@ -228,6 +231,10 @@ import CustomerAfterSalesPanel from '../components/CustomerAfterSalesPanel.vue';
 import CustomerUsersDrawer from '../components/CustomerUsersDrawer.vue';
 import CustomerDepartmentTransferDrawer from '../components/CustomerDepartmentTransferDrawer.vue';
 import CustomerOcrTrainingPanel from '../components/CustomerOcrTrainingPanel.vue';
+import {
+  buildCustomerWechatBindingPayload,
+  normalizeCustomerWechatBinding,
+} from '../presentation/customerWechatBinding';
 
 const historyPrintComponentLoaders = {
   ApplyPanel: () => import('@/components/Applys/ApplyPanel.vue'),
@@ -271,6 +278,8 @@ export default {
       detailError: '',
       labels: [],
       selectedLabelIds: [],
+      wechatBinding: normalizeCustomerWechatBinding(null),
+      wechatBindingLoading: false,
       activeTab: 'profile',
       tabs: [
         { key: 'profile', icon: '客', label: '客户资料', description: '基础与配送信息' },
@@ -377,6 +386,8 @@ export default {
       this.customer = null;
       this.labels = [];
       this.selectedLabelIds = [];
+      this.wechatBinding = normalizeCustomerWechatBinding(null);
+      this.wechatBindingLoading = true;
       this.standardRelation = null;
       this.priceGoods = null;
       this.activeTab = 'profile';
@@ -384,9 +395,13 @@ export default {
       this.detailError = '';
       const requestId = ++this.detailRequestId;
       try {
-        const [detailResponse, labelResponse] = await Promise.all([
+        const [detailResponse, labelResponse, bindingResponse] = await Promise.all([
           customerApi.getCustomer(id),
           customerApi.getLabels(this.distributerId, id),
+          customerApi.loadWechatBinding(id).catch((error) => ({
+            ok: false,
+            message: error?.message || '微信资料加载失败',
+          })),
         ]);
         const detail = ensureSuccess(detailResponse, '客户资料加载失败') || row;
         if (labelResponse?.data?.code !== 0) throw new Error(labelResponse?.data?.msg || '客户标签加载失败');
@@ -395,11 +410,17 @@ export default {
         this.customer = detail;
         this.labels = labelPayload.labelList || [];
         this.selectedLabelIds = labelPayload.selectedLabelIds || [];
+        this.wechatBinding = normalizeCustomerWechatBinding(
+          bindingResponse?.ok ? bindingResponse.data : null,
+        );
       } catch (error) {
         if (requestId !== this.detailRequestId) return;
         this.detailError = error?.message || '客户资料加载失败';
       } finally {
-        if (requestId === this.detailRequestId) this.detailLoading = false;
+        if (requestId === this.detailRequestId) {
+          this.detailLoading = false;
+          this.wechatBindingLoading = false;
+        }
       }
     },
     reloadSelectedCustomer() {
@@ -429,6 +450,19 @@ export default {
           await customerApi.syncLabels(this.distributerId, payload.customer.nxDepartmentId, payload.labelIds),
           '客户标签保存失败',
         );
+        const bindingPayload = buildCustomerWechatBindingPayload(
+          payload.customer.nxDepartmentId,
+          this.wechatBinding,
+          payload.customer.nxDepartmentWechatDisplayName,
+          payload.wechatGroupMode,
+        );
+        if (bindingPayload) {
+          const bindingResponse = await customerApi.saveWechatBinding(bindingPayload);
+          if (!bindingResponse?.ok) {
+            throw new Error(bindingResponse?.message || '微信资料保存失败');
+          }
+          this.wechatBinding = normalizeCustomerWechatBinding(bindingResponse.data);
+        }
         this.editDrawerOpen = false;
         this.showNotice('客户资料已保存');
         await this.loadCustomers(payload.customer.nxDepartmentId);

@@ -9,10 +9,19 @@ const orderSource = fs.readFileSync(
   'vue/src/modules/order/components/workbench/WechatOrderSource.vue',
   'utf8',
 );
+const profilePanel = fs.readFileSync(
+  'vue/src/modules/customer/components/CustomerProfilePanel.vue',
+  'utf8',
+);
 
-assert.match(editDrawer, /微信好友／群昵称/);
+assert.match(editDrawer, /客户微信名称（好友／群昵称）/);
 assert.match(editDrawer, /v-model\.trim="form\.nxDepartmentWechatDisplayName"/);
 assert.match(editDrawer, /maxlength="255"/);
+assert.match(editDrawer, /专属群/);
+assert.match(editDrawer, /混合群/);
+assert.match(editDrawer, /wechatGroupMode/);
+assert.match(profilePanel, /客户微信名称/);
+assert.match(profilePanel, /微信订单接收方式/);
 assert.match(
   orderSource,
   /if \(!loaded\.bound && loaded\.displayName\) searchName\.value = loaded\.displayName;/,
