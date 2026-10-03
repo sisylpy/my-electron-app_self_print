@@ -113,7 +113,18 @@ function decodeWechatImageEnvelope(envelope) {
   const candidates = Array.isArray(envelope?.v2Candidates) ? envelope.v2Candidates : [];
   let sawWxgf = false;
   let sawPayload = false;
+  let sawThumbnail = false;
   for (const variant of variants) {
+    // `_t.dat` is only the tiny image rendered in the chat bubble.  It is
+    // commonly 118 x 210 and is not suitable for order recognition.  Older
+    // code silently returned it whenever the WXGF original could not be
+    // decoded, which made the existing OCR modal label a thumbnail as the
+    // original image.  A thumbnail may be useful for locating the message in
+    // WeChat, but it must never cross this attachment boundary as order input.
+    if (variant?.kind === 'thumbnail') {
+      if (variant?.encryptedBase64) sawThumbnail = true;
+      continue;
+    }
     const encrypted = Buffer.from(String(variant?.encryptedBase64 || ''), 'base64');
     if (!encrypted.length) continue;
     sawPayload = true;
@@ -123,9 +134,12 @@ function decodeWechatImageEnvelope(envelope) {
       if (error?.message === 'WXGF_UNSUPPORTED') sawWxgf = true;
     }
   }
+  if (!sawPayload && sawThumbnail) {
+    throw new Error('微信尚未下载这张图片的高清原图，目前只有聊天缩略图。请在微信中完整打开原图，待加载完成后重试');
+  }
   if (!sawPayload) throw new Error('微信图片数据为空');
   if (sawWxgf) {
-    throw new Error('微信原图为 WXGF 格式，且没有找到可识别的图片版本；请在微信中打开原图后重试');
+    throw new Error('微信尚未下载可读取的高清原图，目前只有 WXGF 容器和聊天缩略图。请在微信中完整打开原图，待加载完成后重试');
   }
   throw new Error('微信图片解码失败，请先在微信中打开原图后重试');
 }

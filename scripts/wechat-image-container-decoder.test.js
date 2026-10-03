@@ -59,21 +59,35 @@ assert.deepEqual(
 );
 
 // Current macOS WeChat often stores the full-size image as WXGF while keeping
-// a JPEG thumbnail beside it. The decoder must continue to the next available
-// variant instead of reporting a misleading key/decode failure.
+// a tiny JPEG thumbnail beside it.  The thumbnail must never be returned as
+// order input: the user must open the original in WeChat so that the readable
+// high-quality variant is downloaded first.
 const wxgfPayload = Buffer.concat([Buffer.from('wxgf', 'ascii'), Buffer.alloc(1200, 0xcd)]);
 const wxgfV2 = encodeVersioned(wxgfPayload, V2_MAGIC, v2Key, 31, 1024, 27);
 const thumbnailJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x11, 0x22, 0x33]);
 const thumbnailV2 = encodeVersioned(thumbnailJpeg, V2_MAGIC, v2Key, 31, 4, 3);
-assert.deepEqual(
-  Buffer.from(decodeWechatImageEnvelope({
+assert.throws(
+  () => decodeWechatImageEnvelope({
     encryptedVariants: [
       { kind: 'original', encryptedBase64: wxgfV2.toString('base64') },
       { kind: 'thumbnail', encryptedBase64: thumbnailV2.toString('base64') },
     ],
     v2Candidates: [{ aesKey: v2Key, xorKey: 31 }],
+  }),
+  /完整打开原图/,
+);
+
+const highQualityJpeg = Buffer.concat([jpeg, Buffer.alloc(2048, 0xef)]);
+const highQualityV2 = encodeVersioned(highQualityJpeg, V2_MAGIC, v2Key, 31, 1024, 27);
+assert.deepEqual(
+  Buffer.from(decodeWechatImageEnvelope({
+    encryptedVariants: [
+      { kind: 'high', encryptedBase64: highQualityV2.toString('base64') },
+      { kind: 'thumbnail', encryptedBase64: thumbnailV2.toString('base64') },
+    ],
+    v2Candidates: [{ aesKey: v2Key, xorKey: 31 }],
   }).base64, 'base64'),
-  thumbnailJpeg,
+  highQualityJpeg,
 );
 
 console.log('WeChat image container decoder tests passed');
