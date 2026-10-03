@@ -198,12 +198,43 @@
 
           <Transition name="wechat-import-action">
             <div
-              v-if="selectedImportBusy || actionMessage || unmatchedConversationTitle || customerMatchOpen"
+              v-if="selectedImportBusy || actionMessage || unmatchedConversationTitle || customerMatchOpen || groupModeRequest"
               class="wechat-import-modal__action-mask"
-              @click.self="$emit('dismiss-action-message')"
+              @click.self="groupModeRequest ? $emit('cancel-group-mode') : $emit('dismiss-action-message')"
             >
               <section
-                v-if="customerMatchOpen"
+                v-if="groupModeRequest"
+                class="wechat-import-modal__group-mode-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="wechat-group-mode-title"
+              >
+                <header>
+                  <small>微信群转订单</small>
+                  <h3 id="wechat-group-mode-title">选择群订单接收方式</h3>
+                  <p>
+                    已找到客户 <strong>{{ groupModeRequest.customerName }}</strong>
+                    对应的微信群 <strong>“{{ groupModeRequest.title }}”</strong>。请选择哪些群消息可以作为订单。
+                  </p>
+                </header>
+                <div class="wechat-import-modal__group-mode-options">
+                  <button type="button" @click="$emit('select-group-mode', 'ALL_MEMBER_MESSAGES')">
+                    <span aria-hidden="true">全</span>
+                    <strong>专属客户群</strong>
+                    <em>接收群内所有成员发送的文字和图片订单</em>
+                  </button>
+                  <button type="button" @click="$emit('select-group-mode', 'MENTION_SELF_ONLY')">
+                    <span aria-hidden="true">@</span>
+                    <strong>混合业务群</strong>
+                    <em>仅接收明确 @ 当前微信账号的文字和图片订单</em>
+                  </button>
+                </div>
+                <footer>
+                  <button type="button" @click="$emit('cancel-group-mode')">取消</button>
+                </footer>
+              </section>
+              <section
+                v-else-if="customerMatchOpen"
                 class="wechat-import-modal__match-dialog"
                 role="dialog"
                 aria-modal="true"
@@ -354,6 +385,7 @@ const props = defineProps({
   customerMatchCustomers: { type: Array, default: () => [] },
   customerMatchBusy: { type: Boolean, default: false },
   customerMatchError: { type: String, default: '' },
+  groupModeRequest: { type: Object, default: null },
 });
 
 const emit = defineEmits([
@@ -367,6 +399,8 @@ const emit = defineEmits([
   'start-customer-match',
   'cancel-customer-match',
   'confirm-customer-match',
+  'select-group-mode',
+  'cancel-group-mode',
   'dismiss-action-message',
 ]);
 
@@ -824,6 +858,63 @@ function removeItem(item) {
 }
 .wechat-import-modal__action-dialog.is-success > button { background: #118555; }
 
+.wechat-import-modal__group-mode-dialog {
+  width: min(620px, calc(100vw - 40px));
+  padding: 25px;
+  border: 1px solid #8bc8aa;
+  border-radius: 22px;
+  color: #244738;
+  background: #fbfffc;
+  box-shadow: 0 28px 80px rgba(18, 48, 34, .28);
+}
+.wechat-import-modal__group-mode-dialog header small { color: #188253; font-size: 10px; font-weight: 900; letter-spacing: .1em; }
+.wechat-import-modal__group-mode-dialog header h3 { margin: 4px 0 8px; color: #173b2c; font-size: 22px; }
+.wechat-import-modal__group-mode-dialog header p { margin: 0; color: #577164; font-size: 12px; line-height: 1.7; }
+.wechat-import-modal__group-mode-dialog header p strong { color: #214c39; }
+.wechat-import-modal__group-mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+.wechat-import-modal__group-mode-options > button {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 2px 11px;
+  min-height: 96px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #c9ddd3;
+  border-radius: 14px;
+  color: #2b4b3d;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+.wechat-import-modal__group-mode-options > button:hover { border-color: #19905a; background: #f0faf5; transform: translateY(-1px); }
+.wechat-import-modal__group-mode-options > button > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  grid-row: 1 / 3;
+  place-items: center;
+  border-radius: 11px;
+  color: #fff;
+  background: #15915a;
+  font-size: 14px;
+  font-weight: 900;
+}
+.wechat-import-modal__group-mode-options strong { align-self: end; color: #183d2d; font-size: 14px; }
+.wechat-import-modal__group-mode-options em { align-self: start; color: #6b8076; font-size: 10px; font-style: normal; line-height: 1.45; }
+.wechat-import-modal__group-mode-dialog footer { display: flex; justify-content: flex-end; margin-top: 16px; }
+.wechat-import-modal__group-mode-dialog footer button {
+  min-height: 38px;
+  padding: 0 17px;
+  border: 1px solid #c7d8d0;
+  border-radius: 10px;
+  color: #527064;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
 .wechat-import-modal__unmatched-dialog,
 .wechat-import-modal__match-dialog {
   width: min(620px, calc(100vw - 40px));
@@ -977,6 +1068,10 @@ function removeItem(item) {
 .wechat-import-modal__match-dialog footer { display: flex; justify-content: flex-end; gap: 9px; }
 .wechat-import-modal__match-dialog footer button:disabled,
 .wechat-import-modal__unmatched-dialog footer button:disabled { cursor: wait; opacity: .55; }
+
+@media (max-width: 720px) {
+  .wechat-import-modal__group-mode-options { grid-template-columns: 1fr; }
+}
 
 .wechat-import-action-enter-active,
 .wechat-import-action-leave-active { transition: opacity .16s ease; }

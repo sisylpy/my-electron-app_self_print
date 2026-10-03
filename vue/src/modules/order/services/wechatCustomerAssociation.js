@@ -3,6 +3,12 @@ import {
   unwrapWechatReader,
   unwrapWechatServer,
 } from './wechatOrderImport.js';
+import {
+  GROUP_ALL_MEMBER_MESSAGES,
+  GROUP_MENTION_SELF_ONLY,
+} from './wechatOrderMessagePolicy.js';
+
+export const WECHAT_GROUP_MODE_REQUIRED = 'WECHAT_GROUP_MODE_REQUIRED';
 
 function title(value) {
   return String(value || '').trim();
@@ -81,6 +87,7 @@ export async function ensureWechatCustomerBinding({
   row,
   selectedTitle,
   directory,
+  groupMode: requestedGroupMode = null,
   electronAPI = window.electronAPI,
 }) {
   const normalizedTitle = title(selectedTitle);
@@ -113,8 +120,17 @@ export async function ensureWechatCustomerBinding({
   ));
   let groupMode = null;
   if (conversation.kind === 'group') {
-    groupMode = priorRow?.binding?.groupMode || current.groupMode || null;
-    if (!groupMode) throw new Error('群聊需要先在订单录入页选择订单接收方式');
+    groupMode = [
+      requestedGroupMode,
+      priorRow?.binding?.groupMode,
+      current.groupMode,
+    ].find(value => [GROUP_ALL_MEMBER_MESSAGES, GROUP_MENTION_SELF_ONLY].includes(value)) || null;
+    if (!groupMode) {
+      const error = new Error('请选择这个群的订单接收方式');
+      error.code = WECHAT_GROUP_MODE_REQUIRED;
+      error.conversationTitle = conversation.displayName;
+      throw error;
+    }
   }
 
   const customerId = Number(row?.customer?.nxDepartmentId ?? row?.customer?.departmentId);

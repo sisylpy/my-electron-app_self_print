@@ -23,7 +23,7 @@ const unreadAction = workbench.match(
 assert.match(unreadAction, /loadBoundWechatCustomers/);
 assert.match(unreadAction, /loadBoundWechatCustomers\(\{ refreshCustomers: true \}\)/);
 assert.match(unreadAction, /wechatUi\?\.readUnread/);
-assert.match(unreadAction, /ensureWechatCustomerBinding/);
+assert.match(unreadAction, /ensureWechatBindingWithGroupMode/);
 assert.match(workbench, /resolveWechatCustomerAssociation/);
 
 assert.match(modal, /读未读订单/);
@@ -33,6 +33,11 @@ assert.match(modal, /页面不会自动扫描/);
 assert.match(modal, /去跟客户匹配/);
 assert.match(modal, /关联并继续转订单/);
 assert.match(modal, /unmatchedConversationTitle/);
+assert.match(modal, /选择群订单接收方式/);
+assert.match(modal, /ALL_MEMBER_MESSAGES/);
+assert.match(modal, /MENTION_SELF_ONLY/);
+assert.match(workbench, /WECHAT_GROUP_MODE_REQUIRED/);
+assert.match(workbench, /ensureWechatBindingWithGroupMode/);
 
 const selectedAction = workbench.match(
   /async function importSelectedWechatConversation\(\) \{([\s\S]*?)\n\}\n\nasync function openWechatCustomerMatcher/,

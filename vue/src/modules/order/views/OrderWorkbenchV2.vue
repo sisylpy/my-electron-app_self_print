@@ -99,6 +99,7 @@
       :customer-match-customers="customerContext.customers.value"
       :customer-match-busy="wechatCustomerMatchBusy"
       :customer-match-error="wechatCustomerMatchError"
+      :group-mode-request="wechatGroupModeRequest"
       @close="closeWechatImportModal"
       @refresh="refreshActiveWechatImport({ manual: true })"
       @merge-new="mergeActiveWechatImport"
@@ -109,6 +110,8 @@
       @start-customer-match="openWechatCustomerMatcher"
       @cancel-customer-match="closeWechatCustomerMatcher"
       @confirm-customer-match="confirmWechatCustomerMatch"
+      @select-group-mode="selectWechatGroupMode"
+      @cancel-group-mode="cancelWechatGroupMode"
       @dismiss-action-message="dismissWechatSelectedAction"
     >
       <AiOrderPanel
@@ -211,7 +214,12 @@ import {
   ensureWechatCustomerBinding,
   findWechatCustomerProfileMatches,
   resolveWechatCustomerAssociation,
+  WECHAT_GROUP_MODE_REQUIRED,
 } from '../services/wechatCustomerAssociation';
+import {
+  GROUP_ALL_MEMBER_MESSAGES,
+  GROUP_MENTION_SELF_ONLY,
+} from '../services/wechatOrderMessagePolicy';
 import {
   customerId,
   loadSmartReplenishmentCustomerDirectory,
@@ -249,6 +257,8 @@ const wechatUnmatchedConversationTitle = ref('');
 const wechatCustomerMatchOpen = ref(false);
 const wechatCustomerMatchBusy = ref(false);
 const wechatCustomerMatchError = ref('');
+const wechatGroupModeRequest = ref(null);
+let wechatGroupModeResolver = null;
 let wechatImportSequence = 0;
 const overview = reactive({
   customers: [],
@@ -639,6 +649,7 @@ async function removeWechatImport(token) {
 }
 
 async function closeWechatImportModal() {
+  cancelWechatGroupMode();
   wechatImportModalOpen.value = false;
   wechatWorkspaceReady.value = false;
   wechatScanMessage.value = '';
@@ -652,6 +663,7 @@ async function closeWechatImportModal() {
 }
 
 onBeforeUnmount(() => {
+  cancelWechatGroupMode();
   void window.electronAPI?.wechatUi?.closeWorkspace?.();
 });
 
@@ -823,11 +835,52 @@ async function handleDirectWechatTasks(event) {
   await openActiveWechatImport();
 }
 
+function requestWechatGroupMode(row, selectedTitle) {
+  return new Promise((resolve) => {
+    if (wechatGroupModeResolver) wechatGroupModeResolver(null);
+    wechatGroupModeResolver = resolve;
+    wechatGroupModeRequest.value = {
+      title: selectedTitle,
+      customerName: row?.customer?.nxDepartmentAttrName
+        || row?.customer?.nxDepartmentName
+        || row?.customer?.departmentName
+        || selectedTitle,
+    };
+  });
+}
+
+function settleWechatGroupMode(groupMode) {
+  const resolve = wechatGroupModeResolver;
+  wechatGroupModeResolver = null;
+  wechatGroupModeRequest.value = null;
+  if (resolve) resolve(groupMode);
+}
+
+function selectWechatGroupMode(groupMode) {
+  if (![GROUP_ALL_MEMBER_MESSAGES, GROUP_MENTION_SELF_ONLY].includes(groupMode)) return;
+  settleWechatGroupMode(groupMode);
+}
+
+function cancelWechatGroupMode() {
+  settleWechatGroupMode(null);
+}
+
+async function ensureWechatBindingWithGroupMode(options) {
+  try {
+    return await ensureWechatCustomerBinding(options);
+  } catch (error) {
+    if (error?.code !== WECHAT_GROUP_MODE_REQUIRED) throw error;
+    const groupMode = await requestWechatGroupMode(options.row, options.selectedTitle);
+    if (!groupMode) throw new Error('已取消选择群订单接收方式');
+    return ensureWechatCustomerBinding({ ...options, groupMode });
+  }
+}
+
 async function importWechatConversationForCustomer(customer, title) {
   const binding = await loadCustomerWechatBinding(customerId(customer));
   const row = { customer, binding };
   const directory = buildWechatCustomerAssociationDirectory([row]);
-  row.binding = await ensureWechatCustomerBinding({
+  row.binding = await ensureWechatBindingWithGroupMode({
     row,
     selectedTitle: title,
     directory,
@@ -1008,7 +1061,7 @@ async function readUnreadWechatOrders() {
       const row = unique.get(title);
       if (!row) continue;
       try {
-        row.binding = await ensureWechatCustomerBinding({
+        row.binding = await ensureWechatBindingWithGroupMode({
           row,
           selectedTitle: title,
           directory: associationDirectory,

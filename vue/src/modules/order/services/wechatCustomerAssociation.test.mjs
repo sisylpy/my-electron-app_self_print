@@ -4,6 +4,7 @@ import {
   ensureWechatCustomerBinding,
   findWechatCustomerProfileMatches,
   resolveWechatCustomerAssociation,
+  WECHAT_GROUP_MODE_REQUIRED,
 } from './wechatCustomerAssociation.js';
 
 const oldCustomer = {
@@ -95,5 +96,46 @@ const rebound = await ensureWechatCustomerBinding({
 assert.equal(savedPayload.customerId, 8);
 assert.equal(savedPayload.conversationFingerprint, 'fp:conversation123');
 assert.equal(rebound.bound, true);
+
+const groupRow = {
+  customer: { nxDepartmentId: 18, nxDepartmentWechatDisplayName: '调料群' },
+  binding: { enabled: 0 },
+};
+const groupDirectory = buildWechatCustomerAssociationDirectory([groupRow]);
+const groupApi = {
+  wechatReader: {
+    listAccounts: async () => ({
+      ok: true,
+      result: [{ id: 'fp:account123', isCurrentLogin: true, hasAccessMaterial: true }],
+    }),
+    findConversation: async () => ({
+      ok: true,
+      result: {
+        matches: [{ id: 'fp:group123456', displayName: '调料群', kind: 'group' }],
+      },
+    }),
+  },
+  customerWechatOrders: {
+    saveBinding: async (payload) => ({ ok: true, data: { ...payload, enabled: 1 } }),
+  },
+};
+await assert.rejects(
+  ensureWechatCustomerBinding({
+    row: groupRow,
+    selectedTitle: '调料群',
+    directory: groupDirectory,
+    electronAPI: groupApi,
+  }),
+  error => error?.code === WECHAT_GROUP_MODE_REQUIRED
+);
+const groupBinding = await ensureWechatCustomerBinding({
+  row: groupRow,
+  selectedTitle: '调料群',
+  directory: groupDirectory,
+  groupMode: 'MENTION_SELF_ONLY',
+  electronAPI: groupApi,
+});
+assert.equal(groupBinding.bound, true);
+assert.equal(groupBinding.groupMode, 'MENTION_SELF_ONLY');
 
 console.log('WeChat customer association passed');
