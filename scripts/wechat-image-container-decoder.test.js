@@ -1,6 +1,9 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const { decodeWechatImageEnvelope } = require('../src/wechat/image-container-decoder');
+const {
+  decodeWechatImageEnvelope,
+  findWxgfHevcPartition,
+} = require('../src/wechat/image-container-decoder');
 
 const V1_MAGIC = Buffer.from([0x07, 0x08, 0x56, 0x31, 0x08, 0x07]);
 const V2_MAGIC = Buffer.from([0x07, 0x08, 0x56, 0x32, 0x08, 0x07]);
@@ -75,6 +78,24 @@ assert.throws(
     v2Candidates: [{ aesKey: v2Key, xorKey: 31 }],
   }),
   /完整打开原图/,
+);
+
+// WXGF stores one or more Annex-B HEVC partitions. Each start code is
+// preceded by a four-byte big-endian partition length; the still image is the
+// largest partition. This verifies that container parsing does not accidentally
+// send the WXGF header itself to the video decoder.
+const smallHevc = Buffer.from([0x00, 0x00, 0x00, 0x01, 0x26, 0x11]);
+const largeHevc = Buffer.from([0x00, 0x00, 0x00, 0x01, 0x40, 0x22, 0x33, 0x44]);
+const wxgfHeader = Buffer.alloc(15);
+Buffer.from('wxgf', 'ascii').copy(wxgfHeader);
+wxgfHeader[4] = wxgfHeader.length;
+const smallLength = Buffer.alloc(4);
+smallLength.writeUInt32BE(smallHevc.length);
+const largeLength = Buffer.alloc(4);
+largeLength.writeUInt32BE(largeHevc.length);
+assert.deepEqual(
+  findWxgfHevcPartition(Buffer.concat([wxgfHeader, smallLength, smallHevc, largeLength, largeHevc])),
+  largeHevc,
 );
 
 const highQualityJpeg = Buffer.concat([jpeg, Buffer.alloc(2048, 0xef)]);

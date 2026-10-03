@@ -1,6 +1,6 @@
 const { ReaderBridge } = require('./reader-bridge');
 const { ReaderError, transportError, TRANSPORT_ERROR } = require('./reader-errors');
-const { decodeWechatImageEnvelope } = require('./image-container-decoder');
+const { decodeWechatImageEnvelopeAsync } = require('./image-container-decoder');
 
 let bridge = null;
 let shutdownPromise = null;
@@ -67,7 +67,7 @@ function createWechatReaderService(appLogger) {
       const attachmentId = requireString(input?.attachmentId, 'attachmentId');
       const envelope = await request('getAttachment', { attachmentId }, 90_000);
       try {
-        const decoded = decodeWechatImageEnvelope(envelope);
+        const decoded = await decodeWechatImageEnvelopeAsync(envelope);
         return {
           attachmentId,
           mimeType: decoded.mimeType,

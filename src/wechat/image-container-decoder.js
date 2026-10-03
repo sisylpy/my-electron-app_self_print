@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const { spawn } = require('child_process');
+const fs = require('fs');
 
 const V1_MAGIC = Buffer.from([0x07, 0x08, 0x56, 0x31, 0x08, 0x07]);
 const V2_MAGIC = Buffer.from([0x07, 0x08, 0x56, 0x32, 0x08, 0x07]);
@@ -7,6 +9,7 @@ const WXGF_MAGIC = Buffer.from('wxgf', 'ascii');
 // The existing OCR endpoint limits the base64 string itself to 10 MiB. Keep
 // the decoded payload below 7 MiB so the 4/3 base64 expansion remains safe.
 const MAX_DECODED_BYTES = 7 * 1024 * 1024;
+const WXGF_CONVERT_TIMEOUT_MS = 30_000;
 
 const IMAGE_SIGNATURES = [
   { mimeType: 'image/jpeg', bytes: Buffer.from([0xff, 0xd8, 0xff]) },
@@ -97,13 +100,161 @@ function decodeEncryptedVariant(encrypted, v2Candidates) {
   } else {
     decoded = decodeLegacyXor(encrypted);
   }
-  if (decoded.length > MAX_DECODED_BYTES) throw new Error('微信图片过大，暂时无法识别');
   const mimeType = detectImageMime(decoded);
   if (!mimeType) {
-    if (decoded.subarray(0, WXGF_MAGIC.length).equals(WXGF_MAGIC)) throw new Error('WXGF_UNSUPPORTED');
+    if (decoded.subarray(0, WXGF_MAGIC.length).equals(WXGF_MAGIC)) {
+      return { containerType: 'wxgf', buffer: decoded, size: decoded.length };
+    }
     throw new Error('UNSUPPORTED_FORMAT');
   }
+  if (decoded.length > MAX_DECODED_BYTES) throw new Error('微信图片过大，暂时无法识别');
   return { mimeType, base64: decoded.toString('base64'), size: decoded.length };
+}
+
+function findWxgfHevcPartition(buffer) {
+  if (buffer.length < 15 || !buffer.subarray(0, WXGF_MAGIC.length).equals(WXGF_MAGIC)) {
+    throw new Error('微信 WXGF 图片容器无效');
+  }
+  const headerLength = buffer[4];
+  if (headerLength >= buffer.length) throw new Error('微信 WXGF 图片头长度异常');
+
+  const patterns = [Buffer.from([0x00, 0x00, 0x00, 0x01]), Buffer.from([0x00, 0x00, 0x01])];
+  for (const pattern of patterns) {
+    const partitions = [];
+    let offset = 0;
+    while (headerLength + offset <= buffer.length) {
+      const index = buffer.indexOf(pattern, headerLength + offset);
+      if (index < 0) break;
+      if (index < 4) {
+        offset = index - headerLength + 1;
+        continue;
+      }
+      const length = buffer.readUInt32BE(index - 4);
+      if (length > 0 && index + length <= buffer.length) {
+        partitions.push({ offset: index, length });
+        offset = index - headerLength + length;
+      } else {
+        offset = index - headerLength + 1;
+      }
+    }
+    if (partitions.length) {
+      const largest = partitions.reduce((best, value) => value.length > best.length ? value : best);
+      return buffer.subarray(largest.offset, largest.offset + largest.length);
+    }
+  }
+  throw new Error('微信 WXGF 图片中没有找到可解码的高清画面');
+}
+
+function resolveFfmpegPath() {
+  let ffmpegPath;
+  try {
+    ffmpegPath = require('ffmpeg-static');
+  } catch {
+    throw new Error('微信高清图片解码组件未安装');
+  }
+  if (!ffmpegPath) throw new Error('微信高清图片解码组件不可用');
+  if (ffmpegPath.includes('app.asar')) {
+    const unpackedPath = ffmpegPath.replace('app.asar', 'app.asar.unpacked');
+    if (fs.existsSync(unpackedPath)) ffmpegPath = unpackedPath;
+  }
+  return ffmpegPath;
+}
+
+function convertHevcToJpeg(hevc, options = {}) {
+  const ffmpegPath = options.ffmpegPath || resolveFfmpegPath();
+  const spawnProcess = options.spawnProcess || spawn;
+  return new Promise((resolve, reject) => {
+    const child = spawnProcess(ffmpegPath, [
+      '-hide_banner', '-loglevel', 'error',
+      '-i', 'pipe:0',
+      '-vframes', '1',
+      '-c:v', 'mjpeg',
+      '-q:v', '4',
+      '-f', 'image2',
+      'pipe:1',
+    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const stdout = [];
+    const stderr = [];
+    let outputSize = 0;
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      fail(new Error('微信高清原图解码超时'));
+    }, options.timeoutMs || WXGF_CONVERT_TIMEOUT_MS);
+
+    child.stdout.on('data', (chunk) => {
+      outputSize += chunk.length;
+      if (outputSize > MAX_DECODED_BYTES) {
+        child.kill('SIGKILL');
+        fail(new Error('微信高清原图解码结果过大'));
+        return;
+      }
+      stdout.push(chunk);
+    });
+    child.stderr.on('data', (chunk) => {
+      if (stderr.reduce((total, value) => total + value.length, 0) < 64 * 1024) stderr.push(chunk);
+    });
+    child.on('error', () => fail(new Error('微信高清原图解码组件启动失败')));
+    child.on('close', (code) => {
+      if (settled) return;
+      clearTimeout(timer);
+      const output = Buffer.concat(stdout);
+      if (code !== 0 || detectImageMime(output) !== 'image/jpeg') {
+        const detail = Buffer.concat(stderr).toString('utf8').trim().split('\n').pop();
+        fail(new Error(detail ? `微信高清原图解码失败：${detail}` : '微信高清原图解码失败'));
+        return;
+      }
+      settled = true;
+      resolve(output);
+    });
+    child.stdin.on('error', () => {});
+    child.stdin.end(hevc);
+  });
+}
+
+async function decodeWechatImageEnvelopeAsync(envelope, options = {}) {
+  const variants = Array.isArray(envelope?.encryptedVariants) && envelope.encryptedVariants.length
+    ? envelope.encryptedVariants
+    : [{ kind: 'original', encryptedBase64: envelope?.encryptedBase64 }];
+  const candidates = Array.isArray(envelope?.v2Candidates) ? envelope.v2Candidates : [];
+  let wxgf = null;
+  let sawPayload = false;
+  let sawThumbnail = false;
+  for (const variant of variants) {
+    if (variant?.kind === 'thumbnail') {
+      if (variant?.encryptedBase64) sawThumbnail = true;
+      continue;
+    }
+    const encrypted = Buffer.from(String(variant?.encryptedBase64 || ''), 'base64');
+    if (!encrypted.length) continue;
+    sawPayload = true;
+    try {
+      const decoded = decodeEncryptedVariant(encrypted, candidates);
+      if (decoded.containerType === 'wxgf') {
+        wxgf = decoded.buffer;
+        continue;
+      }
+      return decoded;
+    } catch {
+      // A lower-priority full-size variant may still be usable.
+    }
+  }
+  if (wxgf) {
+    const hevc = findWxgfHevcPartition(wxgf);
+    const jpeg = await convertHevcToJpeg(hevc, options);
+    return { mimeType: 'image/jpeg', base64: jpeg.toString('base64'), size: jpeg.length };
+  }
+  if (!sawPayload && sawThumbnail) {
+    throw new Error('微信尚未下载这张图片的高清原图，目前只有聊天缩略图。请在微信中完整打开原图，待加载完成后重试');
+  }
+  if (!sawPayload) throw new Error('微信图片数据为空');
+  throw new Error('微信图片解码失败，请先在微信中打开原图后重试');
 }
 
 function decodeWechatImageEnvelope(envelope) {
@@ -129,7 +280,12 @@ function decodeWechatImageEnvelope(envelope) {
     if (!encrypted.length) continue;
     sawPayload = true;
     try {
-      return decodeEncryptedVariant(encrypted, candidates);
+      const decoded = decodeEncryptedVariant(encrypted, candidates);
+      if (decoded.containerType === 'wxgf') {
+        sawWxgf = true;
+        continue;
+      }
+      return decoded;
     } catch (error) {
       if (error?.message === 'WXGF_UNSUPPORTED') sawWxgf = true;
     }
@@ -144,4 +300,9 @@ function decodeWechatImageEnvelope(envelope) {
   throw new Error('微信图片解码失败，请先在微信中打开原图后重试');
 }
 
-module.exports = { decodeWechatImageEnvelope, detectImageMime };
+module.exports = {
+  decodeWechatImageEnvelope,
+  decodeWechatImageEnvelopeAsync,
+  detectImageMime,
+  findWxgfHevcPartition,
+};
