@@ -21,7 +21,10 @@ const unreadAction = workbench.match(
   /async function readUnreadWechatOrders\(\) \{([\s\S]*?)\n\}\n\nasync function handleTaskAdded/,
 )?.[1] || '';
 assert.match(unreadAction, /loadBoundWechatCustomers/);
+assert.match(unreadAction, /loadBoundWechatCustomers\(\{ refreshCustomers: true \}\)/);
 assert.match(unreadAction, /wechatUi\?\.readUnread/);
+assert.match(unreadAction, /ensureWechatCustomerBinding/);
+assert.match(workbench, /resolveWechatCustomerAssociation/);
 
 assert.match(modal, /读未读订单/);
 assert.match(modal, /查询现在选择的好友转订单/);

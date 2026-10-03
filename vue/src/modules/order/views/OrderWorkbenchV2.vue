@@ -210,6 +210,7 @@ import {
   buildWechatCustomerAssociationDirectory,
   ensureWechatCustomerBinding,
   findWechatCustomerProfileMatches,
+  resolveWechatCustomerAssociation,
 } from '../services/wechatCustomerAssociation';
 import {
   customerId,
@@ -672,20 +673,20 @@ async function loadBoundWechatCustomers({ refreshCustomers = false } = {}) {
   }));
   const failedCount = rows.filter(row => row?.error).length;
   const associationDirectory = buildWechatCustomerAssociationDirectory(rows);
-  const byTitle = new Map();
-  rows.filter(row => row?.binding?.bound).forEach((row) => {
-    const title = String(row.binding.displayName || '').trim();
-    if (!title) return;
-    if (!byTitle.has(title)) byTitle.set(title, []);
-    byTitle.get(title).push(row);
-  });
   const unique = new Map();
   let ambiguousCount = 0;
-  byTitle.forEach((items, title) => {
-    if (items.length === 1) unique.set(title, items[0]);
-    else ambiguousCount += items.length;
+  // The visible WeChat name belongs to the customer profile first. Search the
+  // complete, freshly loaded customer directory instead of limiting the scan
+  // to rows that already have a technical conversation fingerprint. A unique
+  // profile match can repair that fingerprint after WeChat opens the chat.
+  associationDirectory.allowedTitles.forEach((title) => {
+    try {
+      unique.set(title, resolveWechatCustomerAssociation(associationDirectory, title));
+    } catch {
+      ambiguousCount += 1;
+    }
   });
-  return { unique, byTitle, failedCount, ambiguousCount, associationDirectory };
+  return { unique, failedCount, ambiguousCount, associationDirectory };
 }
 
 function wechatImportTaskKey(item) {
@@ -968,7 +969,12 @@ async function readUnreadWechatOrders() {
     if (!wechatWorkspaceReady.value && !await openWechatWorkspace()) {
       throw new Error(wechatWorkspaceWarning.value || '微信窗口未能停靠到屏幕左侧');
     }
-    const { unique, failedCount, ambiguousCount } = await loadBoundWechatCustomers();
+    const {
+      unique,
+      failedCount,
+      ambiguousCount,
+      associationDirectory,
+    } = await loadBoundWechatCustomers({ refreshCustomers: true });
     const allowedTitles = Array.from(unique.keys());
     if (!allowedTitles.length) {
       throw new Error(ambiguousCount
@@ -1002,6 +1008,11 @@ async function readUnreadWechatOrders() {
       const row = unique.get(title);
       if (!row) continue;
       try {
+        row.binding = await ensureWechatCustomerBinding({
+          row,
+          selectedTitle: title,
+          directory: associationDirectory,
+        });
         const result = await prepareWechatOrderImport({
           customerId: customerId(row.customer),
           binding: row.binding,

@@ -35,6 +35,21 @@ assert.deepEqual(
 );
 
 assert.deepEqual(directory.allowedTitles, ['金调料']);
+const profileOnlyDirectory = buildWechatCustomerAssociationDirectory([
+  {
+    customer: { nxDepartmentId: 18, nxDepartmentWechatDisplayName: '调料群' },
+    error: new Error('技术绑定暂时不可用'),
+  },
+  {
+    customer: { nxDepartmentId: 19, nxDepartmentWechatDisplayName: '' },
+    binding: { enabled: 0 },
+  },
+]);
+assert.deepEqual(profileOnlyDirectory.allowedTitles, ['调料群']);
+assert.equal(
+  resolveWechatCustomerAssociation(profileOnlyDirectory, '调料群').customer.nxDepartmentId,
+  18
+);
 assert.equal(
   resolveWechatCustomerAssociation(directory, '金调料').customer.nxDepartmentId,
   newCustomer.customer.nxDepartmentId
