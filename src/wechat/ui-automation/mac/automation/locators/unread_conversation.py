@@ -122,7 +122,69 @@ def _is_title_candidate(item: OCRItem, badge: Rect, width: int, height: int) -> 
     if not (-2 <= title_gap <= 42 and item.rect.x < width * 0.46):
         return False
     delta_y = item.center.y - badge.center.y
-    return -18 <= delta_y <= max(58.0, height * 0.045)
+    # WeChat renders an unread @-mention in red on the preview (second) line.
+    # Its red glyphs look like a notification badge to the colour detector, so
+    # keep the first-line title immediately above the marker as a candidate as
+    # well.  The actual title is selected below; this wider range alone never
+    # makes an OCR row actionable.
+    return -max(60.0, height * 0.037) <= delta_y <= max(58.0, height * 0.045)
+
+
+def _has_time_peer(item: OCRItem, items: list[OCRItem], *, width: int, height: int) -> bool:
+    """Return whether *item* is on a conversation header row.
+
+    The first line of every WeChat conversation row is paired with its time at
+    the right edge.  Preview text has no such peer, which lets us distinguish
+    a red ``@我`` preview from the real conversation title without fuzzy text
+    matching.
+    """
+    tolerance = max(18.0, height * 0.014)
+    return any(
+        peer is not item
+        and _TIME_TEXT.fullmatch(peer.text.strip())
+        and item.rect.x < peer.rect.x < width * 0.46
+        and abs(peer.center.y - item.center.y) <= tolerance
+        for peer in items
+    )
+
+
+def _select_title(
+    candidates: list[OCRItem],
+    items: list[OCRItem],
+    badge: Rect,
+    *,
+    width: int,
+    height: int,
+) -> OCRItem:
+    # A timestamp aligned with the text is the strongest evidence that it is
+    # the first-line conversation title rather than the second-line preview.
+    header_candidates = [
+        item for item in candidates if _has_time_peer(item, items, width=width, height=height)
+    ]
+    if header_candidates:
+        return min(
+            header_candidates,
+            key=lambda item: (abs(item.center.y - badge.center.y), item.rect.x),
+        )
+
+    nearest = min(
+        candidates,
+        key=lambda item: (abs(item.center.y - badge.center.y), item.rect.x),
+    )
+    nearest_delta = nearest.center.y - badge.center.y
+    # Vision occasionally misses the time.  If the nearest OCR text is on the
+    # exact same line as the red marker, the marker is usually the red @-mention
+    # inside a preview.  In that case the closest text line directly above it
+    # is the conversation title.
+    if abs(nearest_delta) <= 12.0:
+        titles_above = [
+            item
+            for item in candidates
+            if -max(60.0, height * 0.037) <= item.center.y - badge.center.y <= -20.0
+        ]
+        if titles_above:
+            return max(titles_above, key=lambda item: (item.center.y, -item.rect.x))
+    return nearest
 
 
 def _preview_for(
@@ -155,12 +217,12 @@ def locate_unread_conversations(
             # A sidebar notification dot or a red avatar fragment is not a
             # conversation and must never become a click target.
             continue
-        title = min(
+        title = _select_title(
             title_candidates,
-            key=lambda item: (
-                abs(item.center.y - badge.center.y),
-                item.rect.x,
-            ),
+            items,
+            badge,
+            width=width,
+            height=height,
         )
         preview = _preview_for(items, title, width=width, height=height)
         conversations.append(
