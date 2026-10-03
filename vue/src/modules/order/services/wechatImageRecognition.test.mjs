@@ -3,6 +3,8 @@ import {
   filterWechatImageOcrText,
   formatWechatImageRecognition,
   isMeaningfulWechatImageOrderName,
+  normalizeWechatImageUncertainFields,
+  shouldKeepWechatImageRecognitionItem,
 } from './wechatImageRecognition.js';
 
 assert.equal(isMeaningfulWechatImageOrderName('-', { quantity: '17' }), false);
@@ -35,6 +37,33 @@ assert.equal(
     ocrText: '---\n西瓜888斤\n川\n17',
   }),
   '西瓜888斤',
+);
+
+assert.deepEqual(
+  normalizeWechatImageUncertainFields(['name', 'unit', 'name', 'unsupported', '', null]),
+  ['name', 'unit'],
+);
+assert.equal(
+  shouldKeepWechatImageRecognitionItem({
+    name: '',
+    rawName: '',
+    quantity: '',
+    unit: '',
+    note: '',
+    uncertainFields: ['name'],
+  }),
+  true,
+);
+assert.equal(
+  shouldKeepWechatImageRecognitionItem({
+    name: '',
+    rawName: '',
+    quantity: '',
+    unit: '',
+    note: '',
+    uncertainFields: [],
+  }),
+  false,
 );
 
 console.log('WeChat image recognition filter passed');

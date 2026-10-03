@@ -1,11 +1,33 @@
 const PRODUCT_CHARACTER = /[\p{Script=Han}A-Za-z]/u;
 const QUANTITY = /^(?:\d+(?:\.\d+)?|[零〇一二三四五六七八九十百千万两半]+)$/u;
 const ORDER_UNIT = /^(?:斤|两|个|件|袋|包|盒|瓶|把|条|箱|份|根|棵|只|串|筐|盆|粒|块|张|桶|杯|支|卷|片|捆|朵|枚|头|组|台|打|碗|盘)$/u;
+const WECHAT_IMAGE_UNCERTAIN_FIELDS = new Set(['name', 'quantity', 'unit', 'note']);
 
 function cleanValue(value) {
   return String(value ?? '')
     .replace(/[\u0000-\u001F\u007F-\u009F\uFFFD]/gu, '')
     .trim();
+}
+
+export function normalizeWechatImageUncertainFields(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value
+    .map(cleanValue)
+    .filter((field) => WECHAT_IMAGE_UNCERTAIN_FIELDS.has(field) && !seen.has(field) && seen.add(field));
+}
+
+/**
+ * Keep rows that contain visible order text or an explicit uncertainty marker.
+ * A fully unreadable field is intentionally returned as an empty string by the
+ * vision service, so uncertainFields can be the only evidence that the visual
+ * row exists and needs human review.
+ */
+export function shouldKeepWechatImageRecognitionItem(item) {
+  if (!item || typeof item !== 'object') return false;
+  if (normalizeWechatImageUncertainFields(item.uncertainFields).length > 0) return true;
+  return [item.name, item.rawName, item.quantity, item.unit, item.note]
+    .some(value => cleanValue(value));
 }
 
 function productCharacterCount(value) {

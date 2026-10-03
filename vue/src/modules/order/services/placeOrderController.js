@@ -16,6 +16,10 @@ import api from '../services/orderApi';
     import OrderModeSelector from '../components/OrderModeSelector.vue';
     import WechatOrderSource from '../components/workbench/WechatOrderSource.vue';
     import {createPlaceOrderState} from '../stores/orderWorkspaceState';
+    import {
+        normalizeWechatImageUncertainFields,
+        shouldKeepWechatImageRecognitionItem,
+    } from './wechatImageRecognition';
 
     export default {
         name: 'PlaceOrder',
@@ -5254,17 +5258,12 @@ import api from '../services/orderApi';
                     // another field proves it is an order line so the user can
                     // correct it; never force the model to invent a name just
                     // to make the row appear in the editor.
-                    .filter(item => item && typeof item === 'object' && [
-                        item.name,
-                        item.rawName,
-                        item.quantity,
-                        item.unit,
-                        item.note,
-                    ].some(value => String(value == null ? '' : value).trim()))
+                    .filter(shouldKeepWechatImageRecognitionItem)
                     .map(item => {
                         const name = String(item.name || item.rawName || '').trim();
                         const rawName = String(item.rawName || name).trim();
                         const remark = String(item.note || '').trim();
+                        const uncertainFields = normalizeWechatImageUncertainFields(item.uncertainFields);
                         return {
                             nxDoGoodsName: name,
                             nxDoGoodsNameOriginal: rawName,
@@ -5285,7 +5284,8 @@ import api from '../services/orderApi';
                             wechatImageColumn: Number(item.column) || 1,
                             wechatImageLineNo: Number(item.lineNo) || 0,
                             wechatImageConfidence: Number(item.confidence) || 0,
-                            wechatImageNeedsReview: Boolean(item.needsReview),
+                            wechatImageNeedsReview: Boolean(item.needsReview) || uncertainFields.length > 0,
+                            wechatImageUncertainFields: uncertainFields,
                         };
                     });
                 this.resetSearchAndMatchedGoodsState();
