@@ -476,6 +476,20 @@ async function refreshActiveWechatImport(options = {}) {
       }
       return false;
     }
+    if (options.manual) {
+      // The first focus makes WeChat hydrate its local database. A message can
+      // finish arriving while the Reader is doing its stability checks, after
+      // that first focus already happened, and WeChat then shows it as unread
+      // even though the order was successfully collected. Activate and verify
+      // the same conversation again only after payload retrieval succeeds so
+      // the visible WeChat unread state matches the imported order state.
+      const markReadWarning = await focusWechatImportConversation(item);
+      if (markReadWarning) {
+        wechatWorkspaceWarning.value = [wechatWorkspaceWarning.value, markReadWarning]
+          .filter(Boolean)
+          .join('；');
+      }
+    }
     const incomingItems = createWechatImportItems({
       customerId: item.customerId,
       customerName: item.customerName,

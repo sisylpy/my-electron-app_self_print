@@ -68,4 +68,17 @@ assert.match(
   '保存当前任务后自动进入下一项时不能重新操作微信窗口'
 );
 
+const refreshAction = workbench.match(
+  /async function refreshActiveWechatImport\(options = \{\}\) \{([\s\S]*?)\n\}\n\nfunction mergeActiveWechatImport/,
+)?.[1] || '';
+assert.match(
+  refreshAction,
+  /const markReadWarning = await focusWechatImportConversation\(item\)/,
+  '手动取得新增消息后必须再次激活同一微信会话以清除未读状态'
+);
+assert.ok(
+  refreshAction.indexOf('if (!result.payload)') < refreshAction.indexOf('const markReadWarning'),
+  '只能在新增订单内容成功取得后标记微信会话为已读'
+);
+
 console.log('WeChat image/text task routing passed');

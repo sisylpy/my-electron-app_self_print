@@ -142,6 +142,19 @@ class FocusConversationFlow:
             press_escape(0.2)
             shot, items = self._window_shot("search-before")
 
+            # Manual refresh calls this flow once before reading the local
+            # database and once again after new messages have arrived. If the
+            # intended chat is already open, raising WeChat and keeping that
+            # verified conversation active is enough for WeChat to clear its
+            # unread badge. Avoid reopening search, which would temporarily
+            # take focus away from the current conversation.
+            if self._header_matches(shot, items):
+                self.details.append("CURRENT_CONVERSATION_ACTIVATED")
+                return self._finish(
+                    ResultCode.SUCCESS,
+                    f"微信当前会话“{self.target}”已激活",
+                )
+
             search_boxes = search_box_candidates(
                 items,
                 image_width=shot.image.width,
