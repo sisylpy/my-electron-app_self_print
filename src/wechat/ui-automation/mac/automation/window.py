@@ -66,11 +66,21 @@ def list_wechat_windows() -> list[WeChatWindow]:
 
 
 def main_wechat_window() -> WeChatWindow:
-    windows = list_wechat_windows()
-    titled = [window for window in windows if window.title == "微信"]
-    if not titled:
-        raise WindowError("没有找到标题为“微信”的主窗口")
-    return max(titled, key=lambda window: window.bounds.width * window.bounds.height)
+    # Docking and raising the Electron/WeChat windows happen in separate
+    # processes. macOS can briefly expose an empty AX window list while that
+    # transition is in progress even though the visible chat window is already
+    # on screen. Treat that as transient instead of telling the user to log in.
+    last_windows: list[WeChatWindow] = []
+    for attempt in range(6):
+        last_windows = list_wechat_windows()
+        titled = [window for window in last_windows if window.title == "微信"]
+        if titled:
+            return max(titled, key=lambda window: window.bounds.width * window.bounds.height)
+        if attempt < 5:
+            time.sleep(0.15)
+    visible_titles = ", ".join(window.title or "(无标题)" for window in last_windows)
+    detail = f"；当前窗口: {visible_titles}" if visible_titles else ""
+    raise WindowError(f"没有找到标题为“微信”的主窗口{detail}")
 
 
 def close_auxiliary_window(title: str) -> None:
