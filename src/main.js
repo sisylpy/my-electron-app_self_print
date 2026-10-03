@@ -919,10 +919,6 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().prepareCustomerWechatMessages(command);
   });
-  ipcMain.handle('customer-wechat-image-analyze', async (event, command) => {
-    assertTrustedRendererEvent(event);
-    return getDispatchGateway().analyzeCustomerWechatOrderImage(command);
-  });
   ipcMain.handle('sales-analysis-load-overview', async (event, range) => {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().loadSalesAnalysisOverview(range);

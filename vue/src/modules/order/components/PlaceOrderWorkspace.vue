@@ -64,7 +64,6 @@
                     :task-type="3"
                     :current-task="currentTask"
                     :paste-input-text="pasteInputText"
-                    :source-images="uploadType === 'wechat' ? wechatOrderImages : []"
                     :paste-invalid-line-indices="pasteInvalidLineIndices"
                     :paste-invalid-segments="pasteInvalidSegments"
                     :paste-no-valid-order="pasteNoValidOrder"

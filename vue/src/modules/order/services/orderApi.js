@@ -28,7 +28,6 @@ const ALLOWED_METHODS = [
   'recognizeOrderFromExcel',
   'recognizeOrderOCR',
   'recognizeOrderOCRWithAi',
-  'recognizeWechatOrderImage',
   'revertTaskOrder',
   'saveManulOrder',
   'saveNxDisLinshiGoods',

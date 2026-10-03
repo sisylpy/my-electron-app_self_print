@@ -873,38 +873,6 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     });
   }
 
-  function validateWechatImageAnalysis(input) {
-    const data = strictPayload(input || {}, [
-      'customerId', 'imageBase64', 'messageFingerprint',
-    ]);
-    const customerId = requirePositiveId(data.customerId, 'customerId');
-    if (typeof data.imageBase64 !== 'string') {
-      throw new Error('微信图片内容无效');
-    }
-    const imageBase64 = data.imageBase64.trim();
-    const dataUrlComma = imageBase64.indexOf(',');
-    const encoded = imageBase64.startsWith('data:') && dataUrlComma >= 0
-      ? imageBase64.slice(dataUrlComma + 1)
-      : imageBase64;
-    // The server also validates magic bytes and enforces 15 MB. Keep the
-    // renderer bridge bounded so an untrusted page cannot allocate an
-    // arbitrary IPC/request body before that server-side check runs.
-    if (!encoded || encoded.length > 21 * 1024 * 1024
-        || !/^[A-Za-z0-9+/=\s]+$/.test(encoded)) {
-      throw new Error('微信图片内容无效或过大');
-    }
-    if (data.messageFingerprint !== undefined
-        && (typeof data.messageFingerprint !== 'string'
-          || !/^[A-Za-z0-9:._-]{8,160}$/.test(data.messageFingerprint))) {
-      throw new Error('微信图片消息指纹无效');
-    }
-    return {
-      customerId,
-      imageBase64,
-      messageFingerprint: data.messageFingerprint || undefined,
-    };
-  }
-
   async function loadCustomerWechatBinding(input) {
     try {
       const customerId = requirePositiveId(input?.customerId, 'customerId');
@@ -969,21 +937,6 @@ function createDispatchGateway({ app, safeStorage, axios }) {
       const customerId = requirePositiveId(data.customerId, 'customerId');
       return request('POST', `customer-wechat-orders/${customerId}/messages/prepare`, {
         data: { messages: validateWechatMessageRefs(data.messages) },
-      });
-    } catch (error) {
-      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
-    }
-  }
-
-  async function analyzeCustomerWechatOrderImage(input) {
-    try {
-      const envelope = validateWechatImageAnalysis(input);
-      return request('POST', `customer-wechat-orders/${envelope.customerId}/images/analyze`, {
-        data: {
-          imageBase64: envelope.imageBase64,
-          messageFingerprint: envelope.messageFingerprint,
-        },
-        timeout: 90_000,
       });
     } catch (error) {
       return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
@@ -1142,7 +1095,6 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     saveCustomerWechatBinding,
     clearCustomerWechatBinding,
     prepareCustomerWechatMessages,
-    analyzeCustomerWechatOrderImage,
     loadSalesAnalysisOverview,
     loadSalesAnalysisCategory,
     loadSalesAnalysisProductCustomers,

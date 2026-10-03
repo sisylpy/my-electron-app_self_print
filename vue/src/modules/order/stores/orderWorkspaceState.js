@@ -139,7 +139,6 @@ export function createPlaceOrderState() {
     pasteOriginText: '',
     pasteInputContent: '',
     wechatOrderSource: null,
-    wechatOrderImages: [],
     // Incremented for every imported WeChat task so stale OCR responses cannot
     // write into a task the user has already left.
     wechatOrderLoadSequence: 0,

@@ -16,10 +16,6 @@ import api from '../services/orderApi';
     import OrderModeSelector from '../components/OrderModeSelector.vue';
     import WechatOrderSource from '../components/workbench/WechatOrderSource.vue';
     import {createPlaceOrderState} from '../stores/orderWorkspaceState';
-    import {
-        normalizeWechatImageUncertainFields,
-        shouldKeepWechatImageRecognitionItem,
-    } from './wechatImageRecognition';
 
     export default {
         name: 'PlaceOrder',
@@ -390,7 +386,6 @@ import api from '../services/orderApi';
                 this.pasteInputContent = '';
                 this.pasteOriginText = '';
                 this.wechatOrderSource = null;
-                this.wechatOrderImages = [];
                 this.excelPasteSaveCount = null;
                 this.excelPasteTableData = Array.from({ length: 50 }, () => ({
                     goodsName: '', quantity: '', specification: '', specificationWeight: '',
@@ -3592,7 +3587,6 @@ import api from '../services/orderApi';
                         this.resetSearchAndMatchedGoodsState();
 
                         this.wechatOrderSource = null;
-                        this.wechatOrderImages = [];
 
                         this.$emit('task-added');
                     } else {
@@ -3796,7 +3790,6 @@ import api from '../services/orderApi';
                 this.pasteInvalidSegments = [];
                 this.pasteNoValidOrder = false;
                 this.wechatOrderSource = null;
-                this.wechatOrderImages = [];
 
                 // 重置搜索和匹配商品列表状态
                 this.resetSearchAndMatchedGoodsState();
@@ -5162,9 +5155,8 @@ import api from '../services/orderApi';
                 const isImageTask = images.length > 0;
 
                 this.wechatOrderSource = payload.source;
-                this.wechatOrderImages = images;
-                // Text and image tasks are deliberately separate. An image
-                // task starts empty and receives only its own OCR result.
+                // 微信图片只负责把原图交给系统现有的图片识别流程。不要在
+                // 微信粘贴区再生成第二套图片预览/识别结果界面。
                 const initialText = isImageTask ? '' : text;
                 this.pasteInputText = initialText;
                 this.pasteInputContent = initialText;
@@ -5174,16 +5166,56 @@ import api from '../services/orderApi';
                 this.pasteInvalidLineIndices = [];
                 this.pasteInvalidSegments = [];
                 this.pasteNoValidOrder = false;
-                // A later task may have opened while OCR was in flight. Its
-                // text and order list must remain untouched by this request.
                 if (isImageTask) {
-                    const imageAnalysis = await this.recognizeWechatOrderImages(images, payload, requestId);
                     if (!this.isCurrentWechatOrderLoad(requestId)) return;
-                    if (imageAnalysis) this.applyWechatImageRecognition(imageAnalysis);
+                    await this.openWechatImageInOriginalRecognizer(images[0]);
                     return;
                 }
                 if (!this.isCurrentWechatOrderLoad(requestId)) return;
                 if (text) await this.handlePasteLocalParse();
+            },
+
+            async openWechatImageInOriginalRecognizer(image) {
+                const dataUrl = String(image?.dataUrl || '').trim();
+                if (!/^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(dataUrl)) {
+                    throw new Error('微信原图内容无效，请重新获取该消息');
+                }
+
+                const mimeType = dataUrl.match(/^data:([^;,]+)[;,]/)?.[1] || 'image/jpeg';
+                const extensionByMime = {
+                    'image/jpeg': 'jpg',
+                    'image/jpg': 'jpg',
+                    'image/png': 'png',
+                    'image/webp': 'webp',
+                    'image/gif': 'gif',
+                    'image/bmp': 'bmp',
+                };
+                const extension = extensionByMime[mimeType.toLowerCase()] || 'jpg';
+                const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+                const padding = (base64.match(/=+$/)?.[0].length) || 0;
+                const estimatedSize = Math.max(0, Math.floor(base64.length * 3 / 4) - padding);
+
+                // 切换到原来的图片录入页面，识别后仍使用原来的图片任务列表、
+                // 商品编辑和完成任务流程。
+                this.uploadType = 'image';
+                this.$emit('upload-type-change', 'image');
+                this.originalImageFile = null;
+                this.uploadedImageFile = {
+                    name: `微信订单原图.${extension}`,
+                    size: estimatedSize,
+                    type: mimeType,
+                    lastModified: Number(image?.messageTimeMs) || Date.now(),
+                    dataUrl,
+                };
+                this.imagePreview = null;
+                this.previewImageDataUrl = dataUrl;
+                this.imageScale = 1;
+                this.imageTranslateX = 0;
+                this.imageTranslateY = 0;
+                this.showCropMode = false;
+
+                await this.$nextTick();
+                this.showImagePreviewModal = true;
             },
 
             beginWechatOrderLoad() {
@@ -5197,107 +5229,6 @@ import api from '../services/orderApi';
 
             isCurrentWechatOrderLoad(requestId) {
                 return requestId === this.wechatOrderLoadSequence;
-            },
-
-            async recognizeWechatOrderImages(images, payload, requestId = null) {
-                const rows = Array.isArray(images) ? images : [];
-                if (!rows.length) return null;
-                const isCurrentRequest = () => (
-                    requestId == null || this.isCurrentWechatOrderLoad(requestId)
-                );
-                if (isCurrentRequest()) this.showDeepSeekLoading = true;
-                try {
-                    const customerId = Number(this.selectedSubDepartment || this.selectedAllCustomer);
-                    const wechatApi = window.electronAPI?.customerWechatOrders;
-                    if (!Number.isSafeInteger(customerId) || customerId <= 0) {
-                        throw new Error('当前客户信息无效，无法识别微信订单图片');
-                    }
-                    if (!wechatApi?.analyzeImage) {
-                        throw new Error('当前桌面程序版本不支持微信图片识别，请退出后重新打开程序');
-                    }
-                    const combined = {
-                        items: [],
-                        warnings: [],
-                        needsReview: false,
-                    };
-                    for (const image of rows) {
-                        if (!isCurrentRequest()) return null;
-                        const dataUrl = String(image?.dataUrl || '');
-                        if (!dataUrl) throw new Error('微信图片内容为空');
-                        const response = await wechatApi.analyzeImage({
-                            customerId,
-                            imageBase64: dataUrl,
-                            messageFingerprint: image?.messageFingerprint || payload?.taskFingerprint,
-                        });
-                        if (!isCurrentRequest()) return null;
-                        if (!response?.ok || !response.data || typeof response.data !== 'object') {
-                            throw new Error(response?.message || '微信图片识别失败，请稍后重试');
-                        }
-                        const result = response.data;
-                        if (Array.isArray(result.items)) combined.items.push(...result.items);
-                        if (Array.isArray(result.warnings)) combined.warnings.push(...result.warnings);
-                        combined.needsReview = combined.needsReview || Boolean(result.needsReview);
-                    }
-                    return combined;
-                } catch (error) {
-                    if (isCurrentRequest()) {
-                        await this.$refs.alertDialog.alert(error?.message || '微信图片识别失败，请重试');
-                    }
-                    return null;
-                } finally {
-                    if (isCurrentRequest()) this.showDeepSeekLoading = false;
-                }
-            },
-
-            applyWechatImageRecognition(result) {
-                const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
-                const sourceItems = Array.isArray(result?.items) ? result.items : [];
-                const rows = sourceItems
-                    // A conservative vision result may intentionally leave an
-                    // unreadable product name blank.  Keep that visual row when
-                    // another field proves it is an order line so the user can
-                    // correct it; never force the model to invent a name just
-                    // to make the row appear in the editor.
-                    .filter(shouldKeepWechatImageRecognitionItem)
-                    .map(item => {
-                        const name = String(item.name || item.rawName || '').trim();
-                        const rawName = String(item.rawName || name).trim();
-                        const remark = String(item.note || '').trim();
-                        const uncertainFields = normalizeWechatImageUncertainFields(item.uncertainFields);
-                        return {
-                            nxDoGoodsName: name,
-                            nxDoGoodsNameOriginal: rawName,
-                            nxDoQuantity: item.quantity == null ? '' : String(item.quantity),
-                            nxDoStandard: item.unit == null ? '' : String(item.unit),
-                            nxDoRemark: remark,
-                            nxDoAddRemark: Boolean(remark),
-                            nxDoStatus: -2,
-                            nxDoDepartmentId: targetDepId,
-                            nxDoDepartmentFatherId: this.selectedAllCustomer,
-                            nxDoDisGoodsId: null,
-                            nxDoStandardWarn: 0,
-                            goodsNameWarn: 0,
-                            nxDoDistributerId: this.disUser?.nxDiuDistributerId,
-                            nxDoPurchaseUserId: -1,
-                            nxDoOrderUserId: this.disUser?.nxDistributerUserId || this.disUser?.nxDiuDistributerId,
-                            nxDoIsAgent: -1,
-                            wechatImageColumn: Number(item.column) || 1,
-                            wechatImageLineNo: Number(item.lineNo) || 0,
-                            wechatImageConfidence: Number(item.confidence) || 0,
-                            wechatImageNeedsReview: Boolean(item.needsReview) || uncertainFields.length > 0,
-                            wechatImageUncertainFields: uncertainFields,
-                        };
-                    });
-                this.resetSearchAndMatchedGoodsState();
-                this.orderItems = rows;
-                const warnings = Array.isArray(result?.warnings)
-                    ? result.warnings.map(item => String(item || '').trim()).filter(Boolean)
-                    : [];
-                if (!rows.length) {
-                    this.showToast(warnings[0] || '图片中没有识别到可编辑订单行，请核对原图后重试', 'warning', 6000);
-                } else if (result?.needsReview || rows.some(item => item.wechatImageNeedsReview)) {
-                    this.showToast(warnings[0] || '图片识别结果需要核对，请编辑确认后再保存订单', 'warning', 6000);
-                }
             },
 
             // DraftOrderList 组件的事件适配器（Paste 模式草稿状态）
@@ -6144,7 +6075,6 @@ data[] 中每条订单对象必须包含字段：
                 this.pasteInputText = '';
                 this.pasteInputContent = '';
                 this.pasteOriginText = '';
-                this.wechatOrderImages = [];
             },
 
             // 重新粘贴（清空草稿订单和文本内容）
@@ -6156,7 +6086,6 @@ data[] 中每条订单对象必须包含字段：
                 this.pasteInvalidLineIndices = [];
                 this.pasteInvalidSegments = [];
                 this.pasteNoValidOrder = false;
-                this.wechatOrderImages = [];
 
             },
 
