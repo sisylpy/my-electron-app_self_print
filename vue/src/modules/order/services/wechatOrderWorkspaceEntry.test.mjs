@@ -15,7 +15,18 @@ const openEntry = workbench.match(
 )?.[1] || '';
 assert.match(openEntry, /wechatImportModalOpen\.value = true/);
 assert.match(openEntry, /await openWechatWorkspace\(\)/);
+assert.match(
+  openEntry,
+  /await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: false \}\)/,
+);
+assert.doesNotMatch(openEntry, /await openActiveWechatImport\(\);/);
 assert.doesNotMatch(openEntry, /loadBoundWechatCustomers|readUnread|currentConversation/);
+
+const closeEntry = workbench.match(
+  /async function closeWechatImportModal\(\) \{([\s\S]*?)\n\}\n\nonBeforeUnmount/,
+)?.[1] || '';
+assert.match(closeEntry, /const shouldCloseWechatWorkspace = wechatWorkspaceReady\.value/);
+assert.match(closeEntry, /if \(!shouldCloseWechatWorkspace\) return/);
 
 const unreadAction = workbench.match(
   /async function readUnreadWechatOrders\(\) \{([\s\S]*?)\n\}\n\nasync function handleTaskAdded/,

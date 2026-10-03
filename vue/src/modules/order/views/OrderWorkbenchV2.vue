@@ -664,11 +664,13 @@ async function removeWechatImport(token) {
 
 async function closeWechatImportModal() {
   cancelWechatGroupMode();
+  const shouldCloseWechatWorkspace = wechatWorkspaceReady.value;
   wechatImportModalOpen.value = false;
   wechatWorkspaceReady.value = false;
   wechatScanMessage.value = '';
   dismissWechatSelectedAction();
   activeView.value = 'overview';
+  if (!shouldCloseWechatWorkspace) return;
   try {
     await window.electronAPI?.wechatUi?.closeWorkspace?.();
   } catch {
@@ -1009,7 +1011,9 @@ function dismissWechatSelectedAction() {
 async function handleWechatScan() {
   if (wechatScanBusy.value || wechatSelectedImportBusy.value) return;
   if (wechatImportQueue.value.length) {
-    await openActiveWechatImport();
+    // “继续微信订单”只恢复现有任务界面。不要再次停靠微信窗口，
+    // 也不要自动搜索或切换到对应微信会话。
+    await openActiveWechatImport({ openWorkspace: false, focusConversation: false });
     return;
   }
 
