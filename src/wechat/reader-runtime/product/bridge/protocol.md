@@ -32,17 +32,19 @@ Electron main 启动本进程，通过 **stdin/stdout 每行一个 JSON** 通信
 | method | params | result |
 |---|---|---|
 | `diagnose` | — | `DiagnoseResult` |
-| `listAccounts` | — | `WechatAccount[]` |
+| `listAccounts` | `warmMessages?` | `WechatAccount[]` |
 | `findConversation` | `accountId`, `name` | `FindResult{matches,ambiguous}` |
 | `getMessages` | `conversationId`, `timeRange?`, `page?` | `PageResult<Message>` |
 | `searchMessages` | `conversationId`, `query`, `timeRange?`, `page?` | `PageResult<Message>` |
-| `getParticipants` | `conversationId` | `Participant[]` |
+| `getParticipants` | `conversationId`, `selfOnly?` | `Participant[]` |
 | `resolveSender` | `messageId` | `Participant` |
 | `ping` | — | `{"ok":true}` |
 | `shutdown` | — | `{"ok":true}`（随后进程退出） |
 
 - `timeRange`: `{"start"?: ISO8601, "end"?: ISO8601}`（本地时区）
 - `page`: `{"offset"?: int, "limit"?: int}`，默认 `{offset:0, limit:50}`
+- `warmMessages`: 仅预热消息分片元数据，不读取消息正文
+- `selfOnly`: 只返回当前微信账号身份，供订单过滤快速路径使用
 
 ## 错误码
 

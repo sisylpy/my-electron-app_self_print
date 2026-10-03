@@ -154,7 +154,7 @@ export async function prepareWechatOrderImport({
   customerId,
   binding,
   now = null,
-  retryDelaysMs = [2000, 4000, 7000, 12000, 20000],
+  retryDelaysMs = [400, 800, 1600],
   sleep = (delayMs) => new Promise(resolve => setTimeout(resolve, delayMs)),
   electronAPI = window.electronAPI,
 }) {
@@ -170,13 +170,19 @@ export async function prepareWechatOrderImport({
 
   const reader = electronAPI?.wechatReader;
   const orderApi = electronAPI?.customerWechatOrders;
-  if (!reader?.getParticipants || !reader?.getMessages || !orderApi?.prepareMessages) {
+  if ((!reader?.getSelfParticipant && !reader?.getParticipants)
+      || !reader?.getMessages
+      || !orderApi?.prepareMessages) {
     throw new Error('当前安装包不支持读取微信聊天订单');
   }
 
-  const participants = unwrapWechatReader(
-    await reader.getParticipants(normalizedBinding.conversationFingerprint)
-  );
+  const participants = reader.getSelfParticipant
+    ? [unwrapWechatReader(await reader.getSelfParticipant(
+      normalizedBinding.conversationFingerprint
+    ))].filter(Boolean)
+    : unwrapWechatReader(await reader.getParticipants(
+      normalizedBinding.conversationFingerprint
+    ));
   const cursor = Number(normalizedBinding.cursorTimeMs);
   const fixedNow = Number(now);
   const hasFixedNow = Number.isFinite(fixedNow) && fixedNow > 0;
@@ -189,10 +195,15 @@ export async function prepareWechatOrderImport({
   let nextBinding = normalizedBinding;
   let pendingSignature = '';
   let stablePendingReads = 0;
+  let preparedIncomingSignature = '';
+  // Keep the query window stable during one synchronization. Together with
+  // the Reader's DB/WAL change token this makes unchanged verification reads
+  // memory-fast, while a newly written WeChat message still invalidates cache.
+  const scanNow = hasFixedNow ? fixedNow : Date.now();
 
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
     if (attempt > 0) await sleep(Number(retryDelays[attempt - 1]));
-    const attemptNow = hasFixedNow ? fixedNow : Date.now();
+    const attemptNow = scanNow;
     const startMs = Number.isFinite(cursor) && cursor > 0
       ? Math.max(0, cursor - 2 * 60 * 1000)
       : attemptNow - 24 * 60 * 60 * 1000;
@@ -213,13 +224,17 @@ export async function prepareWechatOrderImport({
       ));
     if (!incoming.length) continue;
 
-    prepared = unwrapWechatServer(await orderApi.prepareMessages(
-      id,
-      incoming.map((message) => ({
-        messageFingerprint: message.id,
-        messageTimeMs: message.messageTimeMs,
-      }))
-    ));
+    const incomingSignature = incoming.map(message => message.id).sort().join('|');
+    if (incomingSignature !== preparedIncomingSignature) {
+      prepared = unwrapWechatServer(await orderApi.prepareMessages(
+        id,
+        incoming.map((message) => ({
+          messageFingerprint: message.id,
+          messageTimeMs: message.messageTimeMs,
+        }))
+      ));
+      preparedIncomingSignature = incomingSignature;
+    }
     const pendingIds = new Set(prepared?.pendingMessageFingerprints || []);
     pending = incoming.filter((message) => pendingIds.has(message.id));
     nextBinding = normalizeWechatBinding(prepared?.binding || nextBinding);

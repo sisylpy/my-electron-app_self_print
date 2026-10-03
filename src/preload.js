@@ -181,10 +181,13 @@ const electronAPI = Object.freeze({
   wechatReader: Object.freeze({
     diagnose: () => ipcRenderer.invoke('wechat-reader-diagnose'),
     listAccounts: () => ipcRenderer.invoke('wechat-reader-list-accounts'),
+    warmUp: () => ipcRenderer.invoke('wechat-reader-warm-up'),
     findConversation: (accountId, name) =>
       ipcRenderer.invoke('wechat-reader-find-conversation', { accountId, name }),
     getParticipants: (conversationId) =>
       ipcRenderer.invoke('wechat-reader-get-participants', { conversationId }),
+    getSelfParticipant: (conversationId) =>
+      ipcRenderer.invoke('wechat-reader-get-self-participant', { conversationId }),
     getMessages: (conversationId, timeRange, page) =>
       ipcRenderer.invoke('wechat-reader-get-messages', { conversationId, timeRange, page }),
     getAttachment: (attachmentId) =>

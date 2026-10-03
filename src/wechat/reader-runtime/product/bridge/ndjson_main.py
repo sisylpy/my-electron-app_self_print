@@ -149,7 +149,7 @@ def _dispatch(svc, method, params):
     if method == "diagnose":
         return _diagnose(svc.diagnose())
     if method == "listAccounts":
-        return [_acc(a) for a in svc.listAccounts()]
+        return [_acc(a) for a in svc.listAccounts(bool(p.get("warmMessages")))]
     if method == "findConversation":
         return _find(svc.findConversation(p["accountId"], p["name"]))
     if method == "getMessages":
@@ -161,7 +161,10 @@ def _dispatch(svc, method, params):
         )
         return _page_result_messages(pr)
     if method == "getParticipants":
-        return [_participant(x) for x in svc.getParticipants(p["conversationId"])]
+        return [
+            _participant(x)
+            for x in svc.getParticipants(p["conversationId"], bool(p.get("selfOnly")))
+        ]
     if method == "getAttachment":
         # This envelope is consumed only by Electron's main process. It contains
         # no filesystem path or raw account identifier.
@@ -202,6 +205,18 @@ def _pg(v):
 # ---------------------------------------------------------------- 主循环
 def main():
     from ..errors.codes import WechatServiceError
+
+    # PyInstaller executables on Simplified Chinese Windows inherit the console
+    # code page (normally GBK) even when stdout/stderr are redirected to pipes.
+    # NDJSON is an UTF-8 protocol; force both streams before emitting nicknames
+    # or message text so emoji and other non-GBK characters cannot crash the
+    # bridge with UnicodeEncodeError.
+    if hasattr(sys.stdin, "reconfigure"):
+        sys.stdin.reconfigure(encoding="utf-8", errors="strict", newline=None)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="strict", newline="\n")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace", newline="\n")
 
     svc = _build_service()
     _emit({"event": "ready", "version": BRIDGE_VERSION, "platform": sys.platform})
@@ -252,7 +267,10 @@ def main():
 
 
 def _emit(obj):
-    sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+    # ASCII-only JSON is transport-safe even if a frozen Windows runtime or a
+    # parent shell overrides the console code page. JSON consumers restore the
+    # escaped Unicode text losslessly.
+    sys.stdout.write(json.dumps(obj, ensure_ascii=True) + "\n")
     sys.stdout.flush()
 
 

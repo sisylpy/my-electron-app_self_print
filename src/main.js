@@ -645,6 +645,10 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     return getWechatReaderService().listAccounts();
   });
+  ipcMain.handle('wechat-reader-warm-up', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getWechatReaderService().warmUp();
+  });
   ipcMain.handle('wechat-reader-find-conversation', async (event, input) => {
     assertTrustedRendererEvent(event);
     return getWechatReaderService().findConversation(input);
@@ -652,6 +656,10 @@ function setupIpcHandlers() {
   ipcMain.handle('wechat-reader-get-participants', async (event, input) => {
     assertTrustedRendererEvent(event);
     return getWechatReaderService().getParticipants(input);
+  });
+  ipcMain.handle('wechat-reader-get-self-participant', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    return getWechatReaderService().getSelfParticipant(input);
   });
   ipcMain.handle('wechat-reader-get-messages', async (event, input) => {
     assertTrustedRendererEvent(event);

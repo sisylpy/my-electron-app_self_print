@@ -105,6 +105,7 @@ class WechatLocalDataService:
         self._accounts: Dict[AccountId, AccountMeta] = {}
         self._conv_index: Dict[ConversationId, _ConversationMeta] = {}
         self._materials: Dict[AccountId, AccessMaterial] = {}
+        self._databases: Dict[AccountId, WechatReadOnlyDB] = {}
         self._attachment_index: Dict[str, dict] = {}
         # 连续分页必须复用同一份会话快照，否则每页都会重新扫描数千联系人。
         self._conv_snapshot: Dict[str, Tuple[float, List[Tuple[_ConversationMeta, Conversation]]]] = {}
@@ -140,7 +141,7 @@ class WechatLocalDataService:
         )
 
     # ===================== listAccounts =====================
-    def listAccounts(self) -> List[WechatAccount]:
+    def listAccounts(self, warmMessages: bool = False) -> List[WechatAccount]:
         self._ensure_accounts()
         out = []
         for meta in self._accounts.values():
@@ -149,7 +150,7 @@ class WechatLocalDataService:
             display_hint = meta.display_hint
             if meta.has_material:
                 try:
-                    nick = WechatReadOnlyDB(self._acquire(meta)).contact_nick(meta.wxid)
+                    nick = self._db_for(meta).contact_nick(meta.wxid)
                     if nick and nick.strip():
                         display_hint = nick.strip()
                 except WechatServiceError:
@@ -163,6 +164,19 @@ class WechatLocalDataService:
                     hasAccessMaterial=meta.has_material,
                 )
             )
+        if warmMessages:
+            # The launcher calls this without awaiting it. Warming only the
+            # shard/table index overlaps the user's choice of read mode and
+            # removes the largest cold-start cost from the later order read.
+            for meta in self._accounts.values():
+                if not meta.has_material:
+                    continue
+                try:
+                    self._db_for(meta).warm_message_index()
+                except WechatServiceError:
+                    # A secondary account with stale material must not block the
+                    # usable current account or the regular error path.
+                    continue
         return out
 
     # ===================== listConversations =====================
@@ -185,7 +199,7 @@ class WechatLocalDataService:
     # ===================== findConversation =====================
     def findConversation(self, account: AccountId, name: str) -> FindResult:
         acct = self._account_meta(account)
-        db = WechatReadOnlyDB(self._acquire(acct))
+        db = self._db_for(acct)
         matches: List[Conversation] = []
         for username, nick, remark, _lt in db.contact_rows():
             if name.lower() in (nick or "").lower() or name.lower() in (remark or "").lower():
@@ -227,19 +241,49 @@ class WechatLocalDataService:
         return self._read_messages(conversation, timeRange, page, like=query)
 
     # ===================== getParticipants =====================
-    def getParticipants(self, conversation: ConversationId) -> List[Participant]:
+    def getParticipants(
+        self,
+        conversation: ConversationId,
+        selfOnly: bool = False,
+    ) -> List[Participant]:
         meta = self._conv_meta(conversation)
         acct = self._account_meta(meta.account_id)
-        db = WechatReadOnlyDB(self._acquire(acct))
+        db = self._db_for(acct)
+        # The current account may have no outgoing row in a newly-created
+        # direct chat, but renderer policy still needs a stable self identity
+        # to reject outgoing messages. Seed it explicitly from account metadata.
+        self_nick = db.contact_nick(acct.wxid) or "(当前微信账号)"
+        seen = {acct.wxid}
+        parts: List[Participant] = [
+            Participant(
+                id=ParticipantId(_fp(acct.wxid)),
+                displayName=self_nick,
+                isSelf=True,
+                inAddressBook=True,
+            )
+        ]
+        if selfOnly:
+            return parts
+        if meta.kind == "direct":
+            friend_nick = db.contact_nick(meta.username)
+            parts.append(
+                Participant(
+                    id=ParticipantId(_fp(meta.username)),
+                    displayName=friend_nick or meta.username,
+                    isSelf=False,
+                    inAddressBook=(friend_nick is not None),
+                )
+            )
+            return parts
+
         locations = db.locate_message_table(meta.username)
-        seen = set()
-        parts: List[Participant] = []
         for shard, table in locations:
             for rid in db.distinct_senders(shard, table):
-                if rid in seen:
-                    continue
-                seen.add(rid)
                 uname = db.sender_user_name(shard, rid)
+                sender_key = uname or "rid:%d" % rid
+                if sender_key in seen:
+                    continue
+                seen.add(sender_key)
                 nick = db.contact_nick(uname) if uname else None
                 display = nick or uname or "(未知)"
                 pid = ParticipantId(_fp(uname)) if uname else ParticipantId(_fp("rid:%d" % rid))
@@ -263,7 +307,7 @@ class WechatLocalDataService:
             )
         meta = self._conv_meta(ConversationId(cid))
         acct = self._account_meta(meta.account_id)
-        db = WechatReadOnlyDB(self._acquire(acct))
+        db = self._db_for(acct)
         local_id = int(local_id_s)
         for shard, table in db.locate_message_table(meta.username):
             row = db.message_by_local_id(shard, table, local_id)
@@ -303,22 +347,30 @@ class WechatLocalDataService:
     ) -> PageResult[Message]:
         meta = self._conv_meta(conversation)
         acct = self._account_meta(meta.account_id)
-        db = WechatReadOnlyDB(self._acquire(acct))
+        # The DB wrapper keeps only metadata/contact indexes; message rows are
+        # always queried live. Reusing it avoids re-scanning every message shard
+        # for every customer and every stabilization retry.
+        db = self._db_for(acct)
         tr = (_iso_to_epoch(timeRange.start) if timeRange else None,
               _iso_to_epoch(timeRange.end) if timeRange else None)
         pairs: List[Tuple[str, list]] = []
-        for shard, table in db.locate_message_table(meta.username):
-            rows = db.query_messages(shard, table, tr, limit=1_000_000, offset=0, like=like)
+        fetch_limit = page.offset + page.limit + 1
+        locations = db.locate_message_table(meta.username)
+        for shard, table in locations:
+            rows = db.query_messages(shard, table, tr, limit=fetch_limit, offset=0, like=like)
             for r in rows:
                 pairs.append((shard, r))
         pairs.sort(key=lambda p: int(p[1][1] or 0), reverse=True)
-        total = len(pairs)
+        has_more = len(pairs) > page.offset + page.limit
+        total = (
+            sum(db.count_messages(shard, table, tr, like=like) for shard, table in locations)
+            if has_more else len(pairs)
+        )
         sliced = pairs[page.offset: page.offset + page.limit]
         items = [
             self._to_message(conversation, meta.kind, acct.wxid, db, shard, row)
             for shard, row in sliced
         ]
-        has_more = page.offset + page.limit < total
         return PageResult(items=items, total=total, hasMore=has_more)
 
     def _to_message(
@@ -332,7 +384,7 @@ class WechatLocalDataService:
         content = row[3] or ""
         local_type = int(row[4] or 0)
         mtype = _msg_type(local_type)
-        uname = db.sender_user_name(shard, rid)
+        uname = row[5] if len(row) > 5 and row[5] else db.sender_user_name(shard, rid)
         nick = db.contact_nick(uname) if uname else None
         sender_name = nick or uname or "(未知)"
         pid = ParticipantId(_fp(uname)) if uname else ParticipantId(_fp("rid:%d" % rid))
@@ -372,7 +424,7 @@ class WechatLocalDataService:
         return pairs
 
     def _conversations_for_account(self, acct: AccountMeta) -> List[Tuple[_ConversationMeta, Conversation]]:
-        db = WechatReadOnlyDB(self._acquire(acct))
+        db = self._db_for(acct)
         out = []
         for username, nick, remark, _lt in db.contact_rows():
             cid = ConversationId(_fp(username))
@@ -415,7 +467,7 @@ class WechatLocalDataService:
         for acct in self._ensure_accounts():
             # 多账号场景下，没有材料的账号取不到 AccessMaterial：跳过继续找
             try:
-                db = WechatReadOnlyDB(self._acquire(acct))
+                db = self._db_for(acct)
                 rows = db.contact_rows()
             except WechatServiceError:
                 continue
@@ -434,6 +486,13 @@ class WechatLocalDataService:
         mat = self._provider.acquire(acct.account_id)
         self._materials[acct.account_id] = mat
         return mat
+
+    def _db_for(self, acct: AccountMeta) -> WechatReadOnlyDB:
+        db = self._databases.get(acct.account_id)
+        if db is None:
+            db = WechatReadOnlyDB(self._acquire(acct))
+            self._databases[acct.account_id] = db
+        return db
 
     @staticmethod
     def _count_dbs(db_root: str) -> Optional[int]:

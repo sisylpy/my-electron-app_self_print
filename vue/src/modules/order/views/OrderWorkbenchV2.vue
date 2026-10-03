@@ -283,6 +283,8 @@ let wechatGroupModeResolver = null;
 let wechatImportSequence = 0;
 let wechatConversationFocusDepth = 0;
 let wechatLauncherSummaryRequestId = 0;
+let wechatReaderWarmupStarted = false;
+const selectedWechatRetryDelaysMs = Object.freeze([650]);
 const overview = reactive({
   customers: [],
   totals: { all: 0, needsReview: 0, needsPrice: 0, inProgress: 0, readyToPrint: 0 },
@@ -553,7 +555,7 @@ async function refreshActiveWechatImport(options = {}) {
       customerId: item.customerId,
       binding: item.binding,
       // 用户手动触发时做一次短暂、有限的稳定性复查；页面不再后台轮询。
-      retryDelaysMs: [350, 700],
+      retryDelaysMs: selectedWechatRetryDelaysMs,
     });
     if (!result.payload) {
       if (options.manual) {
@@ -692,6 +694,20 @@ async function openWechatWorkspace() {
     wechatWorkspaceWarning.value = error?.message || '微信窗口未能停靠到左侧';
     return false;
   }
+}
+
+function prewarmWechatReader() {
+  if (wechatReaderWarmupStarted) return;
+  const warmUp = window.electronAPI?.wechatReader?.warmUp;
+  if (!warmUp) return;
+  wechatReaderWarmupStarted = true;
+  void warmUp().then((result) => {
+    if (!result?.ok) wechatReaderWarmupStarted = false;
+  }).catch(() => {
+    // Prewarming is an invisible optimization. A failure falls back to the
+    // normal on-demand Reader path and remains retryable on the next opening.
+    wechatReaderWarmupStarted = false;
+  });
 }
 
 async function openActiveWechatImport(options = {}) {
@@ -1122,7 +1138,7 @@ async function importWechatConversationForCustomer(customer, title) {
   const result = await prepareWechatOrderImport({
     customerId: customerId(customer),
     binding: row.binding,
-    retryDelaysMs: [350, 700],
+    retryDelaysMs: selectedWechatRetryDelaysMs,
   });
   if (!result.payload) {
     throw new Error(result.message || '已关联该微信好友，但当前没有未处理的新订单');
@@ -1245,6 +1261,7 @@ async function handleWechatScan() {
   smartModeActive.value = false;
   activeView.value = 'overview';
   wechatImportModalOpen.value = true;
+  prewarmWechatReader();
   const workspaceOpened = await openWechatWorkspace();
   if (workspaceOpened) void refreshWechatLauncherSummary();
 }

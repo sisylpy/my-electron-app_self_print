@@ -11,7 +11,9 @@ import hashlib
 import io
 import json
 import os
+import re
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Tuple
 
 from .DatabaseAccessProvider import AccessMaterial
@@ -101,7 +103,18 @@ class WechatReadOnlyDB:
         self._integrity_checked = set()
         # 会话时间的批量缓存（见 session_last_times 的 N+1 说明）
         self._session_cache: Optional[Dict[str, int]] = None
+        self._contact_rows_cache: Optional[List[Tuple[str, str, str, int]]] = None
+        self._contact_nick_cache: Dict[str, Optional[str]] = {}
+        self._message_location_cache: Dict[str, List[Tuple[str, str]]] = {}
+        self._message_table_index: Dict[str, List[str]] = {}
+        self._indexed_message_shards = set()
+        # Stabilization retries often issue the exact same read while WeChat's
+        # database has not changed. Cache only the latest query per table/page;
+        # a main DB or WAL change invalidates it immediately.
+        self._message_query_cache = {}
         self._message_table_columns_cache: Dict[Tuple[str, str], set] = {}
+        self._sender_username_cache: Dict[Tuple[str, int], Optional[str]] = {}
+        self._distinct_sender_cache = {}
 
     # ---- 底层执行 ----
     def _run(self, db_path: str, sql: str) -> List[List[Optional[str]]]:
@@ -114,21 +127,28 @@ class WechatReadOnlyDB:
     # ---- contact / session ----
     def contact_rows(self) -> List[Tuple[str, str, str, int]]:
         """返回 (username, nick_name, remark, local_type)。"""
+        if self._contact_rows_cache is not None:
+            return list(self._contact_rows_cache)
         sql = (
             "SELECT username, nick_name, remark, local_type "
             "FROM contact WHERE username IS NOT NULL"
         )
         out = []
         for r in self._run(self._contact_db(), sql):
-            out.append((r[0] or "", r[1] or "", r[2] or "", int(r[3] or 0)))
-        return out
+            row = (r[0] or "", r[1] or "", r[2] or "", int(r[3] or 0))
+            out.append(row)
+            self._contact_nick_cache[row[0]] = row[1] or None
+        self._contact_rows_cache = out
+        return list(out)
 
     def contact_nick(self, user_name: str) -> Optional[str]:
+        if user_name in self._contact_nick_cache:
+            return self._contact_nick_cache[user_name]
         sql = "SELECT nick_name FROM contact WHERE username = %s" % _sql_text_literal(user_name)
         rows = self._run(self._contact_db(), sql)
-        if rows and rows[0][0]:
-            return rows[0][0]
-        return None
+        nick = rows[0][0] if rows and rows[0][0] else None
+        self._contact_nick_cache[user_name] = nick
+        return nick
 
     def session_last_times(self) -> Dict[str, int]:
         """一次性取回全部会话的最后活跃时间 {userName: last_timestamp}。
@@ -176,25 +196,134 @@ class WechatReadOnlyDB:
         if not os.path.isdir(msg_dir):
             return []
         import glob
-
-        return sorted(glob.glob(os.path.join(msg_dir, "message_*.db")))
+        # Only numbered message shards carry Msg_<md5> conversation tables.
+        # message_fts.db / message_resource.db use different schemas (and may
+        # even use different WCDB material), so probing them as chat shards can
+        # produce false ACCESS_MATERIAL_EXPIRED errors.
+        return sorted(
+            path for path in glob.glob(os.path.join(msg_dir, "message_*.db"))
+            if re.fullmatch(r"message_\d+\.db", os.path.basename(path))
+        )
 
     def locate_message_table(self, username: str) -> List[Tuple[str, str]]:
         """返回 [(shard_path, table_name), ...]，包含该会话消息表的所有分片。"""
+        self._index_new_message_shards()
+        cached = self._message_location_cache.get(username)
+        if cached:
+            tname = cached[0][1]
+            locations = [(shard, tname) for shard in self._message_table_index.get(tname, [])]
+            if locations != cached:
+                self._message_location_cache[username] = locations
+            return list(locations)
         tname = _msg_table_name(username)
-        found = []
+        found = [(shard, tname) for shard in self._message_table_index.get(tname, [])]
+        if not found and not username.endswith("@chatroom"):
+            found = self._locate_direct_tables_by_sender(username)
+        if found:
+            self._message_location_cache[username] = list(found)
+        return found
+
+    def _index_new_message_shards(self) -> None:
+        """Index each numbered shard once instead of probing every shard per customer.
+
+        Every shard is an independent read-only database. Querying them serially
+        makes the first conversation read pay one native-process startup per
+        shard, so index cold-starts in a small bounded pool instead. ``map`` keeps
+        the merge order deterministic and the four-worker cap avoids a CPU spike
+        on customer machines with many historical shards.
+        """
+        shards = [
+            shard for shard in self.message_shards()
+            if shard not in self._indexed_message_shards
+        ]
+        if not shards:
+            return
+
+        sql = "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'Msg_%'"
+
+        def read_tables(shard: str):
+            return shard, self._run(shard, sql)
+
+        if len(shards) == 1:
+            indexed = [read_tables(shards[0])]
+        else:
+            with ThreadPoolExecutor(max_workers=min(4, len(shards))) as executor:
+                indexed = list(executor.map(read_tables, shards))
+
+        for shard, rows in indexed:
+            for row in rows:
+                table = str(row[0] or "") if row else ""
+                if not re.fullmatch(r"Msg_[0-9a-f]{32}", table):
+                    continue
+                self._message_table_index.setdefault(table, []).append(shard)
+            self._indexed_message_shards.add(shard)
+
+    def warm_message_index(self) -> None:
+        """Preload only message-table metadata; never read message contents."""
+        self._index_new_message_shards()
+
+    def _locate_direct_tables_by_sender(self, username: str) -> List[Tuple[str, str]]:
+        """Recover direct chats whose physical Msg table is not md5(contact.username).
+
+        Windows Weixin 4.1 can retain a contact row whose username resolves the
+        sender correctly while the direct conversation continues in a Msg table
+        keyed by another internal session identity.  We never guess across group
+        chats: every known chatroom table is excluded first, then a candidate is
+        accepted only when this exact sender exists in that non-group table.
+        """
+        group_tables = {
+            _msg_table_name(contact_username)
+            for contact_username, _nick, _remark, _local_type in self.contact_rows()
+            if contact_username.endswith("@chatroom")
+        }
+        username_literal = _sql_text_literal(username)
+        found: List[Tuple[str, str]] = []
         for shard in self.message_shards():
-            rows = self._run(
+            sender_rows = self._run(
                 shard,
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='%s'" % tname,
+                "SELECT rowid FROM Name2Id WHERE user_name = %s" % username_literal,
             )
-            if rows:
-                found.append((shard, tname))
+            sender_ids = []
+            for row in sender_rows:
+                try:
+                    sender_ids.append(int(row[0]))
+                except (ValueError, TypeError, IndexError):
+                    continue
+            if not sender_ids:
+                continue
+            table_rows = self._run(
+                shard,
+                "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'Msg_%'",
+            )
+            candidates = [
+                str(row[0])
+                for row in table_rows
+                if row and re.fullmatch(r"Msg_[0-9a-f]{32}", str(row[0] or ""))
+                and str(row[0]) not in group_tables
+            ]
+            if not candidates:
+                continue
+            ids_sql = ",".join(str(value) for value in sorted(set(sender_ids)))
+            probe_sql = " UNION ALL ".join(
+                "SELECT '%s' WHERE EXISTS (SELECT 1 FROM %s WHERE real_sender_id IN (%s) LIMIT 1)"
+                % (table, table, ids_sql)
+                for table in candidates
+            )
+            for row in self._run(shard, probe_sql):
+                table = str(row[0] or "") if row else ""
+                if table in candidates:
+                    found.append((shard, table))
         return found
 
     # ---- 消息读取 ----
-    def count_messages(self, shard: str, table: str, tr: Tuple[Optional[int], Optional[int]]) -> int:
-        sql = "SELECT count(*) FROM %s%s" % (table, self._where(tr))
+    def count_messages(
+        self,
+        shard: str,
+        table: str,
+        tr: Tuple[Optional[int], Optional[int]],
+        like: Optional[str] = None,
+    ) -> int:
+        sql = "SELECT count(*) FROM %s%s" % (table, self._where(tr, like))
         rows = self._run(shard, sql)
         return int(rows[0][0] or 0) if rows else 0
 
@@ -207,25 +336,37 @@ class WechatReadOnlyDB:
         offset: int,
         like: Optional[str] = None,
     ) -> List[list]:
+        cache_key = (shard, table, limit, offset, like or "")
+        database_state = self._message_database_state(shard)
+        cached = self._message_query_cache.get(cache_key)
+        if cached and cached[0] == tr and cached[1] == database_state:
+            return [list(row) for row in cached[2]]
         packed_column = self._packed_info_column(shard, table)
-        packed_select = "hex(%s)" % packed_column if packed_column else "NULL"
+        packed_select = "hex(m.%s)" % packed_column if packed_column else "NULL"
         sql = (
-            "SELECT local_id, create_time, real_sender_id, hex(message_content), local_type, %s "
-            "FROM %s%s ORDER BY create_time DESC LIMIT %d OFFSET %d"
+            "SELECT local_id, create_time, real_sender_id, hex(message_content), local_type, "
+            "(SELECT user_name FROM Name2Id WHERE rowid = m.real_sender_id), %s "
+            "FROM %s AS m%s ORDER BY m.create_time DESC LIMIT %d OFFSET %d"
             % (packed_select, table, self._where(tr, like), limit, offset)
         )
         rows = self._run(shard, sql)
         for row in rows:
             if len(row) > 3:
                 row[3] = _decode_message_content(row[3])
+        self._message_query_cache[cache_key] = (
+            tr,
+            self._message_database_state(shard),
+            [list(row) for row in rows],
+        )
         return rows
 
     def message_by_local_id(self, shard: str, table: str, local_id: int) -> Optional[list]:
         packed_column = self._packed_info_column(shard, table)
-        packed_select = "hex(%s)" % packed_column if packed_column else "NULL"
+        packed_select = "hex(m.%s)" % packed_column if packed_column else "NULL"
         sql = (
-            "SELECT local_id, create_time, real_sender_id, hex(message_content), local_type, %s "
-            "FROM %s WHERE local_id = %d" % (packed_select, table, local_id)
+            "SELECT local_id, create_time, real_sender_id, hex(message_content), local_type, "
+            "(SELECT user_name FROM Name2Id WHERE rowid = m.real_sender_id), %s "
+            "FROM %s AS m WHERE local_id = %d" % (packed_select, table, local_id)
         )
         rows = self._run(shard, sql)
         if rows and len(rows[0]) > 3:
@@ -242,12 +383,17 @@ class WechatReadOnlyDB:
                 if len(row) > 1 and row[1]
             }
             self._message_table_columns_cache[cache_key] = columns
-        for candidate in ("packed_info_data", "packed_info"):
+        for candidate in ("packed_info_data", "packed_info", "compress_content"):
             if candidate in columns:
                 return candidate
         return None
 
     def distinct_senders(self, shard: str, table: str) -> List[int]:
+        cache_key = (shard, table)
+        database_state = self._message_database_state(shard)
+        cached = self._distinct_sender_cache.get(cache_key)
+        if cached and cached[0] == database_state:
+            return list(cached[1])
         sql = "SELECT DISTINCT real_sender_id FROM %s WHERE real_sender_id IS NOT NULL" % table
         out = []
         for r in self._run(shard, sql):
@@ -255,14 +401,33 @@ class WechatReadOnlyDB:
                 out.append(int(r[0]))
             except (ValueError, TypeError):
                 continue
+        self._distinct_sender_cache[cache_key] = (
+            self._message_database_state(shard),
+            list(out),
+        )
         return out
 
     def sender_user_name(self, shard: str, real_sender_id: int) -> Optional[str]:
+        cache_key = (shard, real_sender_id)
+        if cache_key in self._sender_username_cache:
+            return self._sender_username_cache[cache_key]
         sql = "SELECT user_name FROM Name2Id WHERE rowid = %d" % real_sender_id
         rows = self._run(shard, sql)
-        if rows and rows[0][0]:
-            return rows[0][0]
-        return None
+        username = rows[0][0] if rows and rows[0][0] else None
+        self._sender_username_cache[cache_key] = username
+        return username
+
+    @staticmethod
+    def _message_database_state(shard: str) -> tuple:
+        """Cheap live-change token for a message shard and its SQLite WAL."""
+        state = []
+        for path in (shard, shard + "-wal"):
+            try:
+                stat = os.stat(path)
+                state.append((stat.st_mtime_ns, stat.st_size))
+            except FileNotFoundError:
+                state.append(None)
+        return tuple(state)
 
     # ---- 内部 ----
     def _contact_db(self) -> str:

@@ -221,6 +221,52 @@ assert.deepEqual(imagePrepared.payload.images, [{
 }]);
 assert.equal(imagePrepared.payload.entries[0].type, 'image');
 
+let lightweightSelfCalls = 0;
+let fullParticipantCalls = 0;
+const lightweightPrepared = await prepareWechatOrderImport({
+  customerId: 7,
+  binding: loaded,
+  now: Date.parse('2026-10-01T00:30:00.000Z'),
+  retryDelaysMs: [],
+  electronAPI: {
+    customerWechatOrders: {
+      prepareMessages: async (_customerId, messages) => ({
+        ok: true,
+        data: {
+          binding,
+          pendingMessageFingerprints: messages.map(message => message.messageFingerprint),
+        },
+      }),
+    },
+    wechatReader: {
+      getSelfParticipant: async () => {
+        lightweightSelfCalls += 1;
+        return { ok: true, result: { id: 'self', displayName: '李沛谊', isSelf: true } };
+      },
+      getParticipants: async () => {
+        fullParticipantCalls += 1;
+        return electronAPI.wechatReader.getParticipants();
+      },
+      getMessages: async () => ({
+        ok: true,
+        result: {
+          items: [{
+            id: 'msg:lightweight-self',
+            senderId: 'friend',
+            type: 'text',
+            text: '青菜6斤',
+            timestamp: '2026-10-01T00:29:00.000Z',
+          }],
+        },
+      }),
+    },
+  },
+});
+assert.equal(lightweightPrepared.status, 'ready');
+assert.equal(lightweightPrepared.payload.text, '青菜6斤');
+assert.equal(lightweightSelfCalls, 1);
+assert.equal(fullParticipantCalls, 0);
+
 const mergedPayload = mergeWechatOrderPayload(
   {
     text: '油菜8斤',
@@ -436,7 +482,7 @@ try {
   assert.equal(partialWrite.payload.text, '西葫芦5斤\n油菜8斤');
   assert.equal(partialWrite.pendingCount, 2);
   assert.equal(partialWriteReads, 5);
-  assert.equal(partialWritePrepares, 5);
+  assert.equal(partialWritePrepares, 2);
   assert.deepEqual(partialWriteWaits, [1000, 1000, 1000, 1000]);
 } finally {
   Date.now = originalDateNow;

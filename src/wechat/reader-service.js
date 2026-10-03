@@ -47,6 +47,7 @@ function createWechatReaderService(appLogger) {
   return Object.freeze({
     diagnose: () => run(() => request('diagnose', {})),
     listAccounts: () => run(() => request('listAccounts', {})),
+    warmUp: () => run(() => request('listAccounts', { warmMessages: true })),
     findConversation: (input) => run(() => request('findConversation', {
       accountId: requireString(input?.accountId, 'accountId'),
       name: requireString(input?.name, 'name'),
@@ -54,6 +55,13 @@ function createWechatReaderService(appLogger) {
     getParticipants: (input) => run(() => request('getParticipants', {
       conversationId: requireString(input?.conversationId, 'conversationId'),
     })),
+    getSelfParticipant: (input) => run(async () => {
+      const participants = await request('getParticipants', {
+        conversationId: requireString(input?.conversationId, 'conversationId'),
+        selfOnly: true,
+      });
+      return Array.isArray(participants) ? participants[0] || null : null;
+    }),
     getMessages: (input) => run(() => {
       const params = {
         conversationId: requireString(input?.conversationId, 'conversationId'),
