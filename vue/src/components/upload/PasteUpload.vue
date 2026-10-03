@@ -126,7 +126,9 @@
                      style="display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
                     <div class="d-flex justify-content-between align-items-center mb-3" style="flex-shrink: 0;">
                         <div>
-                            <h6 class="mb-0">解析订单({{ pasteOrderItems.length }} 项)</h6>
+                            <h6 class="mb-0">
+                                {{ compactSource ? `确认商品 · ${pasteOrderItems.length} 项` : `解析订单(${pasteOrderItems.length} 项)` }}
+                            </h6>
                             <div v-if="currentTask" class="image-stats-row small text-muted mt-1 d-flex gap-3">
                                 <span class="image-stats-item">
                                     订单:
@@ -143,7 +145,7 @@
                             <template v-if="pasteSaveCount == null && source === 'placeOrder'">
                                 <button v-if="pasteOrderItems.length > 0  " class="btn btn-secondary btn-sm"
                                         @click="$emit('again-paste')">
-                                    清空内容
+                                    {{ compactSource ? '清空重来' : '清空内容' }}
                                 </button>
                                 <button v-if="pasteOrderItems.length > 0  " class="btn btn-success btn-sm"
                                         @click="$emit('save-paste-orders')" :disabled="savingOrder">
@@ -340,7 +342,7 @@
         },
         computed: {
             wechatInputLabel() {
-                return this.compactSource ? '微信文字原文' : '';
+                return this.compactSource ? '微信原消息' : '';
             },
             /** 校验不合格片段高亮 HTML（只显示不合格的行） */
             pasteInvalidOverlayHtml() {

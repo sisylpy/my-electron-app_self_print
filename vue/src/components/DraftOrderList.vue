@@ -192,7 +192,6 @@
 
             </div>
 
-        <div style="line-height: 100px; text-align:center; font-size:12px; " v-if="orderItems.length > 0">没有订单了！</div>
         </div>
     </div>
 </template>
