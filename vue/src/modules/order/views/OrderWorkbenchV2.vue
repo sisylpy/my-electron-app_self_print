@@ -29,21 +29,6 @@
           <strong>{{ stage.label }}</strong>
           <em>{{ stage.count }}</em>
         </button>
-        <button
-          type="button"
-          class="is-wechat-scan"
-          :disabled="wechatScanBusy"
-          @click="handleWechatScan"
-        >
-          <span class="order-workbench__stage-icon is-wechat-scan" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 11a7 7 0 0 1-7 7H8l-4 3 1.2-4.2A7 7 0 1 1 20 11Z" />
-              <path d="m9 11 2 2 4-4" />
-            </svg>
-          </span>
-          <strong>{{ wechatScanLabel }}</strong>
-          <em v-if="wechatImportQueue.length">{{ wechatImportQueue.length }}</em>
-        </button>
       </nav>
     </Teleport>
 
@@ -83,11 +68,15 @@
       :detail-loading="todayInbox.detailLoading.value"
       :list-error="overviewError"
       :detail-error="todayInbox.detailError.value"
+      :wechat-scan-busy="wechatScanBusy"
+      :wechat-scan-label="wechatScanLabel"
+      :wechat-import-count="wechatImportQueue.length"
       @select-customer="todayInbox.selectCustomer"
       @refresh-list="refreshAll"
       @refresh-detail="todayInbox.refreshSelected"
       @continue-order="openCreateOrder"
       @smart-mode-change="handleSmartModeChange"
+      @scan-wechat="handleWechatScan"
       @new-order="openCreateOrder"
       @data-changed="handleOrderChanged"
     />
@@ -1185,9 +1174,6 @@ async function returnToOverview() {
 .order-workbench__stage-icon.is-progress { color: #2f6fd0; background: #e8f1fe; }
 .order-workbench__stage-icon.is-ready { color: var(--product-primary-strong); background: #e6f6ee; }
 .order-workbench__stage-icon.is-reminder { color: #966008; background: #fff3de; }
-.order-workbench__stage-icon.is-wechat-scan { color: #116a45; background: #e5f7ed; }
-.order-workbench__header-stages > button.is-wechat-scan { border-color: #b9dacb; color: #116a45; }
-.order-workbench__header-stages > button.is-wechat-scan:hover { border-color: #178454; background: #f3fbf7; }
 .order-workbench__header-stages > button:disabled { cursor: wait; opacity: .65; }
 
 .order-workbench__header-stages strong {

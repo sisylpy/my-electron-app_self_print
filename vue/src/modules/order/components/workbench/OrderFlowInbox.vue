@@ -2,10 +2,50 @@
   <section class="order-flow" aria-label="进行中订单工作台">
     <Teleport to="#product-header-context">
       <div class="order-flow__header-tools" aria-label="客户操作">
-        <label class="order-flow__search">
-          <span aria-hidden="true">⌕</span>
-          <input v-model="query" type="search" placeholder="搜索客户" aria-label="搜索客户">
-        </label>
+        <div :class="['order-flow__search-control', { 'is-open': searchOpen }]">
+          <button
+            v-if="!searchOpen"
+            type="button"
+            class="order-flow__search-trigger"
+            title="搜索客户"
+            aria-label="搜索客户"
+            @click="openSearch"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <circle cx="10.8" cy="10.8" r="6.8" />
+              <path d="m16 16 4 4" />
+            </svg>
+          </button>
+          <label v-else class="order-flow__search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <circle cx="10.8" cy="10.8" r="6.8" />
+              <path d="m16 16 4 4" />
+            </svg>
+            <input
+              ref="searchInput"
+              v-model="query"
+              type="search"
+              placeholder="搜索客户"
+              aria-label="搜索客户"
+              @keydown.enter.prevent="submitSearch"
+              @keydown.esc.prevent="closeSearch"
+            >
+            <button type="button" title="关闭搜索" aria-label="关闭搜索" @click="closeSearch">×</button>
+          </label>
+        </div>
+        <button
+          type="button"
+          class="order-flow__wechat-scan"
+          :disabled="wechatScanBusy"
+          @click="$emit('scan-wechat')"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 11a7 7 0 0 1-7 7H8l-4 3 1.2-4.2A7 7 0 1 1 20 11Z" />
+            <path d="m9 11 2 2 4-4" />
+          </svg>
+          <strong>{{ wechatScanLabel }}</strong>
+          <em v-if="wechatImportCount">{{ wechatImportCount }}</em>
+        </button>
         <button type="button" class="order-flow__new-order" title="新建订单" aria-label="新建订单" @click="$emit('new-order')">＋</button>
       </div>
     </Teleport>
@@ -27,7 +67,7 @@
           :key="customerId(customer)"
           type="button"
           :class="{ 'is-active': isSelected(customer) }"
-          @click="$emit('select-customer', customer)"
+          @click="selectCustomer(customer)"
         >
           <span class="order-flow__queue-head">
             <strong>{{ customerName(customer) }}</strong>
@@ -191,7 +231,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import TodayOrders from '@/components/TodayOrders.vue';
 import TaskOrderWorkspace from '../TaskOrderWorkspace.vue';
 import SmartReplenishmentComparison from './SmartReplenishmentComparison.vue';
@@ -215,6 +255,9 @@ const props = defineProps({
   detailLoading: { type: Boolean, default: false },
   listError: { type: String, default: '' },
   detailError: { type: String, default: '' },
+  wechatScanBusy: { type: Boolean, default: false },
+  wechatScanLabel: { type: String, default: '读取微信订单' },
+  wechatImportCount: { type: Number, default: 0 },
 });
 
 const emit = defineEmits([
@@ -225,10 +268,13 @@ const emit = defineEmits([
   'new-order',
   'data-changed',
   'smart-mode-change',
+  'scan-wechat',
 ]);
 
 const query = ref('');
 const smartMode = ref(false);
+const searchOpen = ref(false);
+const searchInput = ref(null);
 const reminderSummary = ref(null);
 
 function stats(customer) {
@@ -300,6 +346,28 @@ function isSelected(customer) {
   return String(customerId(customer)) === String(customerId(props.selectedCustomer));
 }
 
+async function openSearch() {
+  searchOpen.value = true;
+  await nextTick();
+  searchInput.value?.focus();
+}
+
+function closeSearch() {
+  query.value = '';
+  searchOpen.value = false;
+}
+
+function selectCustomer(customer) {
+  emit('select-customer', customer);
+  if (searchOpen.value) closeSearch();
+}
+
+function submitSearch() {
+  const [firstMatch] = visibleCustomers.value;
+  if (!firstMatch) return;
+  selectCustomer(firstMatch);
+}
+
 function toggleSmartMode() {
   smartMode.value = !smartMode.value;
   reminderSummary.value = null;
@@ -357,13 +425,39 @@ function handleTaskChanged(change) {
 
 .order-flow__header-tools {
   display: flex;
-  width: 216px;
-  min-width: 216px;
+  min-width: 0;
   flex: none;
   align-items: center;
   gap: 8px;
   order: -1;
 }
+.order-flow__search-control {
+  width: 34px;
+  height: 35px;
+  flex: none;
+  overflow: hidden;
+  transition: width .22s cubic-bezier(.2, .8, .2, 1);
+}
+.order-flow__search-control.is-open { width: 176px; }
+.order-flow__search-trigger {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--product-border);
+  border-radius: 6px;
+  color: var(--product-text-secondary);
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .16s ease, color .16s ease, background .16s ease;
+}
+.order-flow__search-trigger:hover {
+  border-color: #a9c9b9;
+  color: var(--product-primary-strong);
+  background: #f5fbf8;
+}
+.order-flow__search-trigger svg { width: 16px; height: 16px; }
 .order-flow__header-tools .order-flow__new-order {
   display: grid;
   width: 34px;
@@ -377,18 +471,28 @@ function handleTaskChanged(change) {
   background: var(--product-primary);
   font-size: 21px;
   font-weight: 900;
+  cursor: pointer;
 }
 .order-flow__search {
   display: flex;
+  box-sizing: border-box;
+  width: 176px;
   height: 35px;
-  min-width: 0;
-  flex: 1;
   align-items: center;
-  gap: 7px;
-  padding: 0 9px;
-  border: 1px solid var(--product-border);
-  border-radius: 5px;
+  gap: 6px;
+  padding: 0 6px 0 9px;
+  border: 1px solid #9fc9b4;
+  border-radius: 6px;
   background: #fff;
+  box-shadow: 0 0 0 3px rgba(24, 132, 84, .08);
+  animation: order-flow-search-enter .18s ease both;
+}
+
+.order-flow__search > svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--product-primary-strong);
 }
 
 .order-flow__search input {
@@ -398,6 +502,61 @@ function handleTaskChanged(change) {
   outline: 0;
   background: transparent;
   font-size: 11px;
+}
+.order-flow__search input::-webkit-search-cancel-button { display: none; }
+.order-flow__search button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--product-text-muted);
+  background: transparent;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.order-flow__search button:hover { color: var(--product-text); background: #edf4f0; }
+
+.order-flow__wechat-scan {
+  display: inline-flex;
+  height: 34px;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid #b9dacb;
+  border-radius: 999px;
+  color: #116a45;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(14, 34, 26, .06);
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+.order-flow__wechat-scan:hover { border-color: #178454; background: #f3fbf7; transform: translateY(-1px); }
+.order-flow__wechat-scan:disabled { cursor: wait; opacity: .65; transform: none; }
+.order-flow__wechat-scan svg { width: 15px; height: 15px; flex: none; }
+.order-flow__wechat-scan strong { font-size: 11px; white-space: nowrap; }
+.order-flow__wechat-scan em {
+  display: grid;
+  min-width: 17px;
+  height: 17px;
+  place-items: center;
+  padding: 0 4px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--product-primary);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+@keyframes order-flow-search-enter {
+  from { opacity: 0; transform: translateX(-5px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 .order-flow__list { min-height: 0; overflow: auto; }
