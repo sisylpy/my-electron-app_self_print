@@ -80,6 +80,10 @@ import api from '../services/orderApi';
             newTaskOnly: {
                 type: Boolean,
                 default: false
+            },
+            externalPasteActionsTarget: {
+                type: String,
+                default: ''
             }
         },
         data() {

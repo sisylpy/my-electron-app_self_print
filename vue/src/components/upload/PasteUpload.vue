@@ -120,11 +120,28 @@
             </div>
 
             <!-- 右侧：订单列表（复制粘贴独立） -->
+            <Teleport
+                    v-if="compactSource && externalActionsTarget && pasteSaveCount == null && source === 'placeOrder'"
+                    :to="externalActionsTarget">
+                <div class="wechat-import-external-actions">
+                    <button v-if="pasteOrderItems.length > 0" class="btn btn-secondary btn-sm"
+                            @click="$emit('again-paste')">
+                        清空重来
+                    </button>
+                    <button v-if="pasteOrderItems.length > 0" class="btn btn-success btn-sm"
+                            @click="$emit('save-paste-orders')" :disabled="savingOrder">
+                        {{ savingOrder ? '保存中...' : '保存订单' }}
+                    </button>
+                </div>
+            </Teleport>
             <div :class="[compactSource ? 'col-md-9' : 'col-md-8', 'order-items-section']"
                  style="display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;">
                 <div class="card h-100 p-3"
                      style="display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
-                    <div class="d-flex justify-content-between align-items-center mb-3" style="flex-shrink: 0;">
+                    <div
+                            v-if="!compactSource || !externalActionsTarget || pasteSaveCount != null || source !== 'placeOrder'"
+                            class="d-flex justify-content-between align-items-center mb-3"
+                            style="flex-shrink: 0;">
                         <div>
                             <h6 class="mb-0">
                                 {{ compactSource ? `确认商品 · ${pasteOrderItems.length} 项` : `解析订单(${pasteOrderItems.length} 项)` }}
@@ -244,6 +261,10 @@
             compactSource: {
                 type: Boolean,
                 default: false
+            },
+            externalActionsTarget: {
+                type: String,
+                default: ''
             },
             depId: {
                 type: Number,

@@ -51,6 +51,7 @@
         new-task-only
         :show-mode-selector="false"
         :show-wechat-order-source="!wechatImportMode"
+        :external-paste-actions-target="wechatImportMode ? '#wechat-import-active-actions' : ''"
         @upload-type-change="selectedMode = $event"
         @order-saved="$emit('order-saved', $event)"
         @task-added="handleTaskAdded"

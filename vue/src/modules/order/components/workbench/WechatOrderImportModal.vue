@@ -110,6 +110,11 @@
                     class="wechat-import-modal__merge"
                     @click="$emit('merge-new')"
                   >合并 {{ activeItem.lateMessageCount }} 条</button>
+                  <div
+                    id="wechat-import-active-actions"
+                    class="wechat-import-modal__external-actions"
+                    aria-label="当前订单操作"
+                  ></div>
                 </div>
               </div>
               <p
@@ -854,12 +859,13 @@ function removeItem(item) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 0;
   padding: 9px 11px;
   border: 1px solid #dcebe3;
-  border-radius: 13px;
+  border-bottom-color: #e7f0eb;
+  border-radius: 13px 13px 0 0;
   background: #fff;
-  box-shadow: 0 5px 16px rgba(25, 87, 58, .045);
+  box-shadow: none;
 }
 .wechat-import-modal__current-summary { display: flex; min-width: 0; align-items: center; gap: 10px; }
 .wechat-import-modal__current-number { display: grid; width: 34px; height: 34px; flex: none; place-items: center; border-radius: 11px; color: #fff; background: #15945b; font-size: 13px; font-weight: 900; }
@@ -869,6 +875,17 @@ function removeItem(item) {
 .wechat-import-modal__current p { display: flex; align-items: center; gap: 6px; margin: 0; }
 .wechat-import-modal__current p span { padding: 4px 8px; border-radius: 9px; color: #40705a; background: #eef7f2; font-size: 9px; font-weight: 800; white-space: nowrap; }
 .wechat-import-modal__current-actions { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 7px; }
+.wechat-import-modal__external-actions { display: flex; align-items: center; gap: 7px; }
+.wechat-import-modal__external-actions:empty { display: none; }
+.wechat-import-modal__external-actions :deep(.wechat-import-external-actions) { display: flex; align-items: center; gap: 7px; }
+.wechat-import-modal__external-actions :deep(.btn) {
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
 .wechat-import-modal__remove-current,
 .wechat-import-modal__refresh,
 .wechat-import-modal__merge {
@@ -887,12 +904,23 @@ function removeItem(item) {
 .wechat-import-modal__merge { border: 1px solid #e3a647; color: #fff; background: #d98b13; box-shadow: 0 4px 10px rgba(179, 107, 4, .18); }
 .wechat-import-modal__sync-note { grid-row: 3; margin: -4px 4px 8px; color: #1b7d51; font-size: 9px; text-align: right; }
 .wechat-import-modal__sync-note.is-error { color: #b23c45; }
-.wechat-import-modal__content { min-width: 0; min-height: 0; grid-row: 4; overflow: hidden; }
-.wechat-import-modal__content :deep(.upload-section .card) {
-  border-color: #dce8e2;
-  border-radius: 14px;
+.wechat-import-modal__content {
+  min-width: 0;
+  min-height: 0;
+  grid-row: 4;
+  overflow: hidden;
+  border: 1px solid #dcebe3;
+  border-top: 0;
+  border-radius: 0 0 13px 13px;
   background: #fff;
-  box-shadow: 0 7px 22px rgba(26, 84, 57, .045);
+}
+.wechat-import-modal__content :deep(.upload-section > .row) { --bs-gutter-x: 0; --bs-gutter-y: 0; }
+.wechat-import-modal__content :deep(.upload-section > .row > .col-md-3) { border-right: 1px solid #e3ece7; }
+.wechat-import-modal__content :deep(.upload-section .card) {
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
 }
 .wechat-import-modal__content :deep(.upload-section .paste-textarea) {
   border-color: #e1ebe6;

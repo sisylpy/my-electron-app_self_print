@@ -59,6 +59,7 @@
                     v-if="uploadType === 'paste' || uploadType === 'wechat'"
                     source="placeOrder"
                     :compact-source="uploadType === 'wechat'"
+                    :external-actions-target="externalPasteActionsTarget"
                     :new-task-only="newTaskOnly"
                     :dep-id="selectedSubDepartment || selectedAllCustomer"
                     :task-type="3"
