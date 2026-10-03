@@ -31,6 +31,7 @@ _LEFT_UP = 2
 _LEFT_BUTTON = 0
 _MOUSE_EVENT_CLICK_STATE = 1
 _COMMAND_FLAG = 1 << 20
+_KEY_A = 0
 _KEY_V = 9
 _KEY_ESCAPE = 53
 _KEY_RETURN = 36
@@ -91,11 +92,36 @@ def _key(keycode: int, flags: int = 0) -> None:
 
 
 def set_clipboard(text: str) -> None:
-    subprocess.run(["pbcopy"], input=text, text=True, check=True)
+    # `pbcopy` inherits the launcher locale. The packaged desktop app can run
+    # with a C locale, under which pbcopy silently stores an empty value for
+    # Chinese text even though it exits successfully. AppleScript writes a
+    # proper Unicode pasteboard item; passing the value in argv also avoids
+    # interpolating customer-controlled text into source code.
+    subprocess.run(
+        [
+            "osascript",
+            "-e",
+            "on run argv",
+            "-e",
+            "set the clipboard to item 1 of argv",
+            "-e",
+            "end run",
+            "--",
+            text,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
 
 def paste_clipboard(settle: float = 0.8) -> None:
     _key(_KEY_V, _COMMAND_FLAG)
+    time.sleep(settle)
+
+
+def select_all(settle: float = 0.2) -> None:
+    _key(_KEY_A, _COMMAND_FLAG)
     time.sleep(settle)
 
 
