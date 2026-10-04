@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from automation.api import current_conversation  # noqa: E402
+from automation.flows.current_conversation import CurrentConversationFlow  # noqa: E402
 
 
 def build_output(result) -> dict:
@@ -37,10 +37,14 @@ def main() -> int:
     parser.add_argument("--include-title", action="append", dest="allowed_titles")
     parser.add_argument("--artifact-root", type=Path)
     args = parser.parse_args()
-    result = current_conversation(
-        args.allowed_titles,
-        artifact_root=args.artifact_root,
-    )
+    del args.allowed_titles  # Kept for CLI/backward compatibility.
+    result = CurrentConversationFlow(
+        artifact_root=(
+            args.artifact_root
+            if args.artifact_root is not None
+            else PROJECT_ROOT / "artifacts" / "private"
+        ),
+    ).run()
     print(json.dumps(build_output(result), ensure_ascii=False, indent=2))
     return 0 if result.ok else 1
 

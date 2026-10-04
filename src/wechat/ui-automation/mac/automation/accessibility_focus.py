@@ -37,12 +37,13 @@ def _osascript(lines: list[str]) -> str:
 def _conversation_header(*, focus_search: bool = False) -> str:
     lines = [
         'tell application "System Events" to tell process "WeChat"',
-        'set rootSplit to first splitter group of first splitter group of first group of window "微信"',
-        'set chatHeader to first static text of first group of first splitter group of first group of rootSplit',
+        'set rootSplit to UI element 1 of UI element 7 of UI element 1 of window "微信"',
+        'set chatGroup to UI element 1 of UI element 1 of UI element 1 of UI element 1 of rootSplit',
+        'set chatHeader to UI element 1 of chatGroup',
     ]
     if focus_search:
         lines.extend([
-            'set searchField to first text area of second group of rootSplit',
+            'set searchField to UI element 2 of UI element 2 of rootSplit',
             'set focused of searchField to true',
         ])
     lines.extend([
@@ -50,6 +51,13 @@ def _conversation_header(*, focus_search: bool = False) -> str:
         'end tell',
     ])
     return _osascript(lines)
+
+
+def current_conversation_header() -> str:
+    visible = _conversation_header(focus_search=False).strip()
+    if visible.casefold() == "missing value":
+        return ""
+    return _GROUP_MEMBER_COUNT.sub("", visible).strip()
 
 
 def focus_conversation_with_accessibility(target: str) -> AccessibilityFocusResult:

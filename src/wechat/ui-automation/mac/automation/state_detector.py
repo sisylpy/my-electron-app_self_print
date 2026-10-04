@@ -168,14 +168,50 @@ def current_conversation_title(
             continue
         if timestamp.fullmatch(raw):
             continue
-        if not any(character.isalnum() or "\u4e00" <= character <= "\u9fff" for character in raw):
+        if not any(
+            character.isalnum() or "\u4e00" <= character <= "\u9fff"
+            for character in raw
+        ):
             continue
         candidates.append(item)
     if not candidates:
         return ""
     raw = min(candidates, key=lambda item: (item.rect.y, item.rect.x)).text.strip()
-    normalized = re.sub(r"\s*[（(]\d+[）)]\s*$", "", raw).strip()
+    return normalize_current_conversation_title(raw)
+
+
+def normalize_current_conversation_title(raw: str) -> str:
+    normalized = re.sub(r"\s*[（(]\d+[）)]\s*$", "", str(raw or "")).strip()
     return re.sub(r"^[\u2460-\u2473\u24ea]\s*", "", normalized).strip()
+
+
+def current_conversation_title_from_header(
+    items: list[OCRItem], *, image_height: int
+) -> str:
+    """Extract a title from a screenshot containing only the chat header.
+
+    The caller crops away WeChat's search field and conversation list, so the
+    left-most meaningful text is the selected conversation title. Keeping this
+    detector separate avoids applying full-window geometry to a small crop.
+    """
+
+    timestamp = re.compile(r"^(?:(?:上午|下午)\s*)?\d{1,2}:\d{2}$")
+    candidates: list[OCRItem] = []
+    for item in items:
+        raw = item.text.strip()
+        if (
+            not raw
+            or item.rect.y >= image_height * 0.9
+            or timestamp.fullmatch(raw)
+        ):
+            continue
+        if not any(character.isalnum() or "\u4e00" <= character <= "\u9fff" for character in raw):
+            continue
+        candidates.append(item)
+    if not candidates:
+        return ""
+    raw = min(candidates, key=lambda item: (item.rect.x, item.rect.y)).text.strip()
+    return normalize_current_conversation_title(raw)
 
 
 def profile(items: list[OCRItem]) -> StateResult:

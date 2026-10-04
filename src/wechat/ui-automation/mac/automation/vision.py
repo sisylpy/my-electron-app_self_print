@@ -156,4 +156,3 @@ def saturated_components(
             Rect(left + min(xs), top + min(ys), max(xs) - min(xs) + 1, max(ys) - min(ys) + 1)
         )
     return components
-

@@ -10,7 +10,10 @@ if str(MAC_ROOT) not in sys.path:
     sys.path.insert(0, str(MAC_ROOT))
 
 from automation.coordinates import Rect  # noqa: E402
-from automation.state_detector import current_conversation_title  # noqa: E402
+from automation.state_detector import (  # noqa: E402
+    current_conversation_title,
+    current_conversation_title_from_header,
+)
 from automation.vision import OCRItem  # noqa: E402
 
 
@@ -54,6 +57,27 @@ class CurrentConversationTitleTest(unittest.TestCase):
             "",
         )
 
+    def test_reads_leftmost_title_from_cropped_header(self) -> None:
+        items = [
+            item("调料群 (3)", 36, 18, 150),
+            item("14:14", 420, 20, 70),
+        ]
+
+        self.assertEqual(
+            current_conversation_title_from_header(items, image_height=120),
+            "调料群",
+        )
+
+    def test_cropped_header_ignores_timestamp_and_icons(self) -> None:
+        items = [
+            item("...", 4, 18, 30),
+            item("14:14", 36, 18, 70),
+        ]
+
+        self.assertEqual(
+            current_conversation_title_from_header(items, image_height=120),
+            "",
+        )
 
 if __name__ == "__main__":
     unittest.main()
