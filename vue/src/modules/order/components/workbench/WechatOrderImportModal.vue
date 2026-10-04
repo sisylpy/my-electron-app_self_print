@@ -34,6 +34,14 @@
             >
               {{ closeLabel }}
             </button>
+            <button
+              v-if="items.length || activeItem"
+              type="button"
+              class="wechat-import-modal__rescan-all"
+              title="重新逐个检查全部已关联微信，并生成新一轮订单任务"
+              :disabled="busy || refreshing || selectedImportBusy"
+              @click="$emit('scan-all')"
+            >重新检查全部</button>
           </header>
 
           <div
@@ -144,13 +152,6 @@
                     :disabled="refreshing || selectedImportBusy"
                     @click="$emit('refresh')"
                   >{{ refreshing ? '正在获取…' : '获取新消息' }}</button>
-                  <button
-                    type="button"
-                    class="wechat-import-modal__rescan-all"
-                    title="重新逐个检查全部已关联微信，并生成新一轮订单任务"
-                    :disabled="busy || refreshing || selectedImportBusy"
-                    @click="$emit('scan-all')"
-                  >重新检查全部</button>
                   <button
                     v-if="activeItem.lateMessageCount"
                     type="button"
@@ -1135,6 +1136,7 @@ function hideBrokenAvatar(event) {
 .wechat-import-modal__refresh { border: 1px solid #afd3c0; color: #176a48; background: #f5fbf8; }
 .wechat-import-modal__rescan-all { border: 1px solid #a9cabb; color: #315f4b; background: #edf7f2; }
 .wechat-import-modal__rescan-all:hover { border-color: #23895c; color: #fff; background: #23895c; }
+.wechat-import-modal__header .wechat-import-modal__rescan-all { min-height: 36px; padding: 0 14px; border-radius: 9px; }
 .wechat-import-modal__refresh:disabled,
 .wechat-import-modal__rescan-all:disabled { cursor: wait; opacity: .65; }
 .wechat-import-modal__merge { border: 1px solid #e3a647; color: #fff; background: #d98b13; box-shadow: 0 4px 10px rgba(179, 107, 4, .18); }
