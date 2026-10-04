@@ -717,21 +717,17 @@ function setupIpcHandlers() {
   ipcMain.handle('wechat-ui-focus-conversation', async (event, input) => {
     assertTrustedRendererEvent(event);
     try {
-      const result = await getWechatUiAutomationService().focusConversation(input);
-      // A successful switch intentionally leaves WeChat in front so the user
-      // can see the selected friend and the unread badge disappear. Only bring
-      // GrainPrint back when automation failed and the error needs attention.
-      if (!result?.ok && mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.show();
-        mainWindow.focus();
-      }
-      return result;
-    } catch (error) {
+      return await getWechatUiAutomationService().focusConversation(input);
+    } finally {
+      // Searching/clicking a conversation necessarily activates WeChat. The
+      // two windows remain visible side by side, but GrainPrint must become the
+      // active app again or macOS consumes the user's next click merely to
+      // activate Electron instead of pressing the intended button.
       if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
         mainWindow.show();
         mainWindow.focus();
       }
-      throw error;
     }
   });
   ipcMain.handle('wechat-ui-workspace-open', async (event) => {

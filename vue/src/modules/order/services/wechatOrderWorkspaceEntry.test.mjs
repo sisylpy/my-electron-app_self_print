@@ -237,5 +237,11 @@ assert.match(preload, /onWorkspaceCloseRequested:[\s\S]*?wechat-ui-workspace-clo
 assert.match(mainProcess, /mainWindow\.on\('close',[\s\S]*?event\.preventDefault\(\)/);
 assert.match(mainProcess, /wechat-ui-workspace-close-requested/);
 assert.match(mainProcess, /service\.close\(\)/);
+const focusConversationHandler = mainProcess.match(
+  /ipcMain\.handle\('wechat-ui-focus-conversation',[\s\S]*?\n  \}\);/,
+)?.[0] || '';
+assert.match(focusConversationHandler, /finally \{/);
+assert.match(focusConversationHandler, /mainWindow\.show\(\);\s*mainWindow\.focus\(\);/);
+assert.doesNotMatch(focusConversationHandler, /if \(!result\?\.ok/);
 
 console.log('WeChat order workspace entry passed');
