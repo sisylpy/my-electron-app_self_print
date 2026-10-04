@@ -200,7 +200,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { useStore } from 'vuex';
 import AiOrderPanel from '../components/workbench/AiOrderPanel.vue';
 import OrderFlowInbox from '../components/workbench/OrderFlowInbox.vue';
@@ -238,6 +238,7 @@ import {
   loadOrderWorkbenchOverview,
   orderWorkbenchError,
 } from '../services/orderWorkbenchService';
+import { writeAppLog } from '../../../utils/appLog';
 
 const store = useStore();
 const disUser = computed(() => store.state.disUser);
@@ -284,7 +285,124 @@ let wechatImportSequence = 0;
 let wechatConversationFocusDepth = 0;
 let wechatLauncherSummaryRequestId = 0;
 let wechatReaderWarmupStarted = false;
+let wechatOrderTimingSequence = 0;
 const selectedWechatRetryDelaysMs = Object.freeze([650]);
+
+const wechatOrderTimingLabels = Object.freeze({
+  'current-conversation-cached': '读取已监听的当前微信名称',
+  'current-conversation-api': '识别当前微信名称',
+  'customer-directory-load': '首次加载客户目录',
+  'customer-directory-reload': '刷新客户目录后重试',
+  'customer-profile-match': '按微信名称匹配客户',
+  'binding-load': '读取客户微信绑定',
+  'binding-directory-build': '建立客户绑定索引',
+  'binding-reuse': '复用已有微信绑定',
+  'reader-list-accounts': '读取本机微信账号',
+  'reader-find-conversation': '搜索微信会话',
+  'group-mode-selection': '等待选择群接收方式',
+  'server-save-binding': '保存客户微信绑定',
+  'customer-match-remember': '更新本次客户匹配',
+  'reader-self-participant': '识别当前微信账号',
+  'reader-participants': '读取群成员资料',
+  'reader-stability-wait': '等待微信消息写入稳定',
+  'reader-messages': '读取微信消息',
+  'message-filter': '筛选可转订单消息',
+  'server-prepare-messages': '向服务端核对未处理消息',
+  'reader-attachments': '读取微信图片附件',
+  'payload-build': '组装微信订单内容',
+  'import-result': '确认读取结果',
+  'task-enqueue': '生成确认任务',
+  'confirmation-state-open': '准备订单确认页面',
+  'confirmation-page-visible': '订单确认页面完成显示',
+});
+
+function timingNow() {
+  return globalThis.performance?.now?.() ?? Date.now();
+}
+
+function roundedMs(value) {
+  return Math.round(Number(value || 0) * 100) / 100;
+}
+
+function createWechatOrderTiming(action) {
+  const startedAt = timingNow();
+  let previousAt = startedAt;
+  let finished = false;
+  const phases = [];
+  const traceId = `${Date.now().toString(36)}-${++wechatOrderTimingSequence}`;
+  writeAppLog('info', 'wechat-order-timing', 'started', { traceId, action });
+  return {
+    phase(stage, meta = {}) {
+      if (finished) return;
+      const now = timingNow();
+      const { durationMs: operationDurationMs, ...details } = meta || {};
+      const entry = {
+        stage,
+        label: wechatOrderTimingLabels[stage] || stage,
+        phaseMs: roundedMs(now - previousAt),
+        totalMs: roundedMs(now - startedAt),
+        ...(Number.isFinite(Number(operationDurationMs))
+          ? { operationMs: roundedMs(operationDurationMs) }
+          : {}),
+        ...details,
+      };
+      phases.push(entry);
+      previousAt = now;
+      writeAppLog('info', 'wechat-order-timing', 'phase', { traceId, action, ...entry });
+    },
+    finish(outcome, meta = {}) {
+      if (finished) return;
+      finished = true;
+      writeAppLog(outcome === 'success' ? 'info' : 'warn', 'wechat-order-timing', 'summary', {
+        traceId,
+        action,
+        outcome,
+        totalMs: roundedMs(timingNow() - startedAt),
+        phases,
+        ...meta,
+      });
+    },
+  };
+}
+
+async function timeWechatOrderPhase(timing, stage, task, meta = {}) {
+  const startedAt = timingNow();
+  try {
+    const value = await task();
+    timing?.phase(stage, { ...meta, durationMs: timingNow() - startedAt });
+    return value;
+  } catch (error) {
+    timing?.phase(stage, {
+      ...meta,
+      durationMs: timingNow() - startedAt,
+      failed: true,
+    });
+    throw error;
+  }
+}
+
+function timeWechatOrderSyncPhase(timing, stage, task, meta = {}) {
+  const startedAt = timingNow();
+  const value = task();
+  timing?.phase(stage, { ...meta, durationMs: timingNow() - startedAt });
+  return value;
+}
+
+function recordWechatServiceTiming(timing, event) {
+  if (!event?.stage) return;
+  timing?.phase(event.stage, event);
+}
+
+async function waitForWechatConfirmationPaint() {
+  await nextTick();
+  if (typeof window.requestAnimationFrame !== 'function') {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    return;
+  }
+  await new Promise(resolve => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+  });
+}
 const overview = reactive({
   customers: [],
   totals: { all: 0, needsReview: 0, needsPrice: 0, inProgress: 0, readyToPrint: 0 },
@@ -1119,40 +1237,80 @@ async function ensureWechatBindingWithGroupMode(options) {
     return await ensureWechatCustomerBinding(options);
   } catch (error) {
     if (error?.code !== WECHAT_GROUP_MODE_REQUIRED) throw error;
+    const groupModeStartedAt = timingNow();
     const groupMode = await requestWechatGroupMode(options.row, options.selectedTitle);
+    if (typeof options.onTiming === 'function') {
+      options.onTiming({
+        stage: 'group-mode-selection',
+        durationMs: timingNow() - groupModeStartedAt,
+        cancelled: !groupMode,
+      });
+    }
     if (!groupMode) throw new Error('已取消选择群订单接收方式');
     return ensureWechatCustomerBinding({ ...options, groupMode });
   }
 }
 
-async function importWechatConversationForCustomer(customer, title) {
-  const binding = await loadCustomerWechatBinding(customerId(customer));
+async function importWechatConversationForCustomer(customer, title, timing = null) {
+  const selectedCustomerId = customerId(customer);
+  const onTiming = event => recordWechatServiceTiming(timing, event);
+  const binding = await timeWechatOrderPhase(
+    timing,
+    'binding-load',
+    () => loadCustomerWechatBinding(selectedCustomerId)
+  );
   const row = { customer, binding };
-  const directory = buildWechatCustomerAssociationDirectory([row]);
+  const directory = timeWechatOrderSyncPhase(
+    timing,
+    'binding-directory-build',
+    () => buildWechatCustomerAssociationDirectory([row])
+  );
   row.binding = await ensureWechatBindingWithGroupMode({
     row,
     selectedTitle: title,
     directory,
+    onTiming,
   });
-  rememberWechatCustomerMatch(customer, title);
+  timeWechatOrderSyncPhase(
+    timing,
+    'customer-match-remember',
+    () => rememberWechatCustomerMatch(customer, title)
+  );
   const result = await prepareWechatOrderImport({
-    customerId: customerId(customer),
+    customerId: selectedCustomerId,
     binding: row.binding,
     retryDelaysMs: selectedWechatRetryDelaysMs,
+    onTiming,
+  });
+  timing?.phase('import-result', {
+    status: result.status,
+    pendingCount: Number(result.pendingCount) || 0,
   });
   if (!result.payload) {
     throw new Error(result.message || '已关联该微信好友，但当前没有未处理的新订单');
   }
-  enqueueWechatImport(row, title, result);
+  timeWechatOrderSyncPhase(
+    timing,
+    'task-enqueue',
+    () => enqueueWechatImport(row, title, result),
+    { taskCount: splitWechatOrderPayloads(result.payload).length }
+  );
   wechatSelectedImportMessage.value = '';
   wechatUnmatchedConversationTitle.value = '';
   wechatCustomerMatchOpen.value = false;
   wechatCustomerMatchError.value = '';
-  await openActiveWechatImport({ focusConversation: false });
+  await timeWechatOrderPhase(
+    timing,
+    'confirmation-state-open',
+    () => openActiveWechatImport({ focusConversation: false })
+  );
 }
 
 async function importSelectedWechatConversation() {
   if (wechatSelectedImportBusy.value || wechatScanBusy.value) return;
+  const timing = createWechatOrderTiming('read-selected-wechat');
+  let outcome = 'needs-customer-match';
+  let confirmationReady = false;
   wechatSelectedImportBusy.value = true;
   wechatSelectedImportMessage.value = '';
   wechatSelectedImportStatus.value = 'warning';
@@ -1163,28 +1321,56 @@ async function importSelectedWechatConversation() {
     let title = normalizeObservedWechatConversationTitle(
       observedWechatConversationTitle.value
     );
-    if (!title) {
+    if (title) {
+      timing.phase('current-conversation-cached', { conversationTitle: title });
+    } else {
       const currentConversationApi = window.electronAPI?.wechatUi?.currentConversation;
       if (!currentConversationApi) {
         throw new Error('当前安装包不支持识别所选微信好友');
       }
-      const selected = await currentConversationApi();
+      const selected = await timeWechatOrderPhase(
+        timing,
+        'current-conversation-api',
+        () => currentConversationApi()
+      );
       if (!selected?.ok) {
         throw new Error(selected?.error?.message || '没有识别到当前微信好友');
       }
       title = normalizeObservedWechatConversationTitle(selected.result?.title);
     }
     if (!title) throw new Error('没有识别到当前微信好友名称');
-    if (!customerContext.customers.value.length) await customerContext.reload();
-    let matches = findWechatCustomerProfileMatches(customerContext.customers.value, title);
+    if (!customerContext.customers.value.length) {
+      await timeWechatOrderPhase(
+        timing,
+        'customer-directory-load',
+        () => customerContext.reload()
+      );
+    }
+    let matches = timeWechatOrderSyncPhase(
+      timing,
+      'customer-profile-match',
+      () => findWechatCustomerProfileMatches(customerContext.customers.value, title),
+      { pass: 1 }
+    );
     // 客户资料可能刚在客户中心修改过；仅在首次未命中时刷新一次目录，
     // 不再逐个查询所有客户的微信技术绑定。
     if (!matches.length) {
-      await customerContext.reload();
-      matches = findWechatCustomerProfileMatches(customerContext.customers.value, title);
+      await timeWechatOrderPhase(
+        timing,
+        'customer-directory-reload',
+        () => customerContext.reload()
+      );
+      matches = timeWechatOrderSyncPhase(
+        timing,
+        'customer-profile-match',
+        () => findWechatCustomerProfileMatches(customerContext.customers.value, title),
+        { pass: 2 }
+      );
     }
     if (matches.length === 1) {
-      await importWechatConversationForCustomer(matches[0], title);
+      await importWechatConversationForCustomer(matches[0], title, timing);
+      confirmationReady = true;
+      outcome = 'success';
       return;
     }
     wechatUnmatchedConversationTitle.value = title;
@@ -1192,10 +1378,21 @@ async function importSelectedWechatConversation() {
       wechatCustomerMatchError.value = '多个客户使用了这个微信好友名，请选择本次订单对应的客户';
     }
   } catch (error) {
+    outcome = 'failed';
     wechatSelectedImportStatus.value = 'warning';
     wechatSelectedImportMessage.value = error?.message || '转所选微信好友订单失败';
   } finally {
     wechatSelectedImportBusy.value = false;
+    if (confirmationReady) {
+      await waitForWechatConfirmationPaint();
+      timing.phase('confirmation-page-visible', {
+        taskCount: wechatImportBatch.value.length,
+      });
+    }
+    timing.finish(outcome, {
+      taskCount: wechatImportBatch.value.length,
+      error: outcome === 'failed' ? wechatSelectedImportMessage.value : undefined,
+    });
   }
 }
 
@@ -1218,22 +1415,39 @@ function closeWechatCustomerMatcher() {
 
 async function confirmWechatCustomerMatch(selectedCustomerId) {
   if (wechatCustomerMatchBusy.value) return;
+  const timing = createWechatOrderTiming('confirm-selected-wechat-customer');
+  let outcome = 'failed';
+  let confirmationReady = false;
   const customer = customerContext.customers.value.find(candidate => (
     String(customerId(candidate)) === String(selectedCustomerId)
   ));
   if (!customer) {
     wechatCustomerMatchError.value = '请选择要关联的客户';
+    timing.finish('failed', { error: wechatCustomerMatchError.value });
     return;
   }
   const title = wechatUnmatchedConversationTitle.value;
+  timing.phase('customer-profile-match', { manuallySelected: true });
   wechatCustomerMatchBusy.value = true;
   wechatCustomerMatchError.value = '';
   try {
-    await importWechatConversationForCustomer(customer, title);
+    await importWechatConversationForCustomer(customer, title, timing);
+    confirmationReady = true;
+    outcome = 'success';
   } catch (error) {
     wechatCustomerMatchError.value = error?.message || '关联客户并转订单失败';
   } finally {
     wechatCustomerMatchBusy.value = false;
+    if (confirmationReady) {
+      await waitForWechatConfirmationPaint();
+      timing.phase('confirmation-page-visible', {
+        taskCount: wechatImportBatch.value.length,
+      });
+    }
+    timing.finish(outcome, {
+      taskCount: wechatImportBatch.value.length,
+      error: outcome === 'failed' ? wechatCustomerMatchError.value : undefined,
+    });
   }
 }
 

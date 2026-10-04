@@ -10,6 +10,35 @@ import {
 
 export const WECHAT_GROUP_MODE_REQUIRED = 'WECHAT_GROUP_MODE_REQUIRED';
 
+function timingNow() {
+  return globalThis.performance?.now?.() ?? Date.now();
+}
+
+function emitTiming(onTiming, stage, startedAt, meta = {}) {
+  if (typeof onTiming !== 'function') return;
+  try {
+    onTiming({
+      stage,
+      durationMs: Math.round((timingNow() - startedAt) * 100) / 100,
+      ...meta,
+    });
+  } catch {
+    // 性能日志不能影响客户与微信的关联流程。
+  }
+}
+
+async function timed(onTiming, stage, task, meta = {}) {
+  const startedAt = timingNow();
+  try {
+    const value = await task();
+    emitTiming(onTiming, stage, startedAt, meta);
+    return value;
+  } catch (error) {
+    emitTiming(onTiming, stage, startedAt, { ...meta, failed: true });
+    throw error;
+  }
+}
+
 function title(value) {
   return String(value || '').trim();
 }
@@ -89,10 +118,15 @@ export async function ensureWechatCustomerBinding({
   directory,
   groupMode: requestedGroupMode = null,
   electronAPI = window.electronAPI,
+  onTiming = null,
 }) {
   const normalizedTitle = title(selectedTitle);
   const current = normalizeWechatBinding(row?.binding);
-  if (current.bound && title(current.displayName) === normalizedTitle) return current;
+  if (current.bound && title(current.displayName) === normalizedTitle) {
+    const startedAt = timingNow();
+    emitTiming(onTiming, 'binding-reuse', startedAt);
+    return current;
+  }
 
   const reader = electronAPI?.wechatReader;
   const bindingApi = electronAPI?.customerWechatOrders;
@@ -100,11 +134,19 @@ export async function ensureWechatCustomerBinding({
     throw new Error('当前安装包不支持自动关联微信好友');
   }
 
-  const accounts = unwrapWechatReader(await reader.listAccounts());
+  const accounts = unwrapWechatReader(await timed(
+    onTiming,
+    'reader-list-accounts',
+    () => reader.listAccounts()
+  ));
   const account = activeReaderAccount(accounts);
   if (!account) throw new Error('当前微信账号的本地数据访问材料未就绪');
 
-  const found = unwrapWechatReader(await reader.findConversation(account.id, normalizedTitle));
+  const found = unwrapWechatReader(await timed(
+    onTiming,
+    'reader-find-conversation',
+    () => reader.findConversation(account.id, normalizedTitle)
+  ));
   const exactMatches = (Array.isArray(found?.matches) ? found.matches : []).filter(item => (
     title(item?.displayName) === normalizedTitle
     && (item?.kind === 'direct' || item?.kind === 'group')
@@ -135,13 +177,17 @@ export async function ensureWechatCustomerBinding({
 
   const customerId = Number(row?.customer?.nxDepartmentId ?? row?.customer?.departmentId);
   if (!Number.isSafeInteger(customerId) || customerId <= 0) throw new Error('客户 ID 无效');
-  const saved = unwrapWechatServer(await bindingApi.saveBinding({
-    customerId,
-    displayName: conversation.displayName,
-    accountFingerprint: account.id,
-    conversationFingerprint: conversation.id,
-    conversationKind: conversation.kind,
-    groupMode,
-  }));
+  const saved = unwrapWechatServer(await timed(
+    onTiming,
+    'server-save-binding',
+    () => bindingApi.saveBinding({
+      customerId,
+      displayName: conversation.displayName,
+      accountFingerprint: account.id,
+      conversationFingerprint: conversation.id,
+      conversationKind: conversation.kind,
+      groupMode,
+    })
+  ));
   return normalizeWechatBinding(saved);
 }

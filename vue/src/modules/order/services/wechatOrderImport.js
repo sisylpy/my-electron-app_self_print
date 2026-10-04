@@ -6,6 +6,35 @@ import {
   selectWechatOrderMessages,
 } from './wechatOrderMessagePolicy.js';
 
+function timingNow() {
+  return globalThis.performance?.now?.() ?? Date.now();
+}
+
+function roundedDuration(startedAt) {
+  return Math.round((timingNow() - startedAt) * 100) / 100;
+}
+
+function emitTiming(onTiming, stage, startedAt, meta = {}) {
+  if (typeof onTiming !== 'function') return;
+  try {
+    onTiming({ stage, durationMs: roundedDuration(startedAt), ...meta });
+  } catch {
+    // 性能日志不能影响微信订单读取主流程。
+  }
+}
+
+async function timed(onTiming, stage, task, meta = {}) {
+  const startedAt = timingNow();
+  try {
+    const value = await task();
+    emitTiming(onTiming, stage, startedAt, meta);
+    return value;
+  } catch (error) {
+    emitTiming(onTiming, stage, startedAt, { ...meta, failed: true });
+    throw error;
+  }
+}
+
 export function unwrapWechatReader(response) {
   if (response?.ok) return response.result;
   throw new Error(response?.error?.message || '读取本地微信数据失败');
@@ -157,6 +186,7 @@ export async function prepareWechatOrderImport({
   retryDelaysMs = [400, 800, 1600],
   sleep = (delayMs) => new Promise(resolve => setTimeout(resolve, delayMs)),
   electronAPI = window.electronAPI,
+  onTiming = null,
 }) {
   const id = requireCustomerId(customerId);
   const normalizedBinding = normalizeWechatBinding(binding);
@@ -177,11 +207,17 @@ export async function prepareWechatOrderImport({
   }
 
   const participants = reader.getSelfParticipant
-    ? [unwrapWechatReader(await reader.getSelfParticipant(
-      normalizedBinding.conversationFingerprint
+    ? [unwrapWechatReader(await timed(
+      onTiming,
+      'reader-self-participant',
+      () => reader.getSelfParticipant(normalizedBinding.conversationFingerprint),
+      { mode: 'lightweight' }
     ))].filter(Boolean)
-    : unwrapWechatReader(await reader.getParticipants(
-      normalizedBinding.conversationFingerprint
+    : unwrapWechatReader(await timed(
+      onTiming,
+      'reader-participants',
+      () => reader.getParticipants(normalizedBinding.conversationFingerprint),
+      { mode: 'full' }
     ));
   const cursor = Number(normalizedBinding.cursorTimeMs);
   const fixedNow = Number(now);
@@ -202,7 +238,15 @@ export async function prepareWechatOrderImport({
   const scanNow = hasFixedNow ? fixedNow : Date.now();
 
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
-    if (attempt > 0) await sleep(Number(retryDelays[attempt - 1]));
+    if (attempt > 0) {
+      const delayMs = Number(retryDelays[attempt - 1]);
+      await timed(
+        onTiming,
+        'reader-stability-wait',
+        () => sleep(delayMs),
+        { attempt: attempt + 1, delayMs }
+      );
+    }
     const attemptNow = scanNow;
     const startMs = Number.isFinite(cursor) && cursor > 0
       ? Math.max(0, cursor - 2 * 60 * 1000)
@@ -210,11 +254,17 @@ export async function prepareWechatOrderImport({
     // 微信消息使用服务端时间，刚到达的消息可能比电脑当前时间快几十秒。
     // 如果查询上限严格等于点击时刻，界面中已经可见的未读消息仍会被排除。
     const endMs = attemptNow + 2 * 60 * 1000;
-    const page = unwrapWechatReader(await reader.getMessages(
-      normalizedBinding.conversationFingerprint,
-      { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() },
-      { offset: 0, limit: 200 }
+    const page = unwrapWechatReader(await timed(
+      onTiming,
+      'reader-messages',
+      () => reader.getMessages(
+        normalizedBinding.conversationFingerprint,
+        { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() },
+        { offset: 0, limit: 200 }
+      ),
+      { attempt: attempt + 1 }
     ));
+    const filterStartedAt = timingNow();
     incoming = selectWechatOrderMessages(page?.items, participants, normalizedBinding)
       .map((message) => ({ ...message, messageTimeMs: Date.parse(message.timestamp) }))
       .filter((message) => Number.isFinite(message.messageTimeMs))
@@ -222,16 +272,25 @@ export async function prepareWechatOrderImport({
         left.messageTimeMs - right.messageTimeMs
         || String(left.id).localeCompare(String(right.id))
       ));
+    emitTiming(onTiming, 'message-filter', filterStartedAt, {
+      attempt: attempt + 1,
+      incomingCount: incoming.length,
+    });
     if (!incoming.length) continue;
 
     const incomingSignature = incoming.map(message => message.id).sort().join('|');
     if (incomingSignature !== preparedIncomingSignature) {
-      prepared = unwrapWechatServer(await orderApi.prepareMessages(
-        id,
-        incoming.map((message) => ({
-          messageFingerprint: message.id,
-          messageTimeMs: message.messageTimeMs,
-        }))
+      prepared = unwrapWechatServer(await timed(
+        onTiming,
+        'server-prepare-messages',
+        () => orderApi.prepareMessages(
+          id,
+          incoming.map((message) => ({
+            messageFingerprint: message.id,
+            messageTimeMs: message.messageTimeMs,
+          }))
+        ),
+        { attempt: attempt + 1, incomingCount: incoming.length }
       ));
       preparedIncomingSignature = incomingSignature;
     }
@@ -278,45 +337,56 @@ export async function prepareWechatOrderImport({
   let images = [];
   if (pendingImages.length) {
     if (!reader.getAttachment) throw new Error('当前安装包不支持读取微信图片，请升级后重试');
-    images = await Promise.all(pendingImages.map(async (message) => {
-      const attachmentId = message?.attachmentRef?.id;
-      if (!attachmentId) throw new Error('微信图片缺少附件标识，请重新读取消息');
-      const attachment = unwrapWechatReader(await reader.getAttachment(attachmentId));
-      return {
+    images = await timed(
+      onTiming,
+      'reader-attachments',
+      () => Promise.all(pendingImages.map(async (message) => {
+        const attachmentId = message?.attachmentRef?.id;
+        if (!attachmentId) throw new Error('微信图片缺少附件标识，请重新读取消息');
+        const attachment = unwrapWechatReader(await reader.getAttachment(attachmentId));
+        return {
+          messageFingerprint: message.id,
+          messageTimeMs: message.messageTimeMs,
+          mimeType: attachment.mimeType,
+          size: attachment.size,
+          dataUrl: attachment.dataUrl,
+        };
+      })),
+      { imageCount: pendingImages.length }
+    );
+  }
+  const payloadStartedAt = timingNow();
+  const payload = {
+    text: pending.map((message) => message.orderText).filter(Boolean).join('\n'),
+    images,
+    entries: pending.map((message) => ({
+      messageFingerprint: message.id,
+      messageTimeMs: message.messageTimeMs,
+      type: message.type,
+      text: message.orderText,
+    })),
+    source: {
+      customerId: id,
+      accountFingerprint: nextBinding.accountFingerprint,
+      conversationFingerprint: nextBinding.conversationFingerprint,
+      conversationKind: nextBinding.conversationKind,
+      groupMode: nextBinding.groupMode,
+      messages: pending.map((message) => ({
         messageFingerprint: message.id,
         messageTimeMs: message.messageTimeMs,
-        mimeType: attachment.mimeType,
-        size: attachment.size,
-        dataUrl: attachment.dataUrl,
-      };
-    }));
-  }
+      })),
+    },
+  };
+  emitTiming(onTiming, 'payload-build', payloadStartedAt, {
+    pendingCount: pending.length,
+    imageCount: images.length,
+  });
   return {
     status: 'ready',
     message: `已载入 ${pending.length} 条新消息${skippedCount ? `，跳过 ${skippedCount} 条已处理消息` : ''}`,
     binding: nextBinding,
     pendingCount: pending.length,
     skippedCount,
-    payload: {
-      text: pending.map((message) => message.orderText).filter(Boolean).join('\n'),
-      images,
-      entries: pending.map((message) => ({
-        messageFingerprint: message.id,
-        messageTimeMs: message.messageTimeMs,
-        type: message.type,
-        text: message.orderText,
-      })),
-      source: {
-        customerId: id,
-        accountFingerprint: nextBinding.accountFingerprint,
-        conversationFingerprint: nextBinding.conversationFingerprint,
-        conversationKind: nextBinding.conversationKind,
-        groupMode: nextBinding.groupMode,
-        messages: pending.map((message) => ({
-          messageFingerprint: message.id,
-          messageTimeMs: message.messageTimeMs,
-        })),
-      },
-    },
+    payload,
   };
 }

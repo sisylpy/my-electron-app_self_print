@@ -223,11 +223,13 @@ assert.equal(imagePrepared.payload.entries[0].type, 'image');
 
 let lightweightSelfCalls = 0;
 let fullParticipantCalls = 0;
+const importTimings = [];
 const lightweightPrepared = await prepareWechatOrderImport({
   customerId: 7,
   binding: loaded,
   now: Date.parse('2026-10-01T00:30:00.000Z'),
   retryDelaysMs: [],
+  onTiming: event => importTimings.push(event),
   electronAPI: {
     customerWechatOrders: {
       prepareMessages: async (_customerId, messages) => ({
@@ -266,6 +268,17 @@ assert.equal(lightweightPrepared.status, 'ready');
 assert.equal(lightweightPrepared.payload.text, '青菜6斤');
 assert.equal(lightweightSelfCalls, 1);
 assert.equal(fullParticipantCalls, 0);
+assert.deepEqual(
+  importTimings.map(event => event.stage),
+  [
+    'reader-self-participant',
+    'reader-messages',
+    'message-filter',
+    'server-prepare-messages',
+    'payload-build',
+  ]
+);
+assert.ok(importTimings.every(event => Number.isFinite(event.durationMs)));
 
 const mergedPayload = mergeWechatOrderPayload(
   {

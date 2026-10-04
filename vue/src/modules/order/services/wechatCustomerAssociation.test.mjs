@@ -67,10 +67,12 @@ assert.throws(
 );
 
 let savedPayload = null;
+const associationTimings = [];
 const rebound = await ensureWechatCustomerBinding({
   row: resolveWechatCustomerAssociation(directory, '金调料'),
   selectedTitle: '金调料',
   directory,
+  onTiming: event => associationTimings.push(event),
   electronAPI: {
     wechatReader: {
       listAccounts: async () => ({
@@ -96,6 +98,11 @@ const rebound = await ensureWechatCustomerBinding({
 assert.equal(savedPayload.customerId, 8);
 assert.equal(savedPayload.conversationFingerprint, 'fp:conversation123');
 assert.equal(rebound.bound, true);
+assert.deepEqual(
+  associationTimings.map(event => event.stage),
+  ['reader-list-accounts', 'reader-find-conversation', 'server-save-binding']
+);
+assert.ok(associationTimings.every(event => Number.isFinite(event.durationMs)));
 
 const groupRow = {
   customer: { nxDepartmentId: 18, nxDepartmentWechatDisplayName: '调料群' },

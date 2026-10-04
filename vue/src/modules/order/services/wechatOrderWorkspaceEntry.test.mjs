@@ -71,9 +71,14 @@ const selectedAction = workbench.match(
 )?.[1] || '';
 assert.match(selectedAction, /currentConversationApi\(\)/);
 assert.match(selectedAction, /findWechatCustomerProfileMatches/);
+assert.match(selectedAction, /createWechatOrderTiming\('read-selected-wechat'\)/);
+assert.match(selectedAction, /waitForWechatConfirmationPaint\(\)/);
+assert.match(selectedAction, /confirmation-page-visible/);
 assert.doesNotMatch(selectedAction, /loadBoundWechatCustomers|allowedTitles/);
 assert.match(workbench, /async function importWechatConversationForCustomer/);
-assert.match(workbench, /loadCustomerWechatBinding\(customerId\(customer\)\)/);
+assert.match(workbench, /loadCustomerWechatBinding\(selectedCustomerId\)/);
+assert.match(workbench, /writeAppLog\('info', 'wechat-order-timing', 'phase'/);
+assert.match(workbench, /writeAppLog\(outcome === 'success' \? 'info' : 'warn', 'wechat-order-timing', 'summary'/);
 
 const allCustomerAction = workbench.match(
   /async function scanAllBoundWechatOrders\(\) \{([\s\S]*?)\n\}\n\nasync function handleTaskAdded/,
