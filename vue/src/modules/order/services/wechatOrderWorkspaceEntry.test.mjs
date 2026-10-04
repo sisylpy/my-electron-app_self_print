@@ -210,8 +210,9 @@ const desktopSelectionAction = workbench.match(
   /async function syncWechatSelectionFromDesktop\(payload\) \{([\s\S]*?)\n\}\n\nconst removeWechatConversationListener/,
 )?.[1] || '';
 assert.match(workbench, /onConversationChanged/);
-assert.match(workbench, /window\.addEventListener\('focus', handleWechatWorkspaceWindowFocus\)/);
-assert.match(workbench, /window\.removeEventListener\('focus', handleWechatWorkspaceWindowFocus\)/);
+assert.match(workbench, /wechatConversationObservationPoller = \/\^Win\/i/);
+assert.match(workbench, /document\.hasFocus\(\)/);
+assert.match(workbench, /window\.clearInterval\(wechatConversationObservationPoller\)/);
 assert.match(desktopSelectionAction, /observedWechatConversationTitle\.value = title/);
 assert.match(
   desktopSelectionAction,
@@ -225,7 +226,7 @@ assert.match(
 );
 
 const observedConversationRefresh = workbench.match(
-  /async function refreshObservedWechatConversation\(\{ force = false \} = \{\}\) \{([\s\S]*?)\n\}\n\nfunction handleWechatWorkspaceWindowFocus/,
+  /async function refreshObservedWechatConversation\(\{ force = false \} = \{\}\) \{([\s\S]*?)\n\}\n\nconst wechatConversationObservationPoller/,
 )?.[1] || '';
 assert.match(observedConversationRefresh, /currentConversationApi\(\)/);
 assert.match(observedConversationRefresh, /selected\.result\?\.title/);

@@ -216,7 +216,11 @@ function parseCurrentConversationOutput(stdout, allowedTitles = []) {
     throw new Error('当前微信会话识别结果不完整');
   }
   const title = typeof payload.conversationTitle === 'string'
-    ? payload.conversationTitle.trim()
+    ? payload.conversationTitle
+      .normalize('NFKC')
+      .trim()
+      .replace(/\s*\(\s*\d+\s*\)\s*$/u, '')
+      .trim()
     : '';
   if (payload.code === 'SUCCESS' && !title) throw new Error('当前微信会话名称为空');
   if (title && allowedTitles.length && !new Set(allowedTitles).has(title)) {

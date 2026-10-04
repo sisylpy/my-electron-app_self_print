@@ -68,6 +68,12 @@ const currentConversation = parseCurrentConversationOutput(JSON.stringify({
   conversationTitle: '金调料',
 }), ['金调料', '测试']);
 assert.strictEqual(currentConversation.title, '金调料');
+const currentGroupConversation = parseCurrentConversationOutput(JSON.stringify({
+  code: 'SUCCESS',
+  message: 'matched group',
+  conversationTitle: '调料群（ 3 ）',
+}));
+assert.strictEqual(currentGroupConversation.title, '调料群');
 assert.throws(
   () => parseCurrentConversationOutput(JSON.stringify({
     code: 'SUCCESS',
@@ -205,6 +211,12 @@ assert.match(windowsCurrentConversationScript, /AutomationElement/);
 assert.match(windowsCurrentConversationScript, /OcrEngine/);
 assert.match(windowsCurrentConversationScript, /Console\]::OutputEncoding/);
 assert.match(windowsCurrentConversationScript, /\$rect\.X -lt 400/);
+assert.ok(
+  windowsCurrentConversationScript.indexOf('Get-TitleFromWindowsOcr $window')
+    < windowsCurrentConversationScript.indexOf('Get-TitleFromAutomation $window'),
+  'visible Windows header OCR must win over stale UI Automation nodes'
+);
+assert.match(windowsCurrentConversationScript, /method 'uia-fallback'/);
 assert.match(windowsCurrentConversationScript, /\$code -eq 'AUTOMATION_FAILED'/);
 assert.match(windowsCurrentConversationScript, /conversationTitle/);
 assert.match(windowsCurrentConversationScript, /'SUCCESS'/);

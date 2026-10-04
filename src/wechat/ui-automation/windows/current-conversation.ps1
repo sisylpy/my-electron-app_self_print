@@ -137,7 +137,7 @@ function Normalize-ConversationTitle([string]$value) {
   # Windows OCR often inserts a space between every Chinese glyph even when
   # the visible Weixin title has none (for example, "李 沛 谊").
   $title = $title -replace '(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])', ''
-  $title = $title -replace '\s*[（(]\d+[）)]\s*$', ''
+  $title = $title -replace '\s*[（(]\s*\d+\s*[）)]\s*$', ''
   return $title.Trim()
 }
 
@@ -335,12 +335,6 @@ try {
     exit 3
   }
 
-  $automation = Get-TitleFromAutomation $window
-  if ($automation.Title) {
-    Write-Result -code 'SUCCESS' -message "已识别当前微信会话“$($automation.Title)”" -conversationTitle ($automation.Title) -method 'uia' -candidateCount ([int]$automation.Count) -elapsedMilliseconds ($stopwatch.ElapsedMilliseconds)
-    exit 0
-  }
-
   $artifactDirectory = if ($ArtifactRoot) {
     Join-Path $ArtifactRoot (Get-Date -Format 'yyyyMMdd-HHmmss-fff')
   } else {
@@ -351,6 +345,17 @@ try {
   $ocr = Get-TitleFromWindowsOcr $window $temporaryScreenshot
   if ($ocr.Title) {
     Write-Result -code 'SUCCESS' -message "已识别当前微信会话“$($ocr.Title)”" -conversationTitle ($ocr.Title) -method 'windows-ocr' -candidateCount ([int]$ocr.Count) -elapsedMilliseconds ($stopwatch.ElapsedMilliseconds)
+    exit 0
+  }
+
+  # Weixin keeps hidden/off-screen accessibility nodes alive when the selected
+  # conversation changes. UI Automation can therefore return the previous
+  # chat title even though the visible header has already changed. Treat the
+  # screenshot OCR of the visible header as authoritative and use UIA only
+  # when OCR could not produce a valid title.
+  $automation = Get-TitleFromAutomation $window
+  if ($automation.Title) {
+    Write-Result -code 'SUCCESS' -message "已识别当前微信会话“$($automation.Title)”" -conversationTitle ($automation.Title) -method 'uia-fallback' -candidateCount ([int]$automation.Count) -elapsedMilliseconds ($stopwatch.ElapsedMilliseconds)
     exit 0
   }
 

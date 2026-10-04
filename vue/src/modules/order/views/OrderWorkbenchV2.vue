@@ -1064,7 +1064,7 @@ function normalizeObservedWechatConversationTitle(value) {
   return String(value || '')
     .normalize('NFKC')
     .trim()
-    .replace(/\s*\(\d+\)\s*$/u, '')
+    .replace(/\s*\(\s*\d+\s*\)\s*$/u, '')
     .trim();
 }
 
@@ -1361,15 +1361,18 @@ async function refreshObservedWechatConversation({ force = false } = {}) {
   }
 }
 
-function handleWechatWorkspaceWindowFocus() {
-  if (!wechatWorkspaceReady.value || !wechatImportModalOpen.value) return;
-  // On Windows there is no passive Accessibility notification for a manual
-  // WeChat selection. Refresh once when the user returns to the workbench so
-  // button 2 immediately adopts the selected friend/group name and avatar.
-  void refreshObservedWechatConversation();
-}
-
-window.addEventListener('focus', handleWechatWorkspaceWindowFocus);
+const wechatConversationObservationPoller = /^Win/i.test(String(navigator.platform || ''))
+  ? window.setInterval(() => {
+    if (document.hasFocus()
+        || !wechatWorkspaceReady.value
+        || !wechatImportModalOpen.value) return;
+    // Windows has no passive Accessibility notification for a manual WeChat
+    // selection. Observe only while WeChat is still frontmost; the main
+    // process returns focus after recognition, so the user's first workbench
+    // click is never consumed just to activate Electron.
+    void refreshObservedWechatConversation();
+  }, 650)
+  : null;
 
 async function handleWechatConversationChanged(payload) {
   const shouldRefocusWorkspace = payload?.selectionChanged === true
@@ -1432,7 +1435,9 @@ async function closeWechatImportModal() {
 
 onBeforeUnmount(() => {
   cancelWechatGroupMode();
-  window.removeEventListener('focus', handleWechatWorkspaceWindowFocus);
+  if (wechatConversationObservationPoller !== null) {
+    window.clearInterval(wechatConversationObservationPoller);
+  }
   removeWechatConversationListener?.();
   removeWechatWorkspaceCloseRequestedListener?.();
   void window.electronAPI?.wechatUi?.closeWorkspace?.();
