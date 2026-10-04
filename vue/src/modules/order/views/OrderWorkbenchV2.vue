@@ -1474,9 +1474,9 @@ async function handleWechatScan() {
   if (wechatScanBusy.value || wechatSelectedImportBusy.value) return;
   wechatScanReportOpen.value = false;
   if (wechatImportQueue.value.length) {
-    // “继续微信订单”只恢复现有任务界面。不要再次停靠微信窗口，
-    // 也不要自动搜索或切换到对应微信会话。
-    await openActiveWechatImport({ openWorkspace: false, focusConversation: false });
+    // “稍后处理”会恢复原来的全屏窗口布局。继续现有任务时需要重新
+    // 建立左侧微信、右侧订单的并排工作区，但不重复搜索或切换会话。
+    await openActiveWechatImport({ openWorkspace: true, focusConversation: false });
     return;
   }
 

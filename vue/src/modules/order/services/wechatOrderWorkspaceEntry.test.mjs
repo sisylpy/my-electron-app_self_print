@@ -18,7 +18,7 @@ assert.match(openEntry, /await openWechatWorkspace\(\)/);
 assert.match(openEntry, /refreshWechatLauncherSummary/);
 assert.match(
   openEntry,
-  /await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: false \}\)/,
+  /await openActiveWechatImport\(\{ openWorkspace: true, focusConversation: false \}\)/,
 );
 assert.doesNotMatch(openEntry, /await openActiveWechatImport\(\);/);
 assert.doesNotMatch(openEntry, /loadBoundWechatCustomers|readUnread|currentConversation/);
