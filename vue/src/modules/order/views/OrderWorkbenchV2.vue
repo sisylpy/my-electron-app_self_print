@@ -866,6 +866,11 @@ async function openActiveWechatImport(options = {}) {
   // untouched unless this is an initial/manual workspace entry.
   if (options.openWorkspace !== false) {
     await openWechatWorkspace();
+  } else if (options.focusConversation !== false) {
+    // A new automatic/manual switch supersedes an earlier focus warning.
+    // Keep the warning actionable instead of carrying a stale mismatch into
+    // the next customer.
+    wechatWorkspaceWarning.value = '';
   }
   if (options.focusConversation !== false) {
     observedWechatConversationTitle.value = normalizeObservedWechatConversationTitle(
@@ -914,11 +919,15 @@ async function removeWechatImport(token) {
 
   if (!wechatImportQueue.value.length) {
     activeWechatImportToken.value = null;
-    setWechatScanStatus(`已从本轮列表移除“${item?.conversationTitle || item?.customerName || '该会话'}”`, 'success');
+    await closeWechatImportModal();
+    setWechatScanStatus(
+      `已从本轮列表移除“${item?.conversationTitle || item?.customerName || '该会话'}”，当前没有待确认的微信订单`,
+      'success'
+    );
     return;
   }
   if (wasActive) {
-    await openActiveWechatImport({ openWorkspace: false, focusConversation: false });
+    await openActiveWechatImport({ openWorkspace: false, focusConversation: true });
   }
 }
 
@@ -1886,9 +1895,10 @@ async function handleTaskAdded(change) {
   await handleOrderChanged(change);
   if (!current || change?.wechatImportToken !== current.token) return;
   if (wechatImportQueue.value.length) {
-    await openActiveWechatImport({ openWorkspace: false, focusConversation: false });
+    await openActiveWechatImport({ openWorkspace: false, focusConversation: true });
   } else {
     activeWechatImportToken.value = null;
+    await closeWechatImportModal();
     setWechatScanStatus('本轮微信订单已全部确认保存', 'success');
   }
 }

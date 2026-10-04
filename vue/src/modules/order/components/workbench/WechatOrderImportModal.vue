@@ -165,9 +165,9 @@
                 </div>
               </div>
               <p
-                v-if="activeItem?.refreshNote || activeItem?.refreshError"
-                :class="['wechat-import-modal__sync-note', { 'is-error': activeItem?.refreshError }]"
-              >{{ activeItem.refreshError || activeItem.refreshNote }}</p>
+                v-if="activeItem && (workspaceWarning || activeItem.refreshNote || activeItem.refreshError)"
+                :class="['wechat-import-modal__sync-note', { 'is-error': workspaceWarning || activeItem.refreshError }]"
+              >{{ workspaceWarning || activeItem.refreshError || activeItem.refreshNote }}</p>
               <div
                 v-if="!activeItem && busy"
                 :class="['wechat-import-modal__scan-state', `is-${scanStatus}`, { 'is-busy': busy }]"

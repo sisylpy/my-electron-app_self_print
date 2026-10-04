@@ -45,6 +45,7 @@ assert.match(modal, /launcherCurrentAvatar/);
 assert.match(modal, /wechat-import-modal__selected-avatar/);
 assert.match(modal, /item\.conversationAvatar/);
 assert.match(modal, /activeItem\.conversationAvatar/);
+assert.match(modal, /workspaceWarning \|\| activeItem\.refreshError \|\| activeItem\.refreshNote/);
 assert.match(
   modal,
   /wechat-import-modal__result-icon[\s\S]*?item\.conversationAvatar[\s\S]*?scanResultSymbol\(item\)/,
@@ -136,6 +137,26 @@ assert.match(
   /await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: true \}\)/,
 );
 assert.doesNotMatch(selectTaskAction, /item\.token === activeWechatImport\.value\?\.token/);
+
+const removeTaskAction = workbench.match(
+  /async function removeWechatImport\(token\) \{([\s\S]*?)\n\}\n\nfunction normalizeObservedWechatConversationTitle/,
+)?.[1] || '';
+assert.match(
+  removeTaskAction,
+  /await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: true \}\)/,
+);
+assert.match(removeTaskAction, /await closeWechatImportModal\(\)/);
+
+const savedTaskAction = workbench.match(
+  /async function handleTaskAdded\(change\) \{([\s\S]*?)\n\}\n\nfunction handleWechatImportError/,
+)?.[1] || '';
+assert.match(
+  savedTaskAction,
+  /await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: true \}\)/,
+);
+assert.doesNotMatch(savedTaskAction, /focusConversation: false/);
+assert.match(savedTaskAction, /await closeWechatImportModal\(\)/);
+assert.match(savedTaskAction, /本轮微信订单已全部确认保存/);
 
 const desktopSelectionAction = workbench.match(
   /async function syncWechatSelectionFromDesktop\(payload\) \{([\s\S]*?)\n\}\n\nconst removeWechatConversationListener/,
