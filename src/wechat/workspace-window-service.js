@@ -306,13 +306,17 @@ function createWechatWorkspaceWindowService(options = {}) {
     window.focus();
   }
 
-  function publishConversationTitle(title, avatarDataUrl = '') {
+  function publishConversationTitle(title, avatarDataUrl = '', selectionChanged = false) {
     const window = getMainWindow();
     if (!window || window.isDestroyed()) return;
     const webContents = window.webContents;
     if (!webContents
         || (typeof webContents.isDestroyed === 'function' && webContents.isDestroyed())) return;
-    webContents.send('wechat-ui-conversation-changed', { title, avatarDataUrl });
+    webContents.send('wechat-ui-conversation-changed', {
+      title,
+      avatarDataUrl,
+      selectionChanged,
+    });
   }
 
   async function observeConversationTitle(generation) {
@@ -340,12 +344,19 @@ function createWechatWorkspaceWindowService(options = {}) {
       // title here would then leave the two processes permanently out of sync.
       publishConversationTitle(title);
       if (!conversationChanged) return;
-      const avatarDataUrl = await captureSelectedConversationAvatar();
+      let avatarDataUrl = '';
+      try {
+        // Finish reading the selected row before the renderer reactivates the
+        // workbench. WeChat changes its selection colors when it loses focus,
+        // which would otherwise make avatar detection unreliable.
+        avatarDataUrl = await captureSelectedConversationAvatar();
+      } catch {
+        // Focus handoff must not depend on optional avatar capture succeeding.
+      }
       if (generation !== conversationWatcherGeneration
           || session !== observedSession
-          || title !== lastConversationTitle
-          || !avatarDataUrl) return;
-      publishConversationTitle(title, avatarDataUrl);
+          || title !== lastConversationTitle) return;
+      publishConversationTitle(title, avatarDataUrl, true);
     } catch {
       // Accessibility can be briefly unavailable while WeChat redraws. The
       // next lightweight observation will retry without interrupting the user.

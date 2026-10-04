@@ -1314,9 +1314,27 @@ async function syncWechatSelectionFromDesktop(payload) {
   await showSelectedWechatConversation(title, avatarDataUrl);
 }
 
+async function handleWechatConversationChanged(payload) {
+  const shouldRefocusWorkspace = payload?.selectionChanged === true
+    && wechatImportModalOpen.value
+    && !wechatScanBusy.value
+    && !wechatSelectedImportBusy.value
+    && !wechatCustomerMatchBusy.value
+    && wechatConversationFocusDepth === 0;
+
+  try {
+    await syncWechatSelectionFromDesktop(payload);
+  } finally {
+    // A manual conversation change activates WeChat. Return keyboard/mouse
+    // focus only after the right-hand page has adopted that conversation, so
+    // the user's very next click operates the order workbench immediately.
+    if (shouldRefocusWorkspace) await focusWechatWorkspaceApp();
+  }
+}
+
 const removeWechatConversationListener = window.electronAPI?.wechatUi
   ?.onConversationChanged?.((payload) => {
-    void syncWechatSelectionFromDesktop(payload);
+    void handleWechatConversationChanged(payload);
   });
 
 function resetWechatImportModalState() {
