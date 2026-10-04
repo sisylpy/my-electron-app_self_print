@@ -613,6 +613,9 @@ function updateWechatScanResult(result) {
     status: result?.status || 'checking',
     itemCount: Number(result?.itemCount) || 0,
     message: String(result?.message || '').trim(),
+    conversationAvatar: normalizeWechatAvatarSource(
+      result?.conversationAvatar || wechatConversationAvatars.get(title)
+    ),
   };
   const index = wechatScanResults.value.findIndex(item => item.title === title);
   if (index < 0) {
@@ -620,7 +623,9 @@ function updateWechatScanResult(result) {
     return;
   }
   wechatScanResults.value = wechatScanResults.value.map((item, itemIndex) => (
-    itemIndex === index ? { ...item, ...next } : item
+    itemIndex === index
+      ? { ...item, ...next, conversationAvatar: next.conversationAvatar || item.conversationAvatar || '' }
+      : item
   ));
 }
 
@@ -936,12 +941,13 @@ function applyWechatConversationAvatar(titleValue, avatarValue) {
   if (!title || !avatar) return '';
   wechatConversationAvatars.set(title, avatar);
   const addAvatar = item => (
-    normalizeObservedWechatConversationTitle(item?.conversationTitle) === title
+    normalizeObservedWechatConversationTitle(item?.conversationTitle || item?.title) === title
       ? { ...item, conversationAvatar: avatar }
       : item
   );
   wechatImportQueue.value = wechatImportQueue.value.map(addAvatar);
   wechatImportBatch.value = wechatImportBatch.value.map(addAvatar);
+  wechatScanResults.value = wechatScanResults.value.map(addAvatar);
   return avatar;
 }
 
@@ -1570,6 +1576,7 @@ async function readUnreadWechatOrders() {
           selectedTitle: title,
           directory: associationDirectory,
         });
+        const conversationAvatarPromise = resolveWechatConversationAvatar(title, row.binding);
         const result = await prepareWechatOrderImport({
           customerId: customerId(row.customer),
           binding: row.binding,
@@ -1588,7 +1595,8 @@ async function readUnreadWechatOrders() {
         }
         result.conversationAvatar = await resolveWechatConversationAvatar(
           title,
-          result.binding || row.binding
+          result.binding || row.binding,
+          await conversationAvatarPromise
         );
         const items = createWechatImportItems(row, title, result);
         imports.push(...items);
@@ -1741,6 +1749,7 @@ async function scanAllBoundWechatOrders() {
             }),
             customerMeta
           );
+          const conversationAvatarPromise = resolveWechatConversationAvatar(title, row.binding);
           const readDatabase = ({ mode }) => timeWechatOrderPhase(
             timing,
             'scan-order-read',
@@ -1773,12 +1782,7 @@ async function scanAllBoundWechatOrders() {
           });
           if (!databaseFirst.verifiedByConversation) databaseOnlyCount += 1;
           const prepared = databaseFirst.result;
-          if (prepared.payload) {
-            prepared.conversationAvatar = await resolveWechatConversationAvatar(
-              title,
-              prepared.binding || row.binding
-            );
-          }
+          prepared.conversationAvatar = await conversationAvatarPromise;
           const items = prepared.payload ? createWechatImportItems(row, title, prepared) : [];
           timing.phase('scan-customer-complete', {
             ...customerMeta,

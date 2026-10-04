@@ -433,7 +433,16 @@
                         :key="item.title"
                         :class="`is-${item.status || 'checking'}`"
                       >
-                        <span class="wechat-import-modal__result-icon" aria-hidden="true">
+                        <span
+                          :class="['wechat-import-modal__result-icon', { 'has-avatar': item.conversationAvatar }]"
+                          aria-hidden="true"
+                        >
+                          <img
+                            v-if="item.conversationAvatar"
+                            :src="item.conversationAvatar"
+                            alt=""
+                            @error="hideBrokenAvatar"
+                          />
                           <i v-if="item.status === 'checking'"></i>
                           <template v-else>{{ scanResultSymbol(item) }}</template>
                         </span>
@@ -1544,7 +1553,9 @@ function hideBrokenAvatar(event) {
 .wechat-import-modal__automation-results li.is-found { border-color: #9ed0b6; background: #f5fcf8; }
 .wechat-import-modal__automation-results li.is-not-found,
 .wechat-import-modal__automation-results li.is-error { border-color: #e9b9bc; background: #fff7f7; }
-.wechat-import-modal__result-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 11px; color: #5d776a; background: #eaf2ee; font-size: 14px; font-weight: 900; }
+.wechat-import-modal__result-icon { position: relative; display: grid; width: 34px; height: 34px; overflow: hidden; place-items: center; border-radius: 11px; color: #5d776a; background: #eaf2ee; font-size: 14px; font-weight: 900; }
+.wechat-import-modal__result-icon img { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.wechat-import-modal__result-icon img[hidden] { display: none; }
 .is-checking .wechat-import-modal__result-icon { color: #a06b13; background: #fff0d2; }
 .is-found .wechat-import-modal__result-icon { color: #fff; background: #15935a; }
 .is-not-found .wechat-import-modal__result-icon,
