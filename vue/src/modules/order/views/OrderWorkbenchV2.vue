@@ -2209,7 +2209,7 @@ async function handleTaskAdded(change) {
     wechatImportCompletedTokens.value = wechatImportCompletedTokens.value.filter(
       token => token !== current.token
     );
-    activeWechatImportToken.value = queueUpdate.nextToken;
+    activeWechatImportToken.value = queueUpdate.items[0]?.token || null;
   }
   await handleOrderChanged(change);
   if (!current || change?.wechatImportToken !== current.token) return;

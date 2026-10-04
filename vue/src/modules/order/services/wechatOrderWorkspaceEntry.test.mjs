@@ -176,6 +176,14 @@ assert.match(
   /await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: true \}\)/,
 );
 assert.doesNotMatch(savedTaskAction, /focusConversation: false/);
+assert.match(
+  savedTaskAction,
+  /activeWechatImportToken\.value = queueUpdate\.items\[0\]\?\.token \|\| null/,
+);
+assert.doesNotMatch(
+  savedTaskAction,
+  /activeWechatImportToken\.value = queueUpdate\.nextToken/,
+);
 assert.match(savedTaskAction, /await closeWechatImportModal\(\)/);
 assert.match(savedTaskAction, /本轮微信订单已全部确认保存/);
 
