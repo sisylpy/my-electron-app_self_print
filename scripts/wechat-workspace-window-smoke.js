@@ -2,6 +2,7 @@ const assert = require('assert');
 const {
   computeWorkspaceLayout,
   createWechatWorkspaceWindowService,
+  findSelectedConversationAvatarRect,
   parseBounds,
 } = require('../src/wechat/workspace-window-service');
 
@@ -26,6 +27,35 @@ assert.ok(layout.app.width > layout.wechat.width);
 assert.strictEqual(
   computeWorkspaceLayout({ x: 0, y: 0, width: 1100, height: 700 }).mode,
   'app-only'
+);
+
+const avatarFixtureWidth = 806;
+const avatarFixtureHeight = 1055;
+const avatarFixture = Buffer.alloc(avatarFixtureWidth * avatarFixtureHeight * 4);
+for (let y = 220; y < 284; y += 1) {
+  for (let x = 60; x < 240; x += 1) {
+    const offset = ((y * avatarFixtureWidth) + x) * 4;
+    avatarFixture[offset] = 28;
+    avatarFixture[offset + 1] = 178;
+    avatarFixture[offset + 2] = 105;
+    avatarFixture[offset + 3] = 255;
+  }
+}
+assert.deepStrictEqual(
+  findSelectedConversationAvatarRect(
+    avatarFixture,
+    { width: avatarFixtureWidth, height: avatarFixtureHeight },
+    { width: 806, height: 1055 }
+  ),
+  { x: 72, y: 234, width: 36, height: 36 }
+);
+assert.strictEqual(
+  findSelectedConversationAvatarRect(
+    Buffer.alloc(avatarFixtureWidth * avatarFixtureHeight * 4),
+    { width: avatarFixtureWidth, height: avatarFixtureHeight },
+    { width: 806, height: 1055 }
+  ),
+  null
 );
 
 async function verifyDockAndRestore() {

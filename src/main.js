@@ -10,6 +10,7 @@ const {
   safeStorage,
   systemPreferences,
   session: electronSession,
+  desktopCapturer,
 } = require('electron');
 const path = require('path')
 const fs = require('fs')
@@ -312,6 +313,7 @@ function getWechatWorkspaceWindowService() {
   if (!wechatWorkspaceWindowService) {
     wechatWorkspaceWindowService = createWechatWorkspaceWindowService({
       screen,
+      desktopCapturer,
       execFileAsync,
       getMainWindow: () => mainWindow,
     });
@@ -694,7 +696,16 @@ function setupIpcHandlers() {
   ipcMain.handle('wechat-ui-current-conversation', async (event, input) => {
     assertTrustedRendererEvent(event);
     try {
-      return await getWechatUiAutomationService().currentConversation(input);
+      const result = await getWechatUiAutomationService().currentConversation(input);
+      if (!result?.ok || !result.result) return result;
+      try {
+        const avatarDataUrl = await wechatWorkspaceWindowService
+          ?.captureSelectedConversationAvatar?.();
+        if (avatarDataUrl) result.result.avatarDataUrl = avatarDataUrl;
+      } catch {
+        // Avatar is presentation-only; title/order reading must still succeed.
+      }
+      return result;
     } finally {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.show();

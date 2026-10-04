@@ -97,6 +97,7 @@
       :selected-import-busy="wechatSelectedImportBusy"
       :show-selected-import-action="showCurrentWechatReadButton"
       :launcher-current-title="observedWechatConversationTitle"
+      :launcher-current-avatar="observedWechatConversationAvatar"
       :action-message="wechatSelectedImportMessage"
       :action-status="wechatSelectedImportStatus"
       :unmatched-conversation-title="wechatUnmatchedConversationTitle"
@@ -262,6 +263,7 @@ const wechatImportBatch = ref([]);
 const wechatImportCompletedTokens = ref([]);
 const activeWechatImportToken = ref(null);
 const observedWechatConversationTitle = ref('');
+const observedWechatConversationAvatar = ref('');
 const wechatImportModalOpen = ref(false);
 const wechatImportRefreshing = ref(false);
 const wechatWorkspaceWarning = ref('');
@@ -915,10 +917,24 @@ function normalizeObservedWechatConversationTitle(value) {
     .trim();
 }
 
+function normalizeObservedWechatConversationAvatar(value) {
+  const avatar = String(value || '').trim();
+  if (avatar.length > 300000 || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/u.test(avatar)) {
+    return '';
+  }
+  return avatar;
+}
+
 async function syncWechatSelectionFromDesktop(payload) {
   const title = normalizeObservedWechatConversationTitle(payload?.title);
   if (!title) return;
+  const previousTitle = normalizeObservedWechatConversationTitle(
+    observedWechatConversationTitle.value
+  );
+  if (previousTitle && previousTitle !== title) observedWechatConversationAvatar.value = '';
   observedWechatConversationTitle.value = title;
+  const avatarDataUrl = normalizeObservedWechatConversationAvatar(payload?.avatarDataUrl);
+  if (avatarDataUrl) observedWechatConversationAvatar.value = avatarDataUrl;
   if (!wechatImportModalOpen.value
       || wechatScanBusy.value
       || wechatSelectedImportBusy.value
@@ -953,6 +969,7 @@ async function closeWechatImportModal() {
   wechatScanReportOpen.value = false;
   wechatWorkspaceReady.value = false;
   observedWechatConversationTitle.value = '';
+  observedWechatConversationAvatar.value = '';
   wechatScanMessage.value = '';
   dismissWechatSelectedAction();
   activeView.value = 'overview';
@@ -1275,7 +1292,12 @@ async function importSelectedWechatConversation() {
     }
     const title = normalizeObservedWechatConversationTitle(selected.result?.title);
     if (!title) throw new Error('没有识别到当前微信好友名称');
+    const avatarDataUrl = normalizeObservedWechatConversationAvatar(
+      selected.result?.avatarDataUrl
+    );
+    if (cachedTitle && cachedTitle !== title) observedWechatConversationAvatar.value = '';
     observedWechatConversationTitle.value = title;
+    if (avatarDataUrl) observedWechatConversationAvatar.value = avatarDataUrl;
     if (cachedTitle && cachedTitle !== title) {
       timing.phase('current-conversation-cache-corrected', {
         cachedConversationTitle: cachedTitle,

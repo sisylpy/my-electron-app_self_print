@@ -112,6 +112,77 @@ function normalizeObservedConversationTitle(value) {
     .trim();
 }
 
+function findSelectedConversationAvatarRect(bitmap, imageSize, windowBounds) {
+  const width = Math.round(Number(imageSize?.width) || 0);
+  const height = Math.round(Number(imageSize?.height) || 0);
+  const windowWidth = Math.max(1, Number(windowBounds?.width) || width);
+  const windowHeight = Math.max(1, Number(windowBounds?.height) || height);
+  if (!Buffer.isBuffer(bitmap) || width < 240 || height < 240) return null;
+  const bytesPerPixel = Math.floor(bitmap.length / (width * height));
+  if (bytesPerPixel < 3) return null;
+
+  const scaleX = width / windowWidth;
+  const scaleY = height / windowHeight;
+  // WeChat's left navigation and conversation list are fixed at roughly
+  // 60pt and 180pt. Use those stable columns instead of a whole-window ratio,
+  // because the docked chat area becomes wider on large displays.
+  const listLeft = clamp(Math.round(60 * scaleX), 0, width - 1);
+  const listRight = clamp(Math.round(240 * scaleX), listLeft + 1, width);
+  const firstRow = clamp(Math.round(58 * scaleY), 0, height - 1);
+  const lastRow = clamp(Math.round(height - (8 * scaleY)), firstRow + 1, height);
+  const sampleStep = Math.max(1, Math.round(2 * scaleX));
+  const sampleCount = Math.max(1, Math.floor((listRight - listLeft) / sampleStep));
+  const greenThreshold = Math.max(12, Math.floor(sampleCount * 0.42));
+  const selectedRows = [];
+
+  for (let y = firstRow; y < lastRow; y += 1) {
+    let greenPixels = 0;
+    for (let x = listLeft; x < listRight; x += sampleStep) {
+      const offset = ((y * width) + x) * bytesPerPixel;
+      const channelA = bitmap[offset];
+      const green = bitmap[offset + 1];
+      const channelC = bitmap[offset + 2];
+      if (green >= 105 && green - Math.max(channelA, channelC) >= 24) greenPixels += 1;
+    }
+    if (greenPixels >= greenThreshold) selectedRows.push(y);
+  }
+  if (!selectedRows.length) return null;
+
+  const groups = [];
+  let start = selectedRows[0];
+  let previous = start;
+  selectedRows.slice(1).forEach((row) => {
+    if (row > previous + 1) {
+      groups.push({ start, end: previous });
+      start = row;
+    }
+    previous = row;
+  });
+  groups.push({ start, end: previous });
+
+  const expectedRowHeight = 64 * scaleY;
+  const selected = groups
+    .map(group => ({ ...group, height: group.end - group.start + 1 }))
+    .filter(group => group.height >= expectedRowHeight * 0.45)
+    .sort((left, right) => (
+      Math.abs(left.height - expectedRowHeight) - Math.abs(right.height - expectedRowHeight)
+    ))[0];
+  if (!selected) return null;
+
+  const avatarSize = clamp(
+    Math.round(Math.min(36 * scaleX, 36 * scaleY)),
+    24,
+    Math.min(width, height)
+  );
+  const centerY = Math.round((selected.start + selected.end) / 2);
+  return {
+    x: clamp(Math.round(72 * scaleX), 0, width - avatarSize),
+    y: clamp(Math.round(centerY - (avatarSize / 2)), 0, height - avatarSize),
+    width: avatarSize,
+    height: avatarSize,
+  };
+}
+
 function windowsScript(moduleDir) {
   return path.join(moduleDir, 'ui-automation', 'windows', 'dock-window.ps1');
 }
@@ -143,6 +214,7 @@ function createWechatWorkspaceWindowService(options = {}) {
   const moduleDir = options.moduleDir || __dirname;
   const execFileAsync = options.execFileAsync;
   const screen = options.screen;
+  const desktopCapturer = options.desktopCapturer;
   const getMainWindow = options.getMainWindow;
   const powershell = options.powershell || process.env.JCYX_WECHAT_UI_POWERSHELL || 'powershell.exe';
   let session = null;
@@ -192,6 +264,30 @@ function createWechatWorkspaceWindowService(options = {}) {
     }
   }
 
+  async function captureSelectedConversationAvatar() {
+    if (platform !== 'darwin'
+        || !session?.wechatBounds
+        || typeof desktopCapturer?.getSources !== 'function') return '';
+    const bounds = session.wechatBounds;
+    const sources = await desktopCapturer.getSources({
+      types: ['window'],
+      thumbnailSize: {
+        width: Math.max(640, Math.round(bounds.width * 2)),
+        height: Math.max(640, Math.round(bounds.height * 2)),
+      },
+      fetchWindowIcons: false,
+    });
+    const source = sources.find(candidate => (
+      /^(微信|WeChat)$/iu.test(String(candidate?.name || '').trim())
+    )) || sources.find(candidate => /微信|WeChat/iu.test(String(candidate?.name || '')));
+    const image = source?.thumbnail;
+    if (!image || image.isEmpty?.()) return '';
+    const size = image.getSize();
+    const crop = findSelectedConversationAvatarRect(image.toBitmap(), size, bounds);
+    if (!crop) return '';
+    return image.crop(crop).resize({ width: 72, height: 72, quality: 'best' }).toDataURL();
+  }
+
   function restoreMainWindow(saved) {
     const window = getMainWindow();
     if (!window || window.isDestroyed()) return;
@@ -202,13 +298,13 @@ function createWechatWorkspaceWindowService(options = {}) {
     window.focus();
   }
 
-  function publishConversationTitle(title) {
+  function publishConversationTitle(title, avatarDataUrl = '') {
     const window = getMainWindow();
     if (!window || window.isDestroyed()) return;
     const webContents = window.webContents;
     if (!webContents
         || (typeof webContents.isDestroyed === 'function' && webContents.isDestroyed())) return;
-    webContents.send('wechat-ui-conversation-changed', { title });
+    webContents.send('wechat-ui-conversation-changed', { title, avatarDataUrl });
   }
 
   async function observeConversationTitle(generation) {
@@ -230,6 +326,12 @@ function createWechatWorkspaceWindowService(options = {}) {
       if (!title || title === lastConversationTitle) return;
       lastConversationTitle = title;
       publishConversationTitle(title);
+      const avatarDataUrl = await captureSelectedConversationAvatar();
+      if (generation !== conversationWatcherGeneration
+          || session !== observedSession
+          || title !== lastConversationTitle
+          || !avatarDataUrl) return;
+      publishConversationTitle(title, avatarDataUrl);
     } catch {
       // Accessibility can be briefly unavailable while WeChat redraws. The
       // next lightweight observation will retry without interrupting the user.
@@ -256,6 +358,7 @@ function createWechatWorkspaceWindowService(options = {}) {
   }
 
   return Object.freeze({
+    captureSelectedConversationAvatar,
     async open() {
       if (session) return { ok: true, result: session.layout };
       const window = getMainWindow();
@@ -327,5 +430,6 @@ module.exports = {
   MIN_DOCK_WIDTH,
   computeWorkspaceLayout,
   createWechatWorkspaceWindowService,
+  findSelectedConversationAvatarRect,
   parseBounds,
 };

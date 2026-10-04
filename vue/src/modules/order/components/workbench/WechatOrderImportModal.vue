@@ -74,14 +74,26 @@
                 v-if="showSelectedImportAction && (items.length || activeItem)"
                 type="button"
                 class="wechat-import-modal__selected-import"
+                :class="{ 'has-conversation': launcherCurrentTitle }"
                 :disabled="busy || selectedImportBusy || customerMatchBusy"
                 @click="$emit('import-selected')"
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M20 11a7 7 0 0 1-7 7H8l-4 3 1.2-4.2A7 7 0 1 1 20 11Z" />
-                  <path d="M12 8v6m-3-3h6" />
-                </svg>
-                {{ selectedImportBusy ? '正在读取…' : '读取当前微信' }}
+                <img
+                  v-if="launcherCurrentAvatar"
+                  :src="launcherCurrentAvatar"
+                  alt=""
+                  class="wechat-import-modal__selected-avatar"
+                />
+                <span v-else class="wechat-import-modal__selected-avatar is-fallback" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 11a7 7 0 0 1-7 7H8l-4 3 1.2-4.2A7 7 0 1 1 20 11Z" />
+                    <path d="M12 8v6m-3-3h6" />
+                  </svg>
+                </span>
+                <span class="wechat-import-modal__selected-copy">
+                  <strong>{{ launcherCurrentTitle || '当前微信' }}</strong>
+                  <small>{{ selectedImportBusy ? '正在读取订单…' : '读取当前微信订单' }}</small>
+                </span>
               </button>
             </nav>
 
@@ -620,6 +632,7 @@ const props = defineProps({
   selectedImportBusy: { type: Boolean, default: false },
   showSelectedImportAction: { type: Boolean, default: true },
   launcherCurrentTitle: { type: String, default: '' },
+  launcherCurrentAvatar: { type: String, default: '' },
   actionMessage: { type: String, default: '' },
   actionStatus: { type: String, default: 'warning' },
   unmatchedConversationTitle: { type: String, default: '' },
@@ -952,23 +965,39 @@ function removeItem(item) {
 .wechat-import-modal__queue-scroll { display: flex; min-width: 0; align-items: center; gap: 5px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: #a9c8b8 transparent; }
 .wechat-import-modal__queue ol { display: flex; width: max-content; margin: 0; padding: 0 0 2px; list-style: none; }
 .wechat-import-modal__selected-import {
-  display: inline-flex;
-  min-height: 36px;
+  display: grid;
+  min-width: 142px;
+  min-height: 44px;
   flex: none;
+  grid-template-columns: 32px minmax(0, 1fr);
   align-items: center;
-  gap: 6px;
-  padding: 0 14px;
+  gap: 9px;
+  padding: 5px 12px 5px 6px;
   border: 1px solid #118755;
-  border-radius: 10px;
+  border-radius: 12px;
   color: #fff;
   background: linear-gradient(145deg, #16a466, #0b7e4c);
   box-shadow: 0 5px 12px rgba(14, 126, 76, .18);
-  font-size: 10px;
-  font-weight: 900;
-  white-space: nowrap;
+  text-align: left;
   cursor: pointer;
 }
-.wechat-import-modal__selected-import svg { width: 16px; height: 16px; }
+.wechat-import-modal__selected-avatar {
+  display: block;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .55);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .18);
+  object-fit: cover;
+}
+.wechat-import-modal__selected-avatar.is-fallback { display: grid; place-items: center; }
+.wechat-import-modal__selected-avatar svg { width: 18px; height: 18px; }
+.wechat-import-modal__selected-copy { display: grid; min-width: 0; gap: 1px; }
+.wechat-import-modal__selected-copy strong,
+.wechat-import-modal__selected-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wechat-import-modal__selected-copy strong { max-width: 132px; color: #fff; font-size: 11px; line-height: 1.25; }
+.wechat-import-modal__selected-copy small { color: rgba(255, 255, 255, .78); font-size: 8px; font-weight: 700; }
 .wechat-import-modal__selected-import:hover { background: linear-gradient(145deg, #0d965a, #086d42); }
 .wechat-import-modal__selected-import:disabled { cursor: wait; opacity: .6; }
 .wechat-import-modal__queue li {
