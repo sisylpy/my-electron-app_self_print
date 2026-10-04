@@ -7,6 +7,33 @@ from product.providers.common import WechatReadOnlyDB
 
 
 class MessageQueryCacheTest(unittest.TestCase):
+    def test_session_cache_invalidates_when_session_wal_changes(self):
+        calls = []
+
+        with tempfile.TemporaryDirectory() as root:
+            session_root = os.path.join(root, "session")
+            os.makedirs(session_root)
+            session_db = os.path.join(session_root, "session.db")
+            wal = session_db + "-wal"
+            open(session_db, "wb").close()
+            open(wal, "wb").close()
+
+            def query(_path, sql):
+                calls.append(sql)
+                return [["friend", len(calls)]]
+
+            db = WechatReadOnlyDB(SimpleNamespace(db_root=root, query=query))
+            self.assertEqual(db.session_last_time("friend"), 1)
+            self.assertEqual(db.session_last_time("friend"), 1)
+            self.assertEqual(len(calls), 1)
+
+            with open(wal, "ab") as handle:
+                handle.write(b"changed")
+            os.utime(wal, None)
+
+            self.assertEqual(db.session_last_time("friend"), 2)
+            self.assertEqual(len(calls), 2)
+
     def test_reuses_unchanged_query_and_invalidates_on_wal_change(self):
         calls = []
 

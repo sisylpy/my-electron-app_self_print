@@ -103,6 +103,7 @@ class WechatReadOnlyDB:
         self._integrity_checked = set()
         # 会话时间的批量缓存（见 session_last_times 的 N+1 说明）
         self._session_cache: Optional[Dict[str, int]] = None
+        self._session_cache_state = None
         self._contact_rows_cache: Optional[List[Tuple[str, str, str, int]]] = None
         self._contact_nick_cache: Dict[str, Optional[str]] = {}
         self._contact_avatar_url_cache: Dict[str, Optional[str]] = {}
@@ -215,15 +216,19 @@ class WechatReadOnlyDB:
         subprocess（N+1），listConversations 直接超时。
         现在改为单条查询 + 实例内缓存，会话时间不再随联系人数增长。
         """
-        if self._session_cache is not None:
-            return self._session_cache
-
         from ..errors.codes import WechatServiceError
 
         cache: Dict[str, int] = {}
         db = os.path.join(self.m.db_root, "session", "session.db")
+        database_state = self._message_database_state(db)
+        if (
+            self._session_cache is not None
+            and self._session_cache_state == database_state
+        ):
+            return self._session_cache
         if not os.path.exists(db):
             self._session_cache = cache
+            self._session_cache_state = database_state
             return cache
         try:
             # 微信 4.1.x：SessionTable.last_timestamp
@@ -231,6 +236,7 @@ class WechatReadOnlyDB:
         except WechatServiceError:
             # 表结构不同则降级为空映射，不影响主链路
             self._session_cache = cache
+            self._session_cache_state = database_state
             return cache
         for r in rows:
             username = r[0] if len(r) > 0 else None
@@ -241,6 +247,7 @@ class WechatReadOnlyDB:
             except (ValueError, TypeError, IndexError):
                 continue
         self._session_cache = cache
+        self._session_cache_state = database_state
         return cache
 
     def session_last_time(self, username: str) -> Optional[int]:

@@ -254,6 +254,7 @@ import {
   buildWechatReconciliationPlan,
   loadCustomerWechatBinding,
   loadWechatConversationAvatar,
+  loadWechatConversationSnapshot,
   mergeWechatOrderPayload,
   normalizeWechatAvatarSource,
   prepareWechatOrderImport,
@@ -275,6 +276,7 @@ import {
   GROUP_MENTION_SELF_ONLY,
 } from '../services/wechatOrderMessagePolicy';
 import {
+  databaseResultCoversConversation,
   readWechatCustomerDatabaseFirst,
   scanAllBoundWechatCustomers,
 } from '../services/wechatAllCustomerScan';
@@ -2094,7 +2096,10 @@ async function scanAllBoundWechatOrders() {
             }),
             customerMeta
           );
-          const conversationAvatarPromise = resolveWechatConversationAvatar(title, row.binding);
+          const conversationSnapshotPromise = loadWechatConversationSnapshot({
+            binding: row.binding,
+            conversationTitle: title,
+          });
           const readDatabase = ({ mode }) => timeWechatOrderPhase(
             timing,
             'scan-order-read',
@@ -2112,6 +2117,22 @@ async function scanAllBoundWechatOrders() {
           );
           const databaseFirst = await readWechatCustomerDatabaseFirst({
             readDatabase,
+            canTrustDatabaseResult: async (databaseResult) => {
+              const snapshot = await conversationSnapshotPromise;
+              if (snapshot.available && snapshot.exists === false) {
+                throw new Error(`微信本地会话中已找不到“${title}”，请检查客户关联`);
+              }
+              const covered = databaseResultCoversConversation(databaseResult, snapshot);
+              if (covered) {
+                timing.phase('scan-database-freshness', {
+                  ...customerMeta,
+                  status: databaseResult?.status || '',
+                  lastMessageTimeMs: snapshot.lastMessageTimeMs,
+                  latestObservedMessageTimeMs: databaseResult?.latestObservedMessageTimeMs,
+                });
+              }
+              return covered;
+            },
             focusConversation: async ({ databaseResult, databaseError }) => {
               conversationVerificationCount += 1;
               timing.phase('scan-database-fallback', {
@@ -2127,7 +2148,11 @@ async function scanAllBoundWechatOrders() {
           });
           if (!databaseFirst.verifiedByConversation) databaseOnlyCount += 1;
           const prepared = databaseFirst.result;
-          prepared.conversationAvatar = await conversationAvatarPromise;
+          const conversationSnapshot = await conversationSnapshotPromise;
+          prepared.conversationAvatar = applyWechatConversationAvatar(
+            title,
+            conversationSnapshot.avatarUrl
+          );
           const items = prepared.payload ? createWechatImportItems(row, title, prepared) : [];
           timing.phase('scan-customer-complete', {
             ...customerMeta,

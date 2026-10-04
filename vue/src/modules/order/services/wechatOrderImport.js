@@ -87,24 +87,87 @@ export async function loadWechatConversationAvatar({
   conversationTitle,
   electronAPI = window.electronAPI,
 }) {
+  const snapshot = await loadWechatConversationSnapshot({
+    binding,
+    conversationTitle,
+    electronAPI,
+  });
+  return snapshot.avatarUrl;
+}
+
+export async function loadWechatConversationSnapshot({
+  binding,
+  conversationTitle,
+  electronAPI = window.electronAPI,
+}) {
   const normalizedBinding = normalizeWechatBinding(binding);
   const title = String(conversationTitle || normalizedBinding.displayName || '').trim();
   const reader = electronAPI?.wechatReader;
-  if (!normalizedBinding.bound || !title || !reader?.findConversation) return '';
+  if (!normalizedBinding.bound || !title || !reader?.findConversation) {
+    return {
+      available: false,
+      exists: null,
+      avatarUrl: '',
+      lastMessageTimeMs: null,
+    };
+  }
   try {
-    const found = unwrapWechatReader(await reader.findConversation(
+    const response = await reader.findConversation(
       normalizedBinding.accountFingerprint,
       title
-    ));
+    );
+    if (!response?.ok) {
+      if (response?.error?.code === 'CONVERSATION_NOT_FOUND') {
+        return {
+          available: true,
+          exists: false,
+          avatarUrl: '',
+          lastMessageTimeMs: null,
+        };
+      }
+      return {
+        available: false,
+        exists: null,
+        avatarUrl: '',
+        lastMessageTimeMs: null,
+      };
+    }
+    const found = response.result;
     const matches = Array.isArray(found?.matches) ? found.matches : [];
-    const exact = matches.find(item => (
+    const fingerprintMatch = matches.find(item => (
       String(item?.id || '') === String(normalizedBinding.conversationFingerprint)
-    )) || matches.find(item => String(item?.displayName || '').trim() === title);
-    return normalizeWechatAvatarSource(exact?.avatarUrl);
+    ));
+    const titleMatch = matches.find(item => String(item?.displayName || '').trim() === title);
+    const exact = fingerprintMatch
+      && String(fingerprintMatch?.displayName || '').trim() === title
+      ? fingerprintMatch
+      : null;
+    const avatarMatch = fingerprintMatch || titleMatch;
+    if (!exact) {
+      return {
+        available: true,
+        exists: false,
+        avatarUrl: normalizeWechatAvatarSource(avatarMatch?.avatarUrl),
+        lastMessageTimeMs: null,
+      };
+    }
+    const lastMessageTimeMs = Date.parse(exact.lastMessageAt);
+    return {
+      available: true,
+      exists: true,
+      avatarUrl: normalizeWechatAvatarSource(exact.avatarUrl),
+      lastMessageTimeMs: Number.isFinite(lastMessageTimeMs) ? lastMessageTimeMs : null,
+    };
   } catch {
-    // Avatar is presentation-only. A missing/old contact schema must never
-    // block complete order data from reaching the confirmation queue.
-    return '';
+    // Conversation metadata is an optimization signal. Reader/schema errors
+    // fall back to the proven visible verification path instead of weakening
+    // order completeness.
+    return {
+      available: false,
+      exists: null,
+      avatarUrl: '',
+      lastMessageTimeMs: null,
+    };
   }
 }
 
@@ -293,6 +356,9 @@ export async function prepareWechatOrderImport({
   let pendingSignature = '';
   let stablePendingReads = 0;
   let preparedIncomingSignature = '';
+  let queryStartTimeMs = null;
+  let queryEndTimeMs = null;
+  let latestObservedMessageTimeMs = null;
   // Keep the query window stable during one synchronization. Together with
   // the Reader's DB/WAL change token this makes unchanged verification reads
   // memory-fast, while a newly written WeChat message still invalidates cache.
@@ -315,6 +381,8 @@ export async function prepareWechatOrderImport({
     // 微信消息使用服务端时间，刚到达的消息可能比电脑当前时间快几十秒。
     // 如果查询上限严格等于点击时刻，界面中已经可见的未读消息仍会被排除。
     const endMs = attemptNow + 2 * 60 * 1000;
+    queryStartTimeMs = startMs;
+    queryEndTimeMs = endMs;
     const page = unwrapWechatReader(await timed(
       onTiming,
       'reader-messages',
@@ -325,8 +393,16 @@ export async function prepareWechatOrderImport({
       ),
       { attempt: attempt + 1 }
     ));
+    const pageItems = Array.isArray(page?.items) ? page.items : [];
+    pageItems.forEach((message) => {
+      const messageTimeMs = Date.parse(message?.timestamp);
+      if (!Number.isFinite(messageTimeMs)) return;
+      latestObservedMessageTimeMs = latestObservedMessageTimeMs === null
+        ? messageTimeMs
+        : Math.max(latestObservedMessageTimeMs, messageTimeMs);
+    });
     const filterStartedAt = timingNow();
-    incoming = selectWechatOrderMessages(page?.items, participants, normalizedBinding)
+    incoming = selectWechatOrderMessages(pageItems, participants, normalizedBinding)
       .map((message) => ({ ...message, messageTimeMs: Date.parse(message.timestamp) }))
       .filter((message) => Number.isFinite(message.messageTimeMs))
       .sort((left, right) => (
@@ -391,6 +467,9 @@ export async function prepareWechatOrderImport({
       binding: normalizedBinding,
       pendingCount: 0,
       skippedCount: 0,
+      queryStartTimeMs,
+      queryEndTimeMs,
+      latestObservedMessageTimeMs,
     };
   }
 
@@ -401,6 +480,9 @@ export async function prepareWechatOrderImport({
       binding: normalizedBinding,
       pendingCount: 0,
       skippedCount: 0,
+      queryStartTimeMs,
+      queryEndTimeMs,
+      latestObservedMessageTimeMs,
     };
   }
 
@@ -416,6 +498,9 @@ export async function prepareWechatOrderImport({
       binding: nextBinding,
       pendingCount: 0,
       skippedCount: relevantIncoming.length,
+      queryStartTimeMs,
+      queryEndTimeMs,
+      latestObservedMessageTimeMs,
     };
   }
 

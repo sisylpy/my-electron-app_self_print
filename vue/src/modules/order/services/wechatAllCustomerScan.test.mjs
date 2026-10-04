@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  databaseResultCoversConversation,
   readWechatCustomerDatabaseFirst,
   scanAllBoundWechatCustomers,
 } from './wechatAllCustomerScan.js';
@@ -15,6 +16,40 @@ const databaseOnly = await readWechatCustomerDatabaseFirst({
 assert.deepEqual(databaseOnlyCalls, ['read:database']);
 assert.equal(databaseOnly.mode, 'database');
 assert.equal(databaseOnly.verifiedByConversation, false);
+
+const freshDuplicateCalls = [];
+const freshDuplicate = await readWechatCustomerDatabaseFirst({
+  readDatabase: async ({ mode }) => {
+    freshDuplicateCalls.push(`read:${mode}`);
+    return {
+      status: 'duplicate',
+      queryStartTimeMs: 1000,
+      latestObservedMessageTimeMs: 5000,
+    };
+  },
+  canTrustDatabaseResult: result => databaseResultCoversConversation(result, {
+    available: true,
+    exists: true,
+    lastMessageTimeMs: 5000,
+  }),
+  focusConversation: async () => freshDuplicateCalls.push('focus'),
+});
+assert.deepEqual(freshDuplicateCalls, ['read:database']);
+assert.equal(freshDuplicate.mode, 'database');
+assert.equal(freshDuplicate.result.status, 'duplicate');
+
+assert.equal(databaseResultCoversConversation(
+  { status: 'empty', queryStartTimeMs: 10_000, latestObservedMessageTimeMs: null },
+  { available: true, exists: true, lastMessageTimeMs: 9000 },
+), true, 'a conversation older than the query window is fully covered');
+assert.equal(databaseResultCoversConversation(
+  { status: 'duplicate', queryStartTimeMs: 1000, latestObservedMessageTimeMs: 4000 },
+  { available: true, exists: true, lastMessageTimeMs: 5000 },
+), false, 'a newer session row must still open WeChat for hydration');
+assert.equal(databaseResultCoversConversation(
+  { status: 'duplicate', queryStartTimeMs: 1000, latestObservedMessageTimeMs: 5000 },
+  { available: true, exists: false, lastMessageTimeMs: null },
+), false, 'a stale binding is never trusted');
 
 const fallbackCalls = [];
 const fallback = await readWechatCustomerDatabaseFirst({

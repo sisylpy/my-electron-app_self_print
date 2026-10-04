@@ -3,6 +3,7 @@ import {
   buildWechatReconciliationPlan,
   loadCustomerWechatBinding,
   loadWechatConversationAvatar,
+  loadWechatConversationSnapshot,
   mergeWechatOrderPayload,
   normalizeWechatAvatarSource,
   prepareWechatOrderImport,
@@ -106,6 +107,45 @@ assert.equal(
   }),
   'https://wx.qlogo.cn/mmhead/customer/0'
 );
+assert.deepEqual(
+  await loadWechatConversationSnapshot({
+    binding: loaded,
+    conversationTitle: '金调料',
+    electronAPI: {
+      wechatReader: {
+        findConversation: async () => ({
+          ok: true,
+          result: {
+            matches: [{
+              id: binding.conversationFingerprint,
+              displayName: '金调料',
+              lastMessageAt: '2026-10-01T00:29:00.000Z',
+              avatarUrl: 'https://wx.qlogo.cn/mmhead/customer/0',
+            }],
+          },
+        }),
+      },
+    },
+  }),
+  {
+    available: true,
+    exists: true,
+    avatarUrl: 'https://wx.qlogo.cn/mmhead/customer/0',
+    lastMessageTimeMs: Date.parse('2026-10-01T00:29:00.000Z'),
+  }
+);
+assert.equal((await loadWechatConversationSnapshot({
+  binding: loaded,
+  conversationTitle: '已删除好友',
+  electronAPI: {
+    wechatReader: {
+      findConversation: async () => ({
+        ok: false,
+        error: { code: 'CONVERSATION_NOT_FOUND', message: '未找到匹配会话' },
+      }),
+    },
+  },
+})).exists, false);
 
 const noPendingReader = {
   getParticipants: electronAPI.wechatReader.getParticipants,
@@ -142,6 +182,14 @@ const duplicate = await prepareWechatOrderImport({
   },
 });
 assert.equal(duplicate.status, 'duplicate');
+assert.equal(
+  duplicate.latestObservedMessageTimeMs,
+  Date.parse('2026-10-01T00:29:00.000Z')
+);
+assert.equal(
+  duplicate.queryStartTimeMs,
+  Date.parse('2026-09-30T00:30:00.000Z')
+);
 
 const incompleteState = await prepareWechatOrderImport({
   customerId: 7,

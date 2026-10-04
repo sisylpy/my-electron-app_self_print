@@ -15,6 +15,8 @@ assert.match(allCustomerAction, /scan-workspace-open/);
 assert.match(allCustomerAction, /scan-customer-directory-load/);
 assert.match(allCustomerAction, /readWechatCustomerDatabaseFirst/);
 assert.match(allCustomerAction, /scan-database-fallback/);
+assert.match(allCustomerAction, /scan-database-freshness/);
+assert.match(allCustomerAction, /databaseResultCoversConversation/);
 assert.match(allCustomerAction, /scan-conversation-focus/);
 assert.match(allCustomerAction, /scan-binding-check/);
 assert.match(allCustomerAction, /scan-order-read/);

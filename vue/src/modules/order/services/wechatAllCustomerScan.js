@@ -6,14 +6,15 @@ function scanTitle(entry) {
  * Read one bound conversation from the local WeChat database first.
  *
  * A complete payload proves that the Reader saw every referenced text/image
- * and that the server accepted the pending message fingerprints. Results
- * without a payload cannot prove that WeChat has hydrated the latest local
- * rows, so they must be verified by visibly opening the conversation and
- * reading the database again.
+ * and that the server accepted the pending message fingerprints. A result
+ * without a payload may also be trusted when SessionTable's newest activity
+ * is covered by the message snapshot. Otherwise the conversation is visibly
+ * opened and read again so speed never weakens completeness.
  */
 export async function readWechatCustomerDatabaseFirst({
   readDatabase,
   focusConversation,
+  canTrustDatabaseResult = () => false,
 } = {}) {
   if (typeof readDatabase !== 'function') {
     throw new TypeError('readDatabase must be a function');
@@ -30,7 +31,7 @@ export async function readWechatCustomerDatabaseFirst({
     databaseError = error;
   }
 
-  if (databaseResult?.payload) {
+  if (databaseResult?.payload || await canTrustDatabaseResult(databaseResult)) {
     return {
       result: databaseResult,
       mode: 'database',
@@ -44,6 +45,29 @@ export async function readWechatCustomerDatabaseFirst({
     mode: 'conversation',
     verifiedByConversation: true,
   };
+}
+
+export function databaseResultCoversConversation(databaseResult, conversationSnapshot) {
+  if (databaseResult?.payload) return true;
+  if (!['current', 'duplicate', 'empty'].includes(databaseResult?.status)) return false;
+  if (!conversationSnapshot?.available || conversationSnapshot.exists !== true) return false;
+
+  const lastMessageTimeMs = Number(conversationSnapshot.lastMessageTimeMs);
+  const latestObservedMessageTimeMs = Number(databaseResult.latestObservedMessageTimeMs);
+  const queryStartTimeMs = Number(databaseResult.queryStartTimeMs);
+  if (!Number.isFinite(lastMessageTimeMs) || lastMessageTimeMs <= 0) return false;
+
+  // SessionTable is WeChat's conversation-list freshness marker. If the
+  // message shard contains that same newest timestamp, the local Reader has
+  // already caught up and opening/searching the chat cannot reveal a later
+  // message. An older session also proves the configured query window is empty.
+  return (
+    Number.isFinite(latestObservedMessageTimeMs)
+      && latestObservedMessageTimeMs >= lastMessageTimeMs
+  ) || (
+    Number.isFinite(queryStartTimeMs)
+      && lastMessageTimeMs < queryStartTimeMs
+  );
 }
 
 /**
