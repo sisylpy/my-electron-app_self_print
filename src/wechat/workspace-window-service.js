@@ -323,9 +323,15 @@ function createWechatWorkspaceWindowService(options = {}) {
       });
       if (generation !== conversationWatcherGeneration || session !== observedSession) return;
       const title = normalizeObservedConversationTitle(result.stdout);
-      if (!title || title === lastConversationTitle) return;
+      if (!title) return;
+      const conversationChanged = title !== lastConversationTitle;
       lastConversationTitle = title;
+      // Re-publish the lightweight title while WeChat is frontmost. The
+      // renderer can deliberately clear its selected-chat context after a
+      // failed programmatic focus or a saved task; suppressing an unchanged
+      // title here would then leave the two processes permanently out of sync.
       publishConversationTitle(title);
+      if (!conversationChanged) return;
       const avatarDataUrl = await captureSelectedConversationAvatar();
       if (generation !== conversationWatcherGeneration
           || session !== observedSession

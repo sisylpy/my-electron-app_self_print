@@ -9,6 +9,10 @@ const modal = fs.readFileSync(
   'vue/src/modules/order/components/workbench/WechatOrderImportModal.vue',
   'utf8',
 );
+const workspaceWindowService = fs.readFileSync(
+  'src/wechat/workspace-window-service.js',
+  'utf8',
+);
 
 const openEntry = workbench.match(
   /async function handleWechatScan\(\) \{([\s\S]*?)\n\}\n\nasync function readUnreadWechatOrders/,
@@ -92,7 +96,7 @@ assert.match(modal, /unmatchedConversationTitle/);
 assert.match(modal, /选择群订单接收方式/);
 assert.match(modal, /ALL_MEMBER_MESSAGES/);
 assert.match(modal, /MENTION_SELF_ONLY/);
-assert.match(modal, /showSelectedImportAction && \(items\.length \|\| activeItem\)/);
+assert.match(modal, /showSelectedImportAction && !selectedConversation && \(items\.length \|\| activeItem\)/);
 assert.match(workbench, /:show-selected-import-action="showCurrentWechatReadButton"/);
 assert.match(workbench, /WECHAT_GROUP_MODE_REQUIRED/);
 assert.match(workbench, /ensureWechatBindingWithGroupMode/);
@@ -181,9 +185,21 @@ const desktopSelectionAction = workbench.match(
 assert.match(workbench, /onConversationChanged/);
 assert.match(desktopSelectionAction, /observedWechatConversationTitle\.value = title/);
 assert.match(desktopSelectionAction, /activeWechatImportToken\.value = matchingItem\.token/);
+assert.match(desktopSelectionAction, /showSelectedWechatConversation\(title, avatarDataUrl\)/);
 assert.match(
   desktopSelectionAction,
   /await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: false \}\)/,
 );
+assert.match(workbench, /selectedWechatTodayInbox = useTodayOrderInbox\(disUser\)/);
+assert.match(workbench, /#selected-conversation/);
+assert.match(workbench, /<TodayOrders/);
+assert.match(workbench, /prepareWechatConversationForCustomer/);
+assert.match(workbench, /今天的订单已经全部转存/);
+assert.match(modal, /微信订单记录/);
+assert.match(modal, /再次检查新订单/);
+
+assert.match(workspaceWindowService, /const conversationChanged = title !== lastConversationTitle/);
+assert.match(workspaceWindowService, /publishConversationTitle\(title\);\s*if \(!conversationChanged\) return/);
+assert.doesNotMatch(workspaceWindowService, /!title \|\| title === lastConversationTitle/);
 
 console.log('WeChat order workspace entry passed');

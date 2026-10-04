@@ -84,7 +84,8 @@
     <WechatOrderImportModal
       :open="wechatImportModalOpen"
       :items="wechatImportBatch"
-      :active-item="activeWechatImport"
+      :active-item="modalActiveWechatImport"
+      :selected-conversation="selectedWechatConversation"
       :completed-tokens="wechatImportCompletedTokens"
       :busy="wechatScanBusy"
       :scan-message="wechatScanMessage"
@@ -121,9 +122,10 @@
       @select-group-mode="selectWechatGroupMode"
       @cancel-group-mode="cancelWechatGroupMode"
       @dismiss-action-message="dismissWechatSelectedAction"
+      @refresh-selected-conversation="refreshSelectedWechatConversation"
     >
       <AiOrderPanel
-        v-if="activeWechatImport"
+        v-if="activeWechatImport && !selectedWechatConversation"
         :key="activeWechatImport.token"
         class="order-workbench__wechat-import-panel"
         :customers="customerContext.customers.value"
@@ -143,6 +145,47 @@
         @wechat-import-error="handleWechatImportError"
         @show-today-orders="closeWechatImportModal"
       />
+      <template #selected-conversation>
+        <section class="order-workbench__wechat-history" aria-live="polite">
+          <div
+            v-if="selectedWechatTodayInbox.detailLoading.value"
+            class="order-workbench__wechat-history-state"
+          >
+            <i aria-hidden="true"></i>
+            <strong>正在读取今天的订单</strong>
+            <span>读取完成后，可以直接查看和修改已经保存的商品。</span>
+          </div>
+          <div
+            v-else-if="selectedWechatTodayInbox.detailError.value"
+            class="order-workbench__wechat-history-state is-error"
+          >
+            <strong>今天的订单暂时没有读取成功</strong>
+            <span>{{ selectedWechatTodayInbox.detailError.value }}</span>
+            <button type="button" @click="refreshSelectedWechatTodayOrders">重新读取</button>
+          </div>
+          <TodayOrders
+            v-else-if="selectedWechatConversation?.customer"
+            :today-order-list="selectedWechatTodayInbox.snapshot.value.orders"
+            :today-order-dep-arr="selectedWechatTodayInbox.snapshot.value.departments"
+            :today-order-trade-no="selectedWechatTodayInbox.snapshot.value.tradeNo"
+            :has-sub-departments="selectedWechatTodayInbox.snapshot.value.hasSubDepartments"
+            :selected-sub-department="null"
+            :today-order-total="selectedWechatTodayInbox.snapshot.value.total"
+            :show-list-end="selectedWechatTodayInbox.snapshot.value.totalCount > 0"
+            :selected-all-customer="customerId(selectedWechatConversation.customer)"
+            :selected-customer-name="customerName(selectedWechatConversation.customer)"
+            :selected-customer-entity="selectedWechatConversation.customer"
+            :selected-customer-dep-print-name="selectedWechatConversation.customer.nxDepartmentPrintName || 'ApplyPanel'"
+            hide-footer
+            @order-updated="handleSelectedWechatTodayOrdersChanged"
+            @order-deleted="handleSelectedWechatTodayOrdersChanged"
+          />
+          <div v-else class="order-workbench__wechat-history-state is-empty">
+            <strong>还没有找到对应客户</strong>
+            <span>可以使用上方按钮重新识别当前微信并完成客户关联。</span>
+          </div>
+        </section>
+      </template>
     </WechatOrderImportModal>
 
     <Teleport to="body">
@@ -202,6 +245,7 @@ import { useStore } from 'vuex';
 import AiOrderPanel from '../components/workbench/AiOrderPanel.vue';
 import OrderFlowInbox from '../components/workbench/OrderFlowInbox.vue';
 import WechatOrderImportModal from '../components/workbench/WechatOrderImportModal.vue';
+import TodayOrders from '@/components/TodayOrders.vue';
 import { useOrderCustomerContext } from '../composables/useOrderCustomerContext';
 import { useTodayOrderInbox } from '../composables/useTodayOrderInbox';
 import { customerVisibleInStage } from '../services/orderWorkbenchStage';
@@ -236,6 +280,7 @@ import {
 } from '../services/wechatAllCustomerScan';
 import {
   customerId,
+  customerName,
   loadSmartReplenishmentCustomerDirectory,
   loadOrderWorkbenchOverview,
   orderWorkbenchError,
@@ -246,6 +291,7 @@ const store = useStore();
 const disUser = computed(() => store.state.disUser);
 const customerContext = useOrderCustomerContext(disUser);
 const todayInbox = useTodayOrderInbox(disUser);
+const selectedWechatTodayInbox = useTodayOrderInbox(disUser);
 const activeView = ref('overview');
 const stageFilter = ref('all');
 const overviewLoading = ref(false);
@@ -266,6 +312,7 @@ const wechatImportCompletedTokens = ref([]);
 const activeWechatImportToken = ref(null);
 const observedWechatConversationTitle = ref('');
 const observedWechatConversationAvatar = ref('');
+const selectedWechatConversation = ref(null);
 const wechatImportModalOpen = ref(false);
 const wechatImportRefreshing = ref(false);
 const wechatWorkspaceWarning = ref('');
@@ -283,6 +330,7 @@ let wechatImportSequence = 0;
 let wechatConversationFocusDepth = 0;
 let wechatReaderWarmupStarted = false;
 let wechatOrderTimingSequence = 0;
+let selectedWechatConversationRequestId = 0;
 const wechatConversationAvatars = new Map();
 const selectedWechatRetryDelaysMs = Object.freeze([650]);
 
@@ -439,7 +487,11 @@ const activeWechatImport = computed(() => (
   || wechatImportQueue.value[0]
   || null
 ));
+const modalActiveWechatImport = computed(() => (
+  selectedWechatConversation.value ? null : activeWechatImport.value
+));
 const showCurrentWechatReadButton = computed(() => {
+  if (selectedWechatConversation.value) return false;
   const title = normalizeObservedWechatConversationTitle(observedWechatConversationTitle.value);
   if (!title) return true;
   return !wechatImportBatch.value.some(item => (
@@ -900,6 +952,7 @@ function prewarmWechatReader() {
 async function openActiveWechatImport(options = {}) {
   const item = activeWechatImport.value;
   if (!item) return false;
+  clearSelectedWechatConversation();
   smartModeActive.value = false;
   activeView.value = 'overview';
   const customer = customerContext.customers.value.find(
@@ -935,6 +988,7 @@ async function openActiveWechatImport(options = {}) {
     if (!focusWarning) observedWechatConversationTitle.value = focusedTitle;
     else if (observedWechatConversationTitle.value === focusedTitle) {
       observedWechatConversationTitle.value = '';
+      observedWechatConversationAvatar.value = '';
     }
   }
   wechatWorkspaceWarning.value = [wechatWorkspaceWarning.value, focusWarning]
@@ -1024,6 +1078,186 @@ async function resolveWechatConversationAvatar(title, binding, preferredAvatar =
   return applyWechatConversationAvatar(normalizedTitle, avatar);
 }
 
+function clearSelectedWechatConversation() {
+  selectedWechatConversationRequestId += 1;
+  selectedWechatConversation.value = null;
+  void selectedWechatTodayInbox.selectCustomer(null);
+}
+
+function selectedWechatHistoryMessage(result) {
+  const savedCount = Number(selectedWechatTodayInbox.snapshot.value.totalCount) || 0;
+  if (['conflict', 'unbound'].includes(result?.status)) {
+    return [
+      savedCount > 0 ? `已显示今天保存的 ${savedCount} 项商品。` : '',
+      result.message || '新消息状态需要重新检查。',
+    ].filter(Boolean).join(' ');
+  }
+  if (savedCount > 0) {
+    return `今天的订单已经全部转存，下面显示已保存的 ${savedCount} 项商品，可直接修改。`;
+  }
+  return result?.message || '当前没有未处理的新订单，今天也没有已保存的订单。';
+}
+
+async function showSelectedWechatConversation(title, avatarDataUrl = '', options = {}) {
+  const normalizedTitle = normalizeObservedWechatConversationTitle(title);
+  if (!normalizedTitle) return;
+  if (!options.force
+      && normalizeObservedWechatConversationTitle(selectedWechatConversation.value?.title)
+        === normalizedTitle) {
+    if (avatarDataUrl) {
+      selectedWechatConversation.value = {
+        ...selectedWechatConversation.value,
+        conversationAvatar: avatarDataUrl,
+      };
+    }
+    return;
+  }
+
+  const requestId = ++selectedWechatConversationRequestId;
+  void selectedWechatTodayInbox.selectCustomer(null);
+  selectedWechatConversation.value = {
+    title: normalizedTitle,
+    conversationAvatar: avatarDataUrl || wechatConversationAvatars.get(normalizedTitle) || '',
+    customer: null,
+    orderCount: 0,
+    status: 'checking',
+    message: '正在查找客户，并读取今天已经保存的订单…',
+  };
+
+  try {
+    if (!customerContext.customers.value.length) await customerContext.reload();
+    if (requestId !== selectedWechatConversationRequestId) return;
+    let matches = findWechatCustomerProfileMatches(
+      customerContext.customers.value,
+      normalizedTitle
+    );
+    if (!matches.length) {
+      await customerContext.reload();
+      if (requestId !== selectedWechatConversationRequestId) return;
+      matches = findWechatCustomerProfileMatches(
+        customerContext.customers.value,
+        normalizedTitle
+      );
+    }
+    if (matches.length !== 1) {
+      selectedWechatConversation.value = {
+        ...selectedWechatConversation.value,
+        status: 'warning',
+        message: matches.length > 1
+          ? '多个客户使用了这个微信名称，请先保留唯一的客户关联。'
+          : '这个微信还没有关联客户，可以重新识别并完成关联。',
+      };
+      return;
+    }
+
+    const customer = matches[0];
+    customerContext.selectCustomer(customer);
+    selectedWechatConversation.value = {
+      ...selectedWechatConversation.value,
+      customer,
+      status: 'checking',
+      message: '正在检查新消息，同时读取今天已经保存的订单…',
+    };
+    const historyPromise = selectedWechatTodayInbox.selectCustomer(customer);
+    let prepared;
+    try {
+      prepared = await prepareWechatConversationForCustomer(
+        customer,
+        normalizedTitle,
+        null,
+        avatarDataUrl,
+        { repairBinding: options.repairBinding === true }
+      );
+    } catch (error) {
+      await historyPromise;
+      if (requestId !== selectedWechatConversationRequestId) return;
+      selectedWechatConversation.value = {
+        ...selectedWechatConversation.value,
+        status: 'warning',
+        orderCount: Number(selectedWechatTodayInbox.snapshot.value.totalCount) || 0,
+        message: selectedWechatTodayInbox.detailError.value
+          ? `新消息检查失败：${error?.message || '请稍后重试'}；今天订单也未读取成功。`
+          : `已显示今天保存的订单；新消息检查失败：${error?.message || '请稍后重试'}`,
+      };
+      return;
+    }
+    await historyPromise;
+
+    const { row, result } = prepared;
+    if (result.payload) {
+      const imports = createWechatImportItems(row, normalizedTitle, result);
+      if (requestId !== selectedWechatConversationRequestId) {
+        enqueueWechatImportItems(imports, { activate: false });
+        return;
+      }
+      enqueueWechatImportItems(imports);
+      await openActiveWechatImport({ openWorkspace: false, focusConversation: false });
+      return;
+    }
+    if (requestId !== selectedWechatConversationRequestId) return;
+    const historyError = selectedWechatTodayInbox.detailError.value;
+    selectedWechatConversation.value = {
+      ...selectedWechatConversation.value,
+      status: historyError || ['conflict', 'unbound'].includes(result.status) ? 'warning' : 'ready',
+      orderCount: Number(selectedWechatTodayInbox.snapshot.value.totalCount) || 0,
+      message: historyError
+        ? `${result.message || '新消息检查完成'}；今天订单读取失败，请点击下方“重新读取”。`
+        : selectedWechatHistoryMessage(result),
+    };
+  } catch (error) {
+    if (requestId !== selectedWechatConversationRequestId) return;
+    selectedWechatConversation.value = {
+      ...selectedWechatConversation.value,
+      status: 'warning',
+      message: error?.message || '当前微信的订单情况读取失败，请稍后重试。',
+    };
+  }
+}
+
+async function refreshSelectedWechatConversation() {
+  const current = selectedWechatConversation.value;
+  if (!current?.title) return;
+  await showSelectedWechatConversation(
+    current.title,
+    current.conversationAvatar,
+    { force: true, repairBinding: true }
+  );
+}
+
+async function refreshSelectedWechatTodayOrders() {
+  await selectedWechatTodayInbox.refreshSelected({ preserveView: true });
+  if (selectedWechatConversation.value) {
+    const orderCount = Number(selectedWechatTodayInbox.snapshot.value.totalCount) || 0;
+    selectedWechatConversation.value = {
+      ...selectedWechatConversation.value,
+      orderCount,
+      status: selectedWechatTodayInbox.detailError.value ? 'warning' : 'ready',
+      message: selectedWechatTodayInbox.detailError.value
+        ? '今天订单仍未读取成功，请检查网络后重试。'
+        : orderCount > 0
+          ? `今天的订单已经全部转存，下面显示已保存的 ${orderCount} 项商品，可直接修改。`
+          : '当前没有未处理的新订单，今天也没有已保存的订单。',
+    };
+  }
+}
+
+async function handleSelectedWechatTodayOrdersChanged() {
+  await Promise.all([
+    selectedWechatTodayInbox.refreshSelected({ preserveView: true }),
+    handleOrderChanged({ preserveSelection: true }),
+  ]);
+  if (selectedWechatConversation.value) {
+    const orderCount = Number(selectedWechatTodayInbox.snapshot.value.totalCount) || 0;
+    selectedWechatConversation.value = {
+      ...selectedWechatConversation.value,
+      orderCount,
+      message: orderCount > 0
+        ? `今天已保存 ${orderCount} 项商品，刚才的修改已经同步。`
+        : '这个客户今天已经没有已保存的订单。',
+    };
+  }
+}
+
 async function syncWechatSelectionFromDesktop(payload) {
   const title = normalizeObservedWechatConversationTitle(payload?.title);
   if (!title) return;
@@ -1043,20 +1277,22 @@ async function syncWechatSelectionFromDesktop(payload) {
       || wechatCustomerMatchBusy.value
       || wechatConversationFocusDepth > 0) return;
 
-  const currentTitle = normalizeObservedWechatConversationTitle(
-    activeWechatImport.value?.conversationTitle
-  );
-  if (currentTitle === title) return;
-
   const matchingItem = wechatImportQueue.value.find(item => (
     normalizeObservedWechatConversationTitle(item?.conversationTitle) === title
   ));
-  if (!matchingItem) return;
+  if (matchingItem) {
+    const currentTitle = normalizeObservedWechatConversationTitle(
+      activeWechatImport.value?.conversationTitle
+    );
+    if (currentTitle === title && !selectedWechatConversation.value) return;
+    activeWechatImportToken.value = matchingItem.token;
+    // This event already came from a real WeChat selection. Only update the
+    // right-side draft; focusing WeChat again would create a feedback loop.
+    await openActiveWechatImport({ openWorkspace: false, focusConversation: false });
+    return;
+  }
 
-  activeWechatImportToken.value = matchingItem.token;
-  // This event already came from a real WeChat selection. Only update the
-  // right-side draft; focusing WeChat again would create a feedback loop.
-  await openActiveWechatImport({ openWorkspace: false, focusConversation: false });
+  await showSelectedWechatConversation(title, avatarDataUrl);
 }
 
 const removeWechatConversationListener = window.electronAPI?.wechatUi
@@ -1072,6 +1308,7 @@ async function closeWechatImportModal() {
   wechatWorkspaceReady.value = false;
   observedWechatConversationTitle.value = '';
   observedWechatConversationAvatar.value = '';
+  clearSelectedWechatConversation();
   wechatScanMessage.value = '';
   dismissWechatSelectedAction();
   activeView.value = 'overview';
@@ -1317,11 +1554,12 @@ async function ensureWechatBindingWithGroupMode(options) {
   }
 }
 
-async function importWechatConversationForCustomer(
+async function prepareWechatConversationForCustomer(
   customer,
   title,
   timing = null,
-  preferredAvatar = ''
+  preferredAvatar = '',
+  { repairBinding = true } = {}
 ) {
   const selectedCustomerId = customerId(customer);
   const onTiming = event => recordWechatServiceTiming(timing, event);
@@ -1331,22 +1569,36 @@ async function importWechatConversationForCustomer(
     () => loadCustomerWechatBinding(selectedCustomerId)
   );
   const row = { customer, binding };
-  const directory = timeWechatOrderSyncPhase(
-    timing,
-    'binding-directory-build',
-    () => buildWechatCustomerAssociationDirectory([row])
-  );
-  row.binding = await ensureWechatBindingWithGroupMode({
-    row,
-    selectedTitle: title,
-    directory,
-    onTiming,
-  });
-  timeWechatOrderSyncPhase(
-    timing,
-    'customer-match-remember',
-    () => rememberWechatCustomerMatch(customer, title)
-  );
+  if (repairBinding) {
+    const directory = timeWechatOrderSyncPhase(
+      timing,
+      'binding-directory-build',
+      () => buildWechatCustomerAssociationDirectory([row])
+    );
+    row.binding = await ensureWechatBindingWithGroupMode({
+      row,
+      selectedTitle: title,
+      directory,
+      onTiming,
+    });
+    timeWechatOrderSyncPhase(
+      timing,
+      'customer-match-remember',
+      () => rememberWechatCustomerMatch(customer, title)
+    );
+  } else if (!binding.bound
+      || normalizeObservedWechatConversationTitle(binding.displayName)
+        !== normalizeObservedWechatConversationTitle(title)) {
+    return {
+      row,
+      result: {
+        status: 'unbound',
+        message: '客户的微信绑定与当前会话不一致，请点击“再次检查新订单”完成校准。',
+        binding,
+        pendingCount: 0,
+      },
+    };
+  }
   const result = await prepareWechatOrderImport({
     customerId: selectedCustomerId,
     binding: row.binding,
@@ -1357,14 +1609,31 @@ async function importWechatConversationForCustomer(
     status: result.status,
     pendingCount: Number(result.pendingCount) || 0,
   });
+  if (result.payload) {
+    result.conversationAvatar = await resolveWechatConversationAvatar(
+      title,
+      result.binding || row.binding,
+      preferredAvatar
+    );
+  }
+  return { row, result };
+}
+
+async function importWechatConversationForCustomer(
+  customer,
+  title,
+  timing = null,
+  preferredAvatar = ''
+) {
+  const { row, result } = await prepareWechatConversationForCustomer(
+    customer,
+    title,
+    timing,
+    preferredAvatar
+  );
   if (!result.payload) {
     throw new Error(result.message || '已关联该微信好友，但当前没有未处理的新订单');
   }
-  result.conversationAvatar = await resolveWechatConversationAvatar(
-    title,
-    result.binding || row.binding,
-    preferredAvatar
-  );
   timeWechatOrderSyncPhase(
     timing,
     'task-enqueue',
@@ -2007,6 +2276,49 @@ async function returnToOverview() {
   color: var(--product-text);
   background: var(--product-bg);
 }
+
+.order-workbench__wechat-history {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+}
+
+.order-workbench__wechat-history-state {
+  display: grid;
+  height: 100%;
+  min-height: 240px;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px;
+  color: #587066;
+  text-align: center;
+}
+.order-workbench__wechat-history-state i {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #cfe8da;
+  border-top-color: #15945b;
+  border-radius: 50%;
+  animation: wechat-status-spin .8s linear infinite;
+}
+.order-workbench__wechat-history-state strong { color: #1e4333; font-size: 17px; }
+.order-workbench__wechat-history-state span { font-size: 12px; }
+.order-workbench__wechat-history-state.is-error strong { color: #9f343b; }
+.order-workbench__wechat-history-state button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid #9bc9b1;
+  border-radius: 9px;
+  color: #176a48;
+  background: #f3faf6;
+  font-weight: 800;
+  cursor: pointer;
+}
+.order-workbench__wechat-history :deep(.saved-orders-tab) { background: #fff; }
 
 .order-workbench__header-stages {
   display: flex;

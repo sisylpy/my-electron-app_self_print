@@ -18,7 +18,7 @@
             </div>
             <div class="wechat-import-modal__heading">
               <span v-if="busy">自动读取微信订单</span>
-              <span v-else-if="activeItem">微信订单</span>
+              <span v-else-if="activeItem || selectedConversation">微信订单</span>
               <h2 id="wechat-import-modal-title">{{ modalTitle }}</h2>
               <p v-if="modalSubtitle">{{ modalSubtitle }}</p>
             </div>
@@ -35,7 +35,7 @@
               {{ closeLabel }}
             </button>
             <button
-              v-if="items.length || activeItem"
+              v-if="items.length || activeItem || selectedConversation"
               type="button"
               class="wechat-import-modal__rescan-all"
               title="重新逐个检查全部已关联微信，并生成新一轮订单任务"
@@ -89,7 +89,7 @@
                 </ol>
               </div>
               <button
-                v-if="showSelectedImportAction && (items.length || activeItem)"
+                v-if="showSelectedImportAction && !selectedConversation && (items.length || activeItem)"
                 type="button"
                 class="wechat-import-modal__selected-import"
                 :class="{ 'has-conversation': launcherCurrentTitle }"
@@ -116,8 +116,42 @@
             </nav>
 
             <main class="wechat-import-modal__workspace">
-              <p v-if="workspaceWarning && !activeItem" class="wechat-import-modal__warning">{{ workspaceWarning }}</p>
-              <div v-if="activeItem" class="wechat-import-modal__current">
+              <p v-if="workspaceWarning && !activeItem && !selectedConversation" class="wechat-import-modal__warning">{{ workspaceWarning }}</p>
+              <div
+                v-if="selectedConversation"
+                class="wechat-import-modal__current is-history"
+              >
+                <div class="wechat-import-modal__current-summary">
+                  <span
+                    :class="['wechat-import-modal__current-number', { 'has-avatar': selectedConversation.conversationAvatar }]"
+                  >
+                    <b>{{ selectedConversation.title?.slice(0, 1) || '微' }}</b>
+                    <img
+                      v-if="selectedConversation.conversationAvatar"
+                      :src="selectedConversation.conversationAvatar"
+                      alt=""
+                      @error="hideBrokenAvatar"
+                    />
+                  </span>
+                  <div class="wechat-import-modal__current-copy">
+                    <span>当前微信</span>
+                    <strong>{{ selectedConversation.title }}</strong>
+                  </div>
+                  <p v-if="selectedConversation.customer">
+                    <span>客户 {{ selectedCustomerName }}</span>
+                    <span>{{ selectedConversationOrderCount }} 项今日订单</span>
+                  </p>
+                </div>
+                <div class="wechat-import-modal__current-actions">
+                  <button
+                    type="button"
+                    class="wechat-import-modal__refresh"
+                    :disabled="selectedConversation.status === 'checking' || selectedImportBusy"
+                    @click="$emit('refresh-selected-conversation')"
+                  >{{ selectedConversation.status === 'checking' ? '正在检查…' : '再次检查新订单' }}</button>
+                </div>
+              </div>
+              <div v-else-if="activeItem" class="wechat-import-modal__current">
                 <div class="wechat-import-modal__current-summary">
                   <span
                     :class="['wechat-import-modal__current-number', { 'has-avatar': activeItem.conversationAvatar }]"
@@ -169,8 +203,12 @@
                 v-if="activeItem && (workspaceWarning || activeItem.refreshNote || activeItem.refreshError)"
                 :class="['wechat-import-modal__sync-note', { 'is-error': workspaceWarning || activeItem.refreshError }]"
               >{{ workspaceWarning || activeItem.refreshError || activeItem.refreshNote }}</p>
+              <p
+                v-if="selectedConversation?.message"
+                :class="['wechat-import-modal__sync-note', `is-${selectedConversation.status}`]"
+              >{{ selectedConversation.message }}</p>
               <div
-                v-if="!activeItem && busy"
+                v-if="!activeItem && !selectedConversation && busy"
                 :class="['wechat-import-modal__scan-state', `is-${scanStatus}`, { 'is-busy': busy }]"
                 role="status"
                 aria-live="polite"
@@ -197,7 +235,7 @@
                   <em v-if="busy">读取期间请不要操作左侧微信，完成后将在这里显示订单。</em>
                 </div>
               </div>
-              <div v-else-if="!activeItem" class="wechat-import-modal__launcher">
+              <div v-else-if="!activeItem && !selectedConversation" class="wechat-import-modal__launcher">
                 <p
                   v-if="scanMessage"
                   :class="['wechat-import-modal__launcher-notice', `is-${scanStatus}`]"
@@ -347,6 +385,9 @@
                     <li><b>3.</b> 收单结束前使用“检查已关联微信”，可避免遗漏。</li>
                   </ol>
                 </aside>
+              </div>
+              <div v-else-if="selectedConversation" class="wechat-import-modal__content is-history">
+                <slot name="selected-conversation" />
               </div>
               <div v-else class="wechat-import-modal__content">
                 <slot />
@@ -650,6 +691,7 @@ const props = defineProps({
   open: { type: Boolean, default: false },
   items: { type: Array, default: () => [] },
   activeItem: { type: Object, default: null },
+  selectedConversation: { type: Object, default: null },
   completedTokens: { type: Array, default: () => [] },
   busy: { type: Boolean, default: false },
   scanMessage: { type: String, default: '' },
@@ -689,13 +731,16 @@ const emit = defineEmits([
   'select-group-mode',
   'cancel-group-mode',
   'dismiss-action-message',
+  'refresh-selected-conversation',
 ]);
 
 const customerMatchQuery = ref('');
 const selectedMatchCustomerId = ref('');
 
 const completedTokenSet = computed(() => new Set(props.completedTokens.map(String)));
-const isLauncher = computed(() => !props.busy && !props.activeItem && !props.items.length);
+const isLauncher = computed(() => (
+  !props.busy && !props.activeItem && !props.selectedConversation && !props.items.length
+));
 const completedCount = computed(() => completedTokenSet.value.size);
 const remainingCount = computed(() => Math.max(0, props.items.length - completedCount.value));
 const finalizedScanResults = computed(() => props.scanResults.filter(item => item?.status !== 'checking'));
@@ -722,6 +767,7 @@ const scanReportActionLabel = computed(() => (
 ));
 const modalTitle = computed(() => {
   if (props.busy) return '正在读取微信订单';
+  if (props.selectedConversation) return '微信订单记录';
   if (props.activeItem) return '微信订单确认';
   return '读取微信订单';
 });
@@ -736,6 +782,7 @@ const progressLabel = computed(() => {
 });
 const closeLabel = computed(() => {
   if (props.busy || props.selectedImportBusy || props.customerMatchBusy) return '处理中';
+  if (props.selectedConversation && props.items.length) return '稍后处理';
   if (!props.activeItem) return '关闭';
   return '稍后处理';
 });
@@ -756,6 +803,16 @@ const activePolicyLabel = computed(() => {
     ? '群聊：接收全部成员消息'
     : '群聊：仅接收 @ 当前账号';
 });
+const selectedCustomerName = computed(() => String(
+  props.selectedConversation?.customer?.nxDepartmentAttrName
+  || props.selectedConversation?.customer?.nxDepartmentName
+  || props.selectedConversation?.customer?.departmentName
+  || props.selectedConversation?.title
+  || ''
+).trim());
+const selectedConversationOrderCount = computed(() => (
+  Number(props.selectedConversation?.orderCount) || 0
+));
 const filteredMatchCustomers = computed(() => {
   const query = customerMatchQuery.value.toLocaleLowerCase();
   if (!query) return props.customerMatchCustomers;
@@ -835,6 +892,7 @@ function confirmCustomerMatch() {
 
 function itemState(item) {
   if (completedTokenSet.value.has(String(item?.token))) return 'completed';
+  if (props.selectedConversation) return 'pending';
   if (item?.token === props.activeItem?.token) return 'active';
   return 'pending';
 }
@@ -1100,6 +1158,10 @@ function hideBrokenAvatar(event) {
   background: #fff;
   box-shadow: none;
 }
+.wechat-import-modal__current.is-history {
+  border-color: #b9ddca;
+  background: linear-gradient(90deg, #fff, #f3fbf7);
+}
 .wechat-import-modal__current-summary { display: flex; min-width: 0; align-items: center; gap: 10px; }
 .wechat-import-modal__current-number { position: relative; display: grid; width: 34px; height: 34px; flex: none; overflow: hidden; place-items: center; border-radius: 11px; color: #fff; background: #15945b; font-size: 13px; font-weight: 900; }
 .wechat-import-modal__current-copy { display: grid; min-width: 80px; gap: 1px; }
@@ -1142,6 +1204,8 @@ function hideBrokenAvatar(event) {
 .wechat-import-modal__merge { border: 1px solid #e3a647; color: #fff; background: #d98b13; box-shadow: 0 4px 10px rgba(179, 107, 4, .18); }
 .wechat-import-modal__sync-note { grid-row: 3; margin: -4px 4px 8px; color: #1b7d51; font-size: 9px; text-align: right; }
 .wechat-import-modal__sync-note.is-error { color: #b23c45; }
+.wechat-import-modal__sync-note.is-ready { color: #167b50; }
+.wechat-import-modal__sync-note.is-warning { color: #9a6712; }
 .wechat-import-modal__content {
   min-width: 0;
   min-height: 0;
@@ -1152,6 +1216,7 @@ function hideBrokenAvatar(event) {
   border-radius: 0 0 13px 13px;
   background: #fff;
 }
+.wechat-import-modal__content.is-history { overflow: hidden; }
 .wechat-import-modal__content :deep(.upload-section > .row) { --bs-gutter-x: 0; --bs-gutter-y: 0; }
 .wechat-import-modal__content :deep(.upload-section > .row > .col-md-3) { border-right: 1px solid #e3ece7; }
 .wechat-import-modal__content :deep(.upload-section .card) {
