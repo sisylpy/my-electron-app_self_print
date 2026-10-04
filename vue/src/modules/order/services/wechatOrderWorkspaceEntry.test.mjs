@@ -192,6 +192,10 @@ const desktopSelectionAction = workbench.match(
 )?.[1] || '';
 assert.match(workbench, /onConversationChanged/);
 assert.match(desktopSelectionAction, /observedWechatConversationTitle\.value = title/);
+assert.match(
+  desktopSelectionAction,
+  /if \(!activeWechatImport\.value && !selectedWechatConversation\.value\) return/,
+);
 assert.match(desktopSelectionAction, /activeWechatImportToken\.value = matchingItem\.token/);
 assert.match(desktopSelectionAction, /showSelectedWechatConversation\(title, avatarDataUrl\)/);
 assert.match(

@@ -1277,6 +1277,14 @@ async function syncWechatSelectionFromDesktop(payload) {
       || wechatCustomerMatchBusy.value
       || wechatConversationFocusDepth > 0) return;
 
+  // The launcher is a deliberate choice screen. Opening the side-by-side
+  // workspace makes WeChat publish its already-selected conversation a few
+  // moments later; that passive observation must only update button 2's name
+  // and avatar. Reading that conversation starts only after the user chooses
+  // an action. Once a task/history view is open, real WeChat selections still
+  // keep the right-hand page in sync as before.
+  if (!activeWechatImport.value && !selectedWechatConversation.value) return;
+
   const matchingItem = wechatImportQueue.value.find(item => (
     normalizeObservedWechatConversationTitle(item?.conversationTitle) === title
   ));
