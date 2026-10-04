@@ -365,6 +365,15 @@ function createWechatWorkspaceWindowService(options = {}) {
 
   return Object.freeze({
     captureSelectedConversationAvatar,
+    focus() {
+      const window = getMainWindow();
+      if (!window || window.isDestroyed()) {
+        return { ok: false, error: { code: 'APP_WINDOW_MISSING', message: '订单工作台窗口不可用' } };
+      }
+      window.show();
+      window.focus();
+      return { ok: true };
+    },
     async open() {
       if (session) return { ok: true, result: session.layout };
       const window = getMainWindow();

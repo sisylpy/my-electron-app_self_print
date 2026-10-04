@@ -935,6 +935,15 @@ async function openWechatWorkspace() {
   }
 }
 
+async function focusWechatWorkspaceApp() {
+  try {
+    await window.electronAPI?.wechatUi?.focusWorkspace?.();
+  } catch {
+    // The report is already complete. Focus recovery is presentation-only and
+    // must never change or discard the collected order results.
+  }
+}
+
 function prewarmWechatReader() {
   if (wechatReaderWarmupStarted) return;
   const warmUp = window.electronAPI?.wechatReader?.warmUp;
@@ -2203,6 +2212,7 @@ async function scanAllBoundWechatOrders() {
       waitForWechatConfirmationPaint,
       timingSummary
     );
+    await focusWechatWorkspaceApp();
     timing.finish(timingOutcome, timingSummary);
   }
 }

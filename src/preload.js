@@ -205,6 +205,7 @@ const electronAPI = Object.freeze({
     focusConversation: (title) =>
       ipcRenderer.invoke('wechat-ui-focus-conversation', { title }),
     openWorkspace: () => ipcRenderer.invoke('wechat-ui-workspace-open'),
+    focusWorkspace: () => ipcRenderer.invoke('wechat-ui-workspace-focus'),
     closeWorkspace: () => ipcRenderer.invoke('wechat-ui-workspace-close'),
     onConversationChanged: (callback) =>
       listen('wechat-ui-conversation-changed', callback),

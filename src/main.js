@@ -737,6 +737,10 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     return getWechatWorkspaceWindowService().open();
   });
+  ipcMain.handle('wechat-ui-workspace-focus', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getWechatWorkspaceWindowService().focus();
+  });
   ipcMain.handle('wechat-ui-workspace-close', async (event) => {
     assertTrustedRendererEvent(event);
     return getWechatWorkspaceWindowService().close();

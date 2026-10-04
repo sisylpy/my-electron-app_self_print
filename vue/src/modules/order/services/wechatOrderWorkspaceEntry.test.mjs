@@ -13,6 +13,8 @@ const workspaceWindowService = fs.readFileSync(
   'src/wechat/workspace-window-service.js',
   'utf8',
 );
+const mainProcess = fs.readFileSync('src/main.js', 'utf8');
+const preload = fs.readFileSync('src/preload.js', 'utf8');
 
 const openEntry = workbench.match(
   /async function handleWechatScan\(\) \{([\s\S]*?)\n\}\n\nasync function readUnreadWechatOrders/,
@@ -147,6 +149,7 @@ assert.doesNotMatch(allCustomerAction, /wechatImportQueue\.value = \[\]/);
 assert.doesNotMatch(allCustomerAction, /wechatImportBatch\.value = \[\]/);
 assert.match(allCustomerAction, /enqueueWechatImportItems\(result\.imports, \{ activate: false \}\)/);
 assert.match(allCustomerAction, /已保留当前 \$\{preservedTaskCount\} 个未保存任务/);
+assert.match(allCustomerAction, /await focusWechatWorkspaceApp\(\)/);
 assert.match(workbench, /@scan-all="scanAllBoundWechatOrders"/);
 
 const selectTaskAction = workbench.match(
@@ -220,5 +223,8 @@ assert.match(
   workspaceOpenAction,
   /startConversationWatcher\(\);\s*await observeConversationTitle\(conversationWatcherGeneration\);\s*window\.show\(\);\s*window\.focus\(\);/,
 );
+assert.match(workspaceWindowService, /focus\(\) \{[\s\S]*?window\.show\(\);\s*window\.focus\(\);/);
+assert.match(mainProcess, /ipcMain\.handle\('wechat-ui-workspace-focus'/);
+assert.match(preload, /focusWorkspace: \(\) => ipcRenderer\.invoke\('wechat-ui-workspace-focus'\)/);
 
 console.log('WeChat order workspace entry passed');
