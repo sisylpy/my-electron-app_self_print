@@ -390,12 +390,18 @@ function createWechatWorkspaceWindowService(options = {}) {
         window.setBounds(layout.app);
         if (typeof window.showInactive === 'function') window.showInactive();
         else window.show();
-        // Place the app first and WeChat last. dockWechat activates and raises
-        // WeChat, which keeps the left comparison window visible instead of
-        // allowing the Electron window to cover it immediately afterwards.
+        // Place the app first and WeChat last so the selected conversation can
+        // be observed after docking. Once its title/avatar have been published,
+        // return keyboard and mouse focus to the right-hand workbench. Without
+        // this hand-off macOS consumes the user's first button click merely to
+        // activate Electron, making every launcher action appear to need two
+        // clicks.
         const wechatBounds = await dockWechat(layout.wechat);
         session = { saved, wechatBounds, layout };
         startConversationWatcher();
+        await observeConversationTitle(conversationWatcherGeneration);
+        window.show();
+        window.focus();
         return { ok: true, result: layout };
       } catch (error) {
         restoreMainWindow(saved);

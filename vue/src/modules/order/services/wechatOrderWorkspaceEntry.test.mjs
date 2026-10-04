@@ -213,5 +213,12 @@ assert.match(modal, /再次检查新订单/);
 assert.match(workspaceWindowService, /const conversationChanged = title !== lastConversationTitle/);
 assert.match(workspaceWindowService, /publishConversationTitle\(title\);\s*if \(!conversationChanged\) return/);
 assert.doesNotMatch(workspaceWindowService, /!title \|\| title === lastConversationTitle/);
+const workspaceOpenAction = workspaceWindowService.match(
+  /async open\(\) \{([\s\S]*?)\n    \},\n\n    async close/,
+)?.[1] || '';
+assert.match(
+  workspaceOpenAction,
+  /startConversationWatcher\(\);\s*await observeConversationTitle\(conversationWatcherGeneration\);\s*window\.show\(\);\s*window\.focus\(\);/,
+);
 
 console.log('WeChat order workspace entry passed');
