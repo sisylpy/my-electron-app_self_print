@@ -1612,6 +1612,15 @@ async function readUnreadWechatOrders() {
 
 async function scanAllBoundWechatOrders() {
   if (wechatScanBusy.value || wechatSelectedImportBusy.value) return;
+  const timing = createWechatOrderTiming('scan-all-bound-wechat');
+  let timingOutcome = 'failed';
+  let timingSummary = {
+    checkedCount: 0,
+    orderCustomerCount: 0,
+    taskCount: 0,
+    messageCount: 0,
+    warningCount: 0,
+  };
   wechatScanBusy.value = true;
   beginWechatScanReport();
   wechatSelectedImportMessage.value = '';
@@ -1623,16 +1632,31 @@ async function scanAllBoundWechatOrders() {
   wechatImportModalOpen.value = true;
 
   try {
-    if (!wechatWorkspaceReady.value && !await openWechatWorkspace()) {
-      throw new Error(wechatWorkspaceWarning.value || '微信窗口未能停靠到屏幕左侧');
+    if (!wechatWorkspaceReady.value) {
+      await timeWechatOrderPhase(timing, 'scan-workspace-open', async () => {
+        if (!await openWechatWorkspace()) {
+          throw new Error(wechatWorkspaceWarning.value || '微信窗口未能停靠到屏幕左侧');
+        }
+      });
+    } else {
+      timing.phase('scan-workspace-open', { durationMs: 0, reused: true });
     }
     const {
       unique,
       failedCount,
       ambiguousCount,
       associationDirectory,
-    } = await loadBoundWechatCustomers({ refreshCustomers: true });
+    } = await timeWechatOrderPhase(
+      timing,
+      'scan-customer-directory-load',
+      () => loadBoundWechatCustomers({ refreshCustomers: true })
+    );
     const entries = Array.from(unique.entries()).map(([title, row]) => ({ title, row }));
+    timing.phase('scan-customer-directory-ready', {
+      customerCount: entries.length,
+      failedCount,
+      ambiguousCount,
+    });
     if (!entries.length) {
       throw new Error(ambiguousCount
         ? '客户中心的微信名称存在重复，无法安全匹配，请先改成唯一名称'
@@ -1665,30 +1689,82 @@ async function scanAllBoundWechatOrders() {
           message,
         });
       },
-      scanEntry: async ({ title, row }) => {
-        const focusWarning = await focusWechatImportConversation({ conversationTitle: title });
-        if (focusWarning) throw new Error(focusWarning);
+      scanEntry: async ({ title, row }, progress = {}) => {
+        const customerStartedAt = timingNow();
+        const customerMeta = {
+          conversationTitle: title,
+          customerName: wechatScanCustomerName(row, title),
+          current: Number(progress.current || 0),
+          total: Number(progress.total || entries.length),
+        };
+        const onTiming = event => recordWechatServiceTiming(timing, {
+          ...event,
+          ...customerMeta,
+        });
+        try {
+          await timeWechatOrderPhase(timing, 'scan-conversation-focus', async () => {
+            const focusWarning = await focusWechatImportConversation({ conversationTitle: title });
+            if (focusWarning) throw new Error(focusWarning);
+          }, customerMeta);
 
-        row.binding = await ensureWechatBindingWithGroupMode({
-          row,
-          selectedTitle: title,
-          directory: associationDirectory,
-        });
-        const prepared = await prepareWechatOrderImport({
-          customerId: customerId(row.customer),
-          binding: row.binding,
-          // The visible focus flow already waits for WeChat to render and
-          // verifies the opened title. One short cached verification read is
-          // enough to catch a final local-database write without adding the
-          // multi-second retry budget used by the unread scanner.
-          retryDelaysMs: [250],
-        });
-        if (!prepared.payload) return [];
-        return createWechatImportItems(row, title, prepared);
+          row.binding = await timeWechatOrderPhase(
+            timing,
+            'scan-binding-check',
+            () => ensureWechatBindingWithGroupMode({
+              row,
+              selectedTitle: title,
+              directory: associationDirectory,
+              onTiming,
+            }),
+            customerMeta
+          );
+          const prepared = await timeWechatOrderPhase(
+            timing,
+            'scan-order-read',
+            () => prepareWechatOrderImport({
+              customerId: customerId(row.customer),
+              binding: row.binding,
+              // The visible focus flow already waits for WeChat to render and
+              // verifies the opened title. One short cached verification read is
+              // enough to catch a final local-database write without adding the
+              // multi-second retry budget used by the unread scanner.
+              retryDelaysMs: [250],
+              onTiming,
+            }),
+            customerMeta
+          );
+          const items = prepared.payload ? createWechatImportItems(row, title, prepared) : [];
+          timing.phase('scan-customer-complete', {
+            ...customerMeta,
+            durationMs: Math.max(0, timingNow() - customerStartedAt),
+            status: items.length ? 'found' : 'empty',
+            taskCount: items.length,
+          });
+          return items;
+        } catch (error) {
+          timing.phase('scan-customer-complete', {
+            ...customerMeta,
+            durationMs: Math.max(0, timingNow() - customerStartedAt),
+            status: 'error',
+            failed: true,
+            error: error?.message || String(error),
+          });
+          throw error;
+        }
       },
     });
 
     const warningCount = failedCount + ambiguousCount + result.failures.length;
+    const totalMessages = result.imports.reduce((sum, item) => sum + item.messageCount, 0);
+    const customerCount = new Set(result.imports.map(item => String(item.customerId))).size;
+    timingOutcome = warningCount ? 'warning' : 'success';
+    timingSummary = {
+      checkedCount: result.checkedCount,
+      orderCustomerCount: customerCount,
+      taskCount: result.imports.length,
+      messageCount: totalMessages,
+      warningCount,
+    };
     const checkedSummary = `已巡查 ${result.checkedCount} 个关联微信会话`;
     const warningSummary = warningCount ? `；另有 ${warningCount} 项需检查` : '';
     if (!result.imports.length) {
@@ -1703,13 +1779,16 @@ async function scanAllBoundWechatOrders() {
     wechatImportBatch.value = result.imports;
     wechatImportCompletedTokens.value = [];
     activeWechatImportToken.value = result.imports[0]?.token || null;
-    const totalMessages = result.imports.reduce((sum, item) => sum + item.messageCount, 0);
-    const customerCount = new Set(result.imports.map(item => String(item.customerId))).size;
     setWechatScanStatus(
       `${checkedSummary}，发现 ${customerCount} 位客户的 ${result.imports.length} 个订单任务（${totalMessages} 条新消息）${warningSummary}`,
       warningCount ? 'warning' : 'success'
     );
-    await openActiveWechatImport({ preserveScanMessage: true });
+    await timeWechatOrderPhase(
+      timing,
+      'scan-first-import-open',
+      () => openActiveWechatImport({ preserveScanMessage: true }),
+      timingSummary
+    );
     if (warningCount) {
       const failedTitles = result.failures.slice(0, 3).map(item => `“${item.title}”`).join('、');
       wechatWorkspaceWarning.value = [
@@ -1718,9 +1797,21 @@ async function scanAllBoundWechatOrders() {
       ].filter(Boolean).join('；');
     }
   } catch (error) {
+    timingOutcome = 'failed';
+    timingSummary = {
+      ...timingSummary,
+      error: error?.message || String(error),
+    };
     setWechatScanStatus(error?.message || '巡查全部关联微信失败', 'error');
   } finally {
     wechatScanBusy.value = false;
+    await timeWechatOrderPhase(
+      timing,
+      'scan-report-visible',
+      waitForWechatConfirmationPaint,
+      timingSummary
+    );
+    timing.finish(timingOutcome, timingSummary);
   }
 }
 
