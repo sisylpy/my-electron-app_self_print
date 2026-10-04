@@ -113,6 +113,18 @@ assert.match(workbench, /loadCustomerWechatBinding\(selectedCustomerId\)/);
 assert.match(workbench, /writeAppLog\('info', 'wechat-order-timing', 'phase'/);
 assert.match(workbench, /writeAppLog\(outcome === 'success' \? 'info' : 'warn', 'wechat-order-timing', 'summary'/);
 
+const refreshSelectedAction = workbench.match(
+  /async function refreshActiveWechatImport\(options = \{\}\) \{([\s\S]*?)\n\}\n\nfunction mergeActiveWechatImport/,
+)?.[1] || '';
+assert.match(refreshSelectedAction, /createWechatOrderTiming\('refresh-selected-wechat'\)/);
+assert.match(refreshSelectedAction, /knownMessageFingerprints: messageFingerprints\(item\.payload\)/);
+assert.match(refreshSelectedAction, /deferPrepareUntilStable: true/);
+assert.match(refreshSelectedAction, /observedTitle !== expectedTitle/);
+assert.match(refreshSelectedAction, /needsFocusBeforeRead/);
+assert.match(refreshSelectedAction, /if \(options\.manual && !needsFocusBeforeRead\)/);
+assert.match(refreshSelectedAction, /recordWechatServiceTiming\(timing, event\)/);
+assert.match(refreshSelectedAction, /timing\.finish\(outcome/);
+
 const allCustomerAction = workbench.match(
   /async function scanAllBoundWechatOrders\(\) \{([\s\S]*?)\n\}\n\nasync function handleTaskAdded/,
 )?.[1] || '';

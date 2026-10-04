@@ -469,6 +469,111 @@ assert.equal(delayedWriteReads, 2);
 assert.equal(delayedWritePrepares, 2);
 assert.deepEqual(delayedWriteWaits, [1000]);
 
+let currentSnapshotReads = 0;
+let currentSnapshotPrepares = 0;
+const currentSnapshotWaits = [];
+const currentSnapshot = await prepareWechatOrderImport({
+  customerId: 7,
+  binding,
+  retryDelaysMs: [650],
+  knownMessageFingerprints: new Set(['msg:known']),
+  deferPrepareUntilStable: true,
+  sleep: async delayMs => currentSnapshotWaits.push(delayMs),
+  electronAPI: {
+    customerWechatOrders: {
+      prepareMessages: async () => {
+        currentSnapshotPrepares += 1;
+        throw new Error('已知消息不应该再次请求服务端');
+      },
+    },
+    wechatReader: {
+      getParticipants: electronAPI.wechatReader.getParticipants,
+      getMessages: async () => {
+        currentSnapshotReads += 1;
+        return {
+          ok: true,
+          result: {
+            items: [{
+              id: 'msg:known',
+              senderId: 'friend',
+              type: 'text',
+              text: '已在当前草稿中的订单',
+              timestamp: '2026-10-01T02:01:00.000Z',
+            }],
+          },
+        };
+      },
+    },
+  },
+});
+assert.equal(currentSnapshot.status, 'current');
+assert.equal(currentSnapshot.payload, undefined);
+assert.equal(currentSnapshotReads, 2);
+assert.equal(currentSnapshotPrepares, 0);
+assert.deepEqual(currentSnapshotWaits, [650]);
+
+let optimizedRefreshReads = 0;
+let optimizedRefreshPrepares = 0;
+let optimizedPreparedMessages = [];
+const optimizedRefreshWaits = [];
+const optimizedRefresh = await prepareWechatOrderImport({
+  customerId: 7,
+  binding,
+  retryDelaysMs: [650],
+  knownMessageFingerprints: new Set(['msg:known']),
+  deferPrepareUntilStable: true,
+  sleep: async delayMs => optimizedRefreshWaits.push(delayMs),
+  electronAPI: {
+    customerWechatOrders: {
+      prepareMessages: async (_customerId, messages) => {
+        optimizedRefreshPrepares += 1;
+        optimizedPreparedMessages = messages;
+        return {
+          ok: true,
+          data: {
+            binding,
+            pendingMessageFingerprints: messages.map(message => message.messageFingerprint),
+          },
+        };
+      },
+    },
+    wechatReader: {
+      getParticipants: electronAPI.wechatReader.getParticipants,
+      getMessages: async () => {
+        optimizedRefreshReads += 1;
+        const items = [{
+          id: 'msg:known',
+          senderId: 'friend',
+          type: 'text',
+          text: '已在当前草稿中的订单',
+          timestamp: '2026-10-01T02:01:00.000Z',
+        }];
+        if (optimizedRefreshReads > 1) items.push({
+          id: 'msg:new-after-click',
+          senderId: 'friend',
+          type: 'text',
+          text: '第二次快照才写入的新订单',
+          timestamp: '2026-10-01T02:01:30.000Z',
+        });
+        return { ok: true, result: { items } };
+      },
+    },
+  },
+});
+assert.equal(optimizedRefresh.status, 'ready');
+assert.equal(optimizedRefresh.payload.text, '第二次快照才写入的新订单');
+assert.deepEqual(
+  optimizedRefresh.payload.source.messages.map(message => message.messageFingerprint),
+  ['msg:new-after-click']
+);
+assert.deepEqual(
+  optimizedPreparedMessages.map(message => message.messageFingerprint),
+  ['msg:new-after-click']
+);
+assert.equal(optimizedRefreshReads, 2);
+assert.equal(optimizedRefreshPrepares, 1);
+assert.deepEqual(optimizedRefreshWaits, [650]);
+
 let partialWriteReads = 0;
 let partialWritePrepares = 0;
 const partialWriteWaits = [];

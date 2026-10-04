@@ -308,6 +308,8 @@ const wechatOrderTimingLabels = Object.freeze({
   'server-prepare-messages': '向服务端核对未处理消息',
   'reader-attachments': '读取微信图片附件',
   'payload-build': '组装微信订单内容',
+  'current-conversation-focus': '切换并核验当前微信会话',
+  'current-conversation-reuse': '复用已选中的微信会话',
   'import-result': '确认读取结果',
   'task-enqueue': '生成确认任务',
   'confirmation-state-open': '准备订单确认页面',
@@ -678,35 +680,78 @@ function replaceWechatImportItem(token, replacement) {
 async function refreshActiveWechatImport(options = {}) {
   const item = activeWechatImport.value;
   if (!item || wechatImportRefreshing.value || !wechatImportModalOpen.value) return false;
+  const timing = createWechatOrderTiming('refresh-selected-wechat');
+  let outcome = 'failed';
+  let resultStatus = 'unknown';
+  let lateMessageCount = 0;
   wechatImportRefreshing.value = true;
   try {
-    if (options.manual) {
-      wechatWorkspaceWarning.value = await focusWechatImportConversation(item);
+    const expectedTitle = normalizeObservedWechatConversationTitle(item.conversationTitle);
+    const observedTitle = normalizeObservedWechatConversationTitle(
+      observedWechatConversationTitle.value
+    );
+    const needsFocusBeforeRead = Boolean(
+      options.manual && expectedTitle && observedTitle !== expectedTitle
+    );
+    if (options.manual) wechatWorkspaceWarning.value = '';
+    if (needsFocusBeforeRead) {
+      const focusWarning = await timeWechatOrderPhase(
+        timing,
+        'current-conversation-focus',
+        () => focusWechatImportConversation(item),
+        { reason: 'selection-mismatch', expectedTitle, observedTitle }
+      );
+      wechatWorkspaceWarning.value = focusWarning;
+      if (!focusWarning) observedWechatConversationTitle.value = expectedTitle;
+    } else {
+      timing.phase('current-conversation-reuse', {
+        expectedTitle,
+        observedTitle,
+        matched: Boolean(expectedTitle && expectedTitle === observedTitle),
+      });
     }
     const result = await prepareWechatOrderImport({
       customerId: item.customerId,
       binding: item.binding,
       // 用户手动触发时做一次短暂、有限的稳定性复查；页面不再后台轮询。
       retryDelaysMs: selectedWechatRetryDelaysMs,
+      knownMessageFingerprints: messageFingerprints(item.payload),
+      deferPrepareUntilStable: true,
+      onTiming: event => recordWechatServiceTiming(timing, event),
+    });
+    resultStatus = result.status;
+    timing.phase('import-result', {
+      status: result.status,
+      pendingCount: Number(result.pendingCount) || 0,
+      skippedCount: Number(result.skippedCount) || 0,
     });
     if (!result.payload) {
       if (options.manual) {
+        const isCurrent = ['current', 'duplicate'].includes(result.status);
+        const isBlocking = ['conflict', 'unbound'].includes(result.status);
         replaceWechatImportItem(item.token, {
           ...item,
-          refreshNote: '当前会话没有新增订单消息',
-          refreshError: '',
+          refreshNote: isBlocking
+            ? ''
+            : isCurrent
+              ? '当前会话已经是最新内容'
+              : '当前会话没有新增订单消息',
+          refreshError: isBlocking ? result.message : '',
         });
       }
+      outcome = ['conflict', 'unbound'].includes(result.status) ? 'failed' : 'success';
       return false;
     }
-    if (options.manual) {
-      // The first focus makes WeChat hydrate its local database. A message can
-      // finish arriving while the Reader is doing its stability checks, after
-      // that first focus already happened, and WeChat then shows it as unread
-      // even though the order was successfully collected. Activate and verify
-      // the same conversation again only after payload retrieval succeeds so
-      // the visible WeChat unread state matches the imported order state.
-      const markReadWarning = await focusWechatImportConversation(item);
+    if (options.manual && !needsFocusBeforeRead) {
+      // The already-open conversation needs no UI work for a no-change check.
+      // When new data is actually found, click it once after the stable DB read
+      // so WeChat clears its unread badge without paying for two focus passes.
+      const markReadWarning = await timeWechatOrderPhase(
+        timing,
+        'current-conversation-focus',
+        () => focusWechatImportConversation(item),
+        { reason: 'mark-new-messages-read', expectedTitle }
+      );
       if (markReadWarning) {
         wechatWorkspaceWarning.value = [wechatWorkspaceWarning.value, markReadWarning]
           .filter(Boolean)
@@ -736,11 +781,12 @@ async function refreshActiveWechatImport(options = {}) {
           refreshError: '',
         });
       }
+      outcome = 'success';
       return otherItems.length > 0;
     }
     const existing = messageFingerprints(item.payload);
     const incoming = messageFingerprints(matchingItem.payload);
-    const lateMessageCount = Array.from(incoming).filter(id => !existing.has(id)).length;
+    lateMessageCount = Array.from(incoming).filter(id => !existing.has(id)).length;
     if (!lateMessageCount) {
       if (options.manual) {
         replaceWechatImportItem(item.token, {
@@ -749,6 +795,7 @@ async function refreshActiveWechatImport(options = {}) {
           refreshError: '',
         });
       }
+      outcome = 'success';
       return false;
     }
     const mergedPayload = mergeWechatOrderPayload(item.payload, matchingItem.payload);
@@ -761,8 +808,10 @@ async function refreshActiveWechatImport(options = {}) {
       refreshNote: `发现 ${lateMessageCount} 条后来到达的新消息`,
       refreshError: '',
     });
+    outcome = 'success';
     return true;
   } catch (error) {
+    resultStatus = 'error';
     replaceWechatImportItem(item.token, {
       ...item,
       refreshError: error?.message || '同步当前微信会话失败',
@@ -771,6 +820,7 @@ async function refreshActiveWechatImport(options = {}) {
     return false;
   } finally {
     wechatImportRefreshing.value = false;
+    timing.finish(outcome, { status: resultStatus, lateMessageCount });
   }
 }
 

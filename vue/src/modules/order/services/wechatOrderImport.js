@@ -235,6 +235,8 @@ export async function prepareWechatOrderImport({
   binding,
   now = null,
   retryDelaysMs = [400, 800, 1600],
+  knownMessageFingerprints = null,
+  deferPrepareUntilStable = false,
   sleep = (delayMs) => new Promise(resolve => setTimeout(resolve, delayMs)),
   electronAPI = window.electronAPI,
   onTiming = null,
@@ -276,7 +278,15 @@ export async function prepareWechatOrderImport({
   const retryDelays = Array.isArray(retryDelaysMs)
     ? retryDelaysMs.filter(delayMs => Number.isFinite(Number(delayMs)) && Number(delayMs) >= 0)
     : [];
+  const hasKnownSnapshot = knownMessageFingerprints !== null
+    && knownMessageFingerprints !== undefined;
+  const knownFingerprints = new Set(
+    hasKnownSnapshot
+      ? Array.from(knownMessageFingerprints).map(value => String(value || '')).filter(Boolean)
+      : []
+  );
   let incoming = [];
+  let relevantIncoming = [];
   let pending = [];
   let prepared = null;
   let nextBinding = normalizedBinding;
@@ -326,27 +336,43 @@ export async function prepareWechatOrderImport({
     emitTiming(onTiming, 'message-filter', filterStartedAt, {
       attempt: attempt + 1,
       incomingCount: incoming.length,
+      knownCount: hasKnownSnapshot
+        ? incoming.filter(message => knownFingerprints.has(String(message.id))).length
+        : 0,
     });
     if (!incoming.length) continue;
 
-    const incomingSignature = incoming.map(message => message.id).sort().join('|');
+    relevantIncoming = hasKnownSnapshot
+      ? incoming.filter(message => !knownFingerprints.has(String(message.id)))
+      : incoming;
+    if (!relevantIncoming.length) {
+      pending = [];
+      continue;
+    }
+    // The selected-task refresh already owns the prior message snapshot. Wait
+    // for the final Reader verification before asking the server about only
+    // the newly observed IDs. This preserves the two local completeness reads
+    // while removing duplicate network calls and attachment downloads.
+    if (deferPrepareUntilStable && !hasFixedNow && attempt < retryDelays.length) continue;
+
+    const incomingSignature = relevantIncoming.map(message => message.id).sort().join('|');
     if (incomingSignature !== preparedIncomingSignature) {
       prepared = unwrapWechatServer(await timed(
         onTiming,
         'server-prepare-messages',
         () => orderApi.prepareMessages(
           id,
-          incoming.map((message) => ({
+          relevantIncoming.map((message) => ({
             messageFingerprint: message.id,
             messageTimeMs: message.messageTimeMs,
           }))
         ),
-        { attempt: attempt + 1, incomingCount: incoming.length }
+        { attempt: attempt + 1, incomingCount: relevantIncoming.length }
       ));
       preparedIncomingSignature = incomingSignature;
     }
     const pendingIds = new Set(prepared?.pendingMessageFingerprints || []);
-    pending = incoming.filter((message) => pendingIds.has(message.id));
+    pending = relevantIncoming.filter((message) => pendingIds.has(message.id));
     nextBinding = normalizeWechatBinding(prepared?.binding || nextBinding);
     // 微信窗口被点开后，客户端可能先写入一部分旧消息，再延迟写入最新消息。
     // 生产读取必须等候待处理消息连续两次保持稳定，避免只生成半张订单。
@@ -368,10 +394,20 @@ export async function prepareWechatOrderImport({
     };
   }
 
+  if (hasKnownSnapshot && !relevantIncoming.length) {
+    return {
+      status: 'current',
+      message: '当前会话已经是最新内容',
+      binding: normalizedBinding,
+      pendingCount: 0,
+      skippedCount: 0,
+    };
+  }
+
   if (!pending.length) {
     const processedCount = Number(prepared?.processedCount);
     const allMessagesProcessed = Number.isFinite(processedCount)
-      && processedCount >= incoming.length;
+      && processedCount >= relevantIncoming.length;
     return {
       status: allMessagesProcessed ? 'duplicate' : 'conflict',
       message: allMessagesProcessed
@@ -379,11 +415,11 @@ export async function prepareWechatOrderImport({
         : '读取到了微信消息，但后台没有返回完整的处理状态，请重新关联客户后重试',
       binding: nextBinding,
       pendingCount: 0,
-      skippedCount: incoming.length,
+      skippedCount: relevantIncoming.length,
     };
   }
 
-  const skippedCount = incoming.length - pending.length;
+  const skippedCount = relevantIncoming.length - pending.length;
   const pendingImages = pending.filter(message => message.type === 'image');
   let images = [];
   if (pendingImages.length) {
