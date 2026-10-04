@@ -588,8 +588,8 @@
                 </span>
                 <div>
                   <small>微信好友转订单</small>
-                  <h3 id="wechat-import-action-title">{{ selectedImportBusy ? '正在识别当前微信好友' : (actionStatus === 'success' ? '已加入转订单' : '无法转订单') }}</h3>
-                  <p id="wechat-import-action-message">{{ selectedImportBusy ? '正在查找关联客户并读取订单消息…' : actionMessage }}</p>
+                  <h3 id="wechat-import-action-title">{{ selectedImportBusy ? selectedImportBusyTitle : (actionStatus === 'success' ? '已加入转订单' : '无法转订单') }}</h3>
+                  <p id="wechat-import-action-message">{{ selectedImportBusy ? selectedImportBusyMessage : actionMessage }}</p>
                 </div>
                 <button v-if="!selectedImportBusy" type="button" @click="$emit('dismiss-action-message')">知道了</button>
               </section>
@@ -731,6 +731,7 @@ const selectedMatchCustomerWarning = computed(() => {
   return `该客户当前关联“${current}”，确认后将改为“${props.unmatchedConversationTitle}”。`;
 });
 const launcherCurrentTitleText = computed(() => {
+  if (props.selectedImportBusy && props.launcherCurrentTitle) return `正在读取“${props.launcherCurrentTitle}”…`;
   if (props.selectedImportBusy) return '正在读取当前微信…';
   if (!props.launcherCurrentTitle) return '读取当前微信';
   return `读取“${props.launcherCurrentTitle}”`;
@@ -742,6 +743,16 @@ const launcherCurrentDescription = computed(() => (
 ));
 const launcherCurrentActionText = computed(() => (
   props.selectedImportBusy ? '正在读取…' : '读取当前聊天订单'
+));
+const selectedImportBusyTitle = computed(() => (
+  props.launcherCurrentTitle
+    ? `正在识别“${props.launcherCurrentTitle}”`
+    : '正在识别当前微信'
+));
+const selectedImportBusyMessage = computed(() => (
+  props.launcherCurrentTitle
+    ? `正在查找“${props.launcherCurrentTitle}”关联的客户并读取订单消息…`
+    : '正在获取微信名称并查找关联客户…'
 ));
 watch(
   () => [props.customerMatchOpen, props.unmatchedConversationTitle],
