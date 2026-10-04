@@ -81,6 +81,21 @@ function resolveWindowsAutomationScript(options = {}) {
   return script;
 }
 
+function resolveWindowsCurrentConversationScript(options = {}) {
+  const existsSync = options.existsSync || fs.existsSync;
+  const moduleDir = options.moduleDir || __dirname;
+  const script = path.join(
+    moduleDir,
+    'ui-automation',
+    'windows',
+    'current-conversation.ps1'
+  );
+  if (!existsSync(script)) {
+    throw new Error('安装包内未找到 Windows 当前微信会话识别组件');
+  }
+  return script;
+}
+
 function resolveMacPythonCommand(options = {}) {
   const env = options.env || process.env;
   const configured = String(options.python || env.JCYX_WECHAT_UI_PYTHON || '').trim();
@@ -430,6 +445,25 @@ function createWechatUiAutomationService(options = {}) {
     });
   }
 
+  function runWindowsCurrentConversation(script, legacyAllowedTitles = []) {
+    const powershell = options.powershell || process.env.JCYX_WECHAT_UI_POWERSHELL || 'powershell.exe';
+    const args = [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      script,
+    ];
+    if (artifactRoot) args.push('-ArtifactRoot', artifactRoot);
+    return runProcess(powershell, args, path.dirname(script), legacyAllowedTitles, {
+      parseOutput: parseCurrentConversationOutput,
+      missingRuntimeCode: 'POWERSHELL_NOT_FOUND',
+      missingRuntimeMessage: '未找到 Windows PowerShell，无法识别当前微信会话',
+    });
+  }
+
   return Object.freeze({
     async inspectUnread(input) {
       if (platform !== 'darwin') {
@@ -471,7 +505,7 @@ function createWechatUiAutomationService(options = {}) {
       }
     },
     async currentConversation(input) {
-      if (platform !== 'darwin') {
+      if (platform !== 'darwin' && platform !== 'win32') {
         return {
           ok: false,
           error: { code: 'UNSUPPORTED_PLATFORM', message: '当前系统暂不支持识别所选微信好友' },
@@ -482,6 +516,12 @@ function createWechatUiAutomationService(options = {}) {
       }
       try {
         const legacyAllowedTitles = normalizeCurrentConversationInput(input);
+        if (platform === 'win32') {
+          return await runWindowsCurrentConversation(
+            resolveWindowsCurrentConversationScript(options),
+            legacyAllowedTitles
+          );
+        }
         if (typeof options.ensureMacAccessibility === 'function'
             && !options.ensureMacAccessibility()) {
           return {
@@ -627,4 +667,5 @@ module.exports = {
   resolveMacAutomationRoot,
   resolveMacPythonCommand,
   resolveWindowsAutomationScript,
+  resolveWindowsCurrentConversationScript,
 };

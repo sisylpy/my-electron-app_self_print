@@ -51,7 +51,43 @@ async function verifyUnrestrictedCurrentConversation() {
   assert.equal(spawnedArgs.includes('--include-title'), false);
 }
 
-verifyUnrestrictedCurrentConversation()
+async function verifyWindowsCurrentConversation() {
+  let spawnedCommand = '';
+  let spawnedArgs = [];
+  const service = createWechatUiAutomationService({
+    platform: 'win32',
+    moduleDir: path.join(__dirname, '..', 'src', 'wechat'),
+    spawnProcess: (command, args) => {
+      spawnedCommand = command;
+      spawnedArgs = args;
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => {};
+      process.nextTick(() => {
+        child.stdout.end(JSON.stringify({
+          code: 'SUCCESS',
+          conversationTitle: '李沛谊',
+          metrics: { platform: 'win32', method: 'uia' },
+        }));
+        child.stderr.end();
+        child.emit('close', 0);
+      });
+      return child;
+    },
+  });
+
+  const result = await service.currentConversation();
+  assert.equal(result.ok, true);
+  assert.equal(result.result.title, '李沛谊');
+  assert.equal(spawnedCommand, 'powershell.exe');
+  assert.ok(spawnedArgs.some(arg => String(arg).endsWith('current-conversation.ps1')));
+}
+
+Promise.all([
+  verifyUnrestrictedCurrentConversation(),
+  verifyWindowsCurrentConversation(),
+])
   .then(() => console.log('WeChat current conversation smoke passed'))
   .catch((error) => {
     console.error(error);

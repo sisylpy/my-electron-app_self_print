@@ -14,6 +14,7 @@ const {
   resolveMacAutomationRoot,
   resolveMacPythonCommand,
   resolveWindowsAutomationScript,
+  resolveWindowsCurrentConversationScript,
 } = require('../src/wechat/ui-automation-service');
 
 assert.strictEqual(normalizeConversationTitle({ title: ' 金调料 ' }), '金调料');
@@ -137,6 +138,20 @@ assert.strictEqual(
   expectedWindowsScript
 );
 
+const expectedWindowsCurrentConversationScript = path.join(
+  windowsModuleDir,
+  'ui-automation',
+  'windows',
+  'current-conversation.ps1'
+);
+assert.strictEqual(
+  resolveWindowsCurrentConversationScript({
+    moduleDir: windowsModuleDir,
+    existsSync: (candidate) => candidate === expectedWindowsCurrentConversationScript,
+  }),
+  expectedWindowsCurrentConversationScript
+);
+
 const windowsScript = fs.readFileSync(
   path.join(
     __dirname,
@@ -160,6 +175,24 @@ assert.match(windowsScript, /WEIXIN_MAIN_WINDOW_NOT_READY/);
 assert.match(windowsScript, /ShowWindow/);
 assert.match(windowsScript, /'NO_UNREAD'/);
 assert.match(windowsScript, /if \(-not \$badgeRows\.Count\)/);
+
+const windowsCurrentConversationScript = fs.readFileSync(
+  path.join(
+    __dirname,
+    '..',
+    'src',
+    'wechat',
+    'ui-automation',
+    'windows',
+    'current-conversation.ps1'
+  ),
+  'utf8'
+);
+assert.match(windowsCurrentConversationScript, /AutomationElement/);
+assert.match(windowsCurrentConversationScript, /OcrEngine/);
+assert.match(windowsCurrentConversationScript, /conversationTitle/);
+assert.match(windowsCurrentConversationScript, /'SUCCESS'/);
+assert.match(windowsCurrentConversationScript, /'TARGET_NOT_FOUND'/);
 
 const bundledMacScript = fs.readFileSync(
   path.join(
