@@ -12,6 +12,7 @@ _FOCUS_RESULT_SEPARATOR = "\t"
 class AccessibilityFocusResult:
     matched: bool
     already_open: bool
+    retried: bool
     header: str
 
 
@@ -89,6 +90,23 @@ def focus_conversation_with_accessibility(target: str) -> AccessibilityFocusResu
             "return name of chatHeader as text",
             "end tell",
             "end readHeader",
+            "on searchAndRead(expectedTitle, searchDelay, openDelay)",
+            "set the clipboard to expectedTitle",
+            'tell application "System Events" to tell process "WeChat"',
+            'set rootSplit to UI element 1 of UI element 7 of UI element 1 of window "微信"',
+            "set searchField to UI element 2 of UI element 2 of rootSplit",
+            "set focused of searchField to true",
+            'keystroke "a" using command down',
+            "delay 0.05",
+            'keystroke "v" using command down',
+            "delay searchDelay",
+            "key code 36",
+            "delay openDelay",
+            "key code 53",
+            "end tell",
+            "delay 0.15",
+            "return my readHeader()",
+            "end searchAndRead",
             "on run argv",
             "set expectedTitle to item 1 of argv",
             'tell application "WeChat" to reopen',
@@ -106,22 +124,19 @@ def focus_conversation_with_accessibility(target: str) -> AccessibilityFocusResu
             "if my headerMatches(currentHeader, expectedTitle) then",
             'return "ALREADY_OPEN" & tab & currentHeader',
             "end if",
-            "set the clipboard to expectedTitle",
-            'tell application "System Events" to tell process "WeChat"',
-            'set rootSplit to UI element 1 of UI element 7 of UI element 1 of window "微信"',
-            "set searchField to UI element 2 of UI element 2 of rootSplit",
-            "set focused of searchField to true",
-            'keystroke "a" using command down',
-            "delay 0.05",
-            'keystroke "v" using command down',
-            "delay 0.45",
-            "key code 36",
-            "delay 0.75",
-            "key code 53",
-            "end tell",
-            "delay 0.15",
-            "set openedHeader to my readHeader()",
+            "set openedHeader to my searchAndRead(expectedTitle, 0.45, 0.75)",
+            "if my headerMatches(openedHeader, expectedTitle) then",
             'return "OPENED" & tab & openedHeader',
+            "end if",
+            # A busy WeChat window can render the exact result after the first
+            # Return was already sent. Retry only on a verified mismatch, with
+            # longer waits; successful customers keep the original fast path.
+            "delay 0.25",
+            "set retryHeader to my searchAndRead(expectedTitle, 0.9, 1.0)",
+            "if my headerMatches(retryHeader, expectedTitle) then",
+            'return "OPENED_RETRY" & tab & retryHeader',
+            "end if",
+            'return "MISMATCH_RETRY" & tab & retryHeader',
             "end run",
         ],
         expected,
@@ -132,5 +147,6 @@ def focus_conversation_with_accessibility(target: str) -> AccessibilityFocusResu
     return AccessibilityFocusResult(
         header_matches_target(opened_header, expected),
         state == "ALREADY_OPEN",
+        state in {"OPENED_RETRY", "MISMATCH_RETRY"},
         opened_header,
     )

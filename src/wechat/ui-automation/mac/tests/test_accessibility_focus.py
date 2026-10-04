@@ -36,9 +36,13 @@ class AccessibilityFocusTest(unittest.TestCase):
 
         self.assertTrue(result.matched)
         self.assertFalse(result.already_open)
+        self.assertFalse(result.retried)
         self.assertEqual(result.header, "调料群 (3)")
         run_script.assert_called_once()
         self.assertEqual(run_script.call_args.args[-1], "调料群")
+        script_lines = run_script.call_args.args[0]
+        self.assertIn('return "OPENED_RETRY" & tab & retryHeader', script_lines)
+        self.assertIn("set retryHeader to my searchAndRead(expectedTitle, 0.9, 1.0)", script_lines)
 
     @patch("automation.accessibility_focus._osascript")
     def test_focus_preserves_already_open_result(self, run_script) -> None:
@@ -48,6 +52,17 @@ class AccessibilityFocusTest(unittest.TestCase):
 
         self.assertTrue(result.matched)
         self.assertTrue(result.already_open)
+        self.assertFalse(result.retried)
+
+    @patch("automation.accessibility_focus._osascript")
+    def test_focus_reports_successful_retry(self, run_script) -> None:
+        run_script.return_value = "OPENED_RETRY\tFangfang"
+
+        result = focus_conversation_with_accessibility("Fangfang")
+
+        self.assertTrue(result.matched)
+        self.assertFalse(result.already_open)
+        self.assertTrue(result.retried)
 
 
 if __name__ == "__main__":

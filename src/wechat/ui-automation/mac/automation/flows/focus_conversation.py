@@ -142,7 +142,11 @@ class FocusConversationFlow:
                     self.details.append(
                         "ACCESSIBILITY_CURRENT_CONVERSATION"
                         if fast_focus.already_open
-                        else "ACCESSIBILITY_SEARCH_VERIFIED"
+                        else (
+                            "ACCESSIBILITY_SEARCH_RETRY_VERIFIED"
+                            if fast_focus.retried
+                            else "ACCESSIBILITY_SEARCH_VERIFIED"
+                        )
                     )
                     return self._finish(
                         ResultCode.SUCCESS,
@@ -151,7 +155,8 @@ class FocusConversationFlow:
                         else f"已搜索并打开微信会话“{self.target}”",
                     )
                 self.details.append(
-                    f"ACCESSIBILITY_SEARCH_MISMATCH={fast_focus.header}"
+                    f"ACCESSIBILITY_SEARCH_{'RETRY_' if fast_focus.retried else ''}"
+                    f"MISMATCH={fast_focus.header}"
                 )
                 return self._finish(
                     ResultCode.TARGET_NOT_FOUND,
