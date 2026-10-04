@@ -291,6 +291,14 @@ function createWechatWorkspaceWindowService(options = {}) {
   function restoreMainWindow(saved) {
     const window = getMainWindow();
     if (!window || window.isDestroyed()) return;
+    // The native macOS close button can arrive while Electron is transitioning
+    // the workbench out of its docked state. Make the recovery explicit instead
+    // of relying on `show()` to also undo a minimized window.
+    if (typeof window.isMinimized === 'function'
+        && window.isMinimized()
+        && typeof window.restore === 'function') {
+      window.restore();
+    }
     if (saved.bounds) window.setBounds(saved.bounds);
     if (saved.maximized) window.maximize();
     if (saved.fullScreen) window.setFullScreen(true);
@@ -365,6 +373,9 @@ function createWechatWorkspaceWindowService(options = {}) {
 
   return Object.freeze({
     captureSelectedConversationAvatar,
+    isOpen() {
+      return Boolean(session);
+    },
     focus() {
       const window = getMainWindow();
       if (!window || window.isDestroyed()) {
@@ -388,6 +399,10 @@ function createWechatWorkspaceWindowService(options = {}) {
       const display = screen.getDisplayMatching(saved.bounds);
       const layout = computeWorkspaceLayout(display?.workArea || display?.bounds);
       if (layout.mode !== 'docked') {
+        // Even without enough room to dock WeChat, the order launcher is still
+        // an active workspace. Track it so the native red close button returns
+        // to the app home page instead of destroying the BrowserWindow.
+        session = { saved, wechatBounds: null, layout };
         return {
           ok: true,
           result: { ...layout, message: '当前屏幕空间不足，微信保持为独立窗口' },

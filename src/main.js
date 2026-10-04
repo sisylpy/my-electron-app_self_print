@@ -108,6 +108,7 @@ let orderSessionGateway = null;
 let wechatReaderService = null;
 let wechatUiAutomationService = null;
 let wechatWorkspaceWindowService = null;
+let wechatWorkspaceNativeCloseInProgress = false;
 let quitAfterReaderShutdown = false;
 let beforeQuitReaderPromise = null;
 const selectedFolderCapabilities = new Set();
@@ -1366,6 +1367,33 @@ async function createWindow() {
     }
   });
   const mainWindowWebContentsId = mainWindow.webContents.id;
+  mainWindow.on('close', (event) => {
+    const service = wechatWorkspaceWindowService;
+    // While the side-by-side WeChat workspace is open, the red macOS close
+    // button means "leave this workspace", not "destroy the desktop app".
+    // Keep the BrowserWindow alive, restore its original layout and tell the
+    // renderer to return to the ordinary order home page.
+    if (quitAfterReaderShutdown || !service?.isOpen?.()) return;
+    event.preventDefault();
+    if (wechatWorkspaceNativeCloseInProgress) return;
+    wechatWorkspaceNativeCloseInProgress = true;
+    if (!mainWindow.webContents.isDestroyed()) {
+      mainWindow.webContents.send('wechat-ui-workspace-close-requested');
+    }
+    void service.close()
+      .catch((error) => {
+        appLogger.append('error', 'wechat-ui', 'native workspace close recovery failed', {
+          message: error?.message,
+        });
+      })
+      .finally(() => {
+        wechatWorkspaceNativeCloseInProgress = false;
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      });
+  });
   mainWindow.on('closed', () => {
     void shutdownWechatWorkspaceWindow();
     clearMcpPrintDeliveriesForWebContents(mainWindowWebContentsId);

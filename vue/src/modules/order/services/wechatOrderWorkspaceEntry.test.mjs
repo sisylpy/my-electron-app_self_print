@@ -33,7 +33,11 @@ const closeEntry = workbench.match(
   /async function closeWechatImportModal\(\) \{([\s\S]*?)\n\}\n\nonBeforeUnmount/,
 )?.[1] || '';
 assert.match(closeEntry, /const shouldCloseWechatWorkspace = wechatWorkspaceReady\.value/);
+assert.match(closeEntry, /resetWechatImportModalState\(\)/);
 assert.match(closeEntry, /if \(!shouldCloseWechatWorkspace\) return/);
+assert.match(workbench, /onWorkspaceCloseRequested/);
+assert.match(workbench, /removeWechatWorkspaceCloseRequestedListener/);
+assert.match(workbench, /function resetWechatImportModalState\(\)/);
 
 const unreadAction = workbench.match(
   /async function readUnreadWechatOrders\(\) \{([\s\S]*?)\n\}\n\nasync function scanAllBoundWechatOrders/,
@@ -224,7 +228,14 @@ assert.match(
   /startConversationWatcher\(\);\s*await observeConversationTitle\(conversationWatcherGeneration\);\s*window\.show\(\);\s*window\.focus\(\);/,
 );
 assert.match(workspaceWindowService, /focus\(\) \{[\s\S]*?window\.show\(\);\s*window\.focus\(\);/);
+assert.match(workspaceWindowService, /isOpen\(\) \{\s*return Boolean\(session\);/);
+assert.match(workspaceWindowService, /window\.isMinimized\(\)[\s\S]*?window\.restore\(\)/);
+assert.match(workspaceOpenAction, /session = \{ saved, wechatBounds: null, layout \}/);
 assert.match(mainProcess, /ipcMain\.handle\('wechat-ui-workspace-focus'/);
 assert.match(preload, /focusWorkspace: \(\) => ipcRenderer\.invoke\('wechat-ui-workspace-focus'\)/);
+assert.match(preload, /onWorkspaceCloseRequested:[\s\S]*?wechat-ui-workspace-close-requested/);
+assert.match(mainProcess, /mainWindow\.on\('close',[\s\S]*?event\.preventDefault\(\)/);
+assert.match(mainProcess, /wechat-ui-workspace-close-requested/);
+assert.match(mainProcess, /service\.close\(\)/);
 
 console.log('WeChat order workspace entry passed');

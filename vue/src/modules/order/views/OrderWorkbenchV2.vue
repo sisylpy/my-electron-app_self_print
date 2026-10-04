@@ -1319,9 +1319,8 @@ const removeWechatConversationListener = window.electronAPI?.wechatUi
     void syncWechatSelectionFromDesktop(payload);
   });
 
-async function closeWechatImportModal() {
+function resetWechatImportModalState() {
   cancelWechatGroupMode();
-  const shouldCloseWechatWorkspace = wechatWorkspaceReady.value;
   wechatImportModalOpen.value = false;
   wechatScanReportOpen.value = false;
   wechatWorkspaceReady.value = false;
@@ -1331,6 +1330,19 @@ async function closeWechatImportModal() {
   wechatScanMessage.value = '';
   dismissWechatSelectedAction();
   activeView.value = 'overview';
+}
+
+const removeWechatWorkspaceCloseRequestedListener = window.electronAPI?.wechatUi
+  ?.onWorkspaceCloseRequested?.(() => {
+    // The main process has intercepted the native red close button and is
+    // already restoring the BrowserWindow. Only reset page state here; calling
+    // closeWorkspace again would race the same recovery a second time.
+    resetWechatImportModalState();
+  });
+
+async function closeWechatImportModal() {
+  const shouldCloseWechatWorkspace = wechatWorkspaceReady.value;
+  resetWechatImportModalState();
   if (!shouldCloseWechatWorkspace) return;
   try {
     await window.electronAPI?.wechatUi?.closeWorkspace?.();
@@ -1342,6 +1354,7 @@ async function closeWechatImportModal() {
 onBeforeUnmount(() => {
   cancelWechatGroupMode();
   removeWechatConversationListener?.();
+  removeWechatWorkspaceCloseRequestedListener?.();
   void window.electronAPI?.wechatUi?.closeWorkspace?.();
 });
 
