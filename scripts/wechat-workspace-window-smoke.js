@@ -24,6 +24,21 @@ assert.strictEqual(layout.app.height, 1055);
 assert.strictEqual(layout.wechat.width, 806);
 assert.ok(layout.app.width >= 760);
 assert.ok(layout.app.width > layout.wechat.width);
+const windowsLayout = computeWorkspaceLayout(
+  { x: 0, y: 0, width: 1366, height: 768 },
+  { platform: 'win32' }
+);
+assert.strictEqual(windowsLayout.mode, 'docked');
+assert.strictEqual(windowsLayout.wechat.width, 656);
+assert.strictEqual(windowsLayout.app.width, 702);
+assert.strictEqual(windowsLayout.wechat.width + 8 + windowsLayout.app.width, 1366);
+assert.strictEqual(
+  computeWorkspaceLayout(
+    { x: 0, y: 0, width: 1280, height: 720 },
+    { platform: 'win32' }
+  ).mode,
+  'app-only'
+);
 assert.strictEqual(
   computeWorkspaceLayout({ x: 0, y: 0, width: 1100, height: 700 }).mode,
   'app-only'
@@ -114,12 +129,16 @@ async function verifyDockAndRestore() {
     'GrainPrint must be placed before WeChat is docked and raised'
   );
   assert.ok(calls.includes('showInactive'));
-  assert.strictEqual(calls.includes('show'), false);
-  assert.strictEqual(calls.includes('focus'), false, 'opening the workspace must leave WeChat in front');
+  assert.strictEqual(calls.includes('show'), true);
+  assert.strictEqual(
+    calls.includes('focus'),
+    true,
+    'opening the workspace must return input focus to the workbench'
+  );
 
   const closed = await service.close();
   assert.strictEqual(closed.ok, true);
-  assert.strictEqual(execCalls.length, 2);
+  assert.strictEqual(execCalls.length, 3);
   assert.deepStrictEqual(bounds, { x: 40, y: 60, width: 1500, height: 900 });
   assert.strictEqual(maximized, true);
 }

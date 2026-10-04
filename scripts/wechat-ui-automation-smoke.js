@@ -174,7 +174,7 @@ assert.match(windowsScript, /'WeChatAppEx'/);
 assert.match(windowsScript, /'WeChat'/);
 assert.doesNotMatch(windowsScript, /Chrome_WidgetWin_0/);
 assert.match(windowsScript, /Invoke-WeixinToggleShortcut/);
-assert.match(windowsScript, /Hide-WeixinMainWindow/);
+assert.doesNotMatch(windowsScript, /Hide-WeixinMainWindow/);
 assert.match(windowsScript, /WEIXIN_LOGIN_REQUIRED/);
 assert.match(windowsScript, /WEIXIN_MAIN_WINDOW_NOT_READY/);
 assert.match(windowsScript, /ShowWindow/);
@@ -182,6 +182,7 @@ assert.match(windowsScript, /'NO_UNREAD'/);
 assert.match(windowsScript, /if \(-not \$badgeRows\.Count\)/);
 assert.match(windowsScript, /\$width -lt 480/);
 assert.match(windowsScript, /\$xStart = \[math\]::Max\(0, 106\)/);
+assert.doesNotMatch(windowsScript, /ShowWindow\(\$remainingWindow\.Handle, 6\)/);
 
 const windowsCurrentConversationScript = fs.readFileSync(
   path.join(
@@ -203,6 +204,8 @@ assert.strictEqual(
 assert.match(windowsCurrentConversationScript, /AutomationElement/);
 assert.match(windowsCurrentConversationScript, /OcrEngine/);
 assert.match(windowsCurrentConversationScript, /Console\]::OutputEncoding/);
+assert.match(windowsCurrentConversationScript, /\$rect\.X -lt 400/);
+assert.match(windowsCurrentConversationScript, /\$code -eq 'AUTOMATION_FAILED'/);
 assert.match(windowsCurrentConversationScript, /conversationTitle/);
 assert.match(windowsCurrentConversationScript, /'SUCCESS'/);
 assert.match(windowsCurrentConversationScript, /'TARGET_NOT_FOUND'/);

@@ -1,23 +1,31 @@
 const path = require('path');
 
 const MIN_DOCK_WIDTH = 1280;
+const MIN_WINDOWS_DOCK_WIDTH = 1340;
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
 }
 
-function computeWorkspaceLayout(workArea) {
+function computeWorkspaceLayout(workArea, options = {}) {
   const area = {
     x: Math.round(Number(workArea?.x) || 0),
     y: Math.round(Number(workArea?.y) || 0),
     width: Math.round(Number(workArea?.width) || 0),
     height: Math.round(Number(workArea?.height) || 0),
   };
-  if (area.width < MIN_DOCK_WIDTH || area.height < 680) {
+  const windowsLayout = options.platform === 'win32';
+  const minimumDockWidth = windowsLayout ? MIN_WINDOWS_DOCK_WIDTH : MIN_DOCK_WIDTH;
+  if (area.width < minimumDockWidth || area.height < 680) {
     return { mode: 'app-only', workArea: area };
   }
   const gap = 8;
-  const wechatWidth = clamp(Math.round(area.width * 0.42), 540, area.width - 760);
+  // Windows Weixin collapses its conversation list sooner than macOS WeChat.
+  // Give it enough room for the navigation rail, conversation list and chat
+  // pane on the common 1366px display, while keeping the order workbench usable.
+  const wechatWidth = windowsLayout
+    ? clamp(Math.round(area.width * 0.48), 650, area.width - 680)
+    : clamp(Math.round(area.width * 0.42), 540, area.width - 760);
   return {
     mode: 'docked',
     workArea: area,
@@ -408,7 +416,10 @@ function createWechatWorkspaceWindowService(options = {}) {
         fullScreen: window.isFullScreen(),
       };
       const display = screen.getDisplayMatching(saved.bounds);
-      const layout = computeWorkspaceLayout(display?.workArea || display?.bounds);
+      const layout = computeWorkspaceLayout(
+        display?.workArea || display?.bounds,
+        { platform }
+      );
       if (layout.mode !== 'docked') {
         // Even without enough room to dock WeChat, the order launcher is still
         // an active workspace. Track it so the native red close button returns
@@ -475,6 +486,7 @@ function createWechatWorkspaceWindowService(options = {}) {
 
 module.exports = {
   MIN_DOCK_WIDTH,
+  MIN_WINDOWS_DOCK_WIDTH,
   computeWorkspaceLayout,
   createWechatWorkspaceWindowService,
   findSelectedConversationAvatarRect,

@@ -337,6 +337,9 @@ let wechatConversationFocusDepth = 0;
 let wechatReaderWarmupStarted = false;
 let wechatOrderTimingSequence = 0;
 let selectedWechatConversationRequestId = 0;
+let wechatConversationObservationRequestId = 0;
+let wechatConversationObservationRunning = false;
+let lastWechatConversationObservationAt = 0;
 const wechatConversationAvatars = new Map();
 const selectedWechatRetryDelaysMs = Object.freeze([650]);
 
@@ -909,6 +912,7 @@ async function focusWechatImportConversation(item) {
   wechatConversationSwitchingTitle.value = conversationTitle;
   try {
     const result = await focusApi(conversationTitle);
+    if (result?.error?.code === 'UNSUPPORTED_PLATFORM') return '';
     return result?.ok
       ? ''
       : result?.error?.message || '左侧微信未能自动切换到对应会话';
@@ -1324,6 +1328,49 @@ async function syncWechatSelectionFromDesktop(payload) {
   await showSelectedWechatConversation(title, avatarDataUrl);
 }
 
+async function refreshObservedWechatConversation({ force = false } = {}) {
+  if (!wechatImportModalOpen.value
+      || wechatScanBusy.value
+      || wechatSelectedImportBusy.value
+      || wechatCustomerMatchBusy.value
+      || wechatConversationFocusDepth > 0) return false;
+  const currentConversationApi = window.electronAPI?.wechatUi?.currentConversation;
+  if (!currentConversationApi || wechatConversationObservationRunning) return false;
+  const now = Date.now();
+  if (!force && now - lastWechatConversationObservationAt < 800) return false;
+
+  const requestId = ++wechatConversationObservationRequestId;
+  wechatConversationObservationRunning = true;
+  lastWechatConversationObservationAt = now;
+  try {
+    const selected = await currentConversationApi();
+    if (requestId !== wechatConversationObservationRequestId
+        || !wechatImportModalOpen.value
+        || !selected?.ok
+        || !selected.result?.title) return false;
+    await syncWechatSelectionFromDesktop(selected.result);
+    return true;
+  } catch {
+    // This is a presentation-only observation. Button 2 still performs a
+    // fresh authoritative lookup when the user explicitly starts the import.
+    return false;
+  } finally {
+    if (requestId === wechatConversationObservationRequestId) {
+      wechatConversationObservationRunning = false;
+    }
+  }
+}
+
+function handleWechatWorkspaceWindowFocus() {
+  if (!wechatWorkspaceReady.value || !wechatImportModalOpen.value) return;
+  // On Windows there is no passive Accessibility notification for a manual
+  // WeChat selection. Refresh once when the user returns to the workbench so
+  // button 2 immediately adopts the selected friend/group name and avatar.
+  void refreshObservedWechatConversation();
+}
+
+window.addEventListener('focus', handleWechatWorkspaceWindowFocus);
+
 async function handleWechatConversationChanged(payload) {
   const shouldRefocusWorkspace = payload?.selectionChanged === true
     && wechatImportModalOpen.value
@@ -1348,6 +1395,8 @@ const removeWechatConversationListener = window.electronAPI?.wechatUi
   });
 
 function resetWechatImportModalState() {
+  wechatConversationObservationRequestId += 1;
+  wechatConversationObservationRunning = false;
   cancelWechatGroupMode();
   wechatImportModalOpen.value = false;
   wechatScanReportOpen.value = false;
@@ -1383,6 +1432,7 @@ async function closeWechatImportModal() {
 
 onBeforeUnmount(() => {
   cancelWechatGroupMode();
+  window.removeEventListener('focus', handleWechatWorkspaceWindowFocus);
   removeWechatConversationListener?.();
   removeWechatWorkspaceCloseRequestedListener?.();
   void window.electronAPI?.wechatUi?.closeWorkspace?.();
@@ -1896,7 +1946,11 @@ async function handleWechatScan() {
   activeView.value = 'overview';
   wechatImportModalOpen.value = true;
   prewarmWechatReader();
-  await openWechatWorkspace();
+  if (await openWechatWorkspace()) {
+    // Show the choice page first; name/avatar discovery is deliberately
+    // background-only and must never delay or auto-trigger button 2.
+    void refreshObservedWechatConversation({ force: true });
+  }
 }
 
 async function readUnreadWechatOrders() {

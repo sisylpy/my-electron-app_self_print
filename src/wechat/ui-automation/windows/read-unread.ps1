@@ -142,24 +142,6 @@ function Invoke-WeixinToggleShortcut {
   [GrainPrintWeixinWin32]::keybd_event(0x11, 0, 0x0002, [UIntPtr]::Zero)
 }
 
-function Hide-WeixinMainWindow($window) {
-  if ($null -eq $window) { return }
-  try {
-    # Keep Weixin logged in and running. The global shortcut hides the chat
-    # window back to the notification area and returns the user to GrainPrint.
-    Invoke-WeixinToggleShortcut
-    Start-Sleep -Milliseconds 400
-    $remainingWindow = Get-WeixinWindow
-    if ($null -ne $remainingWindow) {
-      # Fallback for customized/disabled Weixin shortcuts: minimize the
-      # verified main window instead of terminating the client process.
-      [void][GrainPrintWeixinWin32]::ShowWindow($remainingWindow.Handle, 6)
-    }
-  } catch {
-    [void][GrainPrintWeixinWin32]::ShowWindow($window.Handle, 6)
-  }
-}
-
 function Get-WindowBitmap($window) {
   $bitmap = New-Object System.Drawing.Bitmap $window.Width, $window.Height
   $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
@@ -263,7 +245,6 @@ try {
 
   $openedCount = 0
   if (-not $badgeRows.Count) {
-    Hide-WeixinMainWindow $window
     Write-Result 'NO_UNREAD' 'No unread Weixin conversations were found.' 0 0
     exit 0
   }
@@ -279,11 +260,9 @@ try {
 
   $iterations = $badgeRows.Count
   $code = if ($badgeRows.Count -ge $MaxIterations) { 'SCAN_LIMIT_REACHED' } else { 'SUCCESS' }
-  Hide-WeixinMainWindow $window
   Write-Result $code '' $openedCount $iterations
   exit 0
 } catch {
-  Hide-WeixinMainWindow $window
   Write-Result 'AUTOMATION_FAILED' 'Windows Weixin visible scan failed.' 0 0
   exit 1
 }

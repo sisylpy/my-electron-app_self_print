@@ -43,6 +43,24 @@ function title(value) {
   return String(value || '').trim();
 }
 
+function hasRealConversationActivity(conversation) {
+  const value = conversation?.lastMessageAt;
+  if (!value) return false;
+  return Number.isFinite(new Date(value).getTime());
+}
+
+function selectExactConversation(exactMatches) {
+  if (exactMatches.length === 1) return exactMatches[0];
+
+  // Weixin may retain an old contact row after the same person changes account
+  // or is added again.  A stale row has no session timestamp and cannot be the
+  // visible chat containing today's order.  Only resolve the duplicate when
+  // exactly one candidate has real conversation activity; two active chats
+  // remain ambiguous and must still be bound manually to prevent order mixups.
+  const activeMatches = exactMatches.filter(hasRealConversationActivity);
+  return activeMatches.length === 1 ? activeMatches[0] : null;
+}
+
 function addRow(index, key, row) {
   if (!key) return;
   if (!index.has(key)) index.set(key, []);
@@ -152,9 +170,9 @@ export async function ensureWechatCustomerBinding({
     && (item?.kind === 'direct' || item?.kind === 'group')
   ));
   if (!exactMatches.length) throw new Error(`微信中没有找到“${normalizedTitle}”`);
-  if (exactMatches.length > 1) throw new Error('微信中存在多个同名会话，请先在订单录入页手动绑定');
+  const conversation = selectExactConversation(exactMatches);
+  if (!conversation) throw new Error('微信中存在多个同名会话，请先在订单录入页手动绑定');
 
-  const conversation = exactMatches[0];
   const priorRow = (directory?.allRows || []).find(candidate => (
     candidate?.binding?.bound
     && candidate.binding.accountFingerprint === account.id

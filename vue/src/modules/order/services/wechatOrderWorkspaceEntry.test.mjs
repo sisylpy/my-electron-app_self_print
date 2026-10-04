@@ -27,7 +27,9 @@ assert.match(
   /await openActiveWechatImport\(\{ openWorkspace: true, focusConversation: false \}\)/,
 );
 assert.doesNotMatch(openEntry, /await openActiveWechatImport\(\);/);
-assert.doesNotMatch(openEntry, /loadBoundWechatCustomers|readUnread|currentConversation/);
+assert.doesNotMatch(openEntry, /loadBoundWechatCustomers|readUnread/);
+assert.match(openEntry, /void refreshObservedWechatConversation\(\{ force: true \}\)/);
+assert.doesNotMatch(openEntry, /await refreshObservedWechatConversation/);
 
 const closeEntry = workbench.match(
   /async function closeWechatImportModal\(\) \{([\s\S]*?)\n\}\n\nonBeforeUnmount/,
@@ -102,6 +104,10 @@ assert.match(modal, /开始全面检查/);
 assert.match(modal, /日常收单优先使用“读取未读订单”/);
 assert.match(modal, /wechat-import-modal__choice-visual/);
 assert.match(modal, /wechat-import-modal__launcher-tips/);
+assert.match(
+  modal,
+  /@media \(max-width: 760px\)[\s\S]*?wechat-import-modal__launcher-actions \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/,
+);
 assert.match(modal, /去跟客户匹配/);
 assert.match(modal, /关联并继续转订单/);
 assert.match(modal, /unmatchedConversationTitle/);
@@ -204,6 +210,8 @@ const desktopSelectionAction = workbench.match(
   /async function syncWechatSelectionFromDesktop\(payload\) \{([\s\S]*?)\n\}\n\nconst removeWechatConversationListener/,
 )?.[1] || '';
 assert.match(workbench, /onConversationChanged/);
+assert.match(workbench, /window\.addEventListener\('focus', handleWechatWorkspaceWindowFocus\)/);
+assert.match(workbench, /window\.removeEventListener\('focus', handleWechatWorkspaceWindowFocus\)/);
 assert.match(desktopSelectionAction, /observedWechatConversationTitle\.value = title/);
 assert.match(
   desktopSelectionAction,
@@ -215,6 +223,15 @@ assert.match(
   desktopSelectionAction,
   /await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: false \}\)/,
 );
+
+const observedConversationRefresh = workbench.match(
+  /async function refreshObservedWechatConversation\(\{ force = false \} = \{\}\) \{([\s\S]*?)\n\}\n\nfunction handleWechatWorkspaceWindowFocus/,
+)?.[1] || '';
+assert.match(observedConversationRefresh, /currentConversationApi\(\)/);
+assert.match(observedConversationRefresh, /selected\.result\?\.title/);
+assert.match(observedConversationRefresh, /await syncWechatSelectionFromDesktop\(selected\.result\)/);
+assert.match(observedConversationRefresh, /wechatConversationObservationRunning/);
+assert.match(observedConversationRefresh, /lastWechatConversationObservationAt < 800/);
 const desktopSelectionListener = workbench.match(
   /async function handleWechatConversationChanged\(payload\) \{([\s\S]*?)\n\}\n\nconst removeWechatConversationListener/,
 )?.[1] || '';
@@ -227,6 +244,7 @@ const focusConversationAction = workbench.match(
 )?.[1] || '';
 assert.match(focusConversationAction, /wechatConversationSwitching\.value = true/);
 assert.match(focusConversationAction, /await focusApi\(conversationTitle\)/);
+assert.match(focusConversationAction, /UNSUPPORTED_PLATFORM/);
 assert.match(focusConversationAction, /wechatConversationSwitching\.value = false/);
 assert.match(workbench, /selectedWechatTodayInbox = useTodayOrderInbox\(disUser\)/);
 assert.match(workbench, /#selected-conversation/);

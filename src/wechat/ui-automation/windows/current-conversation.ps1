@@ -39,7 +39,9 @@ function Write-Result(
     "METHOD=$method"
     "CANDIDATE_COUNT=$candidateCount"
   )
-  if ($diagnostic) { $details += "DIAGNOSTIC=$diagnostic" }
+  if ($code -eq 'AUTOMATION_FAILED' -and $diagnostic) {
+    $details += "DIAGNOSTIC=$diagnostic"
+  }
   [pscustomobject]@{
     code = $code
     message = $message
@@ -296,7 +298,11 @@ function Get-TitleFromWindowsOcr($window, [string]$screenshotPath) {
         $words = @($line.Words)
         if (-not $words.Count) { continue }
         $rect = $words[0].BoundingRect
-        if ($rect.Y -gt 150 -or $rect.X -lt 0) { continue }
+        # The scaled crop still contains Weixin's search field and the round
+        # add button on its left.  Windows OCR can read either icon as "O".
+        # The actual chat title begins to the right of that fixed header area
+        # in both compact and wide Weixin layouts.
+        if ($rect.Y -gt 150 -or $rect.X -lt 400) { continue }
         [void]$candidates.Add([pscustomobject]@{
           Title = $title
           Left = $rect.X
@@ -325,13 +331,13 @@ $temporaryScreenshot = ''
 try {
   $window = Show-WeixinWindow
   if ($null -eq $window) {
-    Write-Result -code 'WEIXIN_MAIN_WINDOW_NOT_READY' -message '没有找到已登录的微信窗口，请先打开微信聊天窗口' -conversationTitle '' -method 'none' -candidateCount 0 -elapsedMilliseconds $stopwatch.ElapsedMilliseconds
+    Write-Result -code 'WEIXIN_MAIN_WINDOW_NOT_READY' -message '没有找到已登录的微信窗口，请先打开微信聊天窗口' -conversationTitle '' -method 'none' -candidateCount 0 -elapsedMilliseconds ($stopwatch.ElapsedMilliseconds)
     exit 3
   }
 
   $automation = Get-TitleFromAutomation $window
   if ($automation.Title) {
-    Write-Result -code 'SUCCESS' -message "已识别当前微信会话“$($automation.Title)”" -conversationTitle $automation.Title -method 'uia' -candidateCount ([int]$automation.Count) -elapsedMilliseconds $stopwatch.ElapsedMilliseconds
+    Write-Result -code 'SUCCESS' -message "已识别当前微信会话“$($automation.Title)”" -conversationTitle ($automation.Title) -method 'uia' -candidateCount ([int]$automation.Count) -elapsedMilliseconds ($stopwatch.ElapsedMilliseconds)
     exit 0
   }
 
@@ -344,16 +350,16 @@ try {
   $temporaryScreenshot = Join-Path $artifactDirectory 'current-conversation-header.png'
   $ocr = Get-TitleFromWindowsOcr $window $temporaryScreenshot
   if ($ocr.Title) {
-    Write-Result -code 'SUCCESS' -message "已识别当前微信会话“$($ocr.Title)”" -conversationTitle $ocr.Title -method 'windows-ocr' -candidateCount ([int]$ocr.Count) -elapsedMilliseconds $stopwatch.ElapsedMilliseconds
+    Write-Result -code 'SUCCESS' -message "已识别当前微信会话“$($ocr.Title)”" -conversationTitle ($ocr.Title) -method 'windows-ocr' -candidateCount ([int]$ocr.Count) -elapsedMilliseconds ($stopwatch.ElapsedMilliseconds)
     exit 0
   }
 
   $candidateCount = [int]$automation.Count + [int]$ocr.Count
-  Write-Result -code 'TARGET_NOT_FOUND' -message '没有识别到当前微信好友名称，请确认微信聊天窗口已打开并显示聊天标题' -conversationTitle '' -method 'uia+windows-ocr' -candidateCount $candidateCount -elapsedMilliseconds $stopwatch.ElapsedMilliseconds
+  Write-Result -code 'TARGET_NOT_FOUND' -message '没有识别到当前微信好友名称，请确认微信聊天窗口已打开并显示聊天标题' -conversationTitle '' -method 'uia+windows-ocr' -candidateCount $candidateCount -elapsedMilliseconds ($stopwatch.ElapsedMilliseconds)
   exit 2
 } catch {
   $diagnostic = "$($_.Exception.GetType().FullName):$($_.Exception.Message)"
-  Write-Result -code 'AUTOMATION_FAILED' -message 'Windows 微信当前会话识别失败，请保持微信聊天窗口打开后重试' -conversationTitle '' -method 'failed' -candidateCount 0 -elapsedMilliseconds $stopwatch.ElapsedMilliseconds -diagnostic $diagnostic
+  Write-Result -code 'AUTOMATION_FAILED' -message 'Windows 微信当前会话识别失败，请保持微信聊天窗口打开后重试' -conversationTitle '' -method 'failed' -candidateCount 0 -elapsedMilliseconds ($stopwatch.ElapsedMilliseconds) -diagnostic $diagnostic
   exit 1
 } finally {
   if (-not $ArtifactRoot -and $temporaryScreenshot) {

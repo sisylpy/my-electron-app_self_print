@@ -2097,12 +2097,30 @@ function hideBrokenAvatar(event) {
   .wechat-import-modal.is-launcher-view .wechat-import-modal__brand { width: 44px; height: 44px; }
   .wechat-import-modal.is-launcher-view .wechat-import-modal__heading h2 { font-size: 20px; }
   .wechat-import-modal.is-launcher-view .wechat-import-modal__heading p { display: none; }
-  .wechat-import-modal__body.is-launcher .wechat-import-modal__workspace { padding: 16px; overflow-y: auto; }
-  .wechat-import-modal__launcher { width: 100%; min-height: 0; align-self: start; gap: 14px; padding: 0; }
-  .wechat-import-modal__launcher-actions { grid-template-columns: 1fr; }
-  .wechat-import-modal__launcher-actions > button { min-height: 480px; }
-  .wechat-import-modal__launcher-tips { grid-template-columns: 38px minmax(0, 1fr); }
-  .wechat-import-modal__launcher-tips ol { grid-column: 1 / -1; }
+  .wechat-import-modal__body.is-launcher .wechat-import-modal__workspace { padding: 10px; overflow: hidden; }
+  .wechat-import-modal__launcher { width: 100%; min-height: 0; align-self: stretch; gap: 8px; padding: 0; }
+  .wechat-import-modal__launcher-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .wechat-import-modal__launcher-actions > button {
+    min-height: 0;
+    grid-template-rows: auto minmax(110px, 1fr) auto auto;
+    gap: 8px;
+    padding: 12px 9px 10px;
+    border-radius: 16px;
+  }
+  .wechat-import-modal__choice-heading { grid-template-columns: 34px minmax(0, 1fr); gap: 7px; }
+  .wechat-import-modal__choice-number { width: 34px; height: 34px; border-radius: 10px; font-size: 18px; }
+  .wechat-import-modal__choice-heading > span { gap: 4px; }
+  .wechat-import-modal__choice-heading strong { font-size: 14px; }
+  .wechat-import-modal__choice-heading em { font-size: 9px; line-height: 1.35; }
+  .wechat-import-modal__choice-visual svg { max-height: 126px; }
+  .wechat-import-modal__choice-benefits { gap: 5px; padding: 9px; border-radius: 11px; font-size: 9px; }
+  .wechat-import-modal__choice-benefits > span { gap: 5px; }
+  .wechat-import-modal__choice-benefits i { width: 14px; height: 14px; font-size: 8px; }
+  .wechat-import-modal__choice-cta { min-height: 42px; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 5px; padding: 0 8px; border-radius: 11px; }
+  .wechat-import-modal__choice-cta svg { width: 18px; height: 18px; }
+  .wechat-import-modal__choice-cta b { font-size: 10px; }
+  .wechat-import-modal__choice-cta > span { font-size: 18px; }
+  .wechat-import-modal__launcher-tips { display: none; }
   .wechat-import-modal__automation-header { grid-template-columns: 48px minmax(0, 1fr); padding: 16px; }
   .wechat-import-modal__automation-brand { width: 48px; height: 48px; }
   .wechat-import-modal__automation-state { display: none; }

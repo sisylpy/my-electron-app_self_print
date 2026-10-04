@@ -104,6 +104,95 @@ assert.deepEqual(
 );
 assert.ok(associationTimings.every(event => Number.isFinite(event.durationMs)));
 
+let activeDuplicatePayload = null;
+const activeDuplicateBinding = await ensureWechatCustomerBinding({
+  row: {
+    customer: { nxDepartmentId: 20, nxDepartmentWechatDisplayName: '李沛谊' },
+    binding: { enabled: 0 },
+  },
+  selectedTitle: '李沛谊',
+  directory: buildWechatCustomerAssociationDirectory([]),
+  electronAPI: {
+    wechatReader: {
+      listAccounts: async () => ({
+        ok: true,
+        result: [{ id: 'fp:account123', isCurrentLogin: true, hasAccessMaterial: true }],
+      }),
+      findConversation: async () => ({
+        ok: true,
+        result: {
+          matches: [
+            {
+              id: 'fp:active-conversation',
+              displayName: '李沛谊',
+              kind: 'direct',
+              lastMessageAt: '2026-10-04T16:36:18+08:00',
+            },
+            {
+              id: 'fp:stale-contact',
+              displayName: '李沛谊',
+              kind: 'direct',
+              lastMessageAt: null,
+            },
+          ],
+        },
+      }),
+    },
+    customerWechatOrders: {
+      saveBinding: async (payload) => {
+        activeDuplicatePayload = payload;
+        return { ok: true, data: { ...payload, enabled: 1 } };
+      },
+    },
+  },
+});
+assert.equal(activeDuplicatePayload.conversationFingerprint, 'fp:active-conversation');
+assert.equal(activeDuplicateBinding.bound, true);
+
+await assert.rejects(
+  ensureWechatCustomerBinding({
+    row: {
+      customer: { nxDepartmentId: 21, nxDepartmentWechatDisplayName: '同名客户' },
+      binding: { enabled: 0 },
+    },
+    selectedTitle: '同名客户',
+    directory: buildWechatCustomerAssociationDirectory([]),
+    electronAPI: {
+      wechatReader: {
+        listAccounts: async () => ({
+          ok: true,
+          result: [{ id: 'fp:account123', isCurrentLogin: true, hasAccessMaterial: true }],
+        }),
+        findConversation: async () => ({
+          ok: true,
+          result: {
+            matches: [
+              {
+                id: 'fp:conversation-a',
+                displayName: '同名客户',
+                kind: 'direct',
+                lastMessageAt: '2026-10-04T10:00:00+08:00',
+              },
+              {
+                id: 'fp:conversation-b',
+                displayName: '同名客户',
+                kind: 'direct',
+                lastMessageAt: '2026-10-04T11:00:00+08:00',
+              },
+            ],
+          },
+        }),
+      },
+      customerWechatOrders: {
+        saveBinding: async () => {
+          throw new Error('ambiguous conversations must not be saved');
+        },
+      },
+    },
+  }),
+  /多个同名会话/
+);
+
 const groupRow = {
   customer: { nxDepartmentId: 18, nxDepartmentWechatDisplayName: '调料群' },
   binding: { enabled: 0 },
