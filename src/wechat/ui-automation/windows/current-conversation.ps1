@@ -1,9 +1,10 @@
-param(
+﻿param(
   [string]$ArtifactRoot = ''
 )
 
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+$OutputEncoding = [Console]::OutputEncoding
 
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName UIAutomationClient
@@ -31,16 +32,19 @@ function Write-Result(
   [string]$conversationTitle,
   [string]$method,
   [int]$candidateCount,
-  [long]$elapsedMilliseconds
+  [long]$elapsedMilliseconds,
+  [string]$diagnostic = ''
 ) {
+  $details = @(
+    "METHOD=$method"
+    "CANDIDATE_COUNT=$candidateCount"
+  )
+  if ($diagnostic) { $details += "DIAGNOSTIC=$diagnostic" }
   [pscustomobject]@{
     code = $code
     message = $message
     conversationTitle = $conversationTitle
-    details = @(
-      "METHOD=$method"
-      "CANDIDATE_COUNT=$candidateCount"
-    )
+    details = $details
     metrics = [pscustomobject]@{
       platform = 'win32'
       method = $method
@@ -72,7 +76,7 @@ function Get-WeixinWindow {
     $width = $rect.Right - $rect.Left
     $height = $rect.Bottom - $rect.Top
     if ($width -lt 480 -or $height -lt 360) { return $true }
-    $windows.Add([pscustomobject]@{
+    [void]$windows.Add([pscustomobject]@{
       Handle = $windowHandle
       Left = $rect.Left
       Top = $rect.Top
@@ -128,6 +132,9 @@ function Normalize-ConversationTitle([string]$value) {
   $title = [string]$value
   $title = $title.Trim()
   $title = $title -replace '[\r\n\t]+', ' '
+  # Windows OCR often inserts a space between every Chinese glyph even when
+  # the visible Weixin title has none (for example, "李 沛 谊").
+  $title = $title -replace '(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])', ''
   $title = $title -replace '\s*[（(]\d+[）)]\s*$', ''
   return $title.Trim()
 }
@@ -177,7 +184,7 @@ function Get-TitleFromAutomation($window) {
       if ($controlType -eq 'ControlType.Edit') { $score -= 30 }
       $score += [math]::Max(0, 24 - [math]::Abs($bounds.Top - ($window.Top + 72)))
       $score += [math]::Max(0, 20 - (($bounds.Left - $minimumX) / 12))
-      $candidates.Add([pscustomobject]@{
+      [void]$candidates.Add([pscustomobject]@{
         Title = $name
         Score = $score
         Left = $bounds.Left
@@ -199,11 +206,15 @@ function Get-TitleFromAutomation($window) {
 }
 
 function Save-HeaderScreenshot($window, [string]$targetPath) {
-  $cropX = $window.Left + [math]::Max(110, [math]::Round($window.Width * 0.15))
+  # In a wide Weixin window the conversation list occupies the first third;
+  # when it is narrow that list collapses and the chat title moves next to the
+  # navigation rail. Capture both layouts, while the short crop below still
+  # prevents message text from becoming a title candidate.
+  $cropX = $window.Left + [math]::Max(76, [math]::Round($window.Width * 0.14))
   $cropY = $window.Top + 28
-  $cropWidth = [math]::Max(240, [math]::Round($window.Width * 0.72))
+  $cropWidth = [math]::Max(220, [math]::Round($window.Width * 0.62))
   $cropWidth = [math]::Min($cropWidth, $window.Right - $cropX - 30)
-  $cropHeight = [math]::Min(108, [math]::Round($window.Height * 0.16))
+  $cropHeight = [math]::Min(58, [math]::Round($window.Height * 0.09))
   $bitmap = New-Object System.Drawing.Bitmap $cropWidth, $cropHeight
   $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
   try {
@@ -212,7 +223,22 @@ function Save-HeaderScreenshot($window, [string]$targetPath) {
       [System.Drawing.Point]::Empty,
       (New-Object System.Drawing.Size $cropWidth, $cropHeight)
     )
-    $bitmap.Save($targetPath, [System.Drawing.Imaging.ImageFormat]::Png)
+    # The title font is only about 14 physical pixels high on a 1080p desktop.
+    # Upscaling this tiny header materially improves the built-in Windows OCR.
+    $scale = 3
+    $scaled = New-Object System.Drawing.Bitmap ($cropWidth * $scale), ($cropHeight * $scale)
+    $scaledGraphics = [System.Drawing.Graphics]::FromImage($scaled)
+    try {
+      $scaledGraphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+      $scaledGraphics.DrawImage(
+        $bitmap,
+        (New-Object System.Drawing.Rectangle 0, 0, $scaled.Width, $scaled.Height)
+      )
+      $scaled.Save($targetPath, [System.Drawing.Imaging.ImageFormat]::Png)
+    } finally {
+      $scaledGraphics.Dispose()
+      $scaled.Dispose()
+    }
   } finally {
     $graphics.Dispose()
     $bitmap.Dispose()
@@ -230,7 +256,7 @@ function Await-WinRt($operation, [Type]$resultType) {
     Select-Object -First 1
   if ($null -eq $method) { throw 'WINRT_AS_TASK_UNAVAILABLE' }
   $task = $method.MakeGenericMethod($resultType).Invoke($null, @($operation))
-  $task.Wait()
+  [void]$task.Wait()
   return $task.Result
 }
 
@@ -270,8 +296,8 @@ function Get-TitleFromWindowsOcr($window, [string]$screenshotPath) {
         $words = @($line.Words)
         if (-not $words.Count) { continue }
         $rect = $words[0].BoundingRect
-        if ($rect.Y -gt 88 -or $rect.X -lt 0) { continue }
-        $candidates.Add([pscustomobject]@{
+        if ($rect.Y -gt 150 -or $rect.X -lt 0) { continue }
+        [void]$candidates.Add([pscustomobject]@{
           Title = $title
           Left = $rect.X
           Top = $rect.Y
@@ -299,13 +325,13 @@ $temporaryScreenshot = ''
 try {
   $window = Show-WeixinWindow
   if ($null -eq $window) {
-    Write-Result 'WEIXIN_MAIN_WINDOW_NOT_READY' '没有找到已登录的微信窗口，请先打开微信聊天窗口' '' 'none' 0 $stopwatch.ElapsedMilliseconds
+    Write-Result -code 'WEIXIN_MAIN_WINDOW_NOT_READY' -message '没有找到已登录的微信窗口，请先打开微信聊天窗口' -conversationTitle '' -method 'none' -candidateCount 0 -elapsedMilliseconds $stopwatch.ElapsedMilliseconds
     exit 3
   }
 
   $automation = Get-TitleFromAutomation $window
   if ($automation.Title) {
-    Write-Result 'SUCCESS' "已识别当前微信会话“$($automation.Title)”" $automation.Title 'uia' $automation.Count $stopwatch.ElapsedMilliseconds
+    Write-Result -code 'SUCCESS' -message "已识别当前微信会话“$($automation.Title)”" -conversationTitle $automation.Title -method 'uia' -candidateCount ([int]$automation.Count) -elapsedMilliseconds $stopwatch.ElapsedMilliseconds
     exit 0
   }
 
@@ -318,14 +344,16 @@ try {
   $temporaryScreenshot = Join-Path $artifactDirectory 'current-conversation-header.png'
   $ocr = Get-TitleFromWindowsOcr $window $temporaryScreenshot
   if ($ocr.Title) {
-    Write-Result 'SUCCESS' "已识别当前微信会话“$($ocr.Title)”" $ocr.Title 'windows-ocr' $ocr.Count $stopwatch.ElapsedMilliseconds
+    Write-Result -code 'SUCCESS' -message "已识别当前微信会话“$($ocr.Title)”" -conversationTitle $ocr.Title -method 'windows-ocr' -candidateCount ([int]$ocr.Count) -elapsedMilliseconds $stopwatch.ElapsedMilliseconds
     exit 0
   }
 
-  Write-Result 'TARGET_NOT_FOUND' '没有识别到当前微信好友名称，请确认微信聊天窗口已打开并显示聊天标题' '' 'uia+windows-ocr' ($automation.Count + $ocr.Count) $stopwatch.ElapsedMilliseconds
+  $candidateCount = [int]$automation.Count + [int]$ocr.Count
+  Write-Result -code 'TARGET_NOT_FOUND' -message '没有识别到当前微信好友名称，请确认微信聊天窗口已打开并显示聊天标题' -conversationTitle '' -method 'uia+windows-ocr' -candidateCount $candidateCount -elapsedMilliseconds $stopwatch.ElapsedMilliseconds
   exit 2
 } catch {
-  Write-Result 'AUTOMATION_FAILED' 'Windows 微信当前会话识别失败，请保持微信聊天窗口打开后重试' '' 'failed' 0 $stopwatch.ElapsedMilliseconds
+  $diagnostic = "$($_.Exception.GetType().FullName):$($_.Exception.Message)"
+  Write-Result -code 'AUTOMATION_FAILED' -message 'Windows 微信当前会话识别失败，请保持微信聊天窗口打开后重试' -conversationTitle '' -method 'failed' -candidateCount 0 -elapsedMilliseconds $stopwatch.ElapsedMilliseconds -diagnostic $diagnostic
   exit 1
 } finally {
   if (-not $ArtifactRoot -and $temporaryScreenshot) {

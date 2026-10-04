@@ -164,6 +164,11 @@ const windowsScript = fs.readFileSync(
   ),
   'utf8'
 );
+assert.strictEqual(
+  windowsScript.charCodeAt(0),
+  0xFEFF,
+  'Windows PowerShell 5 requires a UTF-8 BOM before the unread scanner source'
+);
 assert.match(windowsScript, /'Weixin'/);
 assert.match(windowsScript, /'WeChatAppEx'/);
 assert.match(windowsScript, /'WeChat'/);
@@ -175,6 +180,8 @@ assert.match(windowsScript, /WEIXIN_MAIN_WINDOW_NOT_READY/);
 assert.match(windowsScript, /ShowWindow/);
 assert.match(windowsScript, /'NO_UNREAD'/);
 assert.match(windowsScript, /if \(-not \$badgeRows\.Count\)/);
+assert.match(windowsScript, /\$width -lt 480/);
+assert.match(windowsScript, /\$xStart = \[math\]::Max\(0, 106\)/);
 
 const windowsCurrentConversationScript = fs.readFileSync(
   path.join(
@@ -188,8 +195,14 @@ const windowsCurrentConversationScript = fs.readFileSync(
   ),
   'utf8'
 );
+assert.strictEqual(
+  windowsCurrentConversationScript.charCodeAt(0),
+  0xFEFF,
+  'Windows PowerShell 5 requires a UTF-8 BOM before Chinese source text'
+);
 assert.match(windowsCurrentConversationScript, /AutomationElement/);
 assert.match(windowsCurrentConversationScript, /OcrEngine/);
+assert.match(windowsCurrentConversationScript, /Console\]::OutputEncoding/);
 assert.match(windowsCurrentConversationScript, /conversationTitle/);
 assert.match(windowsCurrentConversationScript, /'SUCCESS'/);
 assert.match(windowsCurrentConversationScript, /'TARGET_NOT_FOUND'/);

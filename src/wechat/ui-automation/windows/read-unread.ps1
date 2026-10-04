@@ -1,10 +1,12 @@
-param(
+﻿param(
   [int]$MaxIterations = 50,
   [int]$DwellMilliseconds = 1000,
   [string]$ResultPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+$OutputEncoding = [Console]::OutputEncoding
 
 Add-Type -AssemblyName System.Drawing
 Add-Type @'
@@ -77,12 +79,12 @@ function Get-WeixinWindow {
     [void][GrainPrintWeixinWin32]::GetWindowRect($windowHandle, [ref]$rect)
     $width = $rect.Right - $rect.Left
     $height = $rect.Bottom - $rect.Top
-    if ($width -lt 600 -or $height -lt 400) { return $true }
+    if ($width -lt 480 -or $height -lt 360) { return $true }
     $isVisible = [GrainPrintWeixinWin32]::IsWindowVisible($windowHandle)
     if (-not $isVisible) { return $true }
     $className = New-Object System.Text.StringBuilder 256
     [void][GrainPrintWeixinWin32]::GetClassName($windowHandle, $className, $className.Capacity)
-    $windows.Add([pscustomobject]@{
+    [void]$windows.Add([pscustomobject]@{
       Handle = $windowHandle
       Visible = $isVisible
       ClassName = $className.ToString()
@@ -174,11 +176,11 @@ function Get-WindowBitmap($window) {
 }
 
 function Find-UnreadBadgeRows($bitmap) {
-  # Weixin 4.x: conversation avatars occupy x=72..120 relative to the window.
-  # Unread badges sit immediately above/right of the avatar. Restricting this
-  # narrow band avoids red pixels in message previews and the navigation rail.
-  $xStart = [math]::Max(0, [math]::Round($bitmap.Width * 0.105))
-  $xEnd = [math]::Min($bitmap.Width - 1, [math]::Round($bitmap.Width * 0.145))
+  # The Weixin conversation column stays a fixed pixel width while the chat
+  # pane expands or collapses. Use an absolute band so unread badges are found
+  # in both the narrow side-by-side workspace and a wide standalone window.
+  $xStart = [math]::Max(0, 106)
+  $xEnd = [math]::Min($bitmap.Width - 1, 132)
   $yStart = [math]::Max(72, [math]::Round($bitmap.Height * 0.12))
   $yEnd = [math]::Min($bitmap.Height - 24, [math]::Round($bitmap.Height * 0.95))
 
@@ -191,7 +193,7 @@ function Find-UnreadBadgeRows($bitmap) {
         $redPixels += 1
       }
     }
-    if ($redPixels -ge 3) { $activeRows.Add($y) }
+    if ($redPixels -ge 3) { [void]$activeRows.Add($y) }
   }
 
   if (-not $activeRows.Count) { return @() }
@@ -204,11 +206,11 @@ function Find-UnreadBadgeRows($bitmap) {
       $last = $value
       continue
     }
-    $groups.Add([pscustomobject]@{ Start = $start; End = $last })
+    [void]$groups.Add([pscustomobject]@{ Start = $start; End = $last })
     $start = $value
     $last = $value
   }
-  $groups.Add([pscustomobject]@{ Start = $start; End = $last })
+  [void]$groups.Add([pscustomobject]@{ Start = $start; End = $last })
 
   return @($groups |
     Where-Object { ($_.End - $_.Start + 1) -ge 5 -and ($_.End - $_.Start + 1) -le 28 } |
