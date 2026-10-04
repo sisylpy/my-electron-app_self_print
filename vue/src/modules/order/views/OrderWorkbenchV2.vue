@@ -643,9 +643,20 @@ function completeWechatScanStep({ title, customerName = '', status, itemCount = 
   updateWechatScanResult({ title, customerName, status: normalizedStatus, itemCount, message });
 }
 
-function dismissWechatScanReport() {
+async function dismissWechatScanReport() {
   if (wechatScanBusy.value) return;
   wechatScanReportOpen.value = false;
+  if (!activeWechatImport.value) return;
+
+  // Let Vue remove the report immediately. Switching the visible WeChat chat
+  // can then continue alongside the close transition instead of delaying the
+  // completed report by another full conversation search.
+  await nextTick();
+  await openActiveWechatImport({
+    preserveScanMessage: true,
+    openWorkspace: false,
+    focusConversation: true,
+  });
 }
 
 function messageFingerprints(payload) {
@@ -1783,12 +1794,7 @@ async function scanAllBoundWechatOrders() {
       `${checkedSummary}，发现 ${customerCount} 位客户的 ${result.imports.length} 个订单任务（${totalMessages} 条新消息）${warningSummary}`,
       warningCount ? 'warning' : 'success'
     );
-    await timeWechatOrderPhase(
-      timing,
-      'scan-first-import-open',
-      () => openActiveWechatImport({ preserveScanMessage: true }),
-      timingSummary
-    );
+    timing.phase('scan-results-ready', timingSummary);
     if (warningCount) {
       const failedTitles = result.failures.slice(0, 3).map(item => `“${item.title}”`).join('、');
       wechatWorkspaceWarning.value = [

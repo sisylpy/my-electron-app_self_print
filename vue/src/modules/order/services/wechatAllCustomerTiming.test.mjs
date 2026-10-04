@@ -21,7 +21,18 @@ assert.match(allCustomerAction, /conversationTitle: title/);
 assert.match(allCustomerAction, /customerName: wechatScanCustomerName\(row, title\)/);
 assert.match(allCustomerAction, /ensureWechatBindingWithGroupMode\([\s\S]*?onTiming/);
 assert.match(allCustomerAction, /prepareWechatOrderImport\([\s\S]*?onTiming/);
+assert.match(allCustomerAction, /scan-results-ready/);
+assert.doesNotMatch(allCustomerAction, /scan-first-import-open|openActiveWechatImport/);
 assert.match(allCustomerAction, /scan-report-visible/);
 assert.match(allCustomerAction, /timing\.finish\(timingOutcome, timingSummary\)/);
+
+const dismissReportAction = workbench.match(
+  /async function dismissWechatScanReport\(\) \{([\s\S]*?)\n\}\n\nfunction messageFingerprints/,
+)?.[1] || '';
+assert.match(dismissReportAction, /wechatScanReportOpen\.value = false/);
+assert.match(dismissReportAction, /await nextTick\(\)/);
+assert.match(dismissReportAction, /openActiveWechatImport\(\{/);
+assert.match(dismissReportAction, /openWorkspace: false/);
+assert.match(dismissReportAction, /focusConversation: true/);
 
 console.log('WeChat all-customer timing instrumentation passed');

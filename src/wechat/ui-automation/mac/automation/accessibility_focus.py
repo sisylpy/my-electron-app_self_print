@@ -4,11 +4,8 @@ import re
 import subprocess
 from dataclasses import dataclass
 
-from .mouse import paste_clipboard, press_escape, press_return, select_all, set_clipboard
-from .window import activate_wechat
-
-
 _GROUP_MEMBER_COUNT = re.compile(r"\s*\(\d+\)\s*$")
+_FOCUS_RESULT_SEPARATOR = "\t"
 
 
 @dataclass(frozen=True)
@@ -26,10 +23,12 @@ def header_matches_target(header: str, target: str) -> bool:
     return visible == expected or _GROUP_MEMBER_COUNT.sub("", visible) == expected
 
 
-def _osascript(lines: list[str]) -> str:
+def _osascript(lines: list[str], *args: str) -> str:
     command = ["osascript"]
     for line in lines:
         command.extend(["-e", line])
+    if args:
+        command.extend(["--", *args])
     result = subprocess.run(command, check=True, capture_output=True, text=True)
     return result.stdout.strip()
 
@@ -69,22 +68,69 @@ def focus_conversation_with_accessibility(target: str) -> AccessibilityFocusResu
     """
 
     expected = str(target or "").strip()
-    activate_wechat()
-    current_header = _conversation_header(focus_search=False)
-    if header_matches_target(current_header, expected):
-        return AccessibilityFocusResult(True, True, current_header)
-
-    # Focusing the actual AXTextArea is both faster and safer than clicking a
-    # coordinate: a customer name can never land in the message composer.
-    _conversation_header(focus_search=True)
-    select_all(0.05)
-    set_clipboard(expected)
-    paste_clipboard(0.45)
-    press_return(0.75)
-    press_escape(0.15)
-    opened_header = _conversation_header(focus_search=False)
+    # Keep activation, exact-current-title detection, safe search-field focus,
+    # typing, opening, and final title verification inside one osascript
+    # process. The previous implementation launched several independent
+    # System Events processes per customer, each rebuilding the same deep AX
+    # tree; on a real WeChat window that dominated the all-customer scan time.
+    output = _osascript(
+        [
+            "on headerMatches(visibleTitle, expectedTitle)",
+            "if visibleTitle is expectedTitle then return true",
+            'set memberPrefix to expectedTitle & " ("',
+            'if visibleTitle starts with memberPrefix and visibleTitle ends with ")" then return true',
+            "return false",
+            "end headerMatches",
+            "on readHeader()",
+            'tell application "System Events" to tell process "WeChat"',
+            'set rootSplit to UI element 1 of UI element 7 of UI element 1 of window "微信"',
+            "set chatGroup to UI element 1 of UI element 1 of UI element 1 of UI element 1 of rootSplit",
+            "set chatHeader to UI element 1 of chatGroup",
+            "return name of chatHeader as text",
+            "end tell",
+            "end readHeader",
+            "on run argv",
+            "set expectedTitle to item 1 of argv",
+            'tell application "WeChat" to reopen',
+            'tell application "System Events" to tell process "WeChat"',
+            "set frontmost to true",
+            "repeat 30 times",
+            'if exists window "微信" then exit repeat',
+            "delay 0.1",
+            "end repeat",
+            'if not (exists window "微信") then error "WECHAT_MAIN_WINDOW_NOT_FOUND"',
+            'perform action "AXRaise" of window "微信"',
+            "end tell",
+            "delay 0.1",
+            "set currentHeader to my readHeader()",
+            "if my headerMatches(currentHeader, expectedTitle) then",
+            'return "ALREADY_OPEN" & tab & currentHeader',
+            "end if",
+            "set the clipboard to expectedTitle",
+            'tell application "System Events" to tell process "WeChat"',
+            'set rootSplit to UI element 1 of UI element 7 of UI element 1 of window "微信"',
+            "set searchField to UI element 2 of UI element 2 of rootSplit",
+            "set focused of searchField to true",
+            'keystroke "a" using command down',
+            "delay 0.05",
+            'keystroke "v" using command down',
+            "delay 0.45",
+            "key code 36",
+            "delay 0.75",
+            "key code 53",
+            "end tell",
+            "delay 0.15",
+            "set openedHeader to my readHeader()",
+            'return "OPENED" & tab & openedHeader',
+            "end run",
+        ],
+        expected,
+    )
+    state, separator, opened_header = output.partition(_FOCUS_RESULT_SEPARATOR)
+    if not separator:
+        raise RuntimeError("WECHAT_ACCESSIBILITY_FOCUS_INVALID_RESPONSE")
     return AccessibilityFocusResult(
         header_matches_target(opened_header, expected),
-        False,
+        state == "ALREADY_OPEN",
         opened_header,
     )
