@@ -92,7 +92,8 @@ assert.match(allCustomerAction, /completeWechatScanStep/);
 assert.match(allCustomerAction, /focusWechatImportConversation/);
 assert.match(allCustomerAction, /ensureWechatBindingWithGroupMode/);
 assert.match(allCustomerAction, /prepareWechatOrderImport/);
-assert.match(allCustomerAction, /retryDelaysMs: \[250\]/);
+assert.match(allCustomerAction, /readWechatCustomerDatabaseFirst/);
+assert.match(allCustomerAction, /mode === 'database' \? \[250, 500\] : \[250\]/);
 assert.match(workbench, /@scan-all="scanAllBoundWechatOrders"/);
 
 const selectTaskAction = workbench.match(

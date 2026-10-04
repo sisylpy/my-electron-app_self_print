@@ -13,9 +13,12 @@ const allCustomerAction = workbench.match(
 assert.match(allCustomerAction, /createWechatOrderTiming\('scan-all-bound-wechat'\)/);
 assert.match(allCustomerAction, /scan-workspace-open/);
 assert.match(allCustomerAction, /scan-customer-directory-load/);
+assert.match(allCustomerAction, /readWechatCustomerDatabaseFirst/);
+assert.match(allCustomerAction, /scan-database-fallback/);
 assert.match(allCustomerAction, /scan-conversation-focus/);
 assert.match(allCustomerAction, /scan-binding-check/);
 assert.match(allCustomerAction, /scan-order-read/);
+assert.match(allCustomerAction, /mode === 'database' \? \[250, 500\] : \[250\]/);
 assert.match(allCustomerAction, /scan-customer-complete/);
 assert.match(allCustomerAction, /conversationTitle: title/);
 assert.match(allCustomerAction, /customerName: wechatScanCustomerName\(row, title\)/);

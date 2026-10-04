@@ -231,7 +231,10 @@ import {
   GROUP_ALL_MEMBER_MESSAGES,
   GROUP_MENTION_SELF_ONLY,
 } from '../services/wechatOrderMessagePolicy';
-import { scanAllBoundWechatCustomers } from '../services/wechatAllCustomerScan';
+import {
+  readWechatCustomerDatabaseFirst,
+  scanAllBoundWechatCustomers,
+} from '../services/wechatAllCustomerScan';
 import {
   customerId,
   loadSmartReplenishmentCustomerDirectory,
@@ -1631,7 +1634,11 @@ async function scanAllBoundWechatOrders() {
     taskCount: 0,
     messageCount: 0,
     warningCount: 0,
+    databaseOnlyCount: 0,
+    conversationVerificationCount: 0,
   };
+  let databaseOnlyCount = 0;
+  let conversationVerificationCount = 0;
   wechatScanBusy.value = true;
   beginWechatScanReport();
   wechatSelectedImportMessage.value = '';
@@ -1713,11 +1720,6 @@ async function scanAllBoundWechatOrders() {
           ...customerMeta,
         });
         try {
-          await timeWechatOrderPhase(timing, 'scan-conversation-focus', async () => {
-            const focusWarning = await focusWechatImportConversation({ conversationTitle: title });
-            if (focusWarning) throw new Error(focusWarning);
-          }, customerMeta);
-
           row.binding = await timeWechatOrderPhase(
             timing,
             'scan-binding-check',
@@ -1729,27 +1731,45 @@ async function scanAllBoundWechatOrders() {
             }),
             customerMeta
           );
-          const prepared = await timeWechatOrderPhase(
+          const readDatabase = ({ mode }) => timeWechatOrderPhase(
             timing,
             'scan-order-read',
             () => prepareWechatOrderImport({
               customerId: customerId(row.customer),
               binding: row.binding,
-              // The visible focus flow already waits for WeChat to render and
-              // verifies the opened title. One short cached verification read is
-              // enough to catch a final local-database write without adding the
-              // multi-second retry budget used by the unread scanner.
-              retryDelaysMs: [250],
+              // Database-first reads use three snapshots. Only a complete,
+              // stable payload may skip visible WeChat navigation. After a
+              // conversation is opened, one short verification read is enough
+              // because the focus flow already waits for the exact chat header.
+              retryDelaysMs: mode === 'database' ? [250, 500] : [250],
               onTiming,
             }),
-            customerMeta
+            { ...customerMeta, readMode: mode }
           );
+          const databaseFirst = await readWechatCustomerDatabaseFirst({
+            readDatabase,
+            focusConversation: async ({ databaseResult, databaseError }) => {
+              conversationVerificationCount += 1;
+              timing.phase('scan-database-fallback', {
+                ...customerMeta,
+                status: databaseResult?.status || 'error',
+                reason: databaseError?.message || databaseResult?.message || '',
+              });
+              await timeWechatOrderPhase(timing, 'scan-conversation-focus', async () => {
+                const focusWarning = await focusWechatImportConversation({ conversationTitle: title });
+                if (focusWarning) throw new Error(focusWarning);
+              }, customerMeta);
+            },
+          });
+          if (!databaseFirst.verifiedByConversation) databaseOnlyCount += 1;
+          const prepared = databaseFirst.result;
           const items = prepared.payload ? createWechatImportItems(row, title, prepared) : [];
           timing.phase('scan-customer-complete', {
             ...customerMeta,
             durationMs: Math.max(0, timingNow() - customerStartedAt),
             status: items.length ? 'found' : 'empty',
             taskCount: items.length,
+            readMode: databaseFirst.mode,
           });
           return items;
         } catch (error) {
@@ -1775,6 +1795,8 @@ async function scanAllBoundWechatOrders() {
       taskCount: result.imports.length,
       messageCount: totalMessages,
       warningCount,
+      databaseOnlyCount,
+      conversationVerificationCount,
     };
     const checkedSummary = `已巡查 ${result.checkedCount} 个关联微信会话`;
     const warningSummary = warningCount ? `；另有 ${warningCount} 项需检查` : '';

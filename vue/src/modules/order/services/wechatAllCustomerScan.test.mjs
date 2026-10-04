@@ -1,5 +1,68 @@
 import assert from 'node:assert/strict';
-import { scanAllBoundWechatCustomers } from './wechatAllCustomerScan.js';
+import {
+  readWechatCustomerDatabaseFirst,
+  scanAllBoundWechatCustomers,
+} from './wechatAllCustomerScan.js';
+
+const databaseOnlyCalls = [];
+const databaseOnly = await readWechatCustomerDatabaseFirst({
+  readDatabase: async ({ mode }) => {
+    databaseOnlyCalls.push(`read:${mode}`);
+    return { status: 'ready', payload: { text: '苹果5斤' } };
+  },
+  focusConversation: async () => databaseOnlyCalls.push('focus'),
+});
+assert.deepEqual(databaseOnlyCalls, ['read:database']);
+assert.equal(databaseOnly.mode, 'database');
+assert.equal(databaseOnly.verifiedByConversation, false);
+
+const fallbackCalls = [];
+const fallback = await readWechatCustomerDatabaseFirst({
+  readDatabase: async ({ mode }) => {
+    fallbackCalls.push(`read:${mode}`);
+    return mode === 'database'
+      ? { status: 'empty' }
+      : { status: 'ready', payload: { text: '油菜80斤' } };
+  },
+  focusConversation: async ({ databaseResult }) => {
+    fallbackCalls.push(`focus:${databaseResult.status}`);
+  },
+});
+assert.deepEqual(fallbackCalls, [
+  'read:database',
+  'focus:empty',
+  'read:conversation',
+]);
+assert.equal(fallback.mode, 'conversation');
+assert.equal(fallback.verifiedByConversation, true);
+
+const recoveryCalls = [];
+const recovered = await readWechatCustomerDatabaseFirst({
+  readDatabase: async ({ mode }) => {
+    recoveryCalls.push(`read:${mode}`);
+    if (mode === 'database') throw new Error('图片附件尚未完整');
+    return { status: 'ready', payload: { images: [{}] } };
+  },
+  focusConversation: async ({ databaseError }) => {
+    recoveryCalls.push(`focus:${databaseError.message}`);
+  },
+});
+assert.deepEqual(recoveryCalls, [
+  'read:database',
+  'focus:图片附件尚未完整',
+  'read:conversation',
+]);
+assert.equal(recovered.mode, 'conversation');
+
+await assert.rejects(
+  () => readWechatCustomerDatabaseFirst({
+    readDatabase: async () => ({ status: 'empty' }),
+    focusConversation: async () => {
+      throw new Error('微信搜索不到该客户');
+    },
+  }),
+  /微信搜索不到该客户/,
+);
 
 const calls = [];
 const progress = [];

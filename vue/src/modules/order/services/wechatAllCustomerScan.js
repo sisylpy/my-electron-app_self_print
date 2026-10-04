@@ -3,6 +3,50 @@ function scanTitle(entry) {
 }
 
 /**
+ * Read one bound conversation from the local WeChat database first.
+ *
+ * A complete payload proves that the Reader saw every referenced text/image
+ * and that the server accepted the pending message fingerprints. Results
+ * without a payload cannot prove that WeChat has hydrated the latest local
+ * rows, so they must be verified by visibly opening the conversation and
+ * reading the database again.
+ */
+export async function readWechatCustomerDatabaseFirst({
+  readDatabase,
+  focusConversation,
+} = {}) {
+  if (typeof readDatabase !== 'function') {
+    throw new TypeError('readDatabase must be a function');
+  }
+  if (typeof focusConversation !== 'function') {
+    throw new TypeError('focusConversation must be a function');
+  }
+
+  let databaseResult = null;
+  let databaseError = null;
+  try {
+    databaseResult = await readDatabase({ mode: 'database' });
+  } catch (error) {
+    databaseError = error;
+  }
+
+  if (databaseResult?.payload) {
+    return {
+      result: databaseResult,
+      mode: 'database',
+      verifiedByConversation: false,
+    };
+  }
+
+  await focusConversation({ databaseResult, databaseError });
+  return {
+    result: await readDatabase({ mode: 'conversation' }),
+    mode: 'conversation',
+    verifiedByConversation: true,
+  };
+}
+
+/**
  * WeChat is one visible window, so conversation switching must remain strictly
  * sequential. Keeping that invariant here prevents a later UI change from
  * starting overlapping searches while still allowing customer bindings to be
