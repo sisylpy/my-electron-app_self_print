@@ -17,19 +17,29 @@ from ..results import OperationResult, ResultCode
 from ..screenshot import Screenshot, capture_window
 from ..state_detector import conversation_header
 from ..vision import OCRItem, recognize_text, save_ocr
-from ..window import WeChatWindow, activate_wechat, main_wechat_window
+from ..window import WindowError, WeChatWindow, activate_wechat, main_wechat_window
 
 
 HydrationProbe = Callable[[UnreadConversation], bool]
+CHAT_TAB_LOGICAL_X = 30
+CHAT_TAB_LOGICAL_Y = 122
 
 
 class ScreenCaptureUnavailable(RuntimeError):
     pass
 
 
-def chat_tab_point(image_width: int, image_height: int) -> Point:
-    """Return the centre of WeChat's left-rail conversation/logo button."""
-    return Point(round(image_width * 0.052), round(image_height * 0.205))
+def chat_tab_point(pixel_scale_x: float, pixel_scale_y: float) -> Point:
+    """Return the centre of WeChat's first left-rail button: Chats.
+
+    The rail is anchored to the top-left of the window, so its coordinates are
+    fixed in logical points. A height percentage drifts downward on a tall
+    docked window and lands on the second button (Contacts).
+    """
+    return Point(
+        round(CHAT_TAB_LOGICAL_X * pixel_scale_x),
+        round(CHAT_TAB_LOGICAL_Y * pixel_scale_y),
+    )
 
 
 class ReadUnreadConversationsFlow:
@@ -73,6 +83,7 @@ class ReadUnreadConversationsFlow:
         self.skipped = 0
         self.filtered = 0
         self._opened_titles: set[str] = set()
+        self._selected_title_before_scan: str | None = None
 
     def _next_path(self, name: str) -> Path:
         self._counter += 1
@@ -89,31 +100,8 @@ class ReadUnreadConversationsFlow:
         shot = capture_window(self._window.bounds, self._next_path(name))
         return shot, self._read(shot)
 
-    @staticmethod
-    def _resolve_candidate(
-        saved: UnreadConversation,
-        current: list[UnreadConversation],
-    ) -> UnreadConversation | None:
-        exact = [item for item in current if item.key == saved.key]
-        if exact:
-            return min(
-                exact,
-                key=lambda item: abs(item.title_rect.center.y - saved.title_rect.center.y),
-            )
-        # Preview OCR can change slightly between captures.  A unique exact
-        # title near the same row is a safe fallback; fuzzy title matching is
-        # intentionally forbidden.
-        same_title = [item for item in current if item.title == saved.title]
-        near = [
-            item
-            for item in same_title
-            if abs(item.title_rect.center.y - saved.title_rect.center.y) <= 42
-        ]
-        return near[0] if len(near) == 1 else None
-
     def _wait_for_hydration(self, conversation: UnreadConversation) -> str:
         if self.hydration_probe is None:
-            time.sleep(self.dwell_seconds)
             return "NOT_CHECKED"
 
         deadline = time.monotonic() + self.hydration_timeout
@@ -129,15 +117,28 @@ class ReadUnreadConversationsFlow:
             time.sleep(min(0.5, max(0.1, deadline - time.monotonic())))
 
     def _focus_chat_tab(self) -> None:
-        """Double-click the green WeChat logo to promote unread chats to the top."""
+        """Double-click the first Chats button to promote unread chats to the top."""
         shot, items = self._window_shot("chat-tab-before")
         if not items:
             raise ScreenCaptureUnavailable(
                 "微信窗口截图没有任何可识别文字，通常表示 GrainPrint 没有屏幕录制权限"
             )
+        if self.allowed_titles:
+            selected = [
+                title
+                for title in self.allowed_titles
+                if conversation_header(
+                    items,
+                    title,
+                    image_width=shot.image.width,
+                    image_height=shot.image.height,
+                ).matched
+            ]
+            if len(selected) == 1:
+                self._selected_title_before_scan = selected[0]
         double_click(
             shot.transform.physical_to_global_logical(
-                chat_tab_point(shot.image.width, shot.image.height)
+                chat_tab_point(shot.transform.scale_x, shot.transform.scale_y)
             ),
             settle=0.8,
         )
@@ -147,60 +148,46 @@ class ReadUnreadConversationsFlow:
         self,
         saved: UnreadConversation,
         *,
+        shot: Screenshot,
         page: int,
         index: int,
     ) -> tuple[bool, str]:
-        current_shot, current_items = self._window_shot(
-            f"page-{page:02d}-item-{index:02d}-before"
-        )
-        visible = locate_unread_conversations(current_shot.image, current_items)
-        candidate = self._resolve_candidate(saved, visible)
-        if candidate is None:
-            self.skipped += 1
-            self.details.append(
-                f"SKIP page={page} title={saved.title!r}: unread row no longer uniquely visible"
-            )
-            self.entries.append(
-                {"title": saved.title, "status": "SKIPPED", "hydration": "NOT_CHECKED"}
-            )
-            return True, ""
-
         click(
-            current_shot.transform.physical_to_global_logical(candidate.click_point),
-            settle=0.7,
+            shot.transform.physical_to_global_logical(saved.click_point),
+            settle=0.4,
         )
         opened_shot, opened_items = self._window_shot(
             f"page-{page:02d}-item-{index:02d}-opened"
         )
         header = conversation_header(
             opened_items,
-            candidate.title,
+            saved.title,
             image_width=opened_shot.image.width,
             image_height=opened_shot.image.height,
         )
         if not header.matched:
             self.details.append(
-                f"HEADER_MISMATCH page={page} title={candidate.title!r} evidence={header.evidence}"
+                f"HEADER_MISMATCH page={page} title={saved.title!r} evidence={header.evidence}"
             )
             self.entries.append(
-                {"title": candidate.title, "status": "HEADER_MISMATCH", "hydration": "NOT_CHECKED"}
+                {"title": saved.title, "status": "HEADER_MISMATCH", "hydration": "NOT_CHECKED"}
             )
-            return False, f"打开 {candidate.title!r} 后未能核验聊天标题，已停止"
+            return False, f"打开 {saved.title!r} 后未能核验聊天标题，已停止"
 
         self.opened += 1
-        self._opened_titles.add(candidate.title)
+        self._opened_titles.add(saved.title)
         try:
-            hydration = self._wait_for_hydration(candidate)
+            hydration = self._wait_for_hydration(saved)
         except Exception as exc:
             hydration = "PROBE_ERROR"
             self.details.append(
-                f"HYDRATION_PROBE_ERROR title={candidate.title!r}: {type(exc).__name__}: {exc}"
+                f"HYDRATION_PROBE_ERROR title={saved.title!r}: {type(exc).__name__}: {exc}"
             )
         self.entries.append(
-            {"title": candidate.title, "status": "OPENED", "hydration": hydration}
+            {"title": saved.title, "status": "OPENED", "hydration": hydration}
         )
         self.details.append(
-            f"OPENED page={page} title={candidate.title!r} hydration={hydration}"
+            f"OPENED page={page} title={saved.title!r} hydration={hydration}"
         )
         return True, ""
 
@@ -225,7 +212,11 @@ class ReadUnreadConversationsFlow:
             # never scroll through the user's full conversation history.
             round_limit = self.max_pages
             if self.allowed_titles is not None:
-                round_limit = min(round_limit, max(1, len(self.allowed_titles)))
+                # The whitelist is finite and controlled by the customer
+                # directory, so it is also the safest completeness bound. A
+                # fixed eight-round cap would silently miss the ninth unread
+                # customer once a distributor grows beyond a small account.
+                round_limit = max(1, len(self.allowed_titles))
             for round_index in range(1, round_limit + 1):
                 page_shot, page_items = self._window_shot(
                     f"top-unread-{round_index:02d}-snapshot"
@@ -236,11 +227,12 @@ class ReadUnreadConversationsFlow:
                     for item in snapshot
                     if item.key not in processed and item.title not in self._opened_titles
                 ]
-                unseen = [item for item in snapshot if item.key not in processed]
-                self.detected += len(unseen)
+                self.detected += len(snapshot)
 
                 if self.allowed_titles is not None:
-                    unrelated = [item for item in unseen if item.title not in self.allowed_titles]
+                    unrelated = [
+                        item for item in snapshot if item.title not in self.allowed_titles
+                    ]
                     for item in unrelated:
                         processed.add(item.key)
                         self.filtered += 1
@@ -278,6 +270,7 @@ class ReadUnreadConversationsFlow:
                 processed.add(conversation.key)
                 ok, reason = self._open_one(
                     conversation,
+                    shot=page_shot,
                     page=round_index,
                     index=1,
                 )
@@ -303,6 +296,10 @@ class ReadUnreadConversationsFlow:
                 "完全退出 GrainPrint 后重新打开"
             )
             self.details.append(f"SCREEN_CAPTURE_UNAVAILABLE: {exc}")
+        except WindowError as exc:
+            code = ResultCode.VERIFY_FAILED
+            message = "微信聊天主窗口未能打开，请确认微信已经登录"
+            self.details.append(f"WECHAT_MAIN_WINDOW_UNAVAILABLE: {exc}")
         except Exception as exc:  # pragma: no cover - real UI failure path
             code = ResultCode.INTERNAL_ERROR
             message = "未读会话自动化内部错误；请查看私有诊断产物"
@@ -324,6 +321,7 @@ class ReadUnreadConversationsFlow:
             # Titles are private user data; this report lives below the ignored
             # artifacts/private directory and is never a repository fixture.
             "conversations": self.entries,
+            "selectedTitle": self._selected_title_before_scan,
             "details": self.details,
         }
         (self.artifact_dir / "report.json").write_text(

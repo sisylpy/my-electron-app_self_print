@@ -41,6 +41,7 @@ async function verifyDockAndRestore() {
     maximize: () => { maximized = true; calls.push('maximize'); },
     setFullScreen: value => calls.push(`fullscreen:${value}`),
     setBounds: value => { bounds = { ...value }; calls.push({ setBounds: value }); },
+    showInactive: () => calls.push('showInactive'),
     show: () => calls.push('show'),
     focus: () => calls.push('focus'),
   };
@@ -52,6 +53,7 @@ async function verifyDockAndRestore() {
     },
     getMainWindow: () => fakeWindow,
     execFileAsync: async (command, args) => {
+      calls.push('dockWechat');
       execCalls.push({ command, args });
       return { stdout: execCalls.length === 1 ? '100,120,900,760' : '' };
     },
@@ -61,8 +63,29 @@ async function verifyDockAndRestore() {
   assert.strictEqual(opened.ok, true);
   assert.strictEqual(opened.result.mode, 'docked');
   assert.strictEqual(execCalls[0].command, 'osascript');
+  const dockScript = execCalls[0].args.join('\n');
+  assert.match(dockScript, /tell application "WeChat" to reopen/);
+  assert.match(dockScript, /repeat 30 times/);
+  assert.ok(
+    dockScript.indexOf('set size of targetWindow')
+      < dockScript.indexOf('set position of targetWindow'),
+    'WeChat must be resized before its left edge is pinned'
+  );
+  assert.strictEqual(
+    dockScript.match(/set position of targetWindow/g)?.length,
+    2,
+    'WeChat position must be pinned twice after applying its minimum size'
+  );
   assert.ok(calls.includes('unmaximize'));
   assert.deepStrictEqual(bounds, opened.result.app);
+  assert.ok(
+    calls.findIndex(call => typeof call === 'object' && call.setBounds)
+      < calls.indexOf('dockWechat'),
+    'GrainPrint must be placed before WeChat is docked and raised'
+  );
+  assert.ok(calls.includes('showInactive'));
+  assert.strictEqual(calls.includes('show'), false);
+  assert.strictEqual(calls.includes('focus'), false, 'opening the workspace must leave WeChat in front');
 
   const closed = await service.close();
   assert.strictEqual(closed.ok, true);

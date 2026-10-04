@@ -34,6 +34,9 @@ def build_output(result) -> dict:
     conversations = report.get("conversations")
     if isinstance(conversations, list):
         payload["conversations"] = conversations
+    selected_title = report.get("selectedTitle")
+    if isinstance(selected_title, str):
+        payload["selectedTitle"] = selected_title
     return payload
 
 

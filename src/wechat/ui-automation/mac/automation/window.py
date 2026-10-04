@@ -26,16 +26,24 @@ def _osascript(lines: list[str]) -> str:
 
 
 def activate_wechat() -> None:
-    _osascript(['tell application "WeChat" to activate'])
     _osascript(
         [
+            # WeChat keeps its process alive after the main window is closed.
+            # `activate` alone then exposes zero accessibility windows. Reopen
+            # first so visible automation always starts from the chat window.
+            'tell application "WeChat" to reopen',
             'tell application "System Events" to tell process "WeChat"',
             'set frontmost to true',
-            'if exists window "微信" then perform action "AXRaise" of window "微信"',
+            'repeat 30 times',
+            'if exists window "微信" then exit repeat',
+            'delay 0.1',
+            'end repeat',
+            'if not (exists window "微信") then error "WECHAT_MAIN_WINDOW_NOT_FOUND"',
+            'perform action "AXRaise" of window "微信"',
             'end tell',
         ]
     )
-    time.sleep(0.6)
+    time.sleep(0.2)
 
 
 def list_wechat_windows() -> list[WeChatWindow]:

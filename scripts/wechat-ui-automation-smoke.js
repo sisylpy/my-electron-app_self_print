@@ -204,7 +204,11 @@ const bundledMacCurrentConversationScript = fs.readFileSync(
   ),
   'utf8'
 );
-assert.match(bundledMacCurrentConversationScript, /from automation\.api import current_conversation/);
+assert.match(
+  bundledMacCurrentConversationScript,
+  /from automation\.flows\.current_conversation import CurrentConversationFlow/
+);
+assert.match(bundledMacCurrentConversationScript, /CurrentConversationFlow\(/);
 
 const bundledMacCurrentConversationFlow = fs.readFileSync(
   path.join(
@@ -307,6 +311,8 @@ assert.match(bundledMacFlow, /shot\.transform\.scale_x, shot\.transform\.scale_y
 assert.doesNotMatch(bundledMacFlow, /image_height \* 0\.205/);
 assert.match(bundledMacFlow, /self\._opened_titles\.add\(saved\.title\)/);
 assert.doesNotMatch(bundledMacFlow, /page-\{page:02d\}-item-\{index:02d\}-before/);
+assert.match(bundledMacFlow, /round_limit = max\(1, len\(self\.allowed_titles\)\)/);
+assert.doesNotMatch(bundledMacFlow, /min\(round_limit, max\(1, len\(self\.allowed_titles\)\)\)/);
 assert.match(bundledMacFlow, /selectedTitle/);
 assert.match(bundledMacFlow, /ResultCode\.NO_UNREAD/);
 assert.match(bundledMacFlow, /SCREEN_RECORDING_PERMISSION_REQUIRED/);

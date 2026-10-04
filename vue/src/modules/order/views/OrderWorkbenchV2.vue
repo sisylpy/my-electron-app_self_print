@@ -96,11 +96,7 @@
       :workspace-warning="wechatWorkspaceWarning"
       :selected-import-busy="wechatSelectedImportBusy"
       :show-selected-import-action="showCurrentWechatReadButton"
-      :launcher-summary-loading="wechatLauncherSummaryLoading"
-      :launcher-unread-count="wechatLauncherUnreadCount"
-      :launcher-current-title="wechatLauncherConversationTitle"
-      :launcher-customer-count="wechatLauncherCustomerCount"
-      :launcher-summary-error="wechatLauncherSummaryError"
+      :launcher-current-title="observedWechatConversationTitle"
       :action-message="wechatSelectedImportMessage"
       :action-status="wechatSelectedImportStatus"
       :unmatched-conversation-title="wechatUnmatchedConversationTitle"
@@ -270,11 +266,6 @@ const wechatImportModalOpen = ref(false);
 const wechatImportRefreshing = ref(false);
 const wechatWorkspaceWarning = ref('');
 const wechatWorkspaceReady = ref(false);
-const wechatLauncherSummaryLoading = ref(false);
-const wechatLauncherUnreadCount = ref(null);
-const wechatLauncherCustomerCount = ref(null);
-const wechatLauncherConversationTitle = ref('');
-const wechatLauncherSummaryError = ref('');
 const wechatSelectedImportBusy = ref(false);
 const wechatSelectedImportMessage = ref('');
 const wechatSelectedImportStatus = ref('warning');
@@ -286,7 +277,6 @@ const wechatGroupModeRequest = ref(null);
 let wechatGroupModeResolver = null;
 let wechatImportSequence = 0;
 let wechatConversationFocusDepth = 0;
-let wechatLauncherSummaryRequestId = 0;
 let wechatReaderWarmupStarted = false;
 let wechatOrderTimingSequence = 0;
 const selectedWechatRetryDelaysMs = Object.freeze([650]);
@@ -929,7 +919,6 @@ async function syncWechatSelectionFromDesktop(payload) {
   const title = normalizeObservedWechatConversationTitle(payload?.title);
   if (!title) return;
   observedWechatConversationTitle.value = title;
-  wechatLauncherConversationTitle.value = title;
   if (!wechatImportModalOpen.value
       || wechatScanBusy.value
       || wechatSelectedImportBusy.value
@@ -964,12 +953,6 @@ async function closeWechatImportModal() {
   wechatScanReportOpen.value = false;
   wechatWorkspaceReady.value = false;
   observedWechatConversationTitle.value = '';
-  wechatLauncherSummaryRequestId += 1;
-  wechatLauncherSummaryLoading.value = false;
-  wechatLauncherUnreadCount.value = null;
-  wechatLauncherCustomerCount.value = null;
-  wechatLauncherConversationTitle.value = '';
-  wechatLauncherSummaryError.value = '';
   wechatScanMessage.value = '';
   dismissWechatSelectedAction();
   activeView.value = 'overview';
@@ -1019,67 +1002,6 @@ async function loadBoundWechatCustomers({ refreshCustomers = false } = {}) {
     }
   });
   return { unique, failedCount, ambiguousCount, associationDirectory };
-}
-
-async function identifyWechatLauncherConversation(requestId) {
-  if (wechatLauncherConversationTitle.value || requestId !== wechatLauncherSummaryRequestId) return;
-  const currentConversationApi = window.electronAPI?.wechatUi?.currentConversation;
-  if (!currentConversationApi) return;
-  try {
-    const selected = await currentConversationApi();
-    if (requestId !== wechatLauncherSummaryRequestId || !selected?.ok) return;
-    const title = normalizeObservedWechatConversationTitle(selected.result?.title);
-    if (!title) return;
-    observedWechatConversationTitle.value = title;
-    wechatLauncherConversationTitle.value = title;
-  } catch {
-    // The current-conversation fallback is presentational only. The regular
-    // “读取当前微信” action still performs its own validated lookup on click.
-  }
-}
-
-async function refreshWechatLauncherSummary() {
-  const requestId = ++wechatLauncherSummaryRequestId;
-  wechatLauncherSummaryLoading.value = true;
-  wechatLauncherUnreadCount.value = null;
-  wechatLauncherCustomerCount.value = null;
-  wechatLauncherConversationTitle.value = normalizeObservedWechatConversationTitle(
-    observedWechatConversationTitle.value
-  );
-  wechatLauncherSummaryError.value = '';
-  try {
-    const { unique } = await loadBoundWechatCustomers({ refreshCustomers: true });
-    if (requestId !== wechatLauncherSummaryRequestId) return;
-    const allowedTitles = Array.from(unique.keys());
-    wechatLauncherCustomerCount.value = allowedTitles.length;
-    if (!allowedTitles.length) {
-      wechatLauncherUnreadCount.value = 0;
-      await identifyWechatLauncherConversation(requestId);
-      return;
-    }
-
-    const inspectUnread = window.electronAPI?.wechatUi?.inspectUnread;
-    if (!inspectUnread) throw new Error('当前安装包暂不支持未读数量预览');
-    const summary = await inspectUnread(allowedTitles);
-    if (requestId !== wechatLauncherSummaryRequestId) return;
-    if (!summary?.ok) throw new Error(summary?.error?.message || '未读数量统计失败');
-    wechatLauncherUnreadCount.value = Math.max(0, Number(summary.result?.unreadCount) || 0);
-    const title = normalizeObservedWechatConversationTitle(summary.result?.selectedTitle);
-    if (title) {
-      observedWechatConversationTitle.value = title;
-      wechatLauncherConversationTitle.value = title;
-    } else {
-      await identifyWechatLauncherConversation(requestId);
-    }
-  } catch {
-    if (requestId !== wechatLauncherSummaryRequestId) return;
-    wechatLauncherSummaryError.value = '未读数量暂时无法统计，可直接点击检查';
-    await identifyWechatLauncherConversation(requestId);
-  } finally {
-    if (requestId === wechatLauncherSummaryRequestId) {
-      wechatLauncherSummaryLoading.value = false;
-    }
-  }
 }
 
 function wechatImportTaskKey(item) {
@@ -1332,27 +1254,34 @@ async function importSelectedWechatConversation() {
   wechatCustomerMatchOpen.value = false;
   wechatCustomerMatchError.value = '';
   try {
-    let title = normalizeObservedWechatConversationTitle(
+    const cachedTitle = normalizeObservedWechatConversationTitle(
       observedWechatConversationTitle.value
     );
-    if (title) {
-      timing.phase('current-conversation-cached', { conversationTitle: title });
-    } else {
-      const currentConversationApi = window.electronAPI?.wechatUi?.currentConversation;
-      if (!currentConversationApi) {
-        throw new Error('当前安装包不支持识别所选微信好友');
-      }
-      const selected = await timeWechatOrderPhase(
-        timing,
-        'current-conversation-api',
-        () => currentConversationApi()
-      );
-      if (!selected?.ok) {
-        throw new Error(selected?.error?.message || '没有识别到当前微信好友');
-      }
-      title = normalizeObservedWechatConversationTitle(selected.result?.title);
+    const currentConversationApi = window.electronAPI?.wechatUi?.currentConversation;
+    if (!currentConversationApi) {
+      throw new Error('当前安装包不支持识别所选微信好友');
     }
+    // The observer is intentionally lightweight and only runs while WeChat is
+    // frontmost. A very quick WeChat -> GrainPrint switch can therefore leave
+    // its displayed title one beat behind. Always verify the live header when
+    // the user commits the action; the cached title remains presentation only.
+    const selected = await timeWechatOrderPhase(
+      timing,
+      'current-conversation-api',
+      () => currentConversationApi()
+    );
+    if (!selected?.ok) {
+      throw new Error(selected?.error?.message || '没有识别到当前微信好友');
+    }
+    const title = normalizeObservedWechatConversationTitle(selected.result?.title);
     if (!title) throw new Error('没有识别到当前微信好友名称');
+    observedWechatConversationTitle.value = title;
+    if (cachedTitle && cachedTitle !== title) {
+      timing.phase('current-conversation-cache-corrected', {
+        cachedConversationTitle: cachedTitle,
+        conversationTitle: title,
+      });
+    }
     if (!customerContext.customers.value.length) {
       await timeWechatOrderPhase(
         timing,
@@ -1490,8 +1419,7 @@ async function handleWechatScan() {
   activeView.value = 'overview';
   wechatImportModalOpen.value = true;
   prewarmWechatReader();
-  const workspaceOpened = await openWechatWorkspace();
-  if (workspaceOpened) void refreshWechatLauncherSummary();
+  await openWechatWorkspace();
 }
 
 async function readUnreadWechatOrders() {
@@ -1639,13 +1567,10 @@ async function scanAllBoundWechatOrders() {
   };
   let databaseOnlyCount = 0;
   let conversationVerificationCount = 0;
+  const preservedTaskCount = wechatImportBatch.value.length;
   wechatScanBusy.value = true;
   beginWechatScanReport();
   wechatSelectedImportMessage.value = '';
-  wechatImportQueue.value = [];
-  wechatImportBatch.value = [];
-  wechatImportCompletedTokens.value = [];
-  activeWechatImportToken.value = null;
   setWechatScanStatus('正在从客户中心加载全部微信关联，请稍候…');
   wechatImportModalOpen.value = true;
 
@@ -1801,17 +1726,25 @@ async function scanAllBoundWechatOrders() {
     const checkedSummary = `已巡查 ${result.checkedCount} 个关联微信会话`;
     const warningSummary = warningCount ? `；另有 ${warningCount} 项需检查` : '';
     if (!result.imports.length) {
+      const preservedSummary = preservedTaskCount
+        ? `；已保留当前 ${preservedTaskCount} 个未保存任务`
+        : '';
       setWechatScanStatus(
-        `${checkedSummary}，没有发现未处理的新订单${warningSummary}`,
+        `${checkedSummary}，没有发现未处理的新订单${warningSummary}${preservedSummary}`,
         warningCount ? 'warning' : 'success'
       );
       return;
     }
 
-    wechatImportQueue.value = result.imports;
-    wechatImportBatch.value = result.imports;
-    wechatImportCompletedTokens.value = [];
-    activeWechatImportToken.value = result.imports[0]?.token || null;
+    // A full recheck is available from inside an active draft. Never clear the
+    // existing queue before a long external scan: a failed customer or a lost
+    // permission must not discard the operator's unsaved edits. Stable task
+    // keys merge refreshed messages into the existing token; newly discovered
+    // tasks append to the same confirmation list.
+    const firstScannedToken = enqueueWechatImportItems(result.imports, { activate: false });
+    if (!activeWechatImportToken.value) {
+      activeWechatImportToken.value = firstScannedToken;
+    }
     setWechatScanStatus(
       `${checkedSummary}，发现 ${customerCount} 位客户的 ${result.imports.length} 个订单任务（${totalMessages} 条新消息）${warningSummary}`,
       warningCount ? 'warning' : 'success'

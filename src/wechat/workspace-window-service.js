@@ -47,15 +47,28 @@ function parseBounds(text) {
 
 function macDockArgs(bounds) {
   return [
-    '-e', 'tell application "WeChat" to activate',
+    // `activate` only brings the process forward. When the user previously
+    // closed WeChat's main window, the process stays alive with zero AX
+    // windows and `activate` does not recreate it. `reopen` follows the same
+    // behaviour as clicking WeChat in the Dock and restores the chat window.
+    '-e', 'tell application "WeChat" to reopen',
     '-e', 'tell application "System Events" to tell process "WeChat"',
     '-e', 'set frontmost to true',
+    '-e', 'repeat 30 times',
+    '-e', 'if exists window "微信" then exit repeat',
+    '-e', 'delay 0.1',
+    '-e', 'end repeat',
     '-e', 'if not (exists window "微信") then error "WECHAT_MAIN_WINDOW_NOT_FOUND"',
     '-e', 'set targetWindow to window "微信"',
     '-e', 'set oldPosition to position of targetWindow',
     '-e', 'set oldSize to size of targetWindow',
-    '-e', `set position of targetWindow to {${bounds.x}, ${bounds.y}}`,
+    // WeChat applies its minimum-size constraint when the size changes. Set
+    // the size first, then pin the origin again so the window cannot drift to
+    // the right and end up underneath GrainPrint.
     '-e', `set size of targetWindow to {${bounds.width}, ${bounds.height}}`,
+    '-e', `set position of targetWindow to {${bounds.x}, ${bounds.y}}`,
+    '-e', 'delay 0.08',
+    '-e', `set position of targetWindow to {${bounds.x}, ${bounds.y}}`,
     '-e', 'perform action "AXRaise" of targetWindow',
     '-e', 'return (item 1 of oldPosition as text) & "," & (item 2 of oldPosition as text) & "," & (item 1 of oldSize as text) & "," & (item 2 of oldSize as text)',
     '-e', 'end tell',
@@ -67,8 +80,8 @@ function macRestoreArgs(bounds) {
     '-e', 'tell application "System Events" to tell process "WeChat"',
     '-e', 'if exists window "微信" then',
     '-e', 'set targetWindow to window "微信"',
-    '-e', `set position of targetWindow to {${bounds.x}, ${bounds.y}}`,
     '-e', `set size of targetWindow to {${bounds.width}, ${bounds.height}}`,
+    '-e', `set position of targetWindow to {${bounds.x}, ${bounds.y}}`,
     '-e', 'end if',
     '-e', 'end tell',
   ];
@@ -263,12 +276,15 @@ function createWechatWorkspaceWindowService(options = {}) {
         };
       }
       try {
-        const wechatBounds = await dockWechat(layout.wechat);
         if (saved.fullScreen) window.setFullScreen(false);
         if (saved.maximized) window.unmaximize();
         window.setBounds(layout.app);
-        window.show();
-        window.focus();
+        if (typeof window.showInactive === 'function') window.showInactive();
+        else window.show();
+        // Place the app first and WeChat last. dockWechat activates and raises
+        // WeChat, which keeps the left comparison window visible instead of
+        // allowing the Electron window to cover it immediately afterwards.
+        const wechatBounds = await dockWechat(layout.wechat);
         session = { saved, wechatBounds, layout };
         startConversationWatcher();
         return { ok: true, result: layout };

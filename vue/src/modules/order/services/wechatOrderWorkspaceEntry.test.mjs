@@ -15,7 +15,7 @@ const openEntry = workbench.match(
 )?.[1] || '';
 assert.match(openEntry, /wechatImportModalOpen\.value = true/);
 assert.match(openEntry, /await openWechatWorkspace\(\)/);
-assert.match(openEntry, /refreshWechatLauncherSummary/);
+assert.doesNotMatch(openEntry, /refreshWechatLauncherSummary|loadBoundWechatCustomers|inspectUnread/);
 assert.match(
   openEntry,
   /await openActiveWechatImport\(\{ openWorkspace: true, focusConversation: false \}\)/,
@@ -30,7 +30,7 @@ assert.match(closeEntry, /const shouldCloseWechatWorkspace = wechatWorkspaceRead
 assert.match(closeEntry, /if \(!shouldCloseWechatWorkspace\) return/);
 
 const unreadAction = workbench.match(
-  /async function readUnreadWechatOrders\(\) \{([\s\S]*?)\n\}\n\nasync function handleTaskAdded/,
+  /async function readUnreadWechatOrders\(\) \{([\s\S]*?)\n\}\n\nasync function scanAllBoundWechatOrders/,
 )?.[1] || '';
 assert.match(unreadAction, /loadBoundWechatCustomers/);
 assert.match(unreadAction, /loadBoundWechatCustomers\(\{ refreshCustomers: true \}\)/);
@@ -38,18 +38,17 @@ assert.match(unreadAction, /wechatUi\?\.readUnread/);
 assert.match(unreadAction, /ensureWechatBindingWithGroupMode/);
 assert.match(workbench, /resolveWechatCustomerAssociation/);
 
-assert.match(modal, /查看未读订单/);
+assert.match(modal, /读取未读订单/);
 assert.match(modal, /读取当前微信/);
-assert.match(modal, /当前没有未读客户/);
-assert.match(modal, /launcherUnreadCount === 0/);
 assert.match(modal, /launcherCurrentTitle/);
-assert.match(modal, /检查 \$\{props\.launcherCustomerCount\} 位微信客户/);
-assert.match(workbench, /:launcher-unread-count="wechatLauncherUnreadCount"/);
-assert.match(workbench, /:launcher-current-title="wechatLauncherConversationTitle"/);
-assert.match(workbench, /:launcher-customer-count="wechatLauncherCustomerCount"/);
-assert.match(workbench, /wechatUi\?\.inspectUnread/);
+assert.match(modal, /检查已关联微信/);
+assert.doesNotMatch(modal, /launcherUnreadCount|launcherCustomerCount|launcherSummaryLoading/);
+assert.match(workbench, /:launcher-current-title="observedWechatConversationTitle"/);
+assert.doesNotMatch(workbench, /wechatLauncherUnreadCount|wechatLauncherCustomerCount|refreshWechatLauncherSummary/);
 assert.match(modal, /\$emit\('scan-unread'\)/);
 assert.match(modal, /\$emit\('scan-all'\)/);
+assert.match(modal, /重新检查全部/);
+assert.match(modal, /重新逐个检查全部已关联微信/);
 assert.match(modal, /scanReportOpen/);
 assert.match(modal, /实时查询结果/);
 assert.match(modal, /自动化正在执行/);
@@ -70,6 +69,8 @@ const selectedAction = workbench.match(
   /async function importSelectedWechatConversation\(\) \{([\s\S]*?)\n\}\n\nasync function openWechatCustomerMatcher/,
 )?.[1] || '';
 assert.match(selectedAction, /currentConversationApi\(\)/);
+assert.match(selectedAction, /current-conversation-cache-corrected/);
+assert.doesNotMatch(selectedAction, /current-conversation-cached/);
 assert.match(selectedAction, /findWechatCustomerProfileMatches/);
 assert.match(selectedAction, /createWechatOrderTiming\('read-selected-wechat'\)/);
 assert.match(selectedAction, /waitForWechatConfirmationPaint\(\)/);
@@ -94,6 +95,10 @@ assert.match(allCustomerAction, /ensureWechatBindingWithGroupMode/);
 assert.match(allCustomerAction, /prepareWechatOrderImport/);
 assert.match(allCustomerAction, /readWechatCustomerDatabaseFirst/);
 assert.match(allCustomerAction, /mode === 'database' \? \[250, 500\] : \[250\]/);
+assert.doesNotMatch(allCustomerAction, /wechatImportQueue\.value = \[\]/);
+assert.doesNotMatch(allCustomerAction, /wechatImportBatch\.value = \[\]/);
+assert.match(allCustomerAction, /enqueueWechatImportItems\(result\.imports, \{ activate: false \}\)/);
+assert.match(allCustomerAction, /已保留当前 \$\{preservedTaskCount\} 个未保存任务/);
 assert.match(workbench, /@scan-all="scanAllBoundWechatOrders"/);
 
 const selectTaskAction = workbench.match(
