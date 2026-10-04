@@ -518,12 +518,28 @@
 
           <Transition name="wechat-import-action">
             <div
-              v-if="selectedImportBusy || actionMessage || unmatchedConversationTitle || customerMatchOpen || groupModeRequest"
+              v-if="(conversationSwitching && !busy) || selectedImportBusy || actionMessage || unmatchedConversationTitle || customerMatchOpen || groupModeRequest"
               class="wechat-import-modal__action-mask"
-              @click.self="groupModeRequest ? $emit('cancel-group-mode') : $emit('dismiss-action-message')"
+              @click.self="handleActionMaskClick"
             >
               <section
-                v-if="groupModeRequest"
+                v-if="conversationSwitching && !busy"
+                class="wechat-import-modal__action-dialog is-busy is-switching"
+                role="status"
+                aria-live="polite"
+                aria-busy="true"
+              >
+                <span class="wechat-import-modal__action-icon" aria-hidden="true">
+                  <i></i>
+                </span>
+                <div>
+                  <small>正在切换微信会话</small>
+                  <h3>正在打开“{{ conversationSwitchingTitle || '当前客户' }}”</h3>
+                  <p>左侧微信正在搜索并切换会话，完成前请稍候，不要重复操作。</p>
+                </div>
+              </section>
+              <section
+                v-else-if="groupModeRequest"
                 class="wechat-import-modal__group-mode-dialog"
                 role="dialog"
                 aria-modal="true"
@@ -702,6 +718,8 @@ const props = defineProps({
   refreshing: { type: Boolean, default: false },
   workspaceWarning: { type: String, default: '' },
   selectedImportBusy: { type: Boolean, default: false },
+  conversationSwitching: { type: Boolean, default: false },
+  conversationSwitchingTitle: { type: String, default: '' },
   showSelectedImportAction: { type: Boolean, default: true },
   launcherCurrentTitle: { type: String, default: '' },
   launcherCurrentAvatar: { type: String, default: '' },
@@ -854,6 +872,13 @@ const selectedImportBusyMessage = computed(() => (
     ? `正在查找“${props.launcherCurrentTitle}”关联的客户并读取订单消息…`
     : '正在获取微信名称并查找关联客户…'
 ));
+
+function handleActionMaskClick() {
+  if (props.conversationSwitching) return;
+  if (props.groupModeRequest) emit('cancel-group-mode');
+  else emit('dismiss-action-message');
+}
+
 watch(
   () => [props.customerMatchOpen, props.unmatchedConversationTitle],
   ([open]) => {

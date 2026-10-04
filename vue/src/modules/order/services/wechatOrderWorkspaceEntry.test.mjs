@@ -65,6 +65,12 @@ assert.match(modal, /selectedImportBusyTitle/);
 assert.match(modal, /正在识别“\$\{props\.launcherCurrentTitle\}”/);
 assert.match(modal, /正在查找“\$\{props\.launcherCurrentTitle\}”关联的客户/);
 assert.doesNotMatch(modal, /正在识别当前微信好友/);
+assert.match(workbench, /:conversation-switching="wechatConversationSwitching"/);
+assert.match(workbench, /:conversation-switching-title="wechatConversationSwitchingTitle"/);
+assert.match(modal, /v-if="conversationSwitching && !busy"/);
+assert.match(modal, /正在切换微信会话/);
+assert.match(modal, /完成前请稍候，不要重复操作/);
+assert.match(modal, /if \(props\.conversationSwitching\) return/);
 assert.match(modal, /检查已关联微信/);
 assert.doesNotMatch(modal, /launcherUnreadCount|launcherCustomerCount|launcherSummaryLoading/);
 assert.match(workbench, /:launcher-current-title="observedWechatConversationTitle"/);
@@ -216,6 +222,12 @@ assert.match(desktopSelectionListener, /payload\?\.selectionChanged === true/);
 assert.match(desktopSelectionListener, /await syncWechatSelectionFromDesktop\(payload\)/);
 assert.match(desktopSelectionListener, /await focusWechatWorkspaceApp\(\)/);
 assert.match(workbench, /void handleWechatConversationChanged\(payload\)/);
+const focusConversationAction = workbench.match(
+  /async function focusWechatImportConversation\(item\) \{([\s\S]*?)\n\}\n\nasync function openWechatWorkspace/,
+)?.[1] || '';
+assert.match(focusConversationAction, /wechatConversationSwitching\.value = true/);
+assert.match(focusConversationAction, /await focusApi\(conversationTitle\)/);
+assert.match(focusConversationAction, /wechatConversationSwitching\.value = false/);
 assert.match(workbench, /selectedWechatTodayInbox = useTodayOrderInbox\(disUser\)/);
 assert.match(workbench, /#selected-conversation/);
 assert.match(workbench, /<TodayOrders/);

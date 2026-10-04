@@ -96,6 +96,8 @@
       :refreshing="wechatImportRefreshing"
       :workspace-warning="wechatWorkspaceWarning"
       :selected-import-busy="wechatSelectedImportBusy"
+      :conversation-switching="wechatConversationSwitching"
+      :conversation-switching-title="wechatConversationSwitchingTitle"
       :show-selected-import-action="showCurrentWechatReadButton"
       :launcher-current-title="observedWechatConversationTitle"
       :launcher-current-avatar="observedWechatConversationAvatar"
@@ -320,6 +322,8 @@ const wechatImportRefreshing = ref(false);
 const wechatWorkspaceWarning = ref('');
 const wechatWorkspaceReady = ref(false);
 const wechatSelectedImportBusy = ref(false);
+const wechatConversationSwitching = ref(false);
+const wechatConversationSwitchingTitle = ref('');
 const wechatSelectedImportMessage = ref('');
 const wechatSelectedImportStatus = ref('warning');
 const wechatUnmatchedConversationTitle = ref('');
@@ -901,6 +905,8 @@ async function focusWechatImportConversation(item) {
   const focusApi = window.electronAPI?.wechatUi?.focusConversation;
   if (!conversationTitle || !focusApi) return '';
   wechatConversationFocusDepth += 1;
+  wechatConversationSwitching.value = true;
+  wechatConversationSwitchingTitle.value = conversationTitle;
   try {
     const result = await focusApi(conversationTitle);
     return result?.ok
@@ -910,6 +916,10 @@ async function focusWechatImportConversation(item) {
     return error?.message || '左侧微信未能自动切换到对应会话';
   } finally {
     wechatConversationFocusDepth = Math.max(0, wechatConversationFocusDepth - 1);
+    if (wechatConversationFocusDepth === 0) {
+      wechatConversationSwitching.value = false;
+      wechatConversationSwitchingTitle.value = '';
+    }
   }
 }
 
@@ -1342,6 +1352,8 @@ function resetWechatImportModalState() {
   wechatImportModalOpen.value = false;
   wechatScanReportOpen.value = false;
   wechatWorkspaceReady.value = false;
+  wechatConversationSwitching.value = false;
+  wechatConversationSwitchingTitle.value = '';
   observedWechatConversationTitle.value = '';
   observedWechatConversationAvatar.value = '';
   clearSelectedWechatConversation();
