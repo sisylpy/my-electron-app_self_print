@@ -105,6 +105,9 @@ class WechatReadOnlyDB:
         self._session_cache: Optional[Dict[str, int]] = None
         self._contact_rows_cache: Optional[List[Tuple[str, str, str, int]]] = None
         self._contact_nick_cache: Dict[str, Optional[str]] = {}
+        self._contact_avatar_url_cache: Dict[str, Optional[str]] = {}
+        self._contact_avatar_column_cache: Optional[str] = None
+        self._contact_avatar_column_resolved = False
         self._message_location_cache: Dict[str, List[Tuple[str, str]]] = {}
         self._message_table_index: Dict[str, List[str]] = {}
         self._indexed_message_shards = set()
@@ -125,12 +128,56 @@ class WechatReadOnlyDB:
         return self.m.query(db_path, sql)
 
     # ---- contact / session ----
+    def _contact_avatar_column(self) -> Optional[str]:
+        """Find the optional avatar URL column without assuming one WeChat schema.
+
+        WeChat has renamed this presentation-only field across releases.  The
+        order reader must therefore continue working when the column is absent
+        or when a future schema stops exposing it.
+        """
+        if self._contact_avatar_column_resolved:
+            return self._contact_avatar_column_cache
+        self._contact_avatar_column_resolved = True
+        try:
+            rows = self._run(self._contact_db(), "PRAGMA table_info(contact)")
+        except Exception:
+            return None
+        columns = {
+            str(row[1]).lower(): str(row[1])
+            for row in rows
+            if len(row) > 1 and row[1]
+        }
+        for candidate in (
+            "small_head_url",
+            "small_head_img_url",
+            "head_img_url",
+            "avatar_url",
+            "big_head_url",
+        ):
+            if candidate in columns:
+                self._contact_avatar_column_cache = columns[candidate]
+                break
+        return self._contact_avatar_column_cache
+
+    @staticmethod
+    def _normalize_avatar_url(value: Optional[str]) -> Optional[str]:
+        url = str(value or "").strip()
+        if not url or len(url) > 4096 or not url.lower().startswith(("http://", "https://")):
+            return None
+        return url
+
     def contact_rows(self) -> List[Tuple[str, str, str, int]]:
         """返回 (username, nick_name, remark, local_type)。"""
         if self._contact_rows_cache is not None:
             return list(self._contact_rows_cache)
+        avatar_column = self._contact_avatar_column()
+        avatar_select = (
+            ', "%s"' % avatar_column.replace('"', '""')
+            if avatar_column
+            else ", NULL"
+        )
         sql = (
-            "SELECT username, nick_name, remark, local_type "
+            f"SELECT username, nick_name, remark, local_type{avatar_select} "
             "FROM contact WHERE username IS NOT NULL"
         )
         out = []
@@ -138,6 +185,9 @@ class WechatReadOnlyDB:
             row = (r[0] or "", r[1] or "", r[2] or "", int(r[3] or 0))
             out.append(row)
             self._contact_nick_cache[row[0]] = row[1] or None
+            self._contact_avatar_url_cache[row[0]] = self._normalize_avatar_url(
+                r[4] if len(r) > 4 else None
+            )
         self._contact_rows_cache = out
         return list(out)
 
@@ -149,6 +199,13 @@ class WechatReadOnlyDB:
         nick = rows[0][0] if rows and rows[0][0] else None
         self._contact_nick_cache[user_name] = nick
         return nick
+
+    def contact_avatar_url(self, user_name: str) -> Optional[str]:
+        if user_name not in self._contact_avatar_url_cache:
+            # One batched contact read fills every avatar URL and avoids an N+1
+            # native-query process when a scan creates several order tasks.
+            self.contact_rows()
+        return self._contact_avatar_url_cache.get(user_name)
 
     def session_last_times(self) -> Dict[str, int]:
         """一次性取回全部会话的最后活跃时间 {userName: last_timestamp}。

@@ -56,6 +56,7 @@ def _conv(c):
         "kind": c.kind,
         "participantCount": c.participantCount,
         "lastMessageAt": _iso(c.lastMessageAt),
+        "avatarUrl": c.avatarUrl,
     }
 
 

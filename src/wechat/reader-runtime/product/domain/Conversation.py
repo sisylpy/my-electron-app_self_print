@@ -12,3 +12,4 @@ class Conversation:
     kind: Literal["group", "direct", "official"]
     participantCount: Optional[int] = None
     lastMessageAt: Optional[datetime] = None
+    avatarUrl: Optional[str] = None

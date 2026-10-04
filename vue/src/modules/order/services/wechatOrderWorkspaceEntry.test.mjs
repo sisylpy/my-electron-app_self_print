@@ -43,6 +43,9 @@ assert.match(modal, /读取当前微信/);
 assert.match(modal, /launcherCurrentTitle/);
 assert.match(modal, /launcherCurrentAvatar/);
 assert.match(modal, /wechat-import-modal__selected-avatar/);
+assert.match(modal, /item\.conversationAvatar/);
+assert.match(modal, /activeItem\.conversationAvatar/);
+assert.match(modal, /hideBrokenAvatar/);
 assert.match(modal, /selectedImportBusyTitle/);
 assert.match(modal, /正在识别“\$\{props\.launcherCurrentTitle\}”/);
 assert.match(modal, /正在查找“\$\{props\.launcherCurrentTitle\}”关联的客户/);
@@ -53,6 +56,8 @@ assert.match(workbench, /:launcher-current-title="observedWechatConversationTitl
 assert.match(workbench, /:launcher-current-avatar="observedWechatConversationAvatar"/);
 assert.match(workbench, /normalizeObservedWechatConversationAvatar/);
 assert.match(workbench, /payload\?\.avatarDataUrl/);
+assert.match(workbench, /resolveWechatConversationAvatar/);
+assert.match(workbench, /conversationAvatar/);
 assert.doesNotMatch(workbench, /wechatLauncherUnreadCount|wechatLauncherCustomerCount|refreshWechatLauncherSummary/);
 assert.match(modal, /\$emit\('scan-unread'\)/);
 assert.match(modal, /\$emit\('scan-all'\)/);

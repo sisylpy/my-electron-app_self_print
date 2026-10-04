@@ -57,6 +57,57 @@ export function normalizeWechatBinding(data) {
   };
 }
 
+export function normalizeWechatAvatarSource(value) {
+  const source = String(value || '').trim();
+  if (!source) return '';
+  if (/^data:image\/png;base64,[A-Za-z0-9+/=]+$/u.test(source)) {
+    return source.length <= 300000 ? source : '';
+  }
+  if (source.length > 4096) return '';
+  try {
+    const url = new URL(source);
+    const hostname = url.hostname.toLocaleLowerCase();
+    const trustedHost = [
+      'qlogo.cn',
+      'qpic.cn',
+      'weixin.qq.com',
+      'wechat.com',
+      'weixinbridge.com',
+    ].some(domain => hostname === domain || hostname.endsWith(`.${domain}`));
+    if (!trustedHost || !['http:', 'https:'].includes(url.protocol)) return '';
+    url.protocol = 'https:';
+    return url.toString();
+  } catch {
+    return '';
+  }
+}
+
+export async function loadWechatConversationAvatar({
+  binding,
+  conversationTitle,
+  electronAPI = window.electronAPI,
+}) {
+  const normalizedBinding = normalizeWechatBinding(binding);
+  const title = String(conversationTitle || normalizedBinding.displayName || '').trim();
+  const reader = electronAPI?.wechatReader;
+  if (!normalizedBinding.bound || !title || !reader?.findConversation) return '';
+  try {
+    const found = unwrapWechatReader(await reader.findConversation(
+      normalizedBinding.accountFingerprint,
+      title
+    ));
+    const matches = Array.isArray(found?.matches) ? found.matches : [];
+    const exact = matches.find(item => (
+      String(item?.id || '') === String(normalizedBinding.conversationFingerprint)
+    )) || matches.find(item => String(item?.displayName || '').trim() === title);
+    return normalizeWechatAvatarSource(exact?.avatarUrl);
+  } catch {
+    // Avatar is presentation-only. A missing/old contact schema must never
+    // block complete order data from reaching the confirmation queue.
+    return '';
+  }
+}
+
 export function buildWechatReconciliationPlan(boundTitles, openedTitles) {
   const bound = Array.from(new Set(
     (Array.isArray(boundTitles) ? boundTitles : [])

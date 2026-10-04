@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import {
   buildWechatReconciliationPlan,
   loadCustomerWechatBinding,
+  loadWechatConversationAvatar,
   mergeWechatOrderPayload,
+  normalizeWechatAvatarSource,
   prepareWechatOrderImport,
   removeWechatImportQueueItem,
 } from './wechatOrderImport.js';
@@ -78,6 +80,32 @@ const electronAPI = {
 
 const loaded = await loadCustomerWechatBinding(7, electronAPI);
 assert.equal(loaded.bound, true);
+assert.equal(
+  normalizeWechatAvatarSource('http://wx.qlogo.cn/mmhead/example/0'),
+  'https://wx.qlogo.cn/mmhead/example/0'
+);
+assert.equal(normalizeWechatAvatarSource('https://example.com/avatar.png'), '');
+assert.equal(
+  await loadWechatConversationAvatar({
+    binding: loaded,
+    conversationTitle: '金调料',
+    electronAPI: {
+      wechatReader: {
+        findConversation: async () => ({
+          ok: true,
+          result: {
+            matches: [{
+              id: binding.conversationFingerprint,
+              displayName: '金调料',
+              avatarUrl: 'https://wx.qlogo.cn/mmhead/customer/0',
+            }],
+          },
+        }),
+      },
+    },
+  }),
+  'https://wx.qlogo.cn/mmhead/customer/0'
+);
 
 const noPendingReader = {
   getParticipants: electronAPI.wechatReader.getParticipants,

@@ -62,7 +62,17 @@
                     @keydown.enter.prevent="selectItem(item)"
                     @keydown.space.prevent="selectItem(item)"
                   >
-                    <span class="wechat-import-modal__index">{{ index + 1 }}</span>
+                    <span
+                      :class="['wechat-import-modal__index', { 'has-avatar': item.conversationAvatar }]"
+                    >
+                      <b>{{ index + 1 }}</b>
+                      <img
+                        v-if="item.conversationAvatar"
+                        :src="item.conversationAvatar"
+                        alt=""
+                        @error="hideBrokenAvatar"
+                      />
+                    </span>
                     <div class="wechat-import-modal__conversation">
                       <strong>{{ item.conversationTitle || item.customerName }}</strong>
                       <span>{{ item.customerName }} · {{ item.messageCount }} 条消息</span>
@@ -101,7 +111,17 @@
               <p v-if="workspaceWarning && !activeItem" class="wechat-import-modal__warning">{{ workspaceWarning }}</p>
               <div v-if="activeItem" class="wechat-import-modal__current">
                 <div class="wechat-import-modal__current-summary">
-                  <span class="wechat-import-modal__current-number">{{ currentPosition }}</span>
+                  <span
+                    :class="['wechat-import-modal__current-number', { 'has-avatar': activeItem.conversationAvatar }]"
+                  >
+                    <b>{{ currentPosition }}</b>
+                    <img
+                      v-if="activeItem.conversationAvatar"
+                      :src="activeItem.conversationAvatar"
+                      alt=""
+                      @error="hideBrokenAvatar"
+                    />
+                  </span>
                   <div class="wechat-import-modal__current-copy">
                     <span>微信会话</span>
                     <strong>{{ activeItem.conversationTitle || activeItem.customerName }}</strong>
@@ -834,6 +854,10 @@ function removeItem(item) {
   if (itemState(item) === 'completed') return;
   emit('remove-item', item?.token);
 }
+
+function hideBrokenAvatar(event) {
+  if (event?.currentTarget) event.currentTarget.hidden = true;
+}
 </script>
 
 <style scoped>
@@ -1004,7 +1028,7 @@ function removeItem(item) {
   display: grid;
   width: 190px;
   flex: none;
-  grid-template-columns: 25px minmax(0, 1fr);
+  grid-template-columns: 32px minmax(0, 1fr);
   align-items: center;
   gap: 7px;
   margin-right: 7px;
@@ -1019,7 +1043,13 @@ function removeItem(item) {
 .wechat-import-modal__queue li.is-selectable:focus-visible { border-color: #9fd0b6; background: #fff; }
 .wechat-import-modal__queue li.is-active { border-color: #70bd94; background: #fff; box-shadow: 0 5px 14px rgba(27, 99, 67, .09); }
 .wechat-import-modal__queue li.is-completed { opacity: .7; background: #eaf4ee; }
-.wechat-import-modal__index { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 8px; color: #5f7469; background: #e6efea; font-size: 10px; font-weight: 900; }
+.wechat-import-modal__index { position: relative; display: grid; width: 32px; height: 32px; overflow: hidden; place-items: center; border-radius: 9px; color: #5f7469; background: #e6efea; font-size: 11px; font-weight: 900; }
+.wechat-import-modal__index b,
+.wechat-import-modal__current-number b { font: inherit; }
+.wechat-import-modal__index img,
+.wechat-import-modal__current-number img { position: absolute; width: 100%; height: 100%; inset: 0; object-fit: cover; }
+.wechat-import-modal__index img[hidden],
+.wechat-import-modal__current-number img[hidden] { display: none; }
 .is-active .wechat-import-modal__index { color: #fff; background: #14945b; }
 .is-completed .wechat-import-modal__index { color: #20744d; background: #cde9da; }
 .wechat-import-modal__conversation { display: grid; min-width: 0; gap: 1px; }
@@ -1061,7 +1091,7 @@ function removeItem(item) {
   box-shadow: none;
 }
 .wechat-import-modal__current-summary { display: flex; min-width: 0; align-items: center; gap: 10px; }
-.wechat-import-modal__current-number { display: grid; width: 34px; height: 34px; flex: none; place-items: center; border-radius: 11px; color: #fff; background: #15945b; font-size: 13px; font-weight: 900; }
+.wechat-import-modal__current-number { position: relative; display: grid; width: 34px; height: 34px; flex: none; overflow: hidden; place-items: center; border-radius: 11px; color: #fff; background: #15945b; font-size: 13px; font-weight: 900; }
 .wechat-import-modal__current-copy { display: grid; min-width: 80px; gap: 1px; }
 .wechat-import-modal__current-copy span { color: #7a8c83; font-size: 9px; font-weight: 700; }
 .wechat-import-modal__current-copy strong { overflow: hidden; color: #183d2d; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }

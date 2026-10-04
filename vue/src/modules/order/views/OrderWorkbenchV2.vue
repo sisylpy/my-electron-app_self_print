@@ -209,7 +209,9 @@ import { blockingCustomerDirectoryError } from '../services/smartReplenishmentCo
 import {
   buildWechatReconciliationPlan,
   loadCustomerWechatBinding,
+  loadWechatConversationAvatar,
   mergeWechatOrderPayload,
+  normalizeWechatAvatarSource,
   prepareWechatOrderImport,
   removeWechatImportQueueItem,
 } from '../services/wechatOrderImport';
@@ -281,6 +283,7 @@ let wechatImportSequence = 0;
 let wechatConversationFocusDepth = 0;
 let wechatReaderWarmupStarted = false;
 let wechatOrderTimingSequence = 0;
+const wechatConversationAvatars = new Map();
 const selectedWechatRetryDelaysMs = Object.freeze([650]);
 
 const wechatOrderTimingLabels = Object.freeze({
@@ -705,6 +708,11 @@ async function refreshActiveWechatImport(options = {}) {
           .join('；');
       }
     }
+    result.conversationAvatar = await resolveWechatConversationAvatar(
+      item.conversationTitle,
+      result.binding || item.binding,
+      item.conversationAvatar
+    );
     const incomingItems = createWechatImportItems({
       customerId: item.customerId,
       customerName: item.customerName,
@@ -918,11 +926,37 @@ function normalizeObservedWechatConversationTitle(value) {
 }
 
 function normalizeObservedWechatConversationAvatar(value) {
-  const avatar = String(value || '').trim();
-  if (avatar.length > 300000 || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/u.test(avatar)) {
-    return '';
-  }
+  const avatar = normalizeWechatAvatarSource(value);
+  return avatar.startsWith('data:image/png;base64,') ? avatar : '';
+}
+
+function applyWechatConversationAvatar(titleValue, avatarValue) {
+  const title = normalizeObservedWechatConversationTitle(titleValue);
+  const avatar = normalizeWechatAvatarSource(avatarValue);
+  if (!title || !avatar) return '';
+  wechatConversationAvatars.set(title, avatar);
+  const addAvatar = item => (
+    normalizeObservedWechatConversationTitle(item?.conversationTitle) === title
+      ? { ...item, conversationAvatar: avatar }
+      : item
+  );
+  wechatImportQueue.value = wechatImportQueue.value.map(addAvatar);
+  wechatImportBatch.value = wechatImportBatch.value.map(addAvatar);
   return avatar;
+}
+
+async function resolveWechatConversationAvatar(title, binding, preferredAvatar = '') {
+  const normalizedTitle = normalizeObservedWechatConversationTitle(title);
+  if (!normalizedTitle) return '';
+  const preferred = applyWechatConversationAvatar(normalizedTitle, preferredAvatar);
+  if (preferred) return preferred;
+  const cached = normalizeWechatAvatarSource(wechatConversationAvatars.get(normalizedTitle));
+  if (cached) return cached;
+  const avatar = await loadWechatConversationAvatar({
+    binding,
+    conversationTitle: normalizedTitle,
+  });
+  return applyWechatConversationAvatar(normalizedTitle, avatar);
 }
 
 async function syncWechatSelectionFromDesktop(payload) {
@@ -934,7 +968,10 @@ async function syncWechatSelectionFromDesktop(payload) {
   if (previousTitle && previousTitle !== title) observedWechatConversationAvatar.value = '';
   observedWechatConversationTitle.value = title;
   const avatarDataUrl = normalizeObservedWechatConversationAvatar(payload?.avatarDataUrl);
-  if (avatarDataUrl) observedWechatConversationAvatar.value = avatarDataUrl;
+  if (avatarDataUrl) {
+    observedWechatConversationAvatar.value = avatarDataUrl;
+    applyWechatConversationAvatar(title, avatarDataUrl);
+  }
   if (!wechatImportModalOpen.value
       || wechatScanBusy.value
       || wechatSelectedImportBusy.value
@@ -1041,6 +1078,11 @@ function createWechatImportItemsFromTasks(row, title, taskPayloads, options = {}
   const customer = row.customer || { nxDepartmentId: row.customerId };
   const binding = options.binding || row.binding;
   const pendingCount = options.pendingCount;
+  const conversationAvatar = normalizeWechatAvatarSource(
+    options.conversationAvatar
+    || row.conversationAvatar
+    || wechatConversationAvatars.get(normalizeObservedWechatConversationTitle(title))
+  );
   return (Array.isArray(taskPayloads) ? taskPayloads : []).map((payload) => {
     const taskType = payload.taskType || 'mixed';
     return {
@@ -1048,6 +1090,7 @@ function createWechatImportItemsFromTasks(row, title, taskPayloads, options = {}
       customerId: customerId(customer) || row.customerId,
       customerName,
       conversationTitle: title,
+      conversationAvatar,
       taskType,
       taskLabel: wechatOrderTaskLabel(taskType),
       messageCount: payload?.source?.messages?.length || pendingCount,
@@ -1065,7 +1108,11 @@ function createWechatImportItems(row, title, result) {
     row,
     title,
     splitWechatOrderPayloads(result.payload),
-    { binding: result.binding || row.binding, pendingCount: result.pendingCount }
+    {
+      binding: result.binding || row.binding,
+      pendingCount: result.pendingCount,
+      conversationAvatar: result.conversationAvatar,
+    }
   );
 }
 
@@ -1096,6 +1143,7 @@ function enqueueWechatImportItems(incomingItems, { activate = true } = {}) {
         token: existing.token,
         payload,
         messageCount: payload?.source?.messages?.length || incomingItem.messageCount,
+        conversationAvatar: incomingItem.conversationAvatar || existing.conversationAvatar || '',
       };
       replaceWechatImportItem(existing.token, replacement);
       if (!firstToken) firstToken = replacement.token;
@@ -1204,7 +1252,12 @@ async function ensureWechatBindingWithGroupMode(options) {
   }
 }
 
-async function importWechatConversationForCustomer(customer, title, timing = null) {
+async function importWechatConversationForCustomer(
+  customer,
+  title,
+  timing = null,
+  preferredAvatar = ''
+) {
   const selectedCustomerId = customerId(customer);
   const onTiming = event => recordWechatServiceTiming(timing, event);
   const binding = await timeWechatOrderPhase(
@@ -1242,6 +1295,11 @@ async function importWechatConversationForCustomer(customer, title, timing = nul
   if (!result.payload) {
     throw new Error(result.message || '已关联该微信好友，但当前没有未处理的新订单');
   }
+  result.conversationAvatar = await resolveWechatConversationAvatar(
+    title,
+    result.binding || row.binding,
+    preferredAvatar
+  );
   timeWechatOrderSyncPhase(
     timing,
     'task-enqueue',
@@ -1298,6 +1356,7 @@ async function importSelectedWechatConversation() {
     if (cachedTitle && cachedTitle !== title) observedWechatConversationAvatar.value = '';
     observedWechatConversationTitle.value = title;
     if (avatarDataUrl) observedWechatConversationAvatar.value = avatarDataUrl;
+    if (avatarDataUrl) applyWechatConversationAvatar(title, avatarDataUrl);
     if (cachedTitle && cachedTitle !== title) {
       timing.phase('current-conversation-cache-corrected', {
         cachedConversationTitle: cachedTitle,
@@ -1333,7 +1392,7 @@ async function importSelectedWechatConversation() {
       );
     }
     if (matches.length === 1) {
-      await importWechatConversationForCustomer(matches[0], title, timing);
+      await importWechatConversationForCustomer(matches[0], title, timing, avatarDataUrl);
       confirmationReady = true;
       outcome = 'success';
       return;
@@ -1527,6 +1586,10 @@ async function readUnreadWechatOrders() {
           });
           continue;
         }
+        result.conversationAvatar = await resolveWechatConversationAvatar(
+          title,
+          result.binding || row.binding
+        );
         const items = createWechatImportItems(row, title, result);
         imports.push(...items);
         completeWechatScanStep({
@@ -1710,6 +1773,12 @@ async function scanAllBoundWechatOrders() {
           });
           if (!databaseFirst.verifiedByConversation) databaseOnlyCount += 1;
           const prepared = databaseFirst.result;
+          if (prepared.payload) {
+            prepared.conversationAvatar = await resolveWechatConversationAvatar(
+              title,
+              prepared.binding || row.binding
+            );
+          }
           const items = prepared.payload ? createWechatImportItems(row, title, prepared) : [];
           timing.phase('scan-customer-complete', {
             ...customerMeta,

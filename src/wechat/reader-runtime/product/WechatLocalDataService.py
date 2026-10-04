@@ -213,6 +213,7 @@ class WechatLocalDataService:
                         kind=_kind_of(username),
                         participantCount=None,
                         lastMessageAt=datetime.fromtimestamp(last).astimezone() if last else None,
+                        avatarUrl=db.contact_avatar_url(username),
                     )
                 )
         if not matches:
@@ -439,6 +440,7 @@ class WechatLocalDataService:
                         kind=_kind_of(username),
                         participantCount=None,
                         lastMessageAt=datetime.fromtimestamp(last).astimezone() if last else None,
+                        avatarUrl=db.contact_avatar_url(username),
                     ),
                 )
             )
