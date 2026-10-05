@@ -1,5 +1,7 @@
 ﻿param(
-  [string]$ArtifactRoot = ''
+  [string]$ArtifactRoot = '',
+  [switch]$RequireForeground,
+  [switch]$LibraryOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,6 +19,7 @@ public static class GrainPrintCurrentWeixinWin32 {
   public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
   [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int command);
@@ -80,6 +83,7 @@ function Get-WeixinWindow {
     if ($width -lt 480 -or $height -lt 360) { return $true }
     [void]$windows.Add([pscustomobject]@{
       Handle = $windowHandle
+      ProcessId = [int]$windowProcessId
       Left = $rect.Left
       Top = $rect.Top
       Right = $rect.Right
@@ -114,8 +118,21 @@ function Wait-WeixinMainWindow {
   return $null
 }
 
-function Show-WeixinWindow {
+function Show-WeixinWindow([switch]$MustAlreadyBeForeground) {
   $window = Get-WeixinWindow
+  if ($MustAlreadyBeForeground) {
+    if ($null -eq $window) { return $null }
+    $foregroundHandle = [GrainPrintCurrentWeixinWin32]::GetForegroundWindow()
+    [uint32]$foregroundProcessId = 0
+    if ($foregroundHandle -ne [IntPtr]::Zero) {
+      [void][GrainPrintCurrentWeixinWin32]::GetWindowThreadProcessId(
+        $foregroundHandle,
+        [ref]$foregroundProcessId
+      )
+    }
+    if ([int]$foregroundProcessId -ne [int]$window.ProcessId) { return $null }
+    return $window
+  }
   if ($null -eq $window) {
     $running = @(Get-Process -Name Weixin, WeChatAppEx, WeChat -ErrorAction SilentlyContinue)
     if (-not $running.Count) { return $null }
@@ -326,11 +343,20 @@ function Get-TitleFromWindowsOcr($window, [string]$screenshotPath) {
   }
 }
 
+# focus-conversation.ps1 imports these verified title-reading functions into
+# its own process. Keep the executable body behind this switch so switching a
+# chat does not need a second PowerShell startup merely to run the same OCR.
+if ($LibraryOnly) { return }
+
 $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 $temporaryScreenshot = ''
 try {
-  $window = Show-WeixinWindow
+  $window = Show-WeixinWindow -MustAlreadyBeForeground:$RequireForeground
   if ($null -eq $window) {
+    if ($RequireForeground) {
+      Write-Result -code 'NOT_FOREGROUND' -message '微信当前不在前台' -conversationTitle '' -method 'foreground-check' -candidateCount 0 -elapsedMilliseconds ($stopwatch.ElapsedMilliseconds)
+      exit 4
+    }
     Write-Result -code 'WEIXIN_MAIN_WINDOW_NOT_READY' -message '没有找到已登录的微信窗口，请先打开微信聊天窗口' -conversationTitle '' -method 'none' -candidateCount 0 -elapsedMilliseconds ($stopwatch.ElapsedMilliseconds)
     exit 3
   }

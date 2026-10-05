@@ -20,7 +20,7 @@ Electron main 启动本进程，通过 **stdin/stdout 每行一个 JSON** 通信
 事件（child → main，无 id）：
 
 ```jsonc
-{"event":"ready","version":"1","platform":"darwin"}
+{"event":"ready","version":"2","platform":"darwin"}
 {"event":"log","level":"info","message":"…"}
 ```
 

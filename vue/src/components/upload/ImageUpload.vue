@@ -245,12 +245,12 @@
                                         v-if="source !== 'taskOrder'"
                                         class="btn btn-danger btn-sm"
                                         @click="$emit('re-upload')">
-                                    删除
+                                    <img :src="iconDelete" alt="" class="btn-action-icon">删除
                                 </button>
                                 <button
                                         class="btn btn-outline-info btn-sm"
                                         @click="$emit('show-fix-items')">
-                                    Ai协助调整
+                                    <img :src="iconAiAdjustment" alt="" class="btn-action-icon">Ai协助调整
                                 </button>
                                 <button
                                         v-if="currentTask && currentTask.nxOcrTaskPendingOrders == 0"
@@ -270,7 +270,7 @@
                                                     class="btn btn-sm btn-success"
                                                     :disabled="orderItems.length === 0"
                                                     style="min-width: 80px; font-weight: 500;">
-                                                ▶️ 播放
+                                                <img :src="iconPlay" alt="" class="btn-action-icon">播放
                                             </button>
                                             <button
                                                     v-if="ttsPlaying || ttsLoading"
@@ -323,6 +323,9 @@
 <script>
     import api from '../../api/all';
     import Toast from '../Toast.vue';
+    import iconDelete from '../../assets/order-actions/delete.png';
+    import iconAiAdjustment from '../../assets/order-actions/ai_adjustment.png';
+    import iconPlay from '../../assets/order-actions/play.png';
 
     export default {
         name: 'ImageUpload',
@@ -442,6 +445,9 @@
         ],
         data() {
             return {
+                iconDelete,
+                iconAiAdjustment,
+                iconPlay,
                 showClickPopup: false,
                 popupX: 0,
                 popupY: 0,
@@ -550,7 +556,7 @@
                 this.$emit('select-task', {taskId: id, task});
             },
 
-            /** “+” 点击：若已在添加新图片状态则关闭（仅页面恢复），否则进入添加新图片 */
+            /** "+" 点击：若已在添加新图片状态则关闭（仅页面恢复），否则进入添加新图片 */
             onAddNewImageClick() {
                 this.triggerHeaderFlash();
                 if (this.hasCache) {
@@ -860,6 +866,14 @@
 </script>
 
 <style scoped>
+    .btn-action-icon {
+        width: 13px;
+        height: 13px;
+        object-fit: contain;
+        margin-right: 4px;
+        vertical-align: -2px;
+    }
+
     /* 解析中蒙版样式 */
     .parsing-overlay {
         position: absolute;
@@ -992,5 +1006,3 @@
         opacity: 0;
     }
 </style>
-
-

@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const fs = require('fs');
+const path = require('path');
 
 const V1_MAGIC = Buffer.from([0x07, 0x08, 0x56, 0x31, 0x08, 0x07]);
 const V2_MAGIC = Buffer.from([0x07, 0x08, 0x56, 0x32, 0x08, 0x07]);
@@ -145,7 +146,17 @@ function findWxgfHevcPartition(buffer) {
   throw new Error('微信 WXGF 图片中没有找到可解码的高清画面');
 }
 
-function resolveFfmpegPath() {
+function bundledWindowsFfmpegPath(resourcesPath) {
+  return path.join(resourcesPath, 'wechat-image-tools', 'ffmpeg.exe');
+}
+
+function resolveFfmpegPath(options = {}) {
+  const platform = options.platform || process.platform;
+  const resourcesPath = options.resourcesPath || process.resourcesPath || '';
+  if (platform === 'win32' && resourcesPath) {
+    const packagedWindowsFfmpeg = bundledWindowsFfmpegPath(resourcesPath);
+    if (fs.existsSync(packagedWindowsFfmpeg)) return packagedWindowsFfmpeg;
+  }
   let ffmpegPath;
   try {
     ffmpegPath = require('ffmpeg-static');
@@ -303,6 +314,8 @@ function decodeWechatImageEnvelope(envelope) {
 module.exports = {
   decodeWechatImageEnvelope,
   decodeWechatImageEnvelopeAsync,
+  bundledWindowsFfmpegPath,
   detectImageMime,
   findWxgfHevcPartition,
+  resolveFfmpegPath,
 };

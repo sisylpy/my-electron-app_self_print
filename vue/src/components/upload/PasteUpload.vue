@@ -98,16 +98,18 @@
                                     <div v-if="!pasteHasCache && pasteSaveCount == null"
                                         class="d-flex gap-2 w-100">
                                         <button class="btn btn-sm btn-primary flex-grow-1" @click="$emit('paste-from-clipboard')"
-                                                :disabled="showDeepSeekLoading">从剪贴板粘贴
+                                                :disabled="showDeepSeekLoading">
+                                            <img :src="iconPasteFromClipboard" alt="" class="order-input-btn-icon">从剪贴板粘贴
                                         </button>
                                         <button class="btn btn-sm btn-info flex-grow-1" @click="$emit('ai-recognise')"
                                                 :disabled="!pasteInputText || pasteInputText.trim() === '' || showDeepSeekLoading">
+                                            <img :src="iconAiOrderParse" alt="" class="order-input-btn-icon">
                                             {{ showDeepSeekLoading ? 'AI识别中...' : 'Ai协助解析订单' }}
                                         </button>
                                         <button class="btn btn-success btn-sm flex-grow-1" @click="$emit('local-parse')"
                                                 :disabled="!pasteInputText || pasteInputText.trim() === '' || showDeepSeekLoading"
                                                 title="本地解析，不调用 AI">
-                                            解析订单
+                                            <img :src="iconParseOrder" alt="" class="order-input-btn-icon">解析订单
                                         </button>
                                     </div>
 
@@ -243,6 +245,9 @@
 
 <script>
     import api from '../../api/all';
+    import iconPasteFromClipboard from '../../assets/order-input/paste_from_clipboard.png';
+    import iconAiOrderParse from '../../assets/order-input/ai_order_parse.png';
+    import iconParseOrder from '../../assets/order-input/parse_order.png';
 
     export default {
         name: 'PasteUpload',
@@ -351,6 +356,9 @@
         },
         data() {
             return {
+                iconPasteFromClipboard,
+                iconAiOrderParse,
+                iconParseOrder,
                 taskList: [],
                 activeTaskId: null,
                 loadingTaskList: false,
@@ -573,6 +581,15 @@
 </script>
 
 <style scoped>
+    /* 订单录入按钮图标：三个按钮均为彩色底，图标反白保证对比度 */
+    .order-input-btn-icon {
+        width: 15px;
+        height: 15px;
+        margin-right: 5px;
+        vertical-align: -2px;
+        filter: brightness(0) invert(1);
+    }
+
     /* 解析中蒙版样式 */
     .parsing-overlay {
         position: absolute;
@@ -709,5 +726,3 @@
         opacity: 0;
     }
 </style>
-
-

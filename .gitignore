@@ -24,6 +24,13 @@ Thumbs.db
 *.log
 *.tmp
 
+# Local runtime/test caches and generated inspection artifacts
+**/__pycache__/
+*.pyc
+*.pyo
+/src/wechat/ui-automation/mac/artifacts/
+/work/
+
 # Archives
 *.zip
 *.tar.gz

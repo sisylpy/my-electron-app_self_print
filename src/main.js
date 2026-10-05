@@ -61,6 +61,7 @@ const { createOrderSessionGateway } = require('./order/order-session-gateway');
 const { createWechatReaderService, shutdownReader } = require('./wechat/reader-service');
 const { createWechatUiAutomationService } = require('./wechat/ui-automation-service');
 const { createWechatWorkspaceWindowService } = require('./wechat/workspace-window-service');
+const { createMacKeychainEducation } = require('./security/mac-keychain-education');
 const { PRODUCTION_API_BASE_URL } = require('./api-runtime');
 
 // MCP 服务器模块
@@ -108,7 +109,15 @@ let orderSessionGateway = null;
 let wechatReaderService = null;
 let wechatUiAutomationService = null;
 let wechatWorkspaceWindowService = null;
+let macKeychainEducation = null;
 let wechatWorkspaceNativeCloseInProgress = false;
+let windowsWechatSelectionObservationTimer = null;
+let windowsWechatSelectionObservationRunning = false;
+let windowsWechatSelectionObservationGeneration = 0;
+let windowsWechatSelectionObservationLastTitle = '';
+let windowsWechatVerifiedConversationTitle = '';
+let windowsWechatSelectionObservationDeadline = 0;
+let windowsWechatProgrammaticConversationFocusDepth = 0;
 let quitAfterReaderShutdown = false;
 let beforeQuitReaderPromise = null;
 const selectedFolderCapabilities = new Set();
@@ -261,6 +270,28 @@ function getDispatchGateway() {
   return dispatchGateway;
 }
 
+function getMacKeychainEducation() {
+  if (!macKeychainEducation) {
+    macKeychainEducation = createMacKeychainEducation({
+      app,
+      BrowserWindow,
+      getParentWindow: () => mainWindow,
+    });
+  }
+  return macKeychainEducation;
+}
+
+async function allowMacSecureStorage(intent) {
+  const result = await getMacKeychainEducation().ensure(intent);
+  if (result.ok) return null;
+  return {
+    ok: false,
+    status: 499,
+    errorCode: 'MAC_KEYCHAIN_EXPLANATION_CANCELLED',
+    message: '尚未读取本机安全登录信息；需要时可重新进入此页面继续操作',
+  };
+}
+
 function getOrderWriteGateway() {
   if (!orderWriteGateway) {
     orderWriteGateway = createOrderWriteGateway({ axios, appLogger });
@@ -317,6 +348,7 @@ function getWechatWorkspaceWindowService() {
       desktopCapturer,
       execFileAsync,
       getMainWindow: () => mainWindow,
+      ensureMacAccessibility: prompt => systemPreferences.isTrustedAccessibilityClient(prompt),
     });
   }
   return wechatWorkspaceWindowService;
@@ -327,6 +359,110 @@ async function shutdownWechatWorkspaceWindow() {
   if (!service) return;
   wechatWorkspaceWindowService = null;
   await service.dispose();
+}
+
+function rememberWindowsWechatConversationTitle(value) {
+  if (process.platform !== 'win32') return '';
+  const title = String(value || '').trim();
+  if (title) windowsWechatSelectionObservationLastTitle = title;
+  return title;
+}
+
+function stopWindowsWechatSelectionObservation({ resetTitle = false } = {}) {
+  windowsWechatSelectionObservationGeneration += 1;
+  windowsWechatSelectionObservationDeadline = 0;
+  if (windowsWechatSelectionObservationTimer) {
+    clearTimeout(windowsWechatSelectionObservationTimer);
+    windowsWechatSelectionObservationTimer = null;
+  }
+  if (resetTitle) {
+    windowsWechatSelectionObservationLastTitle = '';
+    windowsWechatVerifiedConversationTitle = '';
+  }
+}
+
+function scheduleWindowsWechatSelectionObservation(delayMs = 220) {
+  if (process.platform !== 'win32'
+      || !windowsWechatSelectionObservationDeadline
+      || Date.now() >= windowsWechatSelectionObservationDeadline) return;
+  if (windowsWechatSelectionObservationTimer) {
+    clearTimeout(windowsWechatSelectionObservationTimer);
+  }
+  const generation = windowsWechatSelectionObservationGeneration;
+  windowsWechatSelectionObservationTimer = setTimeout(async () => {
+    windowsWechatSelectionObservationTimer = null;
+    if (generation !== windowsWechatSelectionObservationGeneration
+        || !mainWindow
+        || mainWindow.isDestroyed()) return;
+    if (mainWindow.isFocused()) {
+      scheduleWindowsWechatSelectionObservation(450);
+      return;
+    }
+    if (windowsWechatSelectionObservationRunning) {
+      scheduleWindowsWechatSelectionObservation(180);
+      return;
+    }
+    windowsWechatSelectionObservationRunning = true;
+    try {
+      const result = await getWechatUiAutomationService().currentConversation({
+        requireForeground: true,
+      });
+      const title = String(result?.result?.title || '').trim();
+      if (generation !== windowsWechatSelectionObservationGeneration
+          || !result?.ok
+          || !title
+          || !mainWindow
+          || mainWindow.isDestroyed()) return;
+      const previousTitle = windowsWechatSelectionObservationLastTitle;
+      const selectionChanged = !previousTitle || previousTitle !== title;
+      windowsWechatSelectionObservationLastTitle = title;
+
+      // The first foreground observation is also a real selection: the app
+      // may have opened inactive (or been restarted while Weixin stayed in
+      // front), in which case Electron never receives a blur event. Treat that
+      // first visible title as changed so the right-hand page and focus both
+      // recover without requiring an extra click.
+      if (selectionChanged) {
+        appLogger.append('info', 'wechat-ui', 'observed Windows Weixin conversation', {
+          previousTitle,
+          title,
+          selectionChanged,
+        });
+        mainWindow.webContents.send('wechat-ui-conversation-changed', {
+          title,
+          avatarDataUrl: '',
+          selectionChanged,
+        });
+        windowsWechatSelectionObservationDeadline = 0;
+      }
+    } catch {
+      // Losing focus to another desktop app is normal. Only a foreground
+      // Weixin window produces a selection event; all other blur events are
+      // deliberately ignored without bringing Weixin forward.
+    } finally {
+      windowsWechatSelectionObservationRunning = false;
+      // A blur event fires only once when focus moves from GrainPrint to
+      // Weixin. The user may then click several different Weixin rows without
+      // another blur event, so keep observing until GrainPrint is focused
+      // again or the side-by-side workspace closes.
+      if (generation === windowsWechatSelectionObservationGeneration
+          && mainWindow
+          && !mainWindow.isDestroyed()
+          && Date.now() < windowsWechatSelectionObservationDeadline) {
+        scheduleWindowsWechatSelectionObservation(mainWindow.isFocused() ? 450 : 260);
+      }
+    }
+  }, delayMs);
+  windowsWechatSelectionObservationTimer.unref?.();
+}
+
+function beginWindowsWechatSelectionObservation() {
+  if (process.platform !== 'win32' || windowsWechatProgrammaticConversationFocusDepth > 0) return;
+  // Weixin can briefly report the old row while it is repainting a manual
+  // click. Keep a bounded retry window instead of relying on the workspace
+  // service's in-memory session, which may be absent after app/task recovery.
+  windowsWechatSelectionObservationDeadline = Date.now() + 12000;
+  scheduleWindowsWechatSelectionObservation();
 }
 
 function sanitizeMcpSessionUser(value) {
@@ -696,43 +832,144 @@ function setupIpcHandlers() {
   });
   ipcMain.handle('wechat-ui-current-conversation', async (event, input) => {
     assertTrustedRendererEvent(event);
+    const result = await getWechatUiAutomationService().currentConversation(input);
+    if (!result?.ok || !result.result) return result;
+    rememberWindowsWechatConversationTitle(result.result.title);
     try {
-      const result = await getWechatUiAutomationService().currentConversation(input);
-      if (!result?.ok || !result.result) return result;
-      try {
-        const avatarDataUrl = await wechatWorkspaceWindowService
-          ?.captureSelectedConversationAvatar?.();
-        if (avatarDataUrl) result.result.avatarDataUrl = avatarDataUrl;
-      } catch {
-        // Avatar is presentation-only; title/order reading must still succeed.
-      }
-      return result;
-    } finally {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.show();
-        mainWindow.focus();
-      }
+      const avatarDataUrl = await wechatWorkspaceWindowService
+        ?.captureSelectedConversationAvatar?.();
+      if (avatarDataUrl) result.result.avatarDataUrl = avatarDataUrl;
+    } catch {
+      // Avatar is presentation-only; title/order reading must still succeed.
     }
+    // This read is also used as a passive Windows observer while the user is
+    // clicking Weixin. Do not steal focus here: the renderer returns focus to
+    // GrainPrint only after it has confirmed and applied a different title.
+    return result;
   });
   ipcMain.handle('wechat-ui-focus-conversation', async (event, input) => {
     assertTrustedRendererEvent(event);
+    const focusStartedAt = Date.now();
+    let automationFinishedAt = 0;
+    let automationOk = false;
+    let automationMetrics = {};
+    let automationDetails = [];
+    let requestedTitle = '';
+    let needsWorkspaceFocus = true;
+    windowsWechatProgrammaticConversationFocusDepth += 1;
+    stopWindowsWechatSelectionObservation();
     try {
-      return await getWechatUiAutomationService().focusConversation(input);
+      requestedTitle = String(input?.title || '').normalize('NFKC').trim();
+      let result = null;
+      // If GrainPrint never lost focus after the last exact switch, Weixin
+      // cannot have been changed by the user. Re-clicking that same task is a
+      // no-op and should not flash a several-second switching mask.
+      if (process.platform === 'win32'
+          && requestedTitle
+          && mainWindow?.isFocused?.()
+          && windowsWechatVerifiedConversationTitle === requestedTitle) {
+        result = {
+          ok: true,
+          result: {
+            code: 'SUCCESS',
+            message: `微信会话“${requestedTitle}”已经打开`,
+            metrics: {
+              platform: 'win32',
+              method: 'verified-foreground-title-reused',
+              totalMs: 0,
+            },
+            openedTitles: [requestedTitle],
+            candidateTitles: [requestedTitle],
+            details: ['VERIFIED_FOREGROUND_TITLE_REUSED'],
+          },
+        };
+        needsWorkspaceFocus = false;
+      }
+      // Most task-card clicks target the conversation that is already open on
+      // the left. Use the observer's last title only as a hint, then verify the
+      // visible Weixin header before skipping the expensive search. A stale
+      // hint therefore costs one check but can never open/read the wrong chat.
+      if (!result
+          && process.platform === 'win32'
+          && requestedTitle
+          && windowsWechatSelectionObservationLastTitle === requestedTitle) {
+        const verifyStartedAt = Date.now();
+        const current = await getWechatUiAutomationService().currentConversation({
+          requireForeground: false,
+        });
+        if (current?.ok && current.result?.title === requestedTitle) {
+          const verifyMs = Date.now() - verifyStartedAt;
+          result = {
+            ok: true,
+            result: {
+              code: 'SUCCESS',
+              message: `微信会话“${requestedTitle}”已经打开`,
+              metrics: {
+                platform: 'win32',
+                method: 'visible-header-already-matched',
+                totalMs: verifyMs,
+              },
+              openedTitles: [requestedTitle],
+              candidateTitles: [requestedTitle],
+              details: ['VISIBLE_HEADER_ALREADY_MATCHED'],
+            },
+          };
+        }
+      }
+      if (!result) {
+        result = await getWechatUiAutomationService().focusConversation(input);
+      }
+      automationFinishedAt = Date.now();
+      automationOk = result?.ok === true;
+      automationMetrics = result?.result?.metrics || {};
+      automationDetails = Array.isArray(result?.result?.details)
+        ? result.result.details
+        : [];
+      if (result?.ok) rememberWindowsWechatConversationTitle(input?.title);
+      return result;
     } finally {
+      if (!automationFinishedAt) automationFinishedAt = Date.now();
+      windowsWechatProgrammaticConversationFocusDepth = Math.max(
+        0,
+        windowsWechatProgrammaticConversationFocusDepth - 1
+      );
       // Searching/clicking a conversation necessarily activates WeChat. The
       // two windows remain visible side by side, but GrainPrint must become the
       // active app again or macOS consumes the user's next click merely to
       // activate Electron instead of pressing the intended button.
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.show();
-        mainWindow.focus();
+      if (mainWindow && !mainWindow.isDestroyed() && needsWorkspaceFocus) {
+        // A plain BrowserWindow.focus() is not enough after a PowerShell UIA
+        // helper activates Weixin on Windows: the first click would only
+        // reactivate Electron. The workspace service performs the native HWND
+        // foreground hand-off and falls back to Electron focus elsewhere.
+        await getWechatWorkspaceWindowService().focus();
       }
+      if (automationOk && requestedTitle) {
+        windowsWechatVerifiedConversationTitle = requestedTitle;
+      }
+      appLogger.append('info', 'wechat-ui', 'conversation focus timing', {
+        automationOk,
+        automationMs: automationFinishedAt - focusStartedAt,
+        automationReportedMs: Number(automationMetrics.totalMs || 0),
+        automationDetails,
+        appFocusMs: Date.now() - automationFinishedAt,
+        totalMs: Date.now() - focusStartedAt,
+      });
     }
   });
   ipcMain.handle('wechat-ui-workspace-open', async (event) => {
     assertTrustedRendererEvent(event);
-    return getWechatWorkspaceWindowService().open();
+    const startedAt = Date.now();
+    const result = await getWechatWorkspaceWindowService().open();
+    appLogger.append(result?.ok ? 'info' : 'warn', 'wechat-ui', 'workspace open', {
+      durationMs: Date.now() - startedAt,
+      mode: result?.result?.mode || '',
+      layout: result?.result?.app || null,
+      actualBounds: mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : null,
+      errorCode: result?.error?.code || '',
+      errorDetails: result?.error?.details || '',
+    });
+    return result;
   });
   ipcMain.handle('wechat-ui-workspace-focus', async (event) => {
     assertTrustedRendererEvent(event);
@@ -740,16 +977,23 @@ function setupIpcHandlers() {
   });
   ipcMain.handle('wechat-ui-workspace-close', async (event) => {
     assertTrustedRendererEvent(event);
+    stopWindowsWechatSelectionObservation({ resetTitle: true });
     return getWechatWorkspaceWindowService().close();
   });
 
   // 桌面调度：token 只存在主进程，渲染进程仅能调用以下白名单能力。
   ipcMain.handle('dispatch-auth-get-session', async (event) => {
     assertTrustedRendererEvent(event);
+    const blocked = await allowMacSecureStorage('read');
+    if (blocked) return blocked;
     return getDispatchGateway().getSession();
   });
   ipcMain.handle('dispatch-auth-adopt-login-session', async (event, auth, options) => {
     assertTrustedRendererEvent(event);
+    if (options?.persistSession !== false) {
+      const blocked = await allowMacSecureStorage('write');
+      if (blocked) return blocked;
+    }
     return getDispatchGateway().adoptLoginSession(auth, options);
   });
   ipcMain.handle('user-session-logout', async (event) => {
@@ -1372,6 +1616,7 @@ async function createWindow() {
     if (quitAfterReaderShutdown || !service?.isOpen?.()) return;
     event.preventDefault();
     if (wechatWorkspaceNativeCloseInProgress) return;
+    stopWindowsWechatSelectionObservation({ resetTitle: true });
     wechatWorkspaceNativeCloseInProgress = true;
     if (!mainWindow.webContents.isDestroyed()) {
       mainWindow.webContents.send('wechat-ui-workspace-close-requested');
@@ -1390,7 +1635,17 @@ async function createWindow() {
         mainWindow.focus();
       });
   });
+  mainWindow.on('blur', () => {
+    if (windowsWechatProgrammaticConversationFocusDepth === 0) {
+      windowsWechatVerifiedConversationTitle = '';
+    }
+    beginWindowsWechatSelectionObservation();
+  });
+  mainWindow.on('focus', () => {
+    stopWindowsWechatSelectionObservation();
+  });
   mainWindow.on('closed', () => {
+    stopWindowsWechatSelectionObservation({ resetTitle: true });
     void shutdownWechatWorkspaceWindow();
     clearMcpPrintDeliveriesForWebContents(mainWindowWebContentsId);
     mainWindow = null;

@@ -1,4 +1,6 @@
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const {
   computeWorkspaceLayout,
   createWechatWorkspaceWindowService,
@@ -13,6 +15,10 @@ assert.deepStrictEqual(parseBounds('10,20,800,700\n'), {
   height: 700,
 });
 assert.throws(() => parseBounds('invalid'), /无法读取微信窗口位置/);
+assert.match(
+  fs.readFileSync(path.join(__dirname, 'after-pack.js'), 'utf8'),
+  /codesign[\s\S]*?'--deep'[\s\S]*?'--sign'[\s\S]*?'-'/,
+);
 
 const layout = computeWorkspaceLayout({ x: 0, y: 25, width: 1920, height: 1055 });
 assert.strictEqual(layout.mode, 'docked');
@@ -24,6 +30,14 @@ assert.strictEqual(layout.app.height, 1055);
 assert.strictEqual(layout.wechat.width, 806);
 assert.ok(layout.app.width >= 760);
 assert.ok(layout.app.width > layout.wechat.width);
+const compactMacLayout = computeWorkspaceLayout({ x: 0, y: 23, width: 1168, height: 720 });
+assert.strictEqual(compactMacLayout.mode, 'docked');
+assert.strictEqual(compactMacLayout.wechat.width, 540);
+assert.strictEqual(compactMacLayout.app.width, 620);
+assert.strictEqual(
+  computeWorkspaceLayout({ x: 0, y: 23, width: 1167, height: 720 }).mode,
+  'app-only'
+);
 const windowsLayout = computeWorkspaceLayout(
   { x: 0, y: 0, width: 1366, height: 768 },
   { platform: 'win32' }
@@ -86,6 +100,14 @@ async function verifyDockAndRestore() {
     maximize: () => { maximized = true; calls.push('maximize'); },
     setFullScreen: value => calls.push(`fullscreen:${value}`),
     setBounds: value => { bounds = { ...value }; calls.push({ setBounds: value }); },
+    setSize: (width, height) => {
+      bounds = { ...bounds, width, height };
+      calls.push({ setSize: { width, height } });
+    },
+    setPosition: (x, y) => {
+      bounds = { ...bounds, x, y };
+      calls.push({ setPosition: { x, y } });
+    },
     showInactive: () => calls.push('showInactive'),
     show: () => calls.push('show'),
     focus: () => calls.push('focus'),
@@ -124,12 +146,22 @@ async function verifyDockAndRestore() {
   assert.ok(calls.includes('unmaximize'));
   assert.deepStrictEqual(bounds, opened.result.app);
   assert.ok(
+    calls.findIndex(call => call === 'showInactive')
+      < calls.findIndex(call => typeof call === 'object' && call.setBounds),
+    'GrainPrint must be shown before its docked frame is applied on macOS'
+  );
+  assert.ok(
     calls.findIndex(call => typeof call === 'object' && call.setBounds)
       < calls.indexOf('dockWechat'),
     'GrainPrint must be placed before WeChat is docked and raised'
   );
   assert.ok(calls.includes('showInactive'));
   assert.strictEqual(calls.includes('show'), true);
+  assert.strictEqual(
+    calls.filter(call => typeof call === 'object' && call.setBounds).length,
+    4,
+    'the right-side app frame must be corrected again after WeChat finishes docking'
+  );
   assert.strictEqual(
     calls.includes('focus'),
     true,
@@ -143,7 +175,35 @@ async function verifyDockAndRestore() {
   assert.strictEqual(maximized, true);
 }
 
-verifyDockAndRestore()
+async function verifyMacAccessibilityGuard() {
+  let execCalled = false;
+  const service = createWechatWorkspaceWindowService({
+    platform: 'darwin',
+    screen: {
+      getDisplayMatching: () => ({ workArea: { x: 0, y: 25, width: 1440, height: 815 } }),
+    },
+    getMainWindow: () => ({
+      isDestroyed: () => false,
+      getBounds: () => ({ x: 0, y: 25, width: 1440, height: 815 }),
+      isMaximized: () => false,
+      isFullScreen: () => false,
+    }),
+    ensureMacAccessibility: prompt => {
+      assert.strictEqual(prompt, true);
+      return false;
+    },
+    execFileAsync: async () => {
+      execCalled = true;
+      return { stdout: '' };
+    },
+  });
+  const opened = await service.open();
+  assert.strictEqual(opened.ok, false);
+  assert.strictEqual(opened.error.code, 'MAC_ACCESSIBILITY_REQUIRED');
+  assert.strictEqual(execCalled, false);
+}
+
+Promise.all([verifyDockAndRestore(), verifyMacAccessibilityGuard()])
   .then(() => console.log('WeChat workspace window smoke passed.'))
   .catch((error) => {
     console.error(error);

@@ -43,8 +43,11 @@ function normalizeCurrentConversationInput(input) {
     throw new Error('当前微信会话识别参数无效');
   }
   const keys = Object.keys(input);
-  if (keys.some((key) => key !== 'allowedTitles')) {
+  if (keys.some((key) => key !== 'allowedTitles' && key !== 'requireForeground')) {
     throw new Error('当前微信会话识别包含未允许的参数');
+  }
+  if (input.requireForeground !== undefined && typeof input.requireForeground !== 'boolean') {
+    throw new Error('当前微信前台识别参数无效');
   }
   // Older renderers may still send allowedTitles. Validate them, but title
   // extraction no longer depends on loading every customer's binding first.
@@ -92,6 +95,21 @@ function resolveWindowsCurrentConversationScript(options = {}) {
   );
   if (!existsSync(script)) {
     throw new Error('安装包内未找到 Windows 当前微信会话识别组件');
+  }
+  return script;
+}
+
+function resolveWindowsFocusConversationScript(options = {}) {
+  const existsSync = options.existsSync || fs.existsSync;
+  const moduleDir = options.moduleDir || __dirname;
+  const script = path.join(
+    moduleDir,
+    'ui-automation',
+    'windows',
+    'focus-conversation.ps1'
+  );
+  if (!existsSync(script)) {
+    throw new Error('安装包内未找到 Windows 微信会话切换组件');
   }
   return script;
 }
@@ -240,6 +258,7 @@ function createWechatUiAutomationService(options = {}) {
   const artifactRoot = options.artifactRoot;
   let activeChild = null;
   let activePromise = null;
+  let currentConversationPromise = null;
   let abortReason = '';
 
   function stopChild(child, reason) {
@@ -449,7 +468,11 @@ function createWechatUiAutomationService(options = {}) {
     });
   }
 
-  function runWindowsCurrentConversation(script, legacyAllowedTitles = []) {
+  function runWindowsCurrentConversation(
+    script,
+    legacyAllowedTitles = [],
+    { requireForeground = false } = {}
+  ) {
     const powershell = options.powershell || process.env.JCYX_WECHAT_UI_POWERSHELL || 'powershell.exe';
     const args = [
       '-NoLogo',
@@ -461,10 +484,33 @@ function createWechatUiAutomationService(options = {}) {
       script,
     ];
     if (artifactRoot) args.push('-ArtifactRoot', artifactRoot);
+    if (requireForeground) args.push('-RequireForeground');
     return runProcess(powershell, args, path.dirname(script), legacyAllowedTitles, {
       parseOutput: parseCurrentConversationOutput,
       missingRuntimeCode: 'POWERSHELL_NOT_FOUND',
       missingRuntimeMessage: '未找到 Windows PowerShell，无法识别当前微信会话',
+    });
+  }
+
+  function runWindowsFocusConversation(script, title) {
+    const powershell = options.powershell || process.env.JCYX_WECHAT_UI_POWERSHELL || 'powershell.exe';
+    const currentConversationScript = resolveWindowsCurrentConversationScript(options);
+    const args = [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      script,
+      '-Title',
+      title,
+      '-CurrentConversationScript',
+      currentConversationScript,
+    ];
+    return runProcess(powershell, args, path.dirname(script), [title], {
+      missingRuntimeCode: 'POWERSHELL_NOT_FOUND',
+      missingRuntimeMessage: '未找到 Windows PowerShell，无法切换微信会话',
     });
   }
 
@@ -515,16 +561,23 @@ function createWechatUiAutomationService(options = {}) {
           error: { code: 'UNSUPPORTED_PLATFORM', message: '当前系统暂不支持识别所选微信好友' },
         };
       }
+      // The Windows choice page performs a background title refresh as soon as
+      // the docked workspace opens. If the user immediately presses button 2,
+      // both calls ask for the exact same live WeChat header. Reuse the
+      // in-flight read instead of reporting BUSY or launching a second helper.
+      if (currentConversationPromise) return currentConversationPromise;
       if (activePromise) {
         return { ok: false, error: { code: 'BUSY', message: '微信界面自动化正在运行' } };
       }
       try {
         const legacyAllowedTitles = normalizeCurrentConversationInput(input);
         if (platform === 'win32') {
-          return await runWindowsCurrentConversation(
+          currentConversationPromise = runWindowsCurrentConversation(
             resolveWindowsCurrentConversationScript(options),
-            legacyAllowedTitles
+            legacyAllowedTitles,
+            { requireForeground: input?.requireForeground === true }
           );
+          return await currentConversationPromise;
         }
         if (typeof options.ensureMacAccessibility === 'function'
             && !options.ensureMacAccessibility()) {
@@ -548,16 +601,19 @@ function createWechatUiAutomationService(options = {}) {
             };
           }
         }
-        return await runMacCurrentConversation(
+        currentConversationPromise = runMacCurrentConversation(
           resolveMacAutomationRoot(options),
           legacyAllowedTitles
         );
+        return await currentConversationPromise;
       } catch (error) {
         return { ok: false, error: { code: 'INVALID_ARGUMENT', message: error.message } };
+      } finally {
+        currentConversationPromise = null;
       }
     },
     async focusConversation(input) {
-      if (platform !== 'darwin') {
+      if (platform !== 'darwin' && platform !== 'win32') {
         return {
           ok: false,
           error: { code: 'UNSUPPORTED_PLATFORM', message: '当前系统暂不支持自动切换微信会话' },
@@ -568,6 +624,12 @@ function createWechatUiAutomationService(options = {}) {
       }
       try {
         const title = normalizeConversationTitle(input);
+        if (platform === 'win32') {
+          return await runWindowsFocusConversation(
+            resolveWindowsFocusConversationScript(options),
+            title
+          );
+        }
         if (typeof options.ensureMacAccessibility === 'function'
             && !options.ensureMacAccessibility()) {
           return {
@@ -672,4 +734,5 @@ module.exports = {
   resolveMacPythonCommand,
   resolveWindowsAutomationScript,
   resolveWindowsCurrentConversationScript,
+  resolveWindowsFocusConversationScript,
 };

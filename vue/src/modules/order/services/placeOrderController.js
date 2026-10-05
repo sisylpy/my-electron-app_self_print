@@ -5170,14 +5170,14 @@ import api from '../services/orderApi';
                 this.pasteNoValidOrder = false;
                 if (isImageTask) {
                     if (!this.isCurrentWechatOrderLoad(requestId)) return;
-                    await this.openWechatImageInOriginalRecognizer(images[0]);
+                    await this.openWechatImageInOriginalRecognizer(images[0], requestId);
                     return;
                 }
                 if (!this.isCurrentWechatOrderLoad(requestId)) return;
                 if (text) await this.handlePasteLocalParse();
             },
 
-            async openWechatImageInOriginalRecognizer(image) {
+            async openWechatImageInOriginalRecognizer(image, requestId = null) {
                 const dataUrl = String(image?.dataUrl || '').trim();
                 if (!/^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(dataUrl)) {
                     throw new Error('微信原图内容无效，请重新获取该消息');
@@ -5217,7 +5217,20 @@ import api from '../services/orderApi';
                 this.showCropMode = false;
 
                 await this.$nextTick();
+                if (requestId !== null && !this.isCurrentWechatOrderLoad(requestId)) return;
                 this.showImagePreviewModal = true;
+            },
+
+            dismissWechatImport() {
+                // Removing/switching a WeChat image task must also invalidate
+                // any pending next-tick preview open from the old task.
+                this.invalidateWechatOrderLoad();
+                this.showImagePreviewModal = false;
+                this.previewImageDataUrl = null;
+                this.originalImageFile = null;
+                this.uploadedImageFile = null;
+                this.imagePreview = null;
+                if (this.$refs.imageFileInput) this.$refs.imageFileInput.value = '';
             },
 
             beginWechatOrderLoad() {

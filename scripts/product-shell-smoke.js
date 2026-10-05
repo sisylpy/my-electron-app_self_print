@@ -122,10 +122,10 @@ check(!shell.includes('dispatchCommands'), 'ProductShell 不发起调度写操�
 check(shell.includes('--product-sidebar-width: 104px'), 'Windows 侧栏使用加宽后的 104px 宽度');
 check(shell.includes('.product-sidebar__navigation section') && shell.includes('display: contents'),
   '侧栏分组不会阻断菜单项按整屏高度等分');
-check(shell.includes('.product-sidebar__navigation a') && shell.includes('flex: 1 1 0'),
-  '侧栏菜单项按可用高度均匀分配');
-check(shell.includes('.product-sidebar__navigation') && shell.includes('overflow: hidden'),
-  '侧栏导航不再显示独立滚动条');
+check(shell.includes('.product-sidebar__navigation a') && shell.includes('flex: 1 0 54px'),
+  '侧栏菜单项按可用高度均匀分配并保留最小点击高度');
+check(shell.includes('.product-sidebar__navigation') && shell.includes('overflow-y: auto'),
+  '侧栏在窗口高度不足时允许导航区滚动');
 
 if (failures > 0) {
   console.error(`ProductShell smoke failed: ${failures}`);

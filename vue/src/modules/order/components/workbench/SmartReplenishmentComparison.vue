@@ -12,55 +12,44 @@
     </div>
 
     <template v-else>
-      <div class="forecast-check__table">
-        <div class="forecast-check__table-head">
-          <span>商品</span>
-          <span>AI预估</span>
-          <span>客户实订</span>
-          <span>订货习惯</span>
-          <span>上次订单时间</span>
-        </div>
-
-        <div v-if="!hasReminderRows" class="forecast-check__empty">
-          <strong>今天暂时没有订单提醒</strong>
-        </div>
-
-        <template v-else>
-          <div
-            v-for="section in reminderPresentation.sections"
-            :key="section.key"
-            :class="['forecast-check__group', `is-${section.key.toLocaleLowerCase()}`]"
-          >
-            <template v-if="section.rows.length">
-              <div class="forecast-check__group-title">
-                <strong>{{ section.title }}</strong>
-                <span>{{ section.rows.length }} 种</span>
-              </div>
-              <div
-                v-for="row in section.rows"
-                :key="row.key"
-                class="forecast-check__row"
-              >
-                <div class="forecast-check__goods">
+      <div class="forecast-check__columns">
+        <section
+          v-for="section in reminderPresentation.sections"
+          :key="section.key"
+          :class="['forecast-check__group', `is-${section.key.toLocaleLowerCase()}`]"
+          :aria-label="section.title"
+        >
+          <header class="forecast-check__group-title">
+            <strong>{{ section.title }}</strong>
+            <span>{{ section.rows.length }} 种</span>
+          </header>
+          <div class="forecast-check__group-body">
+            <div v-if="!section.rows.length" class="forecast-check__empty">暂无此类商品</div>
+            <div
+              v-for="(row, index) in section.rows"
+              :key="row.key"
+              class="forecast-check__row"
+            >
+              <div class="forecast-check__goods">
+                <div class="forecast-check__goods-name">
+                  <span class="forecast-check__row-number">{{ index + 1 }}.</span>
                   <strong>{{ row.goodsName }}</strong>
                   <span v-if="row.departmentNames.length">{{ row.departmentNames.join('、') }}</span>
                 </div>
-                <div class="forecast-check__quantity">
-                  <strong>{{ predictedQuantityText(row) }}</strong>
-                </div>
-                <div class="forecast-check__quantity">
-                  <strong>{{ actualQuantityText(row) }}</strong>
-                </div>
-                <div class="forecast-check__cadence">
-                  <strong>{{ intervalText(row) }}</strong>
-                </div>
-                <div class="forecast-check__last-order">
-                  <strong>{{ lastOrderText(row) }}</strong>
+                <div v-if="section.key !== 'MATCHED'" class="forecast-check__headline-quantity">
+                  <span>{{ section.key === 'REMINDER' ? '预估' : '实订' }}</span>
+                  <strong>{{ section.key === 'REMINDER' ? predictedQuantityText(row) : actualQuantityText(row) }}</strong>
                 </div>
               </div>
-            </template>
+              <div class="forecast-check__metrics">
+                <div v-if="section.key === 'MATCHED'"><span>AI预估</span><strong>{{ predictedQuantityText(row) }}</strong></div>
+                <div v-if="section.key === 'MATCHED'"><span>客户实订</span><strong>{{ actualQuantityText(row) }}</strong></div>
+                <div><span>订货习惯</span><strong>{{ intervalText(row) }}</strong></div>
+                <div><span>上次订单时间</span><strong>{{ lastOrderText(row) }}</strong></div>
+              </div>
+            </div>
           </div>
-        </template>
+        </section>
       </div>
     </template>
   </section>
@@ -102,8 +91,6 @@ const reconciliation = computed(() => buildOrderForecastReconciliation(
 const reminderPresentation = computed(() => buildOrderReminderPresentation(
   reconciliation.value
 ));
-const hasReminderRows = computed(() => reminderPresentation.value.sections
-  .some(section => section.rows.length));
 const loading = computed(() => forecastLoading.value || props.actualLoading);
 const error = computed(() => forecastError.value || props.actualError);
 
@@ -222,24 +209,31 @@ function lastOrderText(row) {
 
 <style scoped>
 .forecast-check{display:grid;height:100%;min-width:0;min-height:0;grid-template-rows:minmax(0,1fr);padding:12px;overflow:hidden;background:#f6f9f7;color:var(--product-text)}
-.forecast-check__table{min-width:0;min-height:0;overflow:auto;border:1px solid var(--product-border);border-radius:9px;background:#fff}
-.forecast-check__table-head,.forecast-check__row{display:grid;min-width:680px;grid-template-columns:minmax(160px,1.5fr) minmax(95px,.8fr) minmax(95px,.8fr) minmax(130px,1fr) minmax(125px,.9fr);align-items:center}
-.forecast-check__table-head{position:sticky;z-index:3;top:0;min-height:40px;border-bottom:1px solid var(--product-border);color:var(--product-text-secondary);background:#f5f8f6;font-size:11px;font-weight:900}
-.forecast-check__table-head span,.forecast-check__row>div{min-width:0;padding:7px 12px}
-.forecast-check__group-title{position:sticky;z-index:2;top:40px;display:flex;min-height:34px;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid #e8eeeb;font-size:12px}
-.forecast-check__group-title span{padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.75);font-size:10px;font-weight:800}
+.forecast-check__columns{display:grid;min-width:0;min-height:0;grid-template-columns:repeat(3,minmax(270px,1fr));align-items:stretch;gap:10px;overflow-x:auto;overflow-y:hidden}
+.forecast-check__group{display:flex;min-width:0;min-height:0;height:100%;flex-direction:column;overflow:hidden;border:1px solid var(--product-border);border-radius:8px;background:#fff}
+.forecast-check__group-title{display:flex;min-height:42px;align-items:center;justify-content:space-between;gap:8px;padding:0 11px;border-bottom:1px solid #e8eeeb;font-size:13px}
+.forecast-check__group-body{min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.forecast-check__group-title span{flex:none;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.8);font-size:10px;font-weight:800}
 .forecast-check__group.is-reminder .forecast-check__group-title{color:#a64b18;background:#fff1e7}
 .forecast-check__group.is-matched .forecast-check__group-title{color:#08794b;background:#edf8f2}
 .forecast-check__group.is-customer_ordered .forecast-check__group-title{color:#41637f;background:#f0f5f8}
-.forecast-check__row{min-height:54px;border-bottom:1px solid #edf1ef;background:#fff}
+.forecast-check__row{min-width:0;padding:9px 11px;border-bottom:1px solid #edf1ef;background:#fff}
 .forecast-check__group.is-reminder .forecast-check__row{background:#fffaf6}
 .forecast-check__row:last-child{border-bottom:0}
-.forecast-check__goods strong,.forecast-check__quantity strong,.forecast-check__cadence strong,.forecast-check__last-order strong{display:block;font-size:14px;line-height:1.25}
-.forecast-check__goods span{display:block;margin-top:3px;color:var(--product-text-muted);font-size:11px}
-.forecast-check__last-order strong{font-variant-numeric:tabular-nums;color:var(--product-text-secondary)}
-.forecast-check__empty{display:flex;min-height:220px;align-items:center;justify-content:center;color:var(--product-text-muted)}
-.forecast-check__empty strong{color:var(--product-text);font-size:17px}
-.forecast-check__state{display:flex;height:100%;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--product-text-muted);font-size:12px}
+.forecast-check__goods{display:flex;min-width:0;align-items:baseline;justify-content:space-between;gap:8px}
+.forecast-check__goods-name{display:flex;min-width:0;flex:1;align-items:baseline;gap:5px}
+.forecast-check__goods-name strong{min-width:0;overflow:hidden;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+.forecast-check__goods-name>span:not(.forecast-check__row-number){overflow:hidden;color:var(--product-text-muted);font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.forecast-check__row-number{flex:none;color:var(--product-text-muted);font-size:11px;font-variant-numeric:tabular-nums;font-weight:700}
+.forecast-check__headline-quantity{display:flex;flex:none;align-items:baseline;gap:4px;white-space:nowrap}
+.forecast-check__headline-quantity span{color:var(--product-text-muted);font-size:10px}
+.forecast-check__headline-quantity strong{font-size:13px;font-variant-numeric:tabular-nums}
+.forecast-check__metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 10px;margin-top:5px}
+.forecast-check__metrics>div{display:flex;min-width:0;align-items:baseline;gap:5px}
+.forecast-check__metrics span{flex:none;color:var(--product-text-muted);font-size:10px}
+.forecast-check__metrics strong{min-width:0;overflow:hidden;font-size:11px;font-variant-numeric:tabular-nums;text-overflow:ellipsis;white-space:nowrap}
+.forecast-check__empty{display:flex;min-height:100%;align-items:center;justify-content:center;color:var(--product-text-muted);font-size:11px}
+.forecast-check__state{display:flex;grid-row:1/-1;height:100%;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--product-text-muted);font-size:12px}
 .forecast-check__state strong{color:var(--product-text);font-size:17px}
 .forecast-check__state i{width:26px;height:26px;border:3px solid #d9e7df;border-top-color:var(--product-primary);border-radius:50%;animation:forecast-spin .75s linear infinite}
 .forecast-check__state.is-error{color:#b14343}

@@ -284,8 +284,8 @@ test('order reminder presentation uses the three action groups and hides B-only 
     customerOrderedProducts: 1,
   });
   assert.deepEqual(presentation.sections.map(section => section.title), [
-    '今天可能漏订',
-    '预估已下单',
+    '预估未下单',
+    '预估订单',
     '客户自订',
   ]);
   assert.deepEqual(presentation.sections.map(section => section.rows.map(row => row.goodsName)), [

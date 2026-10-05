@@ -10,6 +10,7 @@ const source = read('vue/src/modules/order/components/workbench/WechatOrderSourc
 const controller = read('vue/src/modules/order/services/placeOrderController.js');
 const panel = read('vue/src/modules/order/components/workbench/AiOrderPanel.vue');
 const workbench = read('vue/src/modules/order/views/OrderWorkbenchV2.vue');
+const modal = read('vue/src/modules/order/components/workbench/WechatOrderImportModal.vue');
 
 assert.match(
   source,
@@ -54,18 +55,43 @@ assert.match(
 
 assert.match(
   workbench,
-  /async function selectWechatImport\(token\)\s*\{.*?await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: false \}\);/s,
-  '切换任务卡只能切换右侧任务，不能重新操作微信窗口'
+  /async function selectWechatImport\(token\)\s*\{.*?await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: true \}\);/s,
+  '切换任务卡时必须同步选中左侧微信会话'
 );
 assert.match(
   workbench,
-  /async function removeWechatImport\(token\)\s*\{.*?await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: false \}\);/s,
-  '移除当前任务后进入下一项时不能重新操作微信窗口'
+  /async function removeWechatImport\(token\)\s*\{.*?await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: true \}\);/s,
+  '移除当前任务后必须同步选中下一项对应的微信会话'
+);
+assert.match(
+  modal,
+  /v-if="activeItem\.taskType !== 'image'"[\s\S]*?获取新消息/,
+  '图片识别任务不能显示仅适用于微信文字会话的“获取新消息”按钮'
+);
+assert.match(
+  modal,
+  /@click\.stop\.prevent="removeItem\(activeItem\)"/,
+  '移除任务按钮必须独立消费点击，不能误触发图片内容区'
 );
 assert.match(
   workbench,
-  /async function handleTaskAdded\(change\)\s*\{.*?await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: false \}\);/s,
-  '保存当前任务后自动进入下一项时不能重新操作微信窗口'
+  /activeWechatImportPanelRef\.value\?\.dismissPendingWechatImport\?\.\(\)/,
+  '移除当前任务前必须关闭并取消该任务的图片预览'
+);
+assert.match(
+  controller,
+  /if \(requestId !== null && !this\.isCurrentWechatOrderLoad\(requestId\)\) return;\s*this\.showImagePreviewModal = true;/,
+  '已经失效的微信图片任务不能再次打开预览弹窗'
+);
+assert.match(
+  modal,
+  /taskLabel\(item\)/,
+  '任务卡必须标明文字或图片任务，删除后切换下一项时不产生误解'
+);
+assert.match(
+  workbench,
+  /async function handleTaskAdded\(change\)\s*\{.*?await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: true \}\);/s,
+  '保存当前任务后必须同步选中下一项对应的微信会话'
 );
 
 const refreshAction = workbench.match(
@@ -73,7 +99,7 @@ const refreshAction = workbench.match(
 )?.[1] || '';
 assert.match(
   refreshAction,
-  /const markReadWarning = await focusWechatImportConversation\(item\)/,
+  /const markReadWarning = await timeWechatOrderPhase\([\s\S]*?\(\) => focusWechatImportConversation\(item\)/,
   '手动取得新增消息后必须再次激活同一微信会话以清除未读状态'
 );
 assert.ok(

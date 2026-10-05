@@ -128,6 +128,7 @@
     >
       <AiOrderPanel
         v-if="activeWechatImport && !selectedWechatConversation"
+        ref="activeWechatImportPanelRef"
         :key="activeWechatImport.token"
         class="order-workbench__wechat-import-panel"
         :customers="customerContext.customers.value"
@@ -314,6 +315,7 @@ const wechatImportQueue = ref([]);
 const wechatImportBatch = ref([]);
 const wechatImportCompletedTokens = ref([]);
 const activeWechatImportToken = ref(null);
+const activeWechatImportPanelRef = ref(null);
 const observedWechatConversationTitle = ref('');
 const observedWechatConversationAvatar = ref('');
 const selectedWechatConversation = ref(null);
@@ -338,6 +340,7 @@ let wechatReaderWarmupStarted = false;
 let wechatOrderTimingSequence = 0;
 let selectedWechatConversationRequestId = 0;
 let wechatConversationObservationRequestId = 0;
+const WECHAT_SCAN_REPORT_LEAVE_MS = 280;
 let wechatConversationObservationRunning = false;
 let lastWechatConversationObservationAt = 0;
 const wechatConversationAvatars = new Map();
@@ -714,10 +717,12 @@ async function dismissWechatScanReport() {
   wechatScanReportOpen.value = false;
   if (!activeWechatImport.value) return;
 
-  // Let Vue remove the report immediately. Switching the visible WeChat chat
-  // can then continue alongside the close transition instead of delaying the
-  // completed report by another full conversation search.
+  // The completed report is a stable user-controlled state. Do not start the
+  // first WeChat search while its leave transition is still visible; that
+  // looks like automation resumed on its own. Only continue after the user
+  // clicks the action and the report has completely left the page.
   await nextTick();
+  await new Promise(resolve => window.setTimeout(resolve, WECHAT_SCAN_REPORT_LEAVE_MS));
   await openActiveWechatImport({
     preserveScanMessage: true,
     openWorkspace: false,
@@ -1039,6 +1044,10 @@ async function removeWechatImport(token) {
   const update = removeWechatImportQueueItem(wechatImportQueue.value, token);
   if (!update.removed) return;
 
+  // Close the deleted task's image preview before advancing the queue. This
+  // also cancels a preview that is still waiting for Vue's next tick.
+  if (wasActive) activeWechatImportPanelRef.value?.dismissPendingWechatImport?.();
+
   wechatImportQueue.value = update.items;
   wechatImportBatch.value = wechatImportBatch.value.filter(candidate => candidate?.token !== token);
   wechatImportCompletedTokens.value = wechatImportCompletedTokens.value.filter(
@@ -1056,6 +1065,16 @@ async function removeWechatImport(token) {
     return;
   }
   if (wasActive) {
+    const nextItem = wechatImportQueue.value.find(
+      candidate => candidate?.token === update.nextToken
+    );
+    if (nextItem) {
+      replaceWechatImportItem(nextItem.token, {
+        ...nextItem,
+        refreshNote: `已移除“${item?.taskLabel || '订单任务'}”，下面显示的是下一项订单任务`,
+        refreshError: '',
+      });
+    }
     await openActiveWechatImport({ openWorkspace: false, focusConversation: true });
   }
 }
@@ -1340,15 +1359,26 @@ async function refreshObservedWechatConversation({ force = false } = {}) {
   if (!force && now - lastWechatConversationObservationAt < 800) return false;
 
   const requestId = ++wechatConversationObservationRequestId;
+  const titleBeforeRequest = normalizeObservedWechatConversationTitle(
+    observedWechatConversationTitle.value
+  );
   wechatConversationObservationRunning = true;
   lastWechatConversationObservationAt = now;
   try {
-    const selected = await currentConversationApi();
+    const selected = await currentConversationApi({ requireForeground: !force });
     if (requestId !== wechatConversationObservationRequestId
         || !wechatImportModalOpen.value
         || !selected?.ok
         || !selected.result?.title) return false;
+    const selectedTitle = normalizeObservedWechatConversationTitle(selected.result.title);
     await syncWechatSelectionFromDesktop(selected.result);
+    // A passive Windows read may start before Weixin finishes painting the
+    // newly clicked row. Keep polling while the title is unchanged, and only
+    // return input focus after a genuinely different conversation has been
+    // adopted by the right-hand workbench.
+    if (selectedTitle && selectedTitle !== titleBeforeRequest) {
+      await focusWechatWorkspaceApp();
+    }
     return true;
   } catch {
     // This is a presentation-only observation. Button 2 still performs a
@@ -1367,9 +1397,8 @@ const wechatConversationObservationPoller = /^Win/i.test(String(navigator.platfo
         || !wechatWorkspaceReady.value
         || !wechatImportModalOpen.value) return;
     // Windows has no passive Accessibility notification for a manual WeChat
-    // selection. Observe only while WeChat is still frontmost; the main
-    // process returns focus after recognition, so the user's first workbench
-    // click is never consumed just to activate Electron.
+    // selection. Observe only while WeChat is still frontmost. The renderer
+    // returns focus after a changed title has been confirmed and applied.
     void refreshObservedWechatConversation();
   }, 650)
   : null;

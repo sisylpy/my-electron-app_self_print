@@ -112,10 +112,10 @@
             aria-label="今日订单提醒统计"
           >
             <article class="is-reminder">
-              <span>待提醒</span><strong>{{ reminderSummary.reminderProducts }}</strong><em>种</em>
+              <span>预估未下单</span><strong>{{ reminderSummary.reminderProducts }}</strong><em>种</em>
             </article>
             <article class="is-matched">
-              <span>预估已订</span><strong>{{ reminderSummary.matchedProducts }}</strong><em>种</em>
+              <span>预估订单</span><strong>{{ reminderSummary.matchedProducts }}</strong><em>种</em>
             </article>
             <article class="is-customer-ordered">
               <span>客户自订</span><strong>{{ reminderSummary.customerOrderedProducts }}</strong><em>种</em>
@@ -123,16 +123,16 @@
           </div>
           <div class="order-flow__detail-actions">
             <button type="button" class="is-secondary" :disabled="detailLoading" @click="$emit('refresh-detail')">
-              {{ detailLoading ? '读取中…' : '刷新' }}
+              <img :src="iconRefresh" alt="" class="order-flow__btn-icon">{{ detailLoading ? '读取中…' : '刷新' }}
             </button>
             <button type="button" class="is-primary" @click="$emit('continue-order', selectedCustomer)">
-              ＋ 追加订单
+              <img :src="iconAddOrder" alt="" class="order-flow__btn-icon">追加订单
             </button>
             <button
               type="button"
               :class="['is-smart', { 'is-active': smartMode }]"
               :aria-pressed="smartMode"
-              @click="toggleSmartMode"
+              @click="$emit('smart-mode-change', !smartMode)"
             >
               <svg class="order-flow__btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
@@ -223,7 +223,6 @@
         <div class="order-flow__empty-mark">单</div>
         <strong>{{ emptyMessage }}</strong>
         <span>可以选择其他阶段，或直接新建订单</span>
-        <button v-if="allCustomers.length" type="button" class="is-smart-entry" @click="toggleSmartMode">订单提醒</button>
         <button type="button" @click="$emit('new-order')">新建订单</button>
       </div>
     </div>
@@ -231,7 +230,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import TodayOrders from '@/components/TodayOrders.vue';
 import TaskOrderWorkspace from '../TaskOrderWorkspace.vue';
 import SmartReplenishmentComparison from './SmartReplenishmentComparison.vue';
@@ -241,12 +240,15 @@ import {
   ordersVisibleInStage,
   orderStatusSummary,
 } from '../../services/orderWorkbenchStage';
+import iconRefresh from '@/assets/order-actions/refresh.png';
+import iconAddOrder from '@/assets/order-actions/add_order.png';
 
 const props = defineProps({
   customers: { type: Array, default: () => [] },
   allCustomers: { type: Array, default: () => [] },
   allCustomersLoading: { type: Boolean, default: false },
   allCustomersError: { type: String, default: '' },
+  smartMode: { type: Boolean, default: false },
   distributerId: { type: [Number, String], default: null },
   selectedCustomer: { type: Object, default: null },
   snapshot: { type: Object, required: true },
@@ -265,17 +267,22 @@ const emit = defineEmits([
   'refresh-list',
   'refresh-detail',
   'continue-order',
-  'new-order',
-  'data-changed',
   'smart-mode-change',
   'scan-wechat',
+  'new-order',
+  'data-changed',
 ]);
 
 const query = ref('');
-const smartMode = ref(false);
 const searchOpen = ref(false);
 const searchInput = ref(null);
 const reminderSummary = ref(null);
+
+watch(() => props.smartMode, () => {
+  reminderSummary.value = null;
+  query.value = '';
+  searchOpen.value = false;
+});
 
 function stats(customer) {
   return customer?._workbenchStats || {
@@ -293,9 +300,9 @@ function stats(customer) {
 }
 
 // 普通模式展示未完成订单客户；订单提醒覆盖有实际订单或有 A 级提醒基线的客户。
-const filteredCustomers = computed(() => smartMode.value ? props.allCustomers : props.customers);
-const activeListLoading = computed(() => smartMode.value ? props.allCustomersLoading : props.listLoading);
-const activeListError = computed(() => smartMode.value ? props.allCustomersError : props.listError);
+const filteredCustomers = computed(() => props.smartMode ? props.allCustomers : props.customers);
+const activeListLoading = computed(() => props.smartMode ? props.allCustomersLoading : props.listLoading);
+const activeListError = computed(() => props.smartMode ? props.allCustomersError : props.listError);
 
 const stageOrders = computed(() => ordersVisibleInStage(props.snapshot.orders, props.stageFilter));
 const currentStatusSummary = computed(() => orderStatusSummary(stageOrders.value));
@@ -328,13 +335,13 @@ const hasStageOrders = computed(() => props.snapshot.hasSubDepartments
 const visibleCustomers = computed(() => {
   const keyword = query.value.trim().toLocaleLowerCase();
   return filteredCustomers.value.filter(
-    customer => (smartMode.value || customerVisibleInStage(customer, props.stageFilter))
+    customer => (props.smartMode || customerVisibleInStage(customer, props.stageFilter))
       && (!keyword || customerName(customer).toLocaleLowerCase().includes(keyword))
   );
 });
 
 const emptyMessage = computed(() => {
-  if (smartMode.value) return '当前没有需要提醒的客户';
+  if (props.smartMode) return '当前没有需要提醒的客户';
   if (props.stageFilter === 'all') return '当前没有订单';
   if (props.stageFilter === 'review') return '当前没有待确认任务';
   if (props.stageFilter === 'price') return '当前没有待写单价的订单';
@@ -366,22 +373,6 @@ function submitSearch() {
   const [firstMatch] = visibleCustomers.value;
   if (!firstMatch) return;
   selectCustomer(firstMatch);
-}
-
-function toggleSmartMode() {
-  smartMode.value = !smartMode.value;
-  reminderSummary.value = null;
-  query.value = '';
-  emit('smart-mode-change', smartMode.value);
-  if (smartMode.value) {
-    const selectedId = customerId(props.selectedCustomer);
-    const selectedCanBeChecked = props.allCustomers.some(
-      customer => String(customerId(customer)) === String(selectedId)
-    );
-    if (!selectedCanBeChecked) {
-      emit('select-customer', props.allCustomers[0] || null);
-    }
-  }
 }
 
 function handleOrdersChanged() {
@@ -595,7 +586,7 @@ function handleTaskChanged(change) {
 }
 
 .order-flow__detail-header {
-  min-height: 62px;
+  min-height: 0;
   padding: 8px 12px;
   border-bottom: 0;
 }
@@ -636,6 +627,9 @@ function handleTaskChanged(change) {
 .order-flow__detail-actions button,
 .order-flow__detail-state button,
 .order-flow__stage-heading button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 7px 11px;
   border: 1px solid var(--product-border);
   border-radius: 5px;
@@ -644,12 +638,11 @@ function handleTaskChanged(change) {
 }
 .order-flow__detail-actions .is-secondary,
 .order-flow__detail-actions .is-secondary { color: var(--product-text-secondary); background: #fff; }
-.order-flow__detail-actions .is-smart { border-color: #b9dfca; color: var(--product-primary-strong); background: #eff9f3; }
-.order-flow__detail-actions .is-smart.is-active { border-color: #dfaa42; color: #966008; background: #fff8e9; }
+.order-flow__detail-actions .is-smart { border-color: #e4bf74; color: #966008; background: #fff8e9; }
+.order-flow__detail-actions .is-smart.is-active { border-color: #c98d23; color: #fff; background: #c98d23; }
 .order-flow__detail-actions .is-primary,
 .order-flow__detail-state button,
 .order-flow__stage-heading button { border-color: var(--product-primary); color: #fff; background: var(--product-primary); }
-.order-flow__detail-state .is-smart-entry { border-color: #dfaa42; color: #8f5c08; background: #fff8e9; }
 
 .order-flow__stage-page {
   min-height: 0;

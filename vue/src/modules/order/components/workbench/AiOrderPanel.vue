@@ -173,7 +173,17 @@ function handleWechatTasksLoaded(event) {
   });
 }
 
-onBeforeUnmount(() => clearTimeout(workspaceResetTimer));
+function dismissPendingWechatImport() {
+  appliedWechatImportToken.value = null;
+  placeOrderRef.value?.dismissWechatImport?.();
+}
+
+defineExpose({ dismissPendingWechatImport });
+
+onBeforeUnmount(() => {
+  clearTimeout(workspaceResetTimer);
+  dismissPendingWechatImport();
+});
 
 async function handleModeChange(mode) {
   if (mode === selectedMode.value) return;

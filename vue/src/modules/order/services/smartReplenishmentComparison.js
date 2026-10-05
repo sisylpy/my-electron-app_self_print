@@ -358,8 +358,8 @@ export function buildOrderReminderPresentation(reconciliation) {
   const customerOrdered = rows.filter(row => row.outcome === 'MISSED');
   return {
     sections: [
-      { key: 'REMINDER', title: '今天可能漏订', rows: needsReminder },
-      { key: 'MATCHED', title: '预估已下单', rows: predictedAndOrdered },
+      { key: 'REMINDER', title: '预估未下单', rows: needsReminder },
+      { key: 'MATCHED', title: '预估订单', rows: predictedAndOrdered },
       { key: 'CUSTOMER_ORDERED', title: '客户自订', rows: customerOrdered },
     ],
     summary: {

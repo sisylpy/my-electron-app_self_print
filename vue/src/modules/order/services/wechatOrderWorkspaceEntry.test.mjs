@@ -97,6 +97,12 @@ assert.match(modal, /scanReportOpen/);
 assert.match(modal, /实时查询结果/);
 assert.match(modal, /自动化正在执行/);
 assert.match(modal, /\$emit\('dismiss-scan-report'\)/);
+const dismissScanReportAction = workbench.match(
+  /async function dismissWechatScanReport\(\) \{([\s\S]*?)\n\}/,
+)?.[1] || '';
+assert.match(dismissScanReportAction, /wechatScanReportOpen\.value = false/);
+assert.match(dismissScanReportAction, /WECHAT_SCAN_REPORT_LEAVE_MS/);
+assert.match(dismissScanReportAction, /await openActiveWechatImport/);
 assert.match(modal, /选择一种方式，把微信里的订货内容同步到农心乐配送商系统/);
 assert.match(modal, /开始读取未读订单/);
 assert.match(modal, /读取当前聊天订单/);
@@ -107,6 +113,18 @@ assert.match(modal, /wechat-import-modal__launcher-tips/);
 assert.match(
   modal,
   /@media \(max-width: 760px\)[\s\S]*?wechat-import-modal__launcher-actions \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/,
+);
+assert.match(
+  modal,
+  /@media \(max-width: 760px\)[\s\S]*?upload-section > \.row\) \{[\s\S]*?flex-wrap: nowrap/,
+);
+assert.match(
+  modal,
+  /upload-section > \.row > \.col-md-3\) \{[\s\S]*?width: 29%[\s\S]*?flex: 0 0 29%/,
+);
+assert.match(
+  modal,
+  /upload-section > \.row > \.col-md-9\) \{[\s\S]*?width: 71%[\s\S]*?flex: 0 0 71%/,
 );
 assert.match(modal, /去跟客户匹配/);
 assert.match(modal, /关联并继续转订单/);
@@ -228,11 +246,20 @@ assert.match(
 const observedConversationRefresh = workbench.match(
   /async function refreshObservedWechatConversation\(\{ force = false \} = \{\}\) \{([\s\S]*?)\n\}\n\nconst wechatConversationObservationPoller/,
 )?.[1] || '';
-assert.match(observedConversationRefresh, /currentConversationApi\(\)/);
+assert.match(
+  observedConversationRefresh,
+  /currentConversationApi\(\{ requireForeground: !force \}\)/,
+);
 assert.match(observedConversationRefresh, /selected\.result\?\.title/);
 assert.match(observedConversationRefresh, /await syncWechatSelectionFromDesktop\(selected\.result\)/);
 assert.match(observedConversationRefresh, /wechatConversationObservationRunning/);
 assert.match(observedConversationRefresh, /lastWechatConversationObservationAt < 800/);
+assert.match(observedConversationRefresh, /selectedTitle !== titleBeforeRequest/);
+assert.match(observedConversationRefresh, /await focusWechatWorkspaceApp\(\)/);
+assert.doesNotMatch(
+  observedConversationRefresh,
+  /activeWechatImport\.value \|\| selectedWechatConversation\.value/,
+);
 const desktopSelectionListener = workbench.match(
   /async function handleWechatConversationChanged\(payload\) \{([\s\S]*?)\n\}\n\nconst removeWechatConversationListener/,
 )?.[1] || '';
@@ -268,23 +295,39 @@ const workspaceOpenAction = workspaceWindowService.match(
 )?.[1] || '';
 assert.match(
   workspaceOpenAction,
-  /startConversationWatcher\(\);\s*await observeConversationTitle\(conversationWatcherGeneration\);\s*window\.show\(\);\s*window\.focus\(\);/,
+  /startConversationWatcher\(\);\s*await observeConversationTitle\(conversationWatcherGeneration\);[\s\S]*?window\.show\(\);\s*applyWorkspaceBounds\(window, layout\.app, platform\);\s*window\.focus\(\);/,
 );
+assert.match(workspaceOpenAction, /await leaveExpandedWindowState\(window, saved\)/);
+assert.match(workspaceOpenAction, /showInactive[\s\S]*?applyWorkspaceBounds\(window, layout\.app, platform\)/);
 assert.match(workspaceWindowService, /focus\(\) \{[\s\S]*?window\.show\(\);\s*window\.focus\(\);/);
 assert.match(workspaceWindowService, /isOpen\(\) \{\s*return Boolean\(session\);/);
 assert.match(workspaceWindowService, /window\.isMinimized\(\)[\s\S]*?window\.restore\(\)/);
 assert.match(workspaceOpenAction, /session = \{ saved, wechatBounds: null, layout \}/);
 assert.match(mainProcess, /ipcMain\.handle\('wechat-ui-workspace-focus'/);
 assert.match(preload, /focusWorkspace: \(\) => ipcRenderer\.invoke\('wechat-ui-workspace-focus'\)/);
+assert.match(preload, /requireForeground: options\?\.requireForeground === true/);
 assert.match(preload, /onWorkspaceCloseRequested:[\s\S]*?wechat-ui-workspace-close-requested/);
 assert.match(mainProcess, /mainWindow\.on\('close',[\s\S]*?event\.preventDefault\(\)/);
 assert.match(mainProcess, /wechat-ui-workspace-close-requested/);
 assert.match(mainProcess, /service\.close\(\)/);
+const currentConversationHandler = mainProcess.match(
+  /ipcMain\.handle\('wechat-ui-current-conversation',[\s\S]*?\n  \}\);/,
+)?.[0] || '';
+assert.match(currentConversationHandler, /currentConversation\(input\)/);
+assert.doesNotMatch(currentConversationHandler, /mainWindow\.focus\(\)/);
+assert.match(mainProcess, /mainWindow\.on\('blur'/);
+assert.match(mainProcess, /scheduleWindowsWechatSelectionObservation\(\)/);
+assert.match(mainProcess, /requireForeground: true/);
+assert.match(mainProcess, /wechat-ui-conversation-changed/);
 const focusConversationHandler = mainProcess.match(
   /ipcMain\.handle\('wechat-ui-focus-conversation',[\s\S]*?\n  \}\);/,
 )?.[0] || '';
 assert.match(focusConversationHandler, /finally \{/);
-assert.match(focusConversationHandler, /mainWindow\.show\(\);\s*mainWindow\.focus\(\);/);
+assert.match(focusConversationHandler, /currentConversation\(\{/);
+assert.match(focusConversationHandler, /VISIBLE_HEADER_ALREADY_MATCHED/);
+assert.match(focusConversationHandler, /VERIFIED_FOREGROUND_TITLE_REUSED/);
+assert.match(focusConversationHandler, /await getWechatWorkspaceWindowService\(\)\.focus\(\)/);
+assert.doesNotMatch(focusConversationHandler, /mainWindow\.show\(\);\s*mainWindow\.focus\(\);/);
 assert.doesNotMatch(focusConversationHandler, /if \(!result\?\.ok/);
 
 console.log('WeChat order workspace entry passed');

@@ -1,11 +1,7 @@
 <template>
   <aside class="product-sidebar" aria-label="产品导航">
     <div class="product-sidebar__brand">
-      <span>{{ distributerInitial }}</span>
-      <div>
-        <strong :title="distributerName">{{ distributerName }}</strong>
-        <small>农心乐 · {{ roleLabel }}工作台</small>
-      </div>
+      <span :title="distributerName">{{ distributerName }}</span>
     </div>
 
     <nav class="product-sidebar__navigation">
@@ -17,7 +13,10 @@
           :to="{ name: item.routeName }"
           :class="{ active: activeKey === item.key }"
         >
-          <span>{{ item.icon }}</span>
+          <span>
+            <img v-if="item.iconImg" :src="item.iconImg" alt="" class="product-sidebar__nav-icon-img">
+            <template v-else>{{ item.icon }}</template>
+          </span>
           <div>
             <strong>{{ item.label }}</strong>
             <small>{{ item.description }}</small>
@@ -28,17 +27,8 @@
 
     <div class="product-sidebar__bottom">
       <button type="button" class="product-sidebar__logout" @click="logoutDialogVisible = true">
-        <span>退</span>
-        <strong>退出登录</strong>
+        <strong>退出</strong>
       </button>
-
-      <div class="product-sidebar__footer">
-        <span :class="{ online: networkOnline }"></span>
-        <div>
-          <strong>{{ networkOnline ? '桌面服务在线' : '网络连接中断' }}</strong>
-          <small>农心乐配送商系统</small>
-        </div>
-      </div>
     </div>
 
     <Teleport to="body">
@@ -95,7 +85,6 @@ const distributerName = computed(() => (
   || store.state.disUser?.nxDiuWxNickName
   || '当前配送商'
 ));
-const distributerInitial = computed(() => distributerName.value.trim().charAt(0) || '农');
 const activeKey = computed(() => route.meta?.navKey || '');
 
 function closeLogoutDialog() {
@@ -136,53 +125,31 @@ async function confirmLogout() {
 }
 
 .product-sidebar__brand {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 7px;
-  padding: 2px 5px 16px;
+  gap: 6px;
+  padding: 4px 0 14px;
   border-bottom: 1px solid #edf1ef;
 }
 
 .product-sidebar__brand > span {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 42px;
+  height: 42px;
   flex: none;
   place-items: center;
-  border: 1px solid var(--product-primary);
-  border-radius: 5px;
-  color: #fff;
-  background: var(--product-primary);
-  font-size: 15px;
-  font-weight: 900;
-}
-
-.product-sidebar__brand div,
-.product-sidebar__footer div,
-.product-sidebar__navigation a div {
-  min-width: 0;
-}
-
-.product-sidebar__brand strong,
-.product-sidebar__brand small,
-.product-sidebar__footer strong,
-.product-sidebar__footer small {
-  display: block;
-}
-
-.product-sidebar__brand strong {
   overflow: hidden;
-  max-width: 72px;
-  color: var(--product-text);
-  font-size: 11px;
-  letter-spacing: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.product-sidebar__brand small {
-  display: none;
+  padding: 0 3px;
+  border: 1px solid #c2ccc6;
+  border-radius: 50%;
+  color: #fff;
+  background: #9aa6a0;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  word-break: break-all;
 }
 
 .product-sidebar__navigation {
@@ -201,14 +168,14 @@ async function confirmLogout() {
 }
 
 .product-sidebar__navigation a {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  gap: 3px;
   margin: 2px 0;
-  padding: 8px 7px;
+  padding: 9px 2px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 6px;
   color: #53625a;
   text-decoration: none;
   transition: background .16s ease, border-color .16s ease, color .16s ease;
@@ -228,19 +195,20 @@ async function confirmLogout() {
 
 .product-sidebar__navigation a > span {
   display: grid;
-  width: 24px;
-  height: 24px;
+  width: 30px;
+  height: 30px;
   place-items: center;
-  border-radius: 4px;
+  border-radius: 6px;
   color: #718078;
   background: transparent;
   font-size: 9px;
   font-weight: 900;
 }
 
-.product-sidebar__navigation a.active > span {
-  color: var(--product-primary-strong);
-  background: transparent;
+.product-sidebar__navigation a > span img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .product-sidebar__navigation strong,
@@ -249,10 +217,11 @@ async function confirmLogout() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
 }
 
 .product-sidebar__navigation strong {
-  font-size: 12px;
+  font-size: 10px;
 }
 
 .product-sidebar__navigation small {
@@ -276,10 +245,10 @@ async function confirmLogout() {
 }
 
 .product-sidebar__logout {
-  display: grid;
+  display: flex;
   width: 100%;
-  grid-template-columns: 24px minmax(0, 1fr);
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 8px 7px;
   border: 1px solid transparent;
@@ -296,43 +265,10 @@ async function confirmLogout() {
   background: #fff8f7;
 }
 
-.product-sidebar__logout span {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border-radius: 4px;
-  background: #f8eeec;
-  font-size: 9px;
-  font-weight: 900;
-}
-
 .product-sidebar__logout strong {
   font-size: 11px;
 }
 
-.product-sidebar__footer > span {
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border-radius: 50%;
-  background: #c36a62;
-  box-shadow: 0 0 0 4px rgba(195, 106, 98, .08);
-}
-
-.product-sidebar__footer > span.online {
-  background: var(--product-primary);
-  box-shadow: 0 0 0 4px rgba(17, 155, 93, .09);
-}
-
-.product-sidebar__footer strong {
-  color: var(--product-text-secondary);
-  font-size: 9px;
-}
-
-.product-sidebar__footer small {
-  display: none;
-}
 
 .logout-dialog-backdrop {
   position: fixed;

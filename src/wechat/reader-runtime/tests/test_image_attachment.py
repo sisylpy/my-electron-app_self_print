@@ -4,6 +4,7 @@ import tempfile
 import unittest
 
 from product.attachments import (
+    _v2_candidates,
     build_image_envelope,
     extract_media_md5,
     locate_image_dat,
@@ -12,6 +13,32 @@ from product.attachments import (
 
 
 class ImageAttachmentTest(unittest.TestCase):
+    def test_derives_v2_candidates_from_both_windows_filename_slots(self):
+        with tempfile.TemporaryDirectory() as root:
+            kvcomm = os.path.join(root, "net", "kvcomm")
+            os.makedirs(kvcomm)
+            for name in (
+                "key_864579947_4065599245_1_input.statistic",
+                "key_0_4065599245_1_input.statistic",
+            ):
+                with open(os.path.join(kvcomm, name), "wb"):
+                    pass
+
+            candidates = _v2_candidates("wxid_account", [root])
+            expected_uins = [864579947, 4065599245]
+            self.assertEqual(
+                candidates,
+                [
+                    {
+                        "aesKey": hashlib.md5(
+                            (str(uin) + "wxid_account").encode("utf-8")
+                        ).hexdigest()[:16],
+                        "xorKey": uin & 0xFF,
+                    }
+                    for uin in expected_uins
+                ],
+            )
+
     def test_extracts_media_md5_from_packed_info(self):
         media_md5 = "0123456789abcdef0123456789abcdef"
         packed = bytes.fromhex("0801") + bytes.fromhex("12220a20") + media_md5.encode("ascii")

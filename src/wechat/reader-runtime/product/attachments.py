@@ -10,6 +10,7 @@ import glob
 import hashlib
 import os
 import re
+import sys
 from typing import Dict, List, Optional
 
 from .errors.codes import ErrorCode, ServiceError, WechatServiceError
@@ -88,17 +89,48 @@ def _variant_name(path: str, media_md5: str) -> str:
     return "alternate"
 
 
-def _mac_v2_candidates(account_wxid: str) -> List[Dict[str, object]]:
-    kvcomm = os.path.expanduser(
-        "~/Library/Containers/com.tencent.xinWeChat/Data/Documents/app_data/net/kvcomm"
-    )
-    if not os.path.isdir(kvcomm):
-        return []
+def _v2_statistic_roots() -> List[str]:
+    if sys.platform == "darwin":
+        return [os.path.expanduser(
+            "~/Library/Containers/com.tencent.xinWeChat/Data/Documents/app_data/net"
+        )]
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA", "")
+        if not appdata:
+            return []
+        return [
+            os.path.join(appdata, "Tencent", "WeChat"),
+            os.path.join(appdata, "Tencent", "xwechat"),
+        ]
+    return []
+
+
+def _v2_candidates(
+    account_wxid: str,
+    statistic_roots: Optional[List[str]] = None,
+) -> List[Dict[str, object]]:
+    """Derive account-local V2 image keys from WeChat statistic filenames.
+
+    Current Windows Weixin stores the same UIN-bearing ``key_*.statistic``
+    records as macOS, but under roaming Tencent directories. Some Windows
+    filenames put a zero in the first slot and the usable UIN in the second,
+    so both leading numeric fields are considered. Raw UINs never leave this
+    Reader process; only the derived image candidates reach Electron main.
+    """
     uins = set()
-    for path in glob.glob(os.path.join(kvcomm, "**", "key_*_*.statistic"), recursive=True):
-        match = re.match(r"key_(\d+)_", os.path.basename(path))
-        if match:
-            uins.add(int(match.group(1)))
+    roots = statistic_roots if statistic_roots is not None else _v2_statistic_roots()
+    for root in roots:
+        if not root or not os.path.isdir(root):
+            continue
+        pattern = os.path.join(root, "**", "kvcomm", "key_*_*.statistic")
+        for path in glob.glob(pattern, recursive=True):
+            match = re.match(r"key_(\d+)_(\d+)_", os.path.basename(path))
+            if not match:
+                continue
+            for value in match.groups():
+                uin = int(value)
+                if uin:
+                    uins.add(uin)
     return [
         {
             "aesKey": hashlib.md5((str(uin) + account_wxid).encode("utf-8")).hexdigest()[:16],
@@ -170,5 +202,5 @@ def build_image_envelope(
         ))
     return {
         "encryptedVariants": variants,
-        "v2Candidates": _mac_v2_candidates(account_wxid),
+        "v2Candidates": _v2_candidates(account_wxid),
     }

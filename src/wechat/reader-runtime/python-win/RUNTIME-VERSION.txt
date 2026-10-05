@@ -1,0 +1,6 @@
+Python 3.12.10 Windows embeddable package (AMD64)
+Source: https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip
+MD5: fe8ef205f2e9c3ba44d0cf9954e1abd3
+
+Bundled dependency:
+zstandard 0.23.0, CPython 3.12, Windows AMD64 wheel

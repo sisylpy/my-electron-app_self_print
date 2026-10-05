@@ -83,7 +83,7 @@
                     </span>
                     <div class="wechat-import-modal__conversation">
                       <strong>{{ item.conversationTitle || item.customerName }}</strong>
-                      <span>{{ item.customerName }} · {{ item.messageCount }} 条消息</span>
+                      <span>{{ item.customerName }} · {{ taskLabel(item) }} · {{ item.messageCount }} 条消息</span>
                     </div>
                   </li>
                 </ol>
@@ -170,6 +170,7 @@
                   </div>
                   <p :title="activePolicyLabel">
                     <span>客户 {{ activeItem.customerName }}</span>
+                    <span>{{ taskLabel(activeItem) }}</span>
                     <span>{{ activeItem.messageCount }} 条消息</span>
                   </p>
                 </div>
@@ -178,9 +179,11 @@
                     type="button"
                     class="wechat-import-modal__remove-current"
                     title="仅从本轮订单任务中移除，不会删除微信消息或客户绑定"
-                    @click="removeItem(activeItem)"
+                    :disabled="refreshing || selectedImportBusy"
+                    @click.stop.prevent="removeItem(activeItem)"
                   >移除任务</button>
                   <button
+                    v-if="activeItem.taskType !== 'image'"
                     type="button"
                     class="wechat-import-modal__refresh"
                     :disabled="refreshing || selectedImportBusy"
@@ -920,6 +923,13 @@ function itemState(item) {
   if (props.selectedConversation) return 'pending';
   if (item?.token === props.activeItem?.token) return 'active';
   return 'pending';
+}
+
+function taskLabel(item) {
+  if (item?.taskLabel) return item.taskLabel;
+  if (item?.taskType === 'image') return '图片识别任务';
+  if (item?.taskType === 'text') return '文字粘贴任务';
+  return '微信订单任务';
 }
 
 function scanResultLabel(item) {
@@ -2093,6 +2103,29 @@ function hideBrokenAvatar(event) {
 }
 
 @media (max-width: 760px) {
+  /* The Windows side-by-side workspace leaves roughly half a 1366px screen
+     for GrainPrint. Bootstrap normally stacks col-md-* below 768px, which put
+     the WeChat source above the order list. Keep this task editor horizontal
+     and give the source only the space needed for message verification. */
+  .wechat-import-modal:not(.is-launcher-view) .wechat-import-modal__content :deep(.upload-section > .row) {
+    display: flex;
+    flex-wrap: nowrap;
+  }
+  .wechat-import-modal:not(.is-launcher-view) .wechat-import-modal__content :deep(.upload-section > .row > .col-md-3) {
+    width: 29%;
+    max-width: 29%;
+    flex: 0 0 29%;
+    min-width: 0;
+  }
+  .wechat-import-modal:not(.is-launcher-view) .wechat-import-modal__content :deep(.upload-section > .row > .col-md-9) {
+    width: 71%;
+    max-width: 71%;
+    flex: 0 0 71%;
+    min-width: 0;
+  }
+  .wechat-import-modal:not(.is-launcher-view) .wechat-import-modal__content :deep(.upload-section .card.h-100.p-3) {
+    padding: .45rem !important;
+  }
   .wechat-import-modal.is-launcher-view .wechat-import-modal__header { min-height: 70px; padding: 10px 14px; }
   .wechat-import-modal.is-launcher-view .wechat-import-modal__brand { width: 44px; height: 44px; }
   .wechat-import-modal.is-launcher-view .wechat-import-modal__heading h2 { font-size: 20px; }

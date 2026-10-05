@@ -16,6 +16,7 @@ const DEFAULTS = Object.freeze({
   malformedThreshold: 3,
   shutdownGraceMs: 3_000,
 });
+const REQUIRED_BRIDGE_VERSION = 2;
 
 function sanitizeDiagnosticText(raw) {
   return String(raw || '')
@@ -233,7 +234,19 @@ class ReaderBridge {
       }
       const value = frame.value;
       if (value.event === 'ready') {
-        this.log('info', 'reader stdout event=ready');
+        const bridgeVersion = Number.parseInt(String(value.version || '0'), 10);
+        if (!Number.isFinite(bridgeVersion) || bridgeVersion < REQUIRED_BRIDGE_VERSION) {
+          this.log(
+            'error',
+            `reader runtime outdated version=${sanitizeDiagnosticText(value.version || '[missing]')} required=${REQUIRED_BRIDGE_VERSION}`
+          );
+          this.settleReady(new Error('reader runtime outdated'));
+          if (this.child && !hasExited(this.child)) {
+            void this.stopChild(this.child, 'outdated-runtime', false);
+          }
+          continue;
+        }
+        this.log('info', `reader stdout event=ready version=${bridgeVersion}`);
         this.settleReady();
         continue;
       }

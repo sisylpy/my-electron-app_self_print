@@ -200,8 +200,10 @@ const electronAPI = Object.freeze({
       ipcRenderer.invoke('wechat-ui-inspect-unread', { allowedTitles }),
     readUnread: (allowedTitles) =>
       ipcRenderer.invoke('wechat-ui-read-unread', { allowedTitles }),
-    currentConversation: () =>
-      ipcRenderer.invoke('wechat-ui-current-conversation', {}),
+    currentConversation: (options = {}) =>
+      ipcRenderer.invoke('wechat-ui-current-conversation', {
+        requireForeground: options?.requireForeground === true,
+      }),
     focusConversation: (title) =>
       ipcRenderer.invoke('wechat-ui-focus-conversation', { title }),
     openWorkspace: () => ipcRenderer.invoke('wechat-ui-workspace-open'),

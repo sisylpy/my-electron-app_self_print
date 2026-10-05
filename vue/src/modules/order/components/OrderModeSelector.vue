@@ -18,7 +18,8 @@
         @change="$emit('change', option.value)"
       >
       <span v-if="variant === 'cards' || variant === 'toolbar'" class="order-mode-selector__icon" aria-hidden="true">
-        {{ option.icon }}
+        <img v-if="option.iconImg" :src="option.iconImg" alt="" class="order-mode-selector__icon-img">
+        <template v-else>{{ option.icon }}</template>
       </span>
       <span class="order-mode-selector__copy">
         <strong>{{ option.label }}</strong>
@@ -31,6 +32,10 @@
 
 <script setup>
 import { computed } from 'vue';
+import iconCopyPaste from '../../../assets/order-input/copy_paste.png';
+import iconImageRecognition from '../../../assets/order-input/image_recognition.png';
+import iconExcelPaste from '../../../assets/order-input/excel_paste.png';
+import iconManualInput from '../../../assets/order-input/manual_input.png';
 
 const props = defineProps({
   modelValue: {
@@ -47,10 +52,10 @@ const props = defineProps({
 defineEmits(['change']);
 
 const cardOptions = Object.freeze([
-  { value: 'paste', label: '复制粘贴', description: '粘贴微信或文字订单', icon: '文', recommended: true },
-  { value: 'image', label: '图片识别', description: '拖入或粘贴订单图片', icon: '图' },
-  { value: 'excel-paste', label: 'Excel 粘贴', description: '直接粘贴表格内容', icon: '表' },
-  { value: 'manual', label: '手工录入', description: '逐项搜索并填写商品', icon: '录' },
+  { value: 'paste', label: '复制粘贴', description: '粘贴微信或文字订单', icon: '文', iconImg: iconCopyPaste, recommended: true },
+  { value: 'image', label: '图片识别', description: '拖入或粘贴订单图片', icon: '图', iconImg: iconImageRecognition },
+  { value: 'excel-paste', label: 'Excel 粘贴', description: '直接粘贴表格内容', icon: '表', iconImg: iconExcelPaste },
+  { value: 'manual', label: '手工录入', description: '逐项搜索并填写商品', icon: '录', iconImg: iconManualInput },
 ]);
 
 const inlineOptions = Object.freeze([
@@ -154,6 +159,17 @@ const options = computed(() => (['cards', 'toolbar'].includes(props.variant) ? c
 .order-mode-selector--cards label.is-active .order-mode-selector__icon {
   color: #fff;
   background: var(--product-primary);
+}
+
+.order-mode-selector__icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* 卡片态激活时底色变绿，图标反白保持对比度 */
+.order-mode-selector--cards label.is-active .order-mode-selector__icon-img {
+  filter: brightness(0) invert(1);
 }
 
 .order-mode-selector--cards .order-mode-selector__copy,

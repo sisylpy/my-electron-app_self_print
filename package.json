@@ -1,6 +1,6 @@
 {
   "name": "grain-print-app",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "A Self Print For Distributer",
   "main": "src/main.js",
   "scripts": {
@@ -37,26 +37,64 @@
     "directories": {
       "output": "release"
     },
+    "afterPack": "scripts/after-pack.js",
     "files": [
       "dist/**/*",
       "src/**/*",
       "!src/main-bf.js",
+      "!src/**/__pycache__/**",
+      "!src/**/*.pyc",
+      "!src/wechat/ui-automation/mac/artifacts/**",
+      "!src/wechat/reader-runtime/python-win/**",
+      "!src/wechat/image-tools/windows/**",
       "package.json",
       "node_modules/**/*"
     ],
     "asar": false,
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "extraResources": [
+        {
+          "from": "src/wechat/reader-runtime/python-win",
+          "to": "wechat-reader-runtime/python-win"
+        },
+        {
+          "from": "src/wechat/reader-runtime/product",
+          "to": "wechat-reader-runtime/product",
+          "filter": [
+            "**/*",
+            "!**/__pycache__/**",
+            "!**/*.pyc"
+          ]
+        },
+        {
+          "from": "src/wechat/reader-runtime/tools/scquery.exe",
+          "to": "wechat-reader-runtime/tools/scquery.exe"
+        },
+        {
+          "from": "src/wechat/image-tools/windows",
+          "to": "wechat-image-tools"
+        }
+      ]
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerLanguages": ["zh_CN", "en_US"],
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ],
       "language": "2052"
     },
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "vue/src/assets/icons.icns",
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "用于与微信协同排列窗口并读取当前微信会话。",
+        "NSAccessibilityUsageDescription": "用于排列微信和订单工作台窗口，并同步当前微信会话。",
+        "NSScreenCaptureUsageDescription": "用于读取微信会话头像和识别图片订单。"
+      },
       "target": [
         {
           "target": "dmg",

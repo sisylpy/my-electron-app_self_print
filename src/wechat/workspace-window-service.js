@@ -1,7 +1,9 @@
 const path = require('path');
 
-const MIN_DOCK_WIDTH = 1280;
+const MIN_DOCK_WIDTH = 1168;
 const MIN_WINDOWS_DOCK_WIDTH = 1340;
+const MIN_DOCK_HEIGHT = 640;
+const WORKSPACE_GAP = 8;
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
@@ -16,16 +18,21 @@ function computeWorkspaceLayout(workArea, options = {}) {
   };
   const windowsLayout = options.platform === 'win32';
   const minimumDockWidth = windowsLayout ? MIN_WINDOWS_DOCK_WIDTH : MIN_DOCK_WIDTH;
-  if (area.width < minimumDockWidth || area.height < 680) {
+  const minimumWechatWidth = windowsLayout ? 650 : 540;
+  const minimumAppWidth = windowsLayout ? 680 : 620;
+  if (area.width < minimumDockWidth || area.height < MIN_DOCK_HEIGHT) {
     return { mode: 'app-only', workArea: area };
   }
-  const gap = 8;
+  const maximumWechatWidth = area.width - WORKSPACE_GAP - minimumAppWidth;
+  if (maximumWechatWidth < minimumWechatWidth) {
+    return { mode: 'app-only', workArea: area };
+  }
   // Windows Weixin collapses its conversation list sooner than macOS WeChat.
   // Give it enough room for the navigation rail, conversation list and chat
   // pane on the common 1366px display, while keeping the order workbench usable.
   const wechatWidth = windowsLayout
-    ? clamp(Math.round(area.width * 0.48), 650, area.width - 680)
-    : clamp(Math.round(area.width * 0.42), 540, area.width - 760);
+    ? clamp(Math.round(area.width * 0.48), minimumWechatWidth, maximumWechatWidth)
+    : clamp(Math.round(area.width * 0.42), minimumWechatWidth, maximumWechatWidth);
   return {
     mode: 'docked',
     workArea: area,
@@ -36,12 +43,59 @@ function computeWorkspaceLayout(workArea, options = {}) {
       height: area.height,
     },
     app: {
-      x: area.x + wechatWidth + gap,
+      x: area.x + wechatWidth + WORKSPACE_GAP,
       y: area.y,
-      width: area.width - wechatWidth - gap,
+      width: area.width - wechatWidth - WORKSPACE_GAP,
       height: area.height,
     },
   };
+}
+
+function waitForWindowTransition(window, eventName, timeoutMs = 2200) {
+  if (!window || typeof window.once !== 'function') return Promise.resolve();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      window.removeListener?.(eventName, finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    window.once(eventName, finish);
+  });
+}
+
+async function leaveExpandedWindowState(window, saved) {
+  // On macOS both transitions are asynchronous. Applying setBounds while the
+  // native full-screen animation is still running looks correct briefly, then
+  // AppKit restores the old full-screen frame over the WeChat window.
+  if (saved.fullScreen) {
+    const leftFullScreen = waitForWindowTransition(window, 'leave-full-screen');
+    window.setFullScreen(false);
+    await leftFullScreen;
+  }
+  if (saved.maximized) {
+    const unmaximized = waitForWindowTransition(window, 'unmaximize');
+    window.unmaximize();
+    await unmaximized;
+  }
+}
+
+function applyWorkspaceBounds(window, bounds, platform = process.platform) {
+  if (!window || !bounds) return null;
+  // BrowserWindow.show()/showInactive() can restore the pre-hide frame on
+  // macOS. Always call this helper after showing the window. setSize and
+  // setPosition also provide a native AppKit path when setBounds alone is
+  // ignored during a display/Space transition.
+  window.setBounds(bounds, false);
+  if (platform === 'darwin') {
+    window.setSize?.(bounds.width, bounds.height, false);
+    window.setPosition?.(bounds.x, bounds.y, false);
+    window.setBounds(bounds, false);
+  }
+  return typeof window.getBounds === 'function' ? window.getBounds() : null;
 }
 
 function parseBounds(text) {
@@ -195,6 +249,18 @@ function windowsScript(moduleDir) {
   return path.join(moduleDir, 'ui-automation', 'windows', 'dock-window.ps1');
 }
 
+function windowsFocusScript(moduleDir) {
+  return path.join(moduleDir, 'ui-automation', 'windows', 'focus-window.ps1');
+}
+
+function nativeWindowHandle(window) {
+  const value = window?.getNativeWindowHandle?.();
+  if (!Buffer.isBuffer(value) || value.length < 4) return '';
+  return value.length >= 8
+    ? value.readBigUInt64LE(0).toString()
+    : String(value.readUInt32LE(0));
+}
+
 function windowsArgs(script, mode, bounds) {
   return [
     '-NoLogo',
@@ -224,6 +290,7 @@ function createWechatWorkspaceWindowService(options = {}) {
   const screen = options.screen;
   const desktopCapturer = options.desktopCapturer;
   const getMainWindow = options.getMainWindow;
+  const ensureMacAccessibility = options.ensureMacAccessibility;
   const powershell = options.powershell || process.env.JCYX_WECHAT_UI_POWERSHELL || 'powershell.exe';
   let session = null;
   let conversationWatcher = null;
@@ -395,13 +462,55 @@ function createWechatWorkspaceWindowService(options = {}) {
     isOpen() {
       return Boolean(session);
     },
-    focus() {
+    async focus() {
       const window = getMainWindow();
       if (!window || window.isDestroyed()) {
         return { ok: false, error: { code: 'APP_WINDOW_MISSING', message: '订单工作台窗口不可用' } };
       }
+      if (typeof window.isMinimized === 'function'
+          && window.isMinimized()
+          && typeof window.restore === 'function') {
+        window.restore();
+      }
+      // Windows may reject a plain focus() request made immediately after an
+      // automation helper has activated Weixin. A very short topmost pulse is
+      // the documented Electron-compatible way to cross that foreground lock
+      // without moving the mouse or synthesizing a user click.
+      if (platform === 'win32' && typeof window.setAlwaysOnTop === 'function') {
+        window.setAlwaysOnTop(true);
+      }
       window.show();
       window.focus();
+      if (platform === 'win32') {
+        if (typeof window.moveTop === 'function') window.moveTop();
+        const handle = nativeWindowHandle(window);
+        if (handle) {
+          try {
+            await execFileAsync(
+              powershell,
+              [
+                '-NoLogo',
+                '-NoProfile',
+                '-NonInteractive',
+                '-ExecutionPolicy',
+                'Bypass',
+                '-File',
+                windowsFocusScript(moduleDir),
+                '-WindowHandle',
+                handle,
+              ],
+              { encoding: 'utf8', timeout: 3000, windowsHide: true }
+            );
+          } catch {
+            // The topmost pulse above remains a safe fallback if Windows
+            // rejects the native foreground handoff during a desktop switch.
+          }
+        }
+        if (!window.isDestroyed()) window.focus();
+        if (!window.isDestroyed() && typeof window.setAlwaysOnTop === 'function') {
+          window.setAlwaysOnTop(false);
+        }
+      }
       return { ok: true };
     },
     async open() {
@@ -430,12 +539,32 @@ function createWechatWorkspaceWindowService(options = {}) {
           result: { ...layout, message: '当前屏幕空间不足，微信保持为独立窗口' },
         };
       }
+      if (platform === 'darwin' && typeof ensureMacAccessibility === 'function') {
+        let trusted = false;
+        try {
+          // Passing true asks macOS to show its native authorization prompt.
+          // Window placement through System Events cannot work until this is
+          // granted, so fail before changing either window instead of briefly
+          // docking WeChat and then restoring GrainPrint over it.
+          trusted = ensureMacAccessibility(true) === true;
+        } catch {
+          trusted = false;
+        }
+        if (!trusted) {
+          return {
+            ok: false,
+            error: {
+              code: 'MAC_ACCESSIBILITY_REQUIRED',
+              message: '需要先允许 GrainPrint 控制电脑：请在“系统设置 → 隐私与安全性 → 辅助功能”中开启 GrainPrint，然后重新点击。',
+            },
+          };
+        }
+      }
       try {
-        if (saved.fullScreen) window.setFullScreen(false);
-        if (saved.maximized) window.unmaximize();
-        window.setBounds(layout.app);
+        await leaveExpandedWindowState(window, saved);
         if (typeof window.showInactive === 'function') window.showInactive();
         else window.show();
+        applyWorkspaceBounds(window, layout.app, platform);
         // Place the app first and WeChat last so the selected conversation can
         // be observed after docking. Once its title/avatar have been published,
         // return keyboard and mouse focus to the right-hand workbench. Without
@@ -446,18 +575,25 @@ function createWechatWorkspaceWindowService(options = {}) {
         session = { saved, wechatBounds, layout };
         startConversationWatcher();
         await observeConversationTitle(conversationWatcherGeneration);
+        // Re-apply the computed frame after WeChat has finished opening and
+        // macOS has completed any native window animation. This keeps the app
+        // on the right even on scaled displays and when entry began in full
+        // screen or maximized mode.
         window.show();
+        applyWorkspaceBounds(window, layout.app, platform);
         window.focus();
         return { ok: true, result: layout };
       } catch (error) {
         restoreMainWindow(saved);
+        const details = String(error?.stderr || error?.message || '').trim();
         return {
           ok: false,
           error: {
             code: 'WECHAT_DOCK_FAILED',
-            message: /WECHAT_MAIN_WINDOW_NOT_FOUND/u.test(String(error?.stderr || error?.message || ''))
+            message: /WECHAT_MAIN_WINDOW_NOT_FOUND/u.test(details)
               ? '没有找到微信主窗口，请先打开已登录的微信'
               : '微信窗口停靠失败，已保留普通订单工作台',
+            details,
           },
         };
       }
@@ -487,8 +623,11 @@ function createWechatWorkspaceWindowService(options = {}) {
 module.exports = {
   MIN_DOCK_WIDTH,
   MIN_WINDOWS_DOCK_WIDTH,
+  MIN_DOCK_HEIGHT,
   computeWorkspaceLayout,
   createWechatWorkspaceWindowService,
   findSelectedConversationAvatarRect,
+  applyWorkspaceBounds,
+  leaveExpandedWindowState,
   parseBounds,
 };

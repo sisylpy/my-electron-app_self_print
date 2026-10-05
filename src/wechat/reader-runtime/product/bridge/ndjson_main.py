@@ -12,7 +12,9 @@ import json
 import sys
 import traceback
 
-BRIDGE_VERSION = "1"
+# Increment whenever the standalone Reader must be rebuilt to match a new
+# Electron-side contract. Version 2 includes Windows V2 image-key discovery.
+BRIDGE_VERSION = "2"
 
 
 def _log(msg, level="info"):

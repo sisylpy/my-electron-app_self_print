@@ -1,9 +1,24 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const path = require('node:path');
 const {
+  bundledWindowsFfmpegPath,
   decodeWechatImageEnvelope,
   findWxgfHevcPartition,
+  resolveFfmpegPath,
 } = require('../src/wechat/image-container-decoder');
+
+const root = path.resolve(__dirname, '..');
+assert.equal(
+  bundledWindowsFfmpegPath('C:\\Program Files\\GrainPrint\\resources'),
+  path.join('C:\\Program Files\\GrainPrint\\resources', 'wechat-image-tools', 'ffmpeg.exe'),
+);
+const windowsFfmpeg = path.join(root, 'src', 'wechat', 'image-tools', 'windows', 'ffmpeg.exe');
+assert.equal(
+  require('node:fs').readFileSync(windowsFfmpeg).subarray(0, 2).toString('ascii'),
+  'MZ',
+  'bundled Windows ffmpeg must be a PE executable',
+);
 
 const V1_MAGIC = Buffer.from([0x07, 0x08, 0x56, 0x31, 0x08, 0x07]);
 const V2_MAGIC = Buffer.from([0x07, 0x08, 0x56, 0x32, 0x08, 0x07]);
