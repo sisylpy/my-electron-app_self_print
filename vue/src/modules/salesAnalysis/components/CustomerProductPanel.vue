@@ -1,5 +1,5 @@
 <template>
-  <aside class="customer-product-panel">
+  <section class="customer-product-panel">
     <header>
       <div>
         <span>客户购买明细</span>
@@ -47,8 +47,8 @@
         </nav>
       </footer>
     </template>
-    <div v-else class="customer-product-state">请先从中间列表选择一个客户</div>
-  </aside>
+    <div v-else class="customer-product-state">请先从左侧选择一个客户</div>
+  </section>
 </template>
 
 <script>
@@ -90,7 +90,7 @@ export default {
 
 <style scoped>
 * { box-sizing: border-box; }
-.customer-product-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-left: 1px solid #dce7e1; background: #fff; }
+.customer-product-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: #fff; }
 .customer-product-panel > header { min-height: 58px; flex: none; display: flex; align-items: center; padding: 9px 14px; border-bottom: 1px solid #dfe8e3; border-left: 3px solid #10a05d; }
 .customer-product-panel header span,.customer-product-panel header h2,.customer-product-panel header p { display: block; margin: 0; }
 .customer-product-panel header span { color: #0b8b52; font-size: 9px; font-weight: 800; }

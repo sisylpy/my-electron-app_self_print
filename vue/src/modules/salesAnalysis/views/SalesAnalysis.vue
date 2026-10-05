@@ -59,7 +59,7 @@
                 :class="{ active: same(category.id, selectedCategoryId) }"
                 @click="selectCategory(category)"
               >
-                <span class="tree-caret">{{ same(category.id, selectedCategoryId) ? (displayMode === 'product' ? '⌄' : '•') : '›' }}</span>
+                <span class="tree-caret">{{ same(category.id, selectedCategoryId) ? '⌄' : '›' }}</span>
                 <strong>{{ category.name }}</strong>
                 <em>{{ percentageLabel(category.share) }}</em>
                 <b>{{ formatMoney(category.salesAmount) }}</b>
@@ -81,6 +81,42 @@
                 </button>
                 <p v-if="detailLoading">正在加载分类…</p>
                 <p v-else-if="!subcategories.length">暂无小类</p>
+              </div>
+              <div
+                v-else-if="same(category.id, selectedCategoryId)"
+                class="category-customer-tree"
+              >
+                <p v-if="categoryCustomersError" class="error">{{ categoryCustomersError }}</p>
+                <p v-else-if="categoryCustomersLoading">正在加载客户…</p>
+                <template v-else>
+                  <button
+                    v-for="customer in categoryCustomers"
+                    :key="customer.customerId"
+                    type="button"
+                    :class="{ active: same(customer.customerId, selectedCustomerId) }"
+                    @click="selectCustomer(customer)"
+                  >
+                    <span>
+                      <strong>{{ customer.customerName || '未命名客户' }}</strong>
+                      <small>{{ customer.goodsCount || 0 }} 种商品 · {{ customer.orderCount || 0 }} 次订货</small>
+                    </span>
+                    <b>{{ formatMoney(customer.salesAmount) }}</b>
+                  </button>
+                  <p v-if="!categoryCustomers.length">该大类暂无成交客户</p>
+                  <nav v-if="categoryCustomerTotalPages > 1" aria-label="大类客户分页">
+                    <button
+                      type="button"
+                      :disabled="categoryCustomersLoading || categoryCustomerPage <= 1"
+                      @click="loadCategoryCustomers(categoryCustomerPage - 1)"
+                    >‹</button>
+                    <span>{{ categoryCustomerPage }} / {{ categoryCustomerTotalPages }}</span>
+                    <button
+                      type="button"
+                      :disabled="categoryCustomersLoading || categoryCustomerPage >= categoryCustomerTotalPages"
+                      @click="loadCategoryCustomers(categoryCustomerPage + 1)"
+                    >›</button>
+                  </nav>
+                </template>
               </div>
             </section>
             <div v-if="!filteredCategories.length" class="tree-empty">没有符合条件的分类</div>
@@ -138,15 +174,15 @@
           <footer class="panel-footer">共 {{ visibleProducts.length }} 条数据</footer>
         </section>
 
-        <CategoryCustomerPanel
+        <CustomerProductPanel
           v-else
-          :detail="categoryCustomersDetail"
-          :fallback-category="selectedCategory"
-          :selected-customer-id="selectedCustomerId"
-          :loading="categoryCustomersLoading"
-          :error="categoryCustomersError"
-          @select="selectCustomer"
-          @page="loadCategoryCustomers"
+          :customer="selectedCustomer"
+          :detail="customerProductsDetail"
+          :loading="customerProductsLoading"
+          :error="customerProductsError"
+          :category-name="selectedCategoryName"
+          :image-server="imageServer"
+          @page="loadCustomerProductsPage"
         />
 
         <aside v-if="displayMode === 'product'" class="customer-contribution-panel">
@@ -181,16 +217,30 @@
           <footer class="panel-footer">共 {{ filteredCustomers.length }} 个客户</footer>
         </aside>
 
-        <CustomerProductPanel
-          v-else
-          :customer="selectedCustomer"
-          :detail="customerProductsDetail"
-          :loading="customerProductsLoading"
-          :error="customerProductsError"
-          :category-name="selectedCategoryName"
-          :image-server="imageServer"
-          @page="loadCustomerProductsPage"
-        />
+        <aside v-else class="selected-customer-panel">
+          <header class="section-heading customer-heading"><h2>客户概览</h2></header>
+          <template v-if="activeCustomer">
+            <section class="selected-customer-identity">
+              <span>{{ customerInitial }}</span>
+              <div>
+                <strong>{{ activeCustomer.customerName || '未命名客户' }}</strong>
+                <small>{{ selectedCategoryName }}内的订货情况</small>
+              </div>
+            </section>
+            <section class="selected-customer-metrics">
+              <article><strong>{{ formatMoney(activeCustomer.salesAmount) }}</strong><span>成交额</span></article>
+              <article><strong>{{ activeCustomer.goodsCount || customerProductsDetail?.totalCount || 0 }}</strong><span>商品数</span></article>
+              <article><strong>{{ activeCustomer.orderCount || 0 }}</strong><span>订货次数</span></article>
+              <article><strong>{{ activeCustomer.orderDays || 0 }}</strong><span>订货天数</span></article>
+            </section>
+            <dl class="selected-customer-details">
+              <div><dt>订货数量</dt><dd>{{ formatQuantities(activeCustomer.quantities, '暂无数量') }}</dd></div>
+              <div><dt>平均单价</dt><dd>{{ formatAveragePrices(activeCustomer.averagePrices) }}</dd></div>
+              <div><dt>最近订货</dt><dd>{{ activeCustomer.lastOrderDate || '暂无日期' }}</dd></div>
+            </dl>
+          </template>
+          <div v-else class="selected-customer-empty">请先从左侧选择一个客户</div>
+        </aside>
       </section>
 
       <footer class="data-note">
@@ -215,7 +265,6 @@
 
 <script>
 import ProductCustomerDrawer from '../components/ProductCustomerDrawer.vue';
-import CategoryCustomerPanel from '../components/CategoryCustomerPanel.vue';
 import CustomerProductPanel from '../components/CustomerProductPanel.vue';
 import salesAnalysisApi from '../api/salesAnalysisApi';
 import config from '../../../config';
@@ -233,7 +282,7 @@ const IMAGE_SERVER = new URL('../', config.baseURL).toString();
 
 export default {
   name: 'SalesAnalysis',
-  components: { CategoryCustomerPanel, CustomerProductPanel, ProductCustomerDrawer },
+  components: { CustomerProductPanel, ProductCustomerDrawer },
   data() {
     return {
       presets: [{ days: 7, label: '近7天' }, { days: 30, label: '近30天' }, { days: 90, label: '近90天' }],
@@ -327,6 +376,16 @@ export default {
     selectedCustomer() {
       return (this.categoryCustomersDetail?.customers || [])
         .find((row) => this.same(row.customerId, this.selectedCustomerId)) || null;
+    },
+    categoryCustomers() { return this.categoryCustomersDetail?.customers || []; },
+    categoryCustomerPage() { return Number(this.categoryCustomersDetail?.page) || 1; },
+    categoryCustomerTotalPages() {
+      return Math.max(1, Number(this.categoryCustomersDetail?.totalPages) || 1);
+    },
+    activeCustomer() { return this.customerProductsDetail?.customer || this.selectedCustomer; },
+    customerInitial() {
+      const name = String(this.activeCustomer?.customerName || '').trim();
+      return name.slice(0, 1) || '客';
     },
     qualityIssueCount() {
       const quality = this.overview?.quality || {};
@@ -703,20 +762,23 @@ export default {
 
 .category-tree-panel,
 .product-analysis-panel,
-.customer-contribution-panel {
+.customer-contribution-panel,
+.selected-customer-panel {
   min-width: 0;
   min-height: 0;
   background: #fff;
 }
 
 .category-tree-panel,
-.customer-contribution-panel {
+.customer-contribution-panel,
+.selected-customer-panel {
   display: flex;
   flex-direction: column;
 }
 
 .category-tree-panel { border-right: 1px solid #dce7e1; }
-.customer-contribution-panel { border-left: 1px solid #dce7e1; }
+.customer-contribution-panel,
+.selected-customer-panel { border-left: 1px solid #dce7e1; }
 
 .section-heading,
 .selection-heading {
@@ -803,7 +865,36 @@ export default {
 .subcategory-tree button b { font-size: 12px; text-align: right; white-space: nowrap; }
 .subcategory-tree button em { color: #6f7f77; font-size: 11px; font-style: normal; text-align: right; }
 .subcategory-tree p,
+.category-customer-tree p,
 .tree-empty { margin: 0; padding: 12px; color: #8b9791; font-size: 10px; text-align: center; }
+.category-customer-tree { padding: 0 8px 8px 30px; }
+.category-customer-tree > button {
+  width: 100%;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: #fff;
+  color: #415149;
+  text-align: left;
+  cursor: pointer;
+}
+.category-customer-tree > button:hover { background: #f2f9f5; }
+.category-customer-tree > button.active { background: #e7f6ee; color: #176741; }
+.category-customer-tree > button span,
+.category-customer-tree > button strong,
+.category-customer-tree > button small { min-width: 0; display: block; }
+.category-customer-tree > button strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.category-customer-tree > button small { margin-top: 3px; overflow: hidden; color: #7f8d86; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.category-customer-tree > button b { color: #137246; font-size: 10px; white-space: nowrap; }
+.category-customer-tree p.error { color: #ac3c45; }
+.category-customer-tree nav { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 7px 0 1px; color: #68776f; font-size: 9px; }
+.category-customer-tree nav button { width: 27px; height: 25px; border: 1px solid #cfe0d7; border-radius: 6px; background: #fff; color: #167144; cursor: pointer; }
+.category-customer-tree nav button:disabled { opacity: .4; cursor: default; }
 
 .product-analysis-panel {
   display: flex;
@@ -811,7 +902,7 @@ export default {
   overflow: hidden;
 }
 
-.analysis-workspace.customer-mode { grid-template-columns: 290px minmax(660px, 1.25fr) minmax(480px, .9fr); }
+.analysis-workspace.customer-mode { grid-template-columns: 290px minmax(620px, 1fr) 340px; }
 
 .selection-summary {
   flex: none;
@@ -902,6 +993,26 @@ export default {
 .share-bar i { height: 100%; display: block; border-radius: inherit; background: #10a05d; }
 .customer-table-wrap em { color: #77847d; font-size: 10px; font-style: normal; text-align: right; }
 
+.selected-customer-identity { display: flex; align-items: center; gap: 10px; padding: 17px 14px; border-bottom: 1px solid #e2eae6; }
+.selected-customer-identity > span { width: 46px; height: 46px; flex: none; display: grid; place-items: center; border-radius: 14px; background: linear-gradient(145deg, #0eaa64, #087d4a); color: #fff; font-size: 20px; font-weight: 800; }
+.selected-customer-identity strong,
+.selected-customer-identity small { display: block; }
+.selected-customer-identity strong { color: #21342b; font-size: 16px; }
+.selected-customer-identity small { margin-top: 4px; color: #85918b; font-size: 10px; }
+.selected-customer-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 13px; border: 1px solid #dfe8e3; border-radius: 9px; overflow: hidden; }
+.selected-customer-metrics article { min-width: 0; padding: 13px 7px; border-right: 1px solid #e3ebe7; border-bottom: 1px solid #e3ebe7; text-align: center; }
+.selected-customer-metrics article:nth-child(2n) { border-right: 0; }
+.selected-customer-metrics article:nth-last-child(-n + 2) { border-bottom: 0; }
+.selected-customer-metrics strong,
+.selected-customer-metrics span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selected-customer-metrics strong { color: #0a8650; font-size: 17px; }
+.selected-customer-metrics span { margin-top: 4px; color: #849089; font-size: 9px; }
+.selected-customer-details { margin: 0 13px; }
+.selected-customer-details div { padding: 12px 1px; border-bottom: 1px solid #e7eeea; }
+.selected-customer-details dt { color: #829088; font-size: 9px; }
+.selected-customer-details dd { margin: 5px 0 0; color: #283a31; font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }
+.selected-customer-empty { flex: 1; display: grid; place-items: center; padding: 20px; color: #87938d; font-size: 11px; text-align: center; }
+
 .analysis-body > .data-note {
   flex: none;
   min-height: 28px;
@@ -913,7 +1024,7 @@ export default {
 
 @media (max-width: 1500px) {
   .analysis-workspace { grid-template-columns: 260px minmax(520px, 1fr) 330px; }
-  .analysis-workspace.customer-mode { grid-template-columns: 260px minmax(590px, 1.2fr) minmax(420px, .85fr); }
+  .analysis-workspace.customer-mode { grid-template-columns: 260px minmax(560px, 1fr) 320px; }
   .customer-concentration { grid-template-columns: 64px 80px minmax(0, 1fr); gap: 7px; }
   .concentration-ring { width: 60px; height: 60px; }
   .concentration-ring span { width: 37px; height: 37px; }
@@ -925,7 +1036,7 @@ export default {
   .analysis-body { overflow: auto; }
   .analysis-workspace { min-height: 760px; grid-template-columns: 240px minmax(520px, 1fr); overflow: visible; }
   .customer-contribution-panel { grid-column: 1 / -1; min-height: 420px; border-top: 1px solid #dce7e1; border-left: 0; }
-  .analysis-workspace.customer-mode { grid-template-columns: 240px minmax(620px, 1fr); }
-  .analysis-workspace.customer-mode .customer-product-panel { grid-column: 1 / -1; min-height: 440px; border-top: 1px solid #dce7e1; border-left: 0; }
+  .analysis-workspace.customer-mode { grid-template-columns: 240px minmax(600px, 1fr); }
+  .analysis-workspace.customer-mode .selected-customer-panel { grid-column: 1 / -1; min-height: 320px; border-top: 1px solid #dce7e1; border-left: 0; }
 }
 </style>
