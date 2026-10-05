@@ -446,7 +446,7 @@ onUnmounted(() => {
   border-radius: 12px;
   color: var(--product-primary);
   background: var(--product-primary-soft);
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 900;
 }
 
@@ -476,18 +476,18 @@ onUnmounted(() => {
 
 .settings-center__summary small {
   color: var(--product-text-muted);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .settings-center__summary strong {
-  margin-top: 3px;
-  font-size: 13px;
+  margin-top: 4px;
+  font-size: 16px;
 }
 
 .settings-center__summary p {
-  margin-top: 3px;
+  margin-top: 4px;
   color: var(--product-text-secondary);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .settings-center__grid {
@@ -519,13 +519,13 @@ onUnmounted(() => {
 
 .settings-card header span {
   color: var(--product-primary);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 900;
 }
 
 .settings-card h2 {
   margin: 4px 0 0;
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 900;
 }
 
@@ -536,7 +536,7 @@ onUnmounted(() => {
   border-radius: var(--product-radius-sm);
   color: var(--product-text-secondary);
   background: #fff;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -552,8 +552,8 @@ onUnmounted(() => {
 
 .settings-card dl > div {
   display: grid;
-  min-height: 52px;
-  grid-template-columns: 95px minmax(0, 1fr);
+  min-height: 58px;
+  grid-template-columns: 110px minmax(0, 1fr);
   gap: 14px;
   align-items: center;
   border-bottom: 1px solid #edf1f5;
@@ -565,7 +565,7 @@ onUnmounted(() => {
 
 .settings-card dt {
   color: var(--product-text-muted);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -573,7 +573,7 @@ onUnmounted(() => {
   overflow: hidden;
   margin: 0;
   color: var(--product-text);
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 800;
   text-align: right;
   text-overflow: ellipsis;
@@ -595,7 +595,7 @@ onUnmounted(() => {
   border-top: 1px solid var(--product-border);
   color: var(--product-text-secondary);
   background: var(--product-surface-soft);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -622,7 +622,7 @@ onUnmounted(() => {
   display: block;
   margin-bottom: 6px;
   color: var(--product-text-muted);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -634,7 +634,7 @@ onUnmounted(() => {
   border-radius: var(--product-radius-sm);
   color: var(--product-text);
   background: #fff;
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.5;
   resize: vertical;
   word-break: break-all;
@@ -654,19 +654,19 @@ onUnmounted(() => {
   border-radius: var(--product-radius-sm);
   color: var(--product-primary);
   background: #fff;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 800;
 }
 
 .connector-token__exp {
   color: var(--product-text-secondary);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .connector-token__note {
   margin: 8px 0 0;
   color: var(--product-text-secondary);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -682,7 +682,7 @@ onUnmounted(() => {
   gap: 12px;
   margin-bottom: 8px;
   color: var(--product-text-muted);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -693,7 +693,7 @@ onUnmounted(() => {
   border-radius: var(--product-radius-sm);
   color: var(--product-text-secondary);
   background: #fff;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -708,11 +708,11 @@ onUnmounted(() => {
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: center;
-  min-height: 38px;
+  min-height: 44px;
   padding: 6px 0;
   border-bottom: 1px solid #edf1f5;
   color: var(--product-text);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -729,7 +729,7 @@ onUnmounted(() => {
 .connector-list__empty {
   margin: 0 0 10px;
   color: var(--product-text-muted);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .connector-revoke {
@@ -739,7 +739,7 @@ onUnmounted(() => {
   border-radius: var(--product-radius-sm);
   color: #d9363e;
   background: #fff;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -754,7 +754,7 @@ onUnmounted(() => {
   border-top: 1px solid var(--product-border);
   color: var(--product-text);
   background: var(--product-surface-soft);
-  font-size: 10px;
+  font-size: 13px;
   line-height: 1.7;
 }
 
@@ -769,7 +769,7 @@ onUnmounted(() => {
   border: 1px solid var(--product-border-strong);
   border-radius: var(--product-radius-sm);
   background: #fff;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 800;
 }
 
