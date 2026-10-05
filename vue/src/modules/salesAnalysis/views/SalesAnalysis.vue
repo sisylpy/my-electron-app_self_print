@@ -7,6 +7,18 @@
         <article><span>成交商品</span><strong>{{ summary.goodsCount || 0 }} 种</strong><small>覆盖 {{ summary.subcategoryCount || 0 }} 个小类</small></article>
         <article><span>销售数量</span><strong>{{ primaryQuantity }}</strong><small>{{ otherQuantityText }}</small></article>
       </section>
+      <nav class="analysis-mode-switch" aria-label="销售分析显示方式">
+        <button
+          type="button"
+          :class="{ active: displayMode === 'product' }"
+          @click="setDisplayMode('product')"
+        >按商品</button>
+        <button
+          type="button"
+          :class="{ active: displayMode === 'customer' }"
+          @click="setDisplayMode('customer')"
+        >按客户</button>
+      </nav>
       <div class="analysis-filters">
         <nav aria-label="快捷统计范围">
           <button
@@ -47,40 +59,28 @@
                 :class="{ active: same(category.id, selectedCategoryId) }"
                 @click="selectCategory(category)"
               >
-                <span class="tree-caret">{{ same(category.id, selectedCategoryId) ? '⌄' : '›' }}</span>
+                <span class="tree-caret">{{ same(category.id, selectedCategoryId) ? (displayMode === 'product' ? '⌄' : '•') : '›' }}</span>
                 <strong>{{ category.name }}</strong>
                 <em>{{ percentageLabel(category.share) }}</em>
                 <b>{{ formatMoney(category.salesAmount) }}</b>
               </button>
-              <div v-if="same(category.id, selectedCategoryId)" class="category-drill">
-                <div class="view-mode-switch" role="group" aria-label="大类分析方式">
-                  <button
-                    type="button"
-                    :class="{ active: displayMode === 'product' }"
-                    @click="setDisplayMode('product')"
-                  >按商品</button>
-                  <button
-                    type="button"
-                    :class="{ active: displayMode === 'customer' }"
-                    @click="setDisplayMode('customer')"
-                  >按客户</button>
-                </div>
-                <div v-if="displayMode === 'product'" class="subcategory-tree">
-                  <button
-                    v-for="subcategory in subcategories"
-                    :key="subcategory.id"
-                    type="button"
-                    :class="{ active: same(subcategory.id, selectedSubcategoryId) }"
-                    @click="selectSubcategory(subcategory)"
-                  >
-                    <strong>{{ subcategory.name }}</strong>
-                    <b>{{ formatMoney(subcategory.salesAmount) }}</b>
-                    <em>{{ percentageLabel(overallShare(subcategory.salesAmount)) }}</em>
-                  </button>
-                  <p v-if="detailLoading">正在加载分类…</p>
-                  <p v-else-if="!subcategories.length">暂无小类</p>
-                </div>
-                <p v-else class="customer-mode-hint">按成交额查看该大类的全部客户，选择客户后可继续查看购买商品。</p>
+              <div
+                v-if="same(category.id, selectedCategoryId) && displayMode === 'product'"
+                class="subcategory-tree"
+              >
+                <button
+                  v-for="subcategory in subcategories"
+                  :key="subcategory.id"
+                  type="button"
+                  :class="{ active: same(subcategory.id, selectedSubcategoryId) }"
+                  @click="selectSubcategory(subcategory)"
+                >
+                  <strong>{{ subcategory.name }}</strong>
+                  <b>{{ formatMoney(subcategory.salesAmount) }}</b>
+                  <em>{{ percentageLabel(overallShare(subcategory.salesAmount)) }}</em>
+                </button>
+                <p v-if="detailLoading">正在加载分类…</p>
+                <p v-else-if="!subcategories.length">暂无小类</p>
               </div>
             </section>
             <div v-if="!filteredCategories.length" class="tree-empty">没有符合条件的分类</div>
@@ -587,11 +587,37 @@ export default {
 .analysis-toolbar .summary-grid article:first-child { padding-left: 0; }
 .analysis-toolbar .summary-grid article:last-child { border-right: 0; }
 .analysis-toolbar .summary-grid strong { font-size: 20px; }
+.analysis-mode-switch {
+  width: 176px;
+  height: 38px;
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 3px;
+  border: 1px solid #cfe0d7;
+  border-radius: 9px;
+  background: #f3f8f5;
+}
+.analysis-mode-switch button {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #64736b;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.analysis-mode-switch button.active {
+  background: #109c5c;
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(16, 156, 92, .18);
+}
 .analysis-toolbar .analysis-filters { flex-shrink: 0; }
 
 @media (max-width: 1150px) {
   .analysis-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }
   .analysis-toolbar .summary-grid { flex-basis: 100%; }
+  .analysis-mode-switch { margin-right: auto; }
 }
 
 @media (max-width: 640px) {
@@ -756,13 +782,6 @@ export default {
 .category-row b { font-size: 11px; text-align: right; white-space: nowrap; }
 .category-row em { color: #079153; font-size: 10px; font-style: normal; text-align: right; }
 .tree-caret { color: #466057; font-size: 17px; }
-
-.category-drill { padding-bottom: 7px; background: #fbfdfc; }
-.view-mode-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; padding: 8px 8px 7px 30px; }
-.view-mode-switch button { height: 30px; border: 1px solid #d3e3da; border-radius: 7px; background: #fff; color: #617169; font-size: 10px; font-weight: 700; cursor: pointer; }
-.view-mode-switch button:hover { border-color: #8fc8aa; color: #087b48; }
-.view-mode-switch button.active { border-color: #109c5c; background: #109c5c; color: #fff; box-shadow: 0 3px 8px rgba(16, 156, 92, .16); }
-.customer-mode-hint { margin: 0; padding: 2px 10px 8px 30px; color: #7d8b84; font-size: 9px; line-height: 1.6; }
 
 .subcategory-tree { padding: 0 8px 7px 30px; }
 .subcategory-tree button {
