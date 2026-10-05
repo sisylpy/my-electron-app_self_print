@@ -11,7 +11,7 @@ export const settingRoutes = [
       navKey: 'setting',
       moduleLabel: '系统管理',
       title: '设备与设置',
-      description: '查看打印机、MCP、日志与运行环境',
+      description: '查看打印机、连接器与运行环境',
     },
   },
 ];

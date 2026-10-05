@@ -12,7 +12,7 @@
       <article>
         <span class="summary-icon is-mcp">M</span>
         <div>
-          <small>MCP 打印服务</small>
+          <small>本机打印服务</small>
           <strong>{{ mcpStatus.running ? '运行中' : '未运行' }}</strong>
           <p>{{ mcpDetail }}</p>
         </div>
@@ -61,43 +61,6 @@
         <p class="settings-card__note">
           本页只展示运行状态，不会改变 Epson 纸型、DPI、边距或现有打印模板。
         </p>
-      </article>
-
-      <article class="settings-card">
-        <header>
-          <div>
-            <span>桌面服务</span>
-            <h2>MCP 与应用日志</h2>
-          </div>
-          <button
-            type="button"
-            :disabled="!canOpenLogs"
-            @click="openLogDirectory"
-          >
-            打开日志
-          </button>
-        </header>
-        <dl>
-          <div>
-            <dt>MCP 状态</dt>
-            <dd :class="{ success: mcpStatus.running }">
-              {{ mcpStatus.running ? '本机服务运行中' : '本机服务未运行' }}
-            </dd>
-          </div>
-          <div>
-            <dt>访问保护</dt>
-            <dd>{{ mcpStatus.authRequired === false ? '请检查配置' : '已启用鉴权' }}</dd>
-          </div>
-          <div>
-            <dt>监听地址</dt>
-            <dd>{{ mcpAddress }}</dd>
-          </div>
-          <div>
-            <dt>日志目录</dt>
-            <dd :title="logDirectory">{{ logDirectory || '仅桌面客户端可用' }}</dd>
-          </div>
-        </dl>
-        <p v-if="feedback" class="settings-card__feedback">{{ feedback }}</p>
       </article>
 
       <article class="settings-card">
@@ -207,13 +170,8 @@ const loading = ref(false);
 const printerName = ref('');
 const printerConfig = ref(null);
 const printerError = ref('');
-const logDirectory = ref('');
-const feedback = ref('');
 const mcpStatus = reactive({
   running: false,
-  authRequired: true,
-  host: '',
-  port: '',
 });
 
 const runtimeAvailable = computed(() => Boolean(window.electronAPI));
@@ -239,16 +197,6 @@ const mcpDetail = computed(() => (
     ? (mcpStatus.running ? '已启用本机鉴权保护' : '打印主流程不受影响')
     : '启动桌面客户端后显示'
 ));
-const mcpAddress = computed(() => {
-  if (!runtimeAvailable.value) return '仅桌面客户端可用';
-  if (!mcpStatus.host && !mcpStatus.port) return '未读取';
-  return `${mcpStatus.host || '127.0.0.1'}:${mcpStatus.port || '-'}`;
-});
-const canOpenLogs = computed(() => (
-  runtimeAvailable.value
-  && typeof window.electronAPI?.openAppLogDirectory === 'function'
-));
-
 async function loadStatus() {
   const api = window.electronAPI;
   if (!api) {
@@ -257,12 +205,10 @@ async function loadStatus() {
   }
 
   loading.value = true;
-  feedback.value = '';
   const requests = await Promise.allSettled([
     api.getDefaultPrinter?.(),
     api.getPrinterSystemConfig?.(),
     api.getMcpStatus?.(),
-    api.getAppLogDirectory?.(),
   ]);
 
   const defaultPrinter = requests[0];
@@ -284,31 +230,10 @@ async function loadStatus() {
 
   const mcp = requests[2];
   if (mcp.status === 'fulfilled' && mcp.value) {
-    Object.assign(mcpStatus, {
-      running: Boolean(mcp.value.running),
-      authRequired: mcp.value.authRequired !== false,
-      host: mcp.value.host || '',
-      port: mcp.value.port || '',
-    });
+    mcpStatus.running = Boolean(mcp.value.running);
   }
 
-  const log = requests[3];
-  if (log.status === 'fulfilled' && typeof log.value === 'string') {
-    logDirectory.value = log.value;
-  }
   loading.value = false;
-}
-
-async function openLogDirectory() {
-  if (!canOpenLogs.value) return;
-  try {
-    const result = await window.electronAPI.openAppLogDirectory();
-    feedback.value = result?.success === false
-      ? result.error || '日志目录打开失败'
-      : '日志目录已打开';
-  } catch (error) {
-    feedback.value = error?.message || '日志目录打开失败';
-  }
 }
 
 // ---- WorkBuddy 连接器凭证 ----

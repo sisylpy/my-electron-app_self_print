@@ -97,7 +97,7 @@ export const PRODUCT_NAVIGATION = Object.freeze([
       Object.freeze({
         key: 'setting',
         label: '设备与设置',
-        description: '打印机、MCP、日志与环境',
+        description: '打印机、连接器与运行环境',
         icon: '设',
         iconImg: iconDeviceSettings,
         routeName: 'SettingsCenter',
