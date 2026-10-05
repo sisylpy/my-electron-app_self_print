@@ -21,7 +21,14 @@
         <table>
           <thead><tr><th>商品</th><th>数量</th><th>成交额</th><th>均价</th><th>次数</th></tr></thead>
           <tbody>
-            <tr v-for="product in products" :key="product.goodsId">
+            <tr
+              v-for="product in products"
+              :key="product.goodsId"
+              :class="{ selected: same(product.goodsId, selectedProductId) }"
+              tabindex="0"
+              @click="$emit('select', product)"
+              @keydown.enter.prevent="$emit('select', product)"
+            >
               <td>
                 <span class="customer-product-identity">
                   <span class="customer-product-thumb"><img :src="goodsImage(product)" :alt="product.goodsName" /></span>
@@ -64,12 +71,13 @@ export default {
   props: {
     customer: { type: Object, default: null },
     detail: { type: Object, default: null },
+    selectedProductId: { type: [Number, String], default: null },
     loading: { type: Boolean, default: false },
     error: { type: String, default: '' },
     categoryName: { type: String, default: '商品大类' },
     imageServer: { type: String, required: true },
   },
-  emits: ['page'],
+  emits: ['page', 'select'],
   computed: {
     resolvedCustomer() { return this.detail?.customer || this.customer; },
     products() { return this.detail?.products || []; },
@@ -81,6 +89,7 @@ export default {
     formatAveragePrices,
     formatMoney,
     formatQuantities,
+    same(left, right) { return String(left) === String(right); },
     goodsImage(product) {
       return resolveGoodsImage(product, this.imageServer, 'goodsImage/logo.jpg');
     },
@@ -107,6 +116,9 @@ table { width: 100%; min-width: 610px; border-collapse: collapse; }
 th,td { padding: 9px 7px; border-bottom: 1px solid #e8eeeb; text-align: left; vertical-align: middle; }
 th { position: sticky; top: 0; z-index: 1; background: #f5f8f6; color: #78857f; font-size: 9px; white-space: nowrap; }
 td { color: #34423b; font-size: 11px; }
+tbody tr[tabindex] { cursor: pointer; outline: none; }
+tbody tr[tabindex]:hover,tbody tr.selected { background: #eff9f4; }
+tbody tr[tabindex]:focus-visible { box-shadow: inset 0 0 0 2px #159d60; }
 td:first-child { min-width: 160px; }
 td:nth-child(2),td:nth-child(4) { min-width: 110px; }
 td.money { color: #07814b; font-weight: 800; white-space: nowrap; }

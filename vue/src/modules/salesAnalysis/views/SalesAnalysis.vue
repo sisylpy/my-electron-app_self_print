@@ -178,69 +178,24 @@
           v-else
           :customer="selectedCustomer"
           :detail="customerProductsDetail"
+          :selected-product-id="selectedProductId"
           :loading="customerProductsLoading"
           :error="customerProductsError"
           :category-name="selectedCategoryName"
           :image-server="imageServer"
+          @select="selectProduct"
           @page="loadCustomerProductsPage"
         />
 
-        <aside v-if="displayMode === 'product'" class="customer-contribution-panel">
-          <header class="section-heading customer-heading"><h2>客户贡献</h2></header>
-          <section class="customer-concentration">
-            <div class="concentration-ring" :style="donutStyle"><span></span></div>
-            <div class="concentration-copy"><span>客户集中度</span><strong>{{ percentageLabel(customerConcentration) }}</strong><small>前 3 客户贡献</small></div>
-            <ul>
-              <li v-for="(customer, index) in currentTopCustomers.slice(0, 4)" :key="customer.customerId || customer.customerName">
-                <i :class="`tone-${index + 1}`"></i><span>{{ customer.customerName }}</span><b>{{ percentageLabel(customer.share) }}</b>
-              </li>
-            </ul>
-          </section>
-          <div class="customer-tools">
-            <label><span>⌕</span><input v-model.trim="customerKeyword" placeholder="搜索客户名称" /></label>
-            <span>按成交销售额</span>
-          </div>
-          <div class="customer-table-wrap">
-            <table>
-              <thead><tr><th>#</th><th>客户名称</th><th>成交销售额</th><th>占比</th></tr></thead>
-              <tbody>
-                <tr v-for="(customer, index) in filteredCustomers" :key="customer.customerId || customer.customerName">
-                  <td>{{ index + 1 }}</td>
-                  <td><strong>{{ customer.customerName }}</strong><small>{{ customer.goodsCount }} 种商品</small></td>
-                  <td>{{ formatMoney(customer.salesAmount) }}</td>
-                  <td><span class="share-bar"><i :style="{ width: relativeBarWidth(currentTopCustomers, customer.salesAmount) }"></i></span><em>{{ percentageLabel(customer.share) }}</em></td>
-                </tr>
-                <tr v-if="!filteredCustomers.length"><td colspan="4" class="empty-cell">暂无客户贡献数据</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <footer class="panel-footer">共 {{ filteredCustomers.length }} 个客户</footer>
-        </aside>
-
-        <aside v-else class="selected-customer-panel">
-          <header class="section-heading customer-heading"><h2>客户概览</h2></header>
-          <template v-if="activeCustomer">
-            <section class="selected-customer-identity">
-              <span>{{ customerInitial }}</span>
-              <div>
-                <strong>{{ activeCustomer.customerName || '未命名客户' }}</strong>
-                <small>{{ selectedCategoryName }}内的订货情况</small>
-              </div>
-            </section>
-            <section class="selected-customer-metrics">
-              <article><strong>{{ formatMoney(activeCustomer.salesAmount) }}</strong><span>成交额</span></article>
-              <article><strong>{{ activeCustomer.goodsCount || customerProductsDetail?.totalCount || 0 }}</strong><span>商品数</span></article>
-              <article><strong>{{ activeCustomer.orderCount || 0 }}</strong><span>订货次数</span></article>
-              <article><strong>{{ activeCustomer.orderDays || 0 }}</strong><span>订货天数</span></article>
-            </section>
-            <dl class="selected-customer-details">
-              <div><dt>订货数量</dt><dd>{{ formatQuantities(activeCustomer.quantities, '暂无数量') }}</dd></div>
-              <div><dt>平均单价</dt><dd>{{ formatAveragePrices(activeCustomer.averagePrices) }}</dd></div>
-              <div><dt>最近订货</dt><dd>{{ activeCustomer.lastOrderDate || '暂无日期' }}</dd></div>
-            </dl>
-          </template>
-          <div v-else class="selected-customer-empty">请先从左侧选择一个客户</div>
-        </aside>
+        <ProductCustomerDrawer
+          embedded
+          visible
+          :product="selectedProduct"
+          :detail="productDetail"
+          :loading="productLoading"
+          :error="productError"
+          :image-server="imageServer"
+        />
       </section>
 
       <footer class="data-note">
@@ -251,15 +206,6 @@
       </footer>
     </main>
 
-    <ProductCustomerDrawer
-      :visible="productDrawerOpen"
-      :product="selectedProduct"
-      :detail="productDetail"
-      :loading="productLoading"
-      :error="productError"
-      :image-server="imageServer"
-      @close="closeProductDrawer"
-    />
   </div>
 </template>
 
@@ -274,7 +220,6 @@ import {
   formatQuantities,
   percentageLabel,
   rangeForDays,
-  relativeBarWidth,
   resolveGoodsImage,
 } from '../presentation/salesAnalysisPresentation';
 
@@ -299,9 +244,7 @@ export default {
       selectedSubcategoryId: null,
       selectedProductId: null,
       selectedCustomerId: null,
-      productDrawerOpen: false,
       keyword: '',
-      customerKeyword: '',
       overviewLoading: false,
       detailLoading: false,
       productLoading: false,
@@ -338,22 +281,8 @@ export default {
         || this.selectedCategory?.name
         || '商品大类';
     },
-    currentTopCustomers() { return this.categoryDetail?.topCustomers || this.overview?.topCustomers || []; },
     filteredCategories() {
       return this.overview?.categories || [];
-    },
-    filteredCustomers() {
-      const key = this.customerKeyword.toLowerCase();
-      if (!key) return this.currentTopCustomers;
-      return this.currentTopCustomers.filter((customer) => String(customer.customerName || '').toLowerCase().includes(key));
-    },
-    customerConcentration() {
-      return Math.min(100, this.currentTopCustomers.slice(0, 3)
-        .reduce((total, customer) => total + (Number(customer.share) || 0), 0));
-    },
-    donutStyle() {
-      const share = Math.max(0, Math.min(100, this.customerConcentration));
-      return { background: `conic-gradient(#109c5c 0 ${share}%, #dfe8e3 ${share}% 100%)` };
     },
     subcategories() { return this.categoryDetail?.subcategories || []; },
     selectedSubcategory() {
@@ -371,7 +300,10 @@ export default {
       });
     },
     selectedProduct() {
-      return (this.categoryDetail?.products || []).find((row) => this.same(row.goodsId, this.selectedProductId)) || null;
+      return [
+        ...(this.categoryDetail?.products || []),
+        ...(this.customerProductsDetail?.products || []),
+      ].find((row) => this.same(row.goodsId, this.selectedProductId)) || null;
     },
     selectedCustomer() {
       return (this.categoryCustomersDetail?.customers || [])
@@ -381,11 +313,6 @@ export default {
     categoryCustomerPage() { return Number(this.categoryCustomersDetail?.page) || 1; },
     categoryCustomerTotalPages() {
       return Math.max(1, Number(this.categoryCustomersDetail?.totalPages) || 1);
-    },
-    activeCustomer() { return this.customerProductsDetail?.customer || this.selectedCustomer; },
-    customerInitial() {
-      const name = String(this.activeCustomer?.customerName || '').trim();
-      return name.slice(0, 1) || '客';
     },
     qualityIssueCount() {
       const quality = this.overview?.quality || {};
@@ -402,7 +329,6 @@ export default {
     formatMoney,
     formatQuantities,
     percentageLabel,
-    relativeBarWidth,
     goodsImage(product) {
       return resolveGoodsImage(product, this.imageServer, 'goodsImage/logo.jpg');
     },
@@ -449,7 +375,6 @@ export default {
       this.selectedSubcategoryId = null;
       this.selectedProductId = null;
       this.selectedCustomerId = null;
-      this.productDrawerOpen = false;
       this.productLoading = false;
       this.categoryCustomersLoading = false;
       this.customerProductsLoading = false;
@@ -464,7 +389,6 @@ export default {
       this.selectedSubcategoryId = null;
       this.selectedProductId = null;
       this.selectedCustomerId = null;
-      this.productDrawerOpen = false;
       this.categoryDetail = null;
       this.productDetail = null;
       this.categoryCustomersDetail = null;
@@ -499,7 +423,6 @@ export default {
     async setDisplayMode(mode) {
       if (!['product', 'customer'].includes(mode) || mode === this.displayMode) return;
       this.displayMode = mode;
-      this.productDrawerOpen = false;
       this.productRequestId += 1;
       this.productLoading = false;
       if (mode === 'product') {
@@ -507,10 +430,22 @@ export default {
         this.customerProductsRequestId += 1;
         this.categoryCustomersLoading = false;
         this.customerProductsLoading = false;
-        if (!this.categoryDetail) await this.loadCategoryDetail();
+        if (!this.categoryDetail) {
+          await this.loadCategoryDetail();
+        } else {
+          const firstProduct = (this.categoryDetail.products || [])
+            .find((product) => this.same(product.subcategoryId, this.selectedSubcategoryId));
+          if (firstProduct) this.selectProduct(firstProduct);
+        }
         return;
       }
-      if (!this.categoryCustomersDetail) await this.loadCategoryCustomers(1);
+      this.clearProductSelection();
+      if (!this.categoryCustomersDetail) {
+        await this.loadCategoryCustomers(1);
+      } else {
+        const firstProduct = this.customerProductsDetail?.products?.[0];
+        if (firstProduct) this.selectProduct(firstProduct);
+      }
     },
     async loadCategoryCustomers(page = 1) {
       if (this.selectedCategoryId === null || this.selectedCategoryId === undefined) return;
@@ -542,6 +477,7 @@ export default {
       if (!customer?.customerId) return;
       if (!this.same(customer.customerId, this.selectedCustomerId)) {
         this.customerProductsDetail = null;
+        this.clearProductSelection();
       }
       this.selectedCustomerId = customer.customerId;
       await this.loadCustomerProductsPage(1);
@@ -556,7 +492,12 @@ export default {
         const detail = await salesAnalysisApi.categoryCustomerProducts(
           this.selectedCategoryId, this.selectedCustomerId, { ...this.range }, page, 20,
         );
-        if (requestId === this.customerProductsRequestId) this.customerProductsDetail = detail;
+        if (requestId === this.customerProductsRequestId) {
+          this.customerProductsDetail = detail;
+          const firstProduct = detail.products?.[0];
+          if (firstProduct) this.selectProduct(firstProduct);
+          else this.clearProductSelection();
+        }
       } catch (error) {
         if (requestId === this.customerProductsRequestId) {
           this.customerProductsError = error?.message || '客户商品明细加载失败';
@@ -574,21 +515,28 @@ export default {
       this.productLoading = false;
       this.categoryCustomersLoading = false;
       this.customerProductsLoading = false;
-      this.productDrawerOpen = false;
     },
     selectSubcategory(subcategory) {
       this.selectedSubcategoryId = subcategory.id;
       this.keyword = '';
-      this.productDrawerOpen = false;
       this.selectedProductId = null;
       this.productDetail = null;
       this.productError = '';
       this.productLoading = false;
       this.productRequestId += 1;
+      const firstProduct = (this.categoryDetail?.products || [])
+        .find((product) => this.same(product.subcategoryId, subcategory.id));
+      if (firstProduct) this.selectProduct(firstProduct);
+    },
+    clearProductSelection() {
+      this.productRequestId += 1;
+      this.selectedProductId = null;
+      this.productDetail = null;
+      this.productError = '';
+      this.productLoading = false;
     },
     async selectProduct(product) {
       this.selectedProductId = product.goodsId;
-      this.productDrawerOpen = true;
       this.productDetail = null;
       const requestId = ++this.productRequestId;
       this.productLoading = true;
@@ -603,11 +551,6 @@ export default {
       } finally {
         if (requestId === this.productRequestId) this.productLoading = false;
       }
-    },
-    closeProductDrawer() {
-      this.productDrawerOpen = false;
-      this.productRequestId += 1;
-      this.productLoading = false;
     },
   },
 };
@@ -754,31 +697,25 @@ export default {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 290px minmax(560px, 1fr) 370px;
+  grid-template-columns: 290px minmax(560px, 1fr) 440px;
   overflow: hidden;
   border-bottom: 1px solid #dce7e1;
   background: #fff;
 }
 
 .category-tree-panel,
-.product-analysis-panel,
-.customer-contribution-panel,
-.selected-customer-panel {
+.product-analysis-panel {
   min-width: 0;
   min-height: 0;
   background: #fff;
 }
 
-.category-tree-panel,
-.customer-contribution-panel,
-.selected-customer-panel {
+.category-tree-panel {
   display: flex;
   flex-direction: column;
 }
 
 .category-tree-panel { border-right: 1px solid #dce7e1; }
-.customer-contribution-panel,
-.selected-customer-panel { border-left: 1px solid #dce7e1; }
 
 .section-heading,
 .selection-heading {
@@ -801,8 +738,7 @@ export default {
 .selection-heading { min-height: 58px; padding-left: 17px; border-left: 3px solid #10a05d; }
 .selection-heading p { margin-top: 4px; color: #7d8983; font-size: 10px; }
 
-.product-search,
-.customer-tools label {
+.product-search {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -811,8 +747,7 @@ export default {
   color: #0b8851;
 }
 
-.product-search input,
-.customer-tools input {
+.product-search input {
   width: 100%;
   min-width: 0;
   border: 0;
@@ -902,7 +837,7 @@ export default {
   overflow: hidden;
 }
 
-.analysis-workspace.customer-mode { grid-template-columns: 290px minmax(620px, 1fr) 340px; }
+.analysis-workspace.customer-mode { grid-template-columns: 290px minmax(620px, 1fr) 440px; }
 
 .selection-summary {
   flex: none;
@@ -945,74 +880,6 @@ export default {
   font-size: 10px;
 }
 
-.customer-heading { min-height: 52px; border-left: 3px solid #10a05d; }
-.customer-concentration {
-  flex: none;
-  display: grid;
-  grid-template-columns: 72px 90px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  padding: 16px 13px;
-  border-bottom: 1px solid #dfe8e3;
-}
-.concentration-ring { width: 68px; height: 68px; display: grid; place-items: center; border-radius: 50%; }
-.concentration-ring span { width: 42px; height: 42px; border-radius: 50%; background: #fff; }
-.concentration-copy span,
-.concentration-copy strong,
-.concentration-copy small { display: block; }
-.concentration-copy span { color: #5f6f67; font-size: 10px; }
-.concentration-copy strong { margin-top: 3px; color: #099253; font-size: 20px; }
-.concentration-copy small { margin-top: 3px; color: #87938d; font-size: 9px; }
-.customer-concentration ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
-.customer-concentration li { min-width: 0; display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 5px; color: #65736c; font-size: 9px; }
-.customer-concentration li i { width: 6px; height: 6px; border-radius: 50%; background: #10a05d; }
-.customer-concentration li .tone-2 { background: #2f90e8; }
-.customer-concentration li .tone-3 { background: #7189e8; }
-.customer-concentration li .tone-4 { background: #b3c0ba; }
-.customer-concentration li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.customer-concentration li b { font-weight: 600; white-space: nowrap; }
-
-.customer-tools { flex: none; display: grid; grid-template-columns:minmax(0, 1fr) 105px; gap: 7px; padding: 9px 11px; border-bottom: 1px solid #dfe8e3; }
-.customer-tools label { height: 31px; padding: 0 8px; }
-.customer-tools > span { display: flex; align-items: center; justify-content: center; border: 1px solid #d7e2dc; color: #637169; font-size: 9px; }
-.customer-table-wrap { flex: 1; min-height: 0; overflow: auto; }
-.customer-table-wrap table { width: 100%; border-collapse: collapse; }
-.customer-table-wrap th,
-.customer-table-wrap td { padding: 8px 7px; border-bottom: 1px solid #e6ece9; text-align: left; vertical-align: middle; }
-.customer-table-wrap th { position: sticky; top: 0; z-index: 1; background: #f5f8f6; color: #78857f; font-size: 9px; }
-.customer-table-wrap td { font-size: 12px; }
-.customer-table-wrap td:first-child { width: 28px; text-align: center; }
-.customer-table-wrap td:nth-child(3) { white-space: nowrap; }
-.customer-table-wrap td:last-child { width: 120px; }
-.customer-table-wrap strong,
-.customer-table-wrap small { display: block; }
-.customer-table-wrap strong { font-size: 13px; }
-.customer-table-wrap small { margin-top: 2px; color: #8a9690; font-size: 10px; }
-.customer-table-wrap td:last-child { display: grid; grid-template-columns: minmax(44px, 1fr) 35px; align-items: center; gap: 5px; }
-.share-bar { height: 7px; display: block; overflow: hidden; border-radius: 5px; background: #edf2ef; }
-.share-bar i { height: 100%; display: block; border-radius: inherit; background: #10a05d; }
-.customer-table-wrap em { color: #77847d; font-size: 10px; font-style: normal; text-align: right; }
-
-.selected-customer-identity { display: flex; align-items: center; gap: 10px; padding: 17px 14px; border-bottom: 1px solid #e2eae6; }
-.selected-customer-identity > span { width: 46px; height: 46px; flex: none; display: grid; place-items: center; border-radius: 14px; background: linear-gradient(145deg, #0eaa64, #087d4a); color: #fff; font-size: 20px; font-weight: 800; }
-.selected-customer-identity strong,
-.selected-customer-identity small { display: block; }
-.selected-customer-identity strong { color: #21342b; font-size: 16px; }
-.selected-customer-identity small { margin-top: 4px; color: #85918b; font-size: 10px; }
-.selected-customer-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 13px; border: 1px solid #dfe8e3; border-radius: 9px; overflow: hidden; }
-.selected-customer-metrics article { min-width: 0; padding: 13px 7px; border-right: 1px solid #e3ebe7; border-bottom: 1px solid #e3ebe7; text-align: center; }
-.selected-customer-metrics article:nth-child(2n) { border-right: 0; }
-.selected-customer-metrics article:nth-last-child(-n + 2) { border-bottom: 0; }
-.selected-customer-metrics strong,
-.selected-customer-metrics span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.selected-customer-metrics strong { color: #0a8650; font-size: 17px; }
-.selected-customer-metrics span { margin-top: 4px; color: #849089; font-size: 9px; }
-.selected-customer-details { margin: 0 13px; }
-.selected-customer-details div { padding: 12px 1px; border-bottom: 1px solid #e7eeea; }
-.selected-customer-details dt { color: #829088; font-size: 9px; }
-.selected-customer-details dd { margin: 5px 0 0; color: #283a31; font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }
-.selected-customer-empty { flex: 1; display: grid; place-items: center; padding: 20px; color: #87938d; font-size: 11px; text-align: center; }
-
 .analysis-body > .data-note {
   flex: none;
   min-height: 28px;
@@ -1023,11 +890,8 @@ export default {
 }
 
 @media (max-width: 1500px) {
-  .analysis-workspace { grid-template-columns: 260px minmax(520px, 1fr) 330px; }
-  .analysis-workspace.customer-mode { grid-template-columns: 260px minmax(560px, 1fr) 320px; }
-  .customer-concentration { grid-template-columns: 64px 80px minmax(0, 1fr); gap: 7px; }
-  .concentration-ring { width: 60px; height: 60px; }
-  .concentration-ring span { width: 37px; height: 37px; }
+  .analysis-workspace { grid-template-columns: 260px minmax(520px, 1fr) 390px; }
+  .analysis-workspace.customer-mode { grid-template-columns: 260px minmax(560px, 1fr) 390px; }
 }
 
 .analysis-filters nav button { font-size: 13px; }
@@ -1035,8 +899,6 @@ export default {
 @media (max-width: 1120px) {
   .analysis-body { overflow: auto; }
   .analysis-workspace { min-height: 760px; grid-template-columns: 240px minmax(520px, 1fr); overflow: visible; }
-  .customer-contribution-panel { grid-column: 1 / -1; min-height: 420px; border-top: 1px solid #dce7e1; border-left: 0; }
   .analysis-workspace.customer-mode { grid-template-columns: 240px minmax(600px, 1fr); }
-  .analysis-workspace.customer-mode .selected-customer-panel { grid-column: 1 / -1; min-height: 320px; border-top: 1px solid #dce7e1; border-left: 0; }
 }
 </style>
