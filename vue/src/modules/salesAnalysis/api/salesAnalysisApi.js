@@ -23,4 +23,18 @@ export default {
       '商品重要客户加载失败',
     );
   },
+  categoryCustomers(categoryId, range, page = 1, pageSize = 20) {
+    return requireSuccess(
+      secureBridge().loadCategoryCustomers(categoryId, range, page, pageSize),
+      '大类客户加载失败',
+    );
+  },
+  categoryCustomerProducts(categoryId, customerId, range, page = 1, pageSize = 20) {
+    return requireSuccess(
+      secureBridge().loadCategoryCustomerProducts(
+        categoryId, customerId, range, page, pageSize,
+      ),
+      '客户商品明细加载失败',
+    );
+  },
 };

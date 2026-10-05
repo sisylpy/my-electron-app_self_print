@@ -323,6 +323,18 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     return normalized;
   }
 
+  function validateSalesPagination(pageValue, pageSizeValue) {
+    const page = pageValue === undefined ? 1 : Number(pageValue);
+    const pageSize = pageSizeValue === undefined ? 20 : Number(pageSizeValue);
+    if (!Number.isSafeInteger(page) || page < 1 || page > 2147483647) {
+      throw new Error('page 无效');
+    }
+    if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+      throw new Error('pageSize 无效');
+    }
+    return { page, pageSize };
+  }
+
   async function capabilities() {
     return request('GET', 'capabilities');
   }
@@ -979,6 +991,41 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     }
   }
 
+  async function loadSalesAnalysisCategoryCustomers(input) {
+    try {
+      const data = strictPayload(input || {}, ['categoryId', 'range', 'page', 'pageSize']);
+      const categoryId = requireReportId(data.categoryId, 'categoryId', true);
+      const params = {
+        ...validateSalesRange(data.range),
+        ...validateSalesPagination(data.page, data.pageSize),
+      };
+      return request('GET', `sales-analysis/categories/${categoryId}/customers`, { params });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function loadSalesAnalysisCategoryCustomerProducts(input) {
+    try {
+      const data = strictPayload(input || {}, [
+        'categoryId', 'customerId', 'range', 'page', 'pageSize',
+      ]);
+      const categoryId = requireReportId(data.categoryId, 'categoryId', true);
+      const customerId = requireReportId(data.customerId, 'customerId');
+      const params = {
+        ...validateSalesRange(data.range),
+        ...validateSalesPagination(data.page, data.pageSize),
+      };
+      return request(
+        'GET',
+        `sales-analysis/categories/${categoryId}/customers/${customerId}/products`,
+        { params },
+      );
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
   async function loadMapTile(input) {
     const zoom = Number(input?.z);
     const x = Number(input?.x);
@@ -1098,6 +1145,8 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     loadSalesAnalysisOverview,
     loadSalesAnalysisCategory,
     loadSalesAnalysisProductCustomers,
+    loadSalesAnalysisCategoryCustomers,
+    loadSalesAnalysisCategoryCustomerProducts,
     loadMapConfig,
     loadMapTile,
     issueConnectorCredential,

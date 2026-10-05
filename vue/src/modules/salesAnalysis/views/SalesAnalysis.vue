@@ -35,9 +35,9 @@
 
     <main v-else class="analysis-body">
       <div v-if="errorMessage" class="inline-message error">{{ errorMessage }}</div>
-      <div v-if="detailError" class="inline-message error">{{ detailError }}</div>
+      <div v-if="displayMode === 'product' && detailError" class="inline-message error">{{ detailError }}</div>
 
-      <section class="analysis-workspace">
+      <section class="analysis-workspace" :class="{ 'customer-mode': displayMode === 'customer' }">
         <aside class="category-tree-panel">
           <nav class="category-tree" aria-label="销售分类树">
             <section v-for="category in filteredCategories" :key="category.id">
@@ -52,27 +52,42 @@
                 <em>{{ percentageLabel(category.share) }}</em>
                 <b>{{ formatMoney(category.salesAmount) }}</b>
               </button>
-              <div v-if="same(category.id, selectedCategoryId)" class="subcategory-tree">
-                <button
-                  v-for="subcategory in subcategories"
-                  :key="subcategory.id"
-                  type="button"
-                  :class="{ active: same(subcategory.id, selectedSubcategoryId) }"
-                  @click="selectSubcategory(subcategory)"
-                >
-                  <strong>{{ subcategory.name }}</strong>
-                  <b>{{ formatMoney(subcategory.salesAmount) }}</b>
-                  <em>{{ percentageLabel(overallShare(subcategory.salesAmount)) }}</em>
-                </button>
-                <p v-if="detailLoading">正在加载分类…</p>
-                <p v-else-if="!subcategories.length">暂无小类</p>
+              <div v-if="same(category.id, selectedCategoryId)" class="category-drill">
+                <div class="view-mode-switch" role="group" aria-label="大类分析方式">
+                  <button
+                    type="button"
+                    :class="{ active: displayMode === 'product' }"
+                    @click="setDisplayMode('product')"
+                  >按商品</button>
+                  <button
+                    type="button"
+                    :class="{ active: displayMode === 'customer' }"
+                    @click="setDisplayMode('customer')"
+                  >按客户</button>
+                </div>
+                <div v-if="displayMode === 'product'" class="subcategory-tree">
+                  <button
+                    v-for="subcategory in subcategories"
+                    :key="subcategory.id"
+                    type="button"
+                    :class="{ active: same(subcategory.id, selectedSubcategoryId) }"
+                    @click="selectSubcategory(subcategory)"
+                  >
+                    <strong>{{ subcategory.name }}</strong>
+                    <b>{{ formatMoney(subcategory.salesAmount) }}</b>
+                    <em>{{ percentageLabel(overallShare(subcategory.salesAmount)) }}</em>
+                  </button>
+                  <p v-if="detailLoading">正在加载分类…</p>
+                  <p v-else-if="!subcategories.length">暂无小类</p>
+                </div>
+                <p v-else class="customer-mode-hint">按成交额查看该大类的全部客户，选择客户后可继续查看购买商品。</p>
               </div>
             </section>
             <div v-if="!filteredCategories.length" class="tree-empty">没有符合条件的分类</div>
           </nav>
         </aside>
 
-        <section class="product-analysis-panel">
+        <section v-if="displayMode === 'product'" class="product-analysis-panel">
           <header class="selection-heading">
             <div>
               <h2>{{ selectedCategoryName }} / {{ selectedSubcategoryName }}</h2>
@@ -123,7 +138,18 @@
           <footer class="panel-footer">共 {{ visibleProducts.length }} 条数据</footer>
         </section>
 
-        <aside class="customer-contribution-panel">
+        <CategoryCustomerPanel
+          v-else
+          :detail="categoryCustomersDetail"
+          :fallback-category="selectedCategory"
+          :selected-customer-id="selectedCustomerId"
+          :loading="categoryCustomersLoading"
+          :error="categoryCustomersError"
+          @select="selectCustomer"
+          @page="loadCategoryCustomers"
+        />
+
+        <aside v-if="displayMode === 'product'" class="customer-contribution-panel">
           <header class="section-heading customer-heading"><h2>客户贡献</h2></header>
           <section class="customer-concentration">
             <div class="concentration-ring" :style="donutStyle"><span></span></div>
@@ -154,6 +180,17 @@
           </div>
           <footer class="panel-footer">共 {{ filteredCustomers.length }} 个客户</footer>
         </aside>
+
+        <CustomerProductPanel
+          v-else
+          :customer="selectedCustomer"
+          :detail="customerProductsDetail"
+          :loading="customerProductsLoading"
+          :error="customerProductsError"
+          :category-name="selectedCategoryName"
+          :image-server="imageServer"
+          @page="loadCustomerProductsPage"
+        />
       </section>
 
       <footer class="data-note">
@@ -178,6 +215,8 @@
 
 <script>
 import ProductCustomerDrawer from '../components/ProductCustomerDrawer.vue';
+import CategoryCustomerPanel from '../components/CategoryCustomerPanel.vue';
+import CustomerProductPanel from '../components/CustomerProductPanel.vue';
 import salesAnalysisApi from '../api/salesAnalysisApi';
 import config from '../../../config';
 import {
@@ -194,7 +233,7 @@ const IMAGE_SERVER = new URL('../', config.baseURL).toString();
 
 export default {
   name: 'SalesAnalysis',
-  components: { ProductCustomerDrawer },
+  components: { CategoryCustomerPanel, CustomerProductPanel, ProductCustomerDrawer },
   data() {
     return {
       presets: [{ days: 7, label: '近7天' }, { days: 30, label: '近30天' }, { days: 90, label: '近90天' }],
@@ -204,21 +243,31 @@ export default {
       overview: null,
       categoryDetail: null,
       productDetail: null,
+      categoryCustomersDetail: null,
+      customerProductsDetail: null,
+      displayMode: 'product',
       selectedCategoryId: null,
       selectedSubcategoryId: null,
       selectedProductId: null,
+      selectedCustomerId: null,
       productDrawerOpen: false,
       keyword: '',
       customerKeyword: '',
       overviewLoading: false,
       detailLoading: false,
       productLoading: false,
+      categoryCustomersLoading: false,
+      customerProductsLoading: false,
       errorMessage: '',
       detailError: '',
       productError: '',
+      categoryCustomersError: '',
+      customerProductsError: '',
       overviewRequestId: 0,
       detailRequestId: 0,
       productRequestId: 0,
+      categoryCustomersRequestId: 0,
+      customerProductsRequestId: 0,
     };
   },
   computed: {
@@ -234,7 +283,12 @@ export default {
     selectedCategory() {
       return (this.overview?.categories || []).find((row) => this.same(row.id, this.selectedCategoryId)) || null;
     },
-    selectedCategoryName() { return this.categoryDetail?.category?.name || this.selectedCategory?.name || '商品大类'; },
+    selectedCategoryName() {
+      return this.categoryDetail?.category?.name
+        || this.categoryCustomersDetail?.category?.name
+        || this.selectedCategory?.name
+        || '商品大类';
+    },
     currentTopCustomers() { return this.categoryDetail?.topCustomers || this.overview?.topCustomers || []; },
     filteredCategories() {
       return this.overview?.categories || [];
@@ -269,6 +323,10 @@ export default {
     },
     selectedProduct() {
       return (this.categoryDetail?.products || []).find((row) => this.same(row.goodsId, this.selectedProductId)) || null;
+    },
+    selectedCustomer() {
+      return (this.categoryCustomersDetail?.customers || [])
+        .find((row) => this.same(row.customerId, this.selectedCustomerId)) || null;
     },
     qualityIssueCount() {
       const quality = this.overview?.quality || {};
@@ -307,9 +365,7 @@ export default {
     },
     async loadReport() {
       const requestId = ++this.overviewRequestId;
-      this.productDrawerOpen = false;
-      this.productRequestId += 1;
-      this.productLoading = false;
+      this.cancelDetailRequests();
       this.overviewLoading = true;
       this.errorMessage = '';
       try {
@@ -328,37 +384,138 @@ export default {
     resetDrill() {
       this.categoryDetail = null;
       this.productDetail = null;
+      this.categoryCustomersDetail = null;
+      this.customerProductsDetail = null;
       this.selectedCategoryId = null;
       this.selectedSubcategoryId = null;
       this.selectedProductId = null;
+      this.selectedCustomerId = null;
       this.productDrawerOpen = false;
       this.productLoading = false;
-      this.productRequestId += 1;
+      this.categoryCustomersLoading = false;
+      this.customerProductsLoading = false;
+      this.cancelDetailRequests();
     },
     async selectCategory(category, force = false) {
-      if (!force && this.same(category.id, this.selectedCategoryId) && this.categoryDetail) return;
+      const hasCurrentModeData = this.displayMode === 'product'
+        ? Boolean(this.categoryDetail) : Boolean(this.categoryCustomersDetail);
+      if (!force && this.same(category.id, this.selectedCategoryId) && hasCurrentModeData) return;
+      this.cancelDetailRequests();
       this.selectedCategoryId = category.id;
       this.selectedSubcategoryId = null;
       this.selectedProductId = null;
+      this.selectedCustomerId = null;
       this.productDrawerOpen = false;
-      this.productRequestId += 1;
       this.categoryDetail = null;
       this.productDetail = null;
+      this.categoryCustomersDetail = null;
+      this.customerProductsDetail = null;
       this.keyword = '';
+      this.detailError = '';
+      this.categoryCustomersError = '';
+      this.customerProductsError = '';
+      if (this.displayMode === 'customer') {
+        await this.loadCategoryCustomers(1);
+        return;
+      }
+      await this.loadCategoryDetail();
+    },
+    async loadCategoryDetail() {
+      if (this.selectedCategoryId === null || this.selectedCategoryId === undefined) return;
       const requestId = ++this.detailRequestId;
       this.detailLoading = true;
       this.detailError = '';
       try {
-        const detail = await salesAnalysisApi.category(category.id, { ...this.range });
+        const detail = await salesAnalysisApi.category(this.selectedCategoryId, { ...this.range });
         if (requestId !== this.detailRequestId) return;
         this.categoryDetail = detail;
         const firstSubcategory = detail.subcategories?.[0];
-        if (firstSubcategory) await this.selectSubcategory(firstSubcategory);
+        if (firstSubcategory) this.selectSubcategory(firstSubcategory);
       } catch (error) {
         if (requestId === this.detailRequestId) this.detailError = error?.message || '商品大类加载失败';
       } finally {
         if (requestId === this.detailRequestId) this.detailLoading = false;
       }
+    },
+    async setDisplayMode(mode) {
+      if (!['product', 'customer'].includes(mode) || mode === this.displayMode) return;
+      this.displayMode = mode;
+      this.productDrawerOpen = false;
+      this.productRequestId += 1;
+      this.productLoading = false;
+      if (mode === 'product') {
+        this.categoryCustomersRequestId += 1;
+        this.customerProductsRequestId += 1;
+        this.categoryCustomersLoading = false;
+        this.customerProductsLoading = false;
+        if (!this.categoryDetail) await this.loadCategoryDetail();
+        return;
+      }
+      if (!this.categoryCustomersDetail) await this.loadCategoryCustomers(1);
+    },
+    async loadCategoryCustomers(page = 1) {
+      if (this.selectedCategoryId === null || this.selectedCategoryId === undefined) return;
+      const requestId = ++this.categoryCustomersRequestId;
+      this.customerProductsRequestId += 1;
+      this.categoryCustomersLoading = true;
+      this.categoryCustomersError = '';
+      this.customerProductsLoading = false;
+      this.customerProductsError = '';
+      this.selectedCustomerId = null;
+      this.customerProductsDetail = null;
+      try {
+        const detail = await salesAnalysisApi.categoryCustomers(
+          this.selectedCategoryId, { ...this.range }, page, 20,
+        );
+        if (requestId !== this.categoryCustomersRequestId) return;
+        this.categoryCustomersDetail = detail;
+        const firstCustomer = detail.customers?.[0];
+        if (firstCustomer) this.selectCustomer(firstCustomer);
+      } catch (error) {
+        if (requestId === this.categoryCustomersRequestId) {
+          this.categoryCustomersError = error?.message || '大类客户加载失败';
+        }
+      } finally {
+        if (requestId === this.categoryCustomersRequestId) this.categoryCustomersLoading = false;
+      }
+    },
+    async selectCustomer(customer) {
+      if (!customer?.customerId) return;
+      if (!this.same(customer.customerId, this.selectedCustomerId)) {
+        this.customerProductsDetail = null;
+      }
+      this.selectedCustomerId = customer.customerId;
+      await this.loadCustomerProductsPage(1);
+    },
+    async loadCustomerProductsPage(page = 1) {
+      if ((this.selectedCategoryId === null || this.selectedCategoryId === undefined)
+          || !this.selectedCustomerId) return;
+      const requestId = ++this.customerProductsRequestId;
+      this.customerProductsLoading = true;
+      this.customerProductsError = '';
+      try {
+        const detail = await salesAnalysisApi.categoryCustomerProducts(
+          this.selectedCategoryId, this.selectedCustomerId, { ...this.range }, page, 20,
+        );
+        if (requestId === this.customerProductsRequestId) this.customerProductsDetail = detail;
+      } catch (error) {
+        if (requestId === this.customerProductsRequestId) {
+          this.customerProductsError = error?.message || '客户商品明细加载失败';
+        }
+      } finally {
+        if (requestId === this.customerProductsRequestId) this.customerProductsLoading = false;
+      }
+    },
+    cancelDetailRequests() {
+      this.detailRequestId += 1;
+      this.productRequestId += 1;
+      this.categoryCustomersRequestId += 1;
+      this.customerProductsRequestId += 1;
+      this.detailLoading = false;
+      this.productLoading = false;
+      this.categoryCustomersLoading = false;
+      this.customerProductsLoading = false;
+      this.productDrawerOpen = false;
     },
     selectSubcategory(subcategory) {
       this.selectedSubcategoryId = subcategory.id;
@@ -600,6 +757,13 @@ export default {
 .category-row em { color: #079153; font-size: 10px; font-style: normal; text-align: right; }
 .tree-caret { color: #466057; font-size: 17px; }
 
+.category-drill { padding-bottom: 7px; background: #fbfdfc; }
+.view-mode-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; padding: 8px 8px 7px 30px; }
+.view-mode-switch button { height: 30px; border: 1px solid #d3e3da; border-radius: 7px; background: #fff; color: #617169; font-size: 10px; font-weight: 700; cursor: pointer; }
+.view-mode-switch button:hover { border-color: #8fc8aa; color: #087b48; }
+.view-mode-switch button.active { border-color: #109c5c; background: #109c5c; color: #fff; box-shadow: 0 3px 8px rgba(16, 156, 92, .16); }
+.customer-mode-hint { margin: 0; padding: 2px 10px 8px 30px; color: #7d8b84; font-size: 9px; line-height: 1.6; }
+
 .subcategory-tree { padding: 0 8px 7px 30px; }
 .subcategory-tree button {
   width: 100%;
@@ -627,6 +791,8 @@ export default {
   flex-direction: column;
   overflow: hidden;
 }
+
+.analysis-workspace.customer-mode { grid-template-columns: 290px minmax(660px, 1.25fr) minmax(480px, .9fr); }
 
 .selection-summary {
   flex: none;
@@ -728,6 +894,7 @@ export default {
 
 @media (max-width: 1500px) {
   .analysis-workspace { grid-template-columns: 260px minmax(520px, 1fr) 330px; }
+  .analysis-workspace.customer-mode { grid-template-columns: 260px minmax(590px, 1.2fr) minmax(420px, .85fr); }
   .customer-concentration { grid-template-columns: 64px 80px minmax(0, 1fr); gap: 7px; }
   .concentration-ring { width: 60px; height: 60px; }
   .concentration-ring span { width: 37px; height: 37px; }
@@ -739,5 +906,7 @@ export default {
   .analysis-body { overflow: auto; }
   .analysis-workspace { min-height: 760px; grid-template-columns: 240px minmax(520px, 1fr); overflow: visible; }
   .customer-contribution-panel { grid-column: 1 / -1; min-height: 420px; border-top: 1px solid #dce7e1; border-left: 0; }
+  .analysis-workspace.customer-mode { grid-template-columns: 240px minmax(620px, 1fr); }
+  .analysis-workspace.customer-mode .customer-product-panel { grid-column: 1 / -1; min-height: 440px; border-top: 1px solid #dce7e1; border-left: 0; }
 }
 </style>

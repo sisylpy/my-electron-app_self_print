@@ -223,13 +223,21 @@ const electronAPI = Object.freeze({
     logout: () => ipcRenderer.invoke('order-session-logout'),
   }),
 
-  // 销售分析只开放三个只读查询，配送商身份由主进程安全会话提供。
+  // 销售分析只开放固定只读查询，配送商身份由主进程安全会话提供。
   salesAnalysis: Object.freeze({
     loadOverview: (range) => ipcRenderer.invoke('sales-analysis-load-overview', range),
     loadCategory: (categoryId, range) =>
       ipcRenderer.invoke('sales-analysis-load-category', { categoryId, range }),
     loadProductCustomers: (goodsId, range, limit) =>
       ipcRenderer.invoke('sales-analysis-load-product-customers', { goodsId, range, limit }),
+    loadCategoryCustomers: (categoryId, range, page, pageSize) =>
+      ipcRenderer.invoke('sales-analysis-load-category-customers', {
+        categoryId, range, page, pageSize,
+      }),
+    loadCategoryCustomerProducts: (categoryId, customerId, range, page, pageSize) =>
+      ipcRenderer.invoke('sales-analysis-load-category-customer-products', {
+        categoryId, customerId, range, page, pageSize,
+      }),
   }),
 
   // 订单写入只暴露逐项白名单，不向页面提供任意网络请求能力。

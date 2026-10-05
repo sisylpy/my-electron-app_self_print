@@ -20,6 +20,7 @@
     "test:order-write": "node scripts/order-write-gateway-smoke.js",
     "test:customer-history-print": "node vue/src/modules/customer/presentation/customerHistoryPrint.test.mjs",
     "test:customer-center-modules": "node vue/src/modules/customer/presentation/customerCenterModules.test.mjs",
+    "test:sales-analysis": "node scripts/sales-analysis-gateway-smoke.js && node vue/src/modules/salesAnalysis/presentation/salesAnalysisPresentation.test.mjs",
     "test:prediction-policy-ui": "node scripts/prediction-policy-ui-smoke.mjs",
     "generate:prediction-policy-fixture": "node scripts/generate-prediction-policy-fixture.mjs",
     "test:phase1": "npm run test:security && npm run test:print-contract",

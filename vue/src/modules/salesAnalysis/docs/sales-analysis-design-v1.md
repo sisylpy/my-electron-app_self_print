@@ -126,6 +126,18 @@ V1 不展示毛利、采购成本或库存成本。现有成本字段和采购�
 
 返回指定商品的使用客户总数、按销售额排序的客户明细（单次最多 200 家）、其余客户合计和单位分组。
 
+### 5.4 大类客户分页
+
+`GET /api/desktop-dispatch/v1/sales-analysis/categories/{categoryId}/customers?startDate=...&endDate=...&page=1&pageSize=20`
+
+返回选中大类下按成交额降序排列的客户分页，包含商品数、订货次数、订货天数和最近订货日期。
+
+### 5.5 客户在大类下的商品分页
+
+`GET /api/desktop-dispatch/v1/sales-analysis/categories/{categoryId}/customers/{customerId}/products?startDate=...&endDate=...&page=1&pageSize=20`
+
+返回指定客户在该大类下成交过的商品分页，保留分单位数量、加权平均价、成交额和订货次数。
+
 ## 6. 服务端结构
 
 新功能是跨订单、商品目录和 B2B 客户的只读经营投影，不属于销售助手的拜访/报价子域。建议使用：

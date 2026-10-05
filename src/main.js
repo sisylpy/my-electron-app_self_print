@@ -1206,6 +1206,14 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().loadSalesAnalysisProductCustomers(command);
   });
+  ipcMain.handle('sales-analysis-load-category-customers', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadSalesAnalysisCategoryCustomers(command);
+  });
+  ipcMain.handle('sales-analysis-load-category-customer-products', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadSalesAnalysisCategoryCustomerProducts(command);
+  });
 
   // 连接器凭证：仅暴露生成、查询本人授权、撤销本人全部授权。
   // 配送商/用户归属完全由主进程持有的 dispatch Bearer 会话及后台决定，

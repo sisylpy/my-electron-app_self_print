@@ -79,7 +79,11 @@ check(readerBridge.includes('严禁记录 stdout 原文')
   'Reader 日志不记录 stdout 内容且会脱敏 stderr');
 check(preload.includes('salesAnalysis: Object.freeze')
   && main.includes("ipcMain.handle('sales-analysis-load-overview'")
+  && main.includes("ipcMain.handle('sales-analysis-load-category-customers'")
+  && main.includes("ipcMain.handle('sales-analysis-load-category-customer-products'")
   && dispatchGateway.includes("request('GET', 'sales-analysis/overview'")
+  && dispatchGateway.includes('sales-analysis/categories/${categoryId}/customers`')
+  && dispatchGateway.includes('sales-analysis/categories/${categoryId}/customers/${customerId}/products`')
   && !preload.includes('salesAnalysisRequest:'),
   '销售分析通过主进程只读白名单网关查询');
 check(!main.includes("'mcp-call-api'"), '主进程没有任意 MCP API IPC');
