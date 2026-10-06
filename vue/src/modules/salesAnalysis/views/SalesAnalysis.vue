@@ -13,9 +13,7 @@
           <strong :class="{ negative: Number(summary.grossMarginRate) < 0 }">{{ optionalPercentageLabel(summary.grossMarginRate) }}</strong>
           <small>可核算成本 {{ formatOptionalMoney(summary.costAmount) }}</small>
         </article>
-        <article><span>使用客户</span><strong>{{ summary.customerCount || 0 }} 家</strong><small>按父客户去重</small></article>
         <article><span>成交商品</span><strong>{{ summary.goodsCount || 0 }} 种</strong><small>覆盖 {{ summary.subcategoryCount || 0 }} 个小类</small></article>
-        <article><span>销售数量</span><strong>{{ primaryQuantity }}</strong><small>{{ otherQuantityText }}</small></article>
       </section>
       <div class="analysis-filters">
         <label><span>开始</span><input v-model="range.startDate" type="date" @change="useCustomRange" /></label>
@@ -309,14 +307,6 @@ export default {
   },
   computed: {
     summary() { return this.overview?.summary || {}; },
-    primaryQuantity() {
-      return this.summary.primaryQuantity
-        ? formatQuantities([this.summary.primaryQuantity]) : '暂无有效数量';
-    },
-    otherQuantityText() {
-      const count = Number(this.summary.otherUnitCount || 0);
-      return count ? `另有 ${count} 种交易单位` : '按原交易单位统计';
-    },
     selectedCategory() {
       return (this.overview?.categories || []).find((row) => this.same(row.id, this.selectedCategoryId)) || null;
     },
@@ -639,10 +629,10 @@ export default {
 }
 
 .analysis-toolbar .summary-grid {
-  flex: 0 1 820px;
+  flex: 0 1 600px;
   min-width: 0;
   gap: 0;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .analysis-toolbar .summary-grid article {
