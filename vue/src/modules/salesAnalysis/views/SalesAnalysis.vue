@@ -68,7 +68,16 @@
                 :class="{ active: same(category.id, selectedCategoryId) }"
                 @click="selectCategory(category)"
               >
-                <span class="tree-caret">{{ same(category.id, selectedCategoryId) ? '⌄' : '›' }}</span>
+                <span
+                  class="tree-caret"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="`${same(category.id, expandedCategoryId) ? '折叠' : '展开'}${category.name}`"
+                  :aria-expanded="same(category.id, expandedCategoryId)"
+                  @click.stop="toggleCategory(category)"
+                  @keydown.enter.stop.prevent="toggleCategory(category)"
+                  @keydown.space.stop.prevent="toggleCategory(category)"
+                >{{ same(category.id, expandedCategoryId) ? '⌄' : '›' }}</span>
                 <span class="category-icon" aria-hidden="true">
                   <img
                     v-if="catalogImage(category, 'category')"
@@ -91,7 +100,7 @@
                 <b class="category-row__amount">{{ formatMoney(category.salesAmount) }}</b>
               </button>
               <div
-                v-if="same(category.id, selectedCategoryId) && displayMode === 'product'"
+                v-if="same(category.id, selectedCategoryId) && same(category.id, expandedCategoryId) && displayMode === 'product'"
                 class="subcategory-tree"
               >
                 <button
@@ -111,7 +120,7 @@
                 <p v-else-if="!subcategories.length">暂无小类</p>
               </div>
               <div
-                v-else-if="same(category.id, selectedCategoryId)"
+                v-else-if="same(category.id, selectedCategoryId) && same(category.id, expandedCategoryId)"
                 class="category-customer-tree"
               >
                 <p v-if="categoryCustomersError" class="error">{{ categoryCustomersError }}</p>
@@ -275,6 +284,7 @@ export default {
       customerProductsDetail: null,
       displayMode: 'product',
       selectedCategoryId: null,
+      expandedCategoryId: null,
       selectedSubcategoryId: null,
       selectedProductId: null,
       selectedCustomerId: null,
@@ -429,6 +439,7 @@ export default {
       this.categoryCustomersDetail = null;
       this.customerProductsDetail = null;
       this.selectedCategoryId = null;
+      this.expandedCategoryId = null;
       this.selectedSubcategoryId = null;
       this.selectedProductId = null;
       this.selectedCustomerId = null;
@@ -438,6 +449,7 @@ export default {
       this.cancelDetailRequests();
     },
     async selectCategory(category, force = false) {
+      this.expandedCategoryId = category.id;
       const hasCurrentModeData = this.displayMode === 'product'
         ? Boolean(this.categoryDetail) : Boolean(this.categoryCustomersDetail);
       if (!force && this.same(category.id, this.selectedCategoryId) && hasCurrentModeData) return;
@@ -459,6 +471,14 @@ export default {
         return;
       }
       await this.loadCategoryDetail();
+    },
+    toggleCategory(category) {
+      if (this.same(category.id, this.expandedCategoryId)) {
+        this.expandedCategoryId = null;
+        return;
+      }
+      this.expandedCategoryId = category.id;
+      if (!this.same(category.id, this.selectedCategoryId)) this.selectCategory(category);
     },
     async loadCategoryDetail() {
       if (this.selectedCategoryId === null || this.selectedCategoryId === undefined) return;
@@ -901,7 +921,19 @@ export default {
   background: linear-gradient(90deg, var(--category-accent), #7fd8a8);
 }
 .category-row > b { color: #26372f; font-size: 12px; text-align: right; white-space: nowrap; }
-.tree-caret { color: #466057; font-size: 17px; }
+.tree-caret {
+  width: 24px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: #466057;
+  font-size: 17px;
+  cursor: pointer;
+  outline: none;
+}
+.tree-caret:hover { background: rgba(16, 156, 92, .09); color: #087f4c; }
+.tree-caret:focus-visible { box-shadow: 0 0 0 2px rgba(16, 156, 92, .28); }
 
 .subcategory-tree {
   margin-left: 26px;
