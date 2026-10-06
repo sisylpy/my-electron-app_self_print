@@ -37,6 +37,10 @@ export function formatMoney(value) {
   })}`;
 }
 
+export function formatOptionalMoney(value, empty = '—') {
+  return value === null || value === undefined || value === '' ? empty : formatMoney(value);
+}
+
 export function formatDecimal(value, digits = 2) {
   return number(value).toLocaleString('zh-CN', {
     minimumFractionDigits: 0,
@@ -86,4 +90,8 @@ export function rangeForDays(days, now = new Date()) {
 
 export function percentageLabel(value) {
   return `${formatDecimal(value, 2)}%`;
+}
+
+export function optionalPercentageLabel(value, empty = '—') {
+  return value === null || value === undefined || value === '' ? empty : percentageLabel(value);
 }

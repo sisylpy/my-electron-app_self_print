@@ -11,6 +11,8 @@
     <template v-if="resolvedCustomer">
       <section class="customer-product-summary">
         <article><strong>{{ formatMoney(resolvedCustomer.salesAmount) }}</strong><span>成交额</span></article>
+        <article><strong :class="{ negative: Number(resolvedCustomer.grossProfit) < 0 }">{{ formatOptionalMoney(resolvedCustomer.grossProfit) }}</strong><span>可核算毛利</span></article>
+        <article><strong :class="{ negative: Number(resolvedCustomer.grossMarginRate) < 0 }">{{ optionalPercentageLabel(resolvedCustomer.grossMarginRate) }}</strong><span>毛利率</span></article>
         <article><strong>{{ resolvedCustomer.goodsCount || totalCount || 0 }}</strong><span>商品数</span></article>
         <article><strong>{{ resolvedCustomer.orderCount || 0 }}</strong><span>订货次数</span></article>
       </section>
@@ -19,7 +21,7 @@
       <div v-else-if="loading" class="customer-product-state">正在加载该客户购买的商品…</div>
       <div v-else class="customer-product-table-wrap">
         <table>
-          <thead><tr><th>商品</th><th>数量</th><th>成交额</th><th>均价</th><th>次数</th></tr></thead>
+          <thead><tr><th>商品</th><th>数量</th><th>成交额</th><th>可核算毛利</th><th>毛利率</th><th>均价</th><th>次数</th></tr></thead>
           <tbody>
             <tr
               v-for="product in products"
@@ -37,10 +39,12 @@
               </td>
               <td>{{ formatQuantities(product.quantities) }}</td>
               <td class="money">{{ formatMoney(product.salesAmount) }}</td>
+              <td class="profit" :class="{ negative: Number(product.grossProfit) < 0 }">{{ formatOptionalMoney(product.grossProfit) }}</td>
+              <td class="profit" :class="{ negative: Number(product.grossMarginRate) < 0 }">{{ optionalPercentageLabel(product.grossMarginRate) }}</td>
               <td>{{ formatAveragePrices(product.averagePrices) }}</td>
               <td>{{ product.orderCount || 0 }}</td>
             </tr>
-            <tr v-if="!products.length"><td colspan="5" class="empty-cell">该客户在此大类下暂无商品数据</td></tr>
+            <tr v-if="!products.length"><td colspan="7" class="empty-cell">该客户在此大类下暂无商品数据</td></tr>
           </tbody>
         </table>
       </div>
@@ -62,7 +66,9 @@
 import {
   formatAveragePrices,
   formatMoney,
+  formatOptionalMoney,
   formatQuantities,
+  optionalPercentageLabel,
   resolveGoodsImage,
 } from '../presentation/salesAnalysisPresentation';
 
@@ -88,7 +94,9 @@ export default {
   methods: {
     formatAveragePrices,
     formatMoney,
+    formatOptionalMoney,
     formatQuantities,
+    optionalPercentageLabel,
     same(left, right) { return String(left) === String(right); },
     goodsImage(product) {
       return resolveGoodsImage(product, this.imageServer, 'goodsImage/logo.jpg');
@@ -105,14 +113,14 @@ export default {
 .customer-product-panel header span { color: #0b8b52; font-size: 9px; font-weight: 800; }
 .customer-product-panel header h2 { margin-top: 2px; color: #202d27; font-size: 16px; }
 .customer-product-panel header p { margin-top: 2px; color: #829089; font-size: 9px; }
-.customer-product-summary { flex: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid #dfe8e3; }
+.customer-product-summary { flex: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-bottom: 1px solid #dfe8e3; }
 .customer-product-summary article { min-width: 0; padding: 11px 7px; border-right: 1px solid #e3ebe7; text-align: center; }
 .customer-product-summary article:last-child { border-right: 0; }
 .customer-product-summary strong,.customer-product-summary span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .customer-product-summary strong { color: #183026; font-size: 15px; }
 .customer-product-summary span { margin-top: 3px; color: #839089; font-size: 9px; }
 .customer-product-table-wrap { flex: 1; min-height: 0; overflow: auto; }
-table { width: 100%; min-width: 610px; border-collapse: collapse; }
+table { width: 100%; min-width: 780px; border-collapse: collapse; }
 th,td { padding: 9px 7px; border-bottom: 1px solid #e8eeeb; text-align: left; vertical-align: middle; }
 th { position: sticky; top: 0; z-index: 1; background: #f5f8f6; color: #78857f; font-size: 9px; white-space: nowrap; }
 td { color: #34423b; font-size: 11px; }
@@ -122,6 +130,8 @@ tbody tr[tabindex]:focus-visible { box-shadow: inset 0 0 0 2px #159d60; }
 td:first-child { min-width: 160px; }
 td:nth-child(2),td:nth-child(4) { min-width: 110px; }
 td.money { color: #07814b; font-weight: 800; white-space: nowrap; }
+.customer-product-summary strong.negative,td.profit.negative { color: #c43e48; }
+td.profit { color: #087f4c; font-weight: 800; white-space: nowrap; }
 .customer-product-identity { display: flex; align-items: center; gap: 7px; }
 .customer-product-identity > span:last-child { min-width: 0; }
 .customer-product-identity strong,.customer-product-identity small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

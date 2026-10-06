@@ -3,6 +3,16 @@
     <header class="analysis-toolbar">
       <section class="summary-grid" aria-label="销售概览">
         <article><span>成交销售额</span><strong>{{ formatMoney(summary.salesAmount) }}</strong><small>已完成历史订单</small></article>
+        <article class="profit-card">
+          <span>可核算毛利</span>
+          <strong :class="{ negative: Number(summary.grossProfit) < 0 }">{{ formatOptionalMoney(summary.grossProfit) }}</strong>
+          <small>{{ profitCoverageText(summary) }}</small>
+        </article>
+        <article class="profit-card">
+          <span>毛利率</span>
+          <strong :class="{ negative: Number(summary.grossMarginRate) < 0 }">{{ optionalPercentageLabel(summary.grossMarginRate) }}</strong>
+          <small>可核算成本 {{ formatOptionalMoney(summary.costAmount) }}</small>
+        </article>
         <article><span>使用客户</span><strong>{{ summary.customerCount || 0 }} 家</strong><small>按父客户去重</small></article>
         <article><span>成交商品</span><strong>{{ summary.goodsCount || 0 }} 种</strong><small>覆盖 {{ summary.subcategoryCount || 0 }} 个小类</small></article>
         <article><span>销售数量</span><strong>{{ primaryQuantity }}</strong><small>{{ otherQuantityText }}</small></article>
@@ -51,6 +61,10 @@
 
       <section class="analysis-workspace" :class="{ 'customer-mode': displayMode === 'customer' }">
         <aside class="category-tree-panel">
+          <div class="category-share-guide">
+            <strong>销售分类</strong>
+            <span><i aria-hidden="true"></i>百分比均为占总销售额</span>
+          </div>
           <nav class="category-tree" aria-label="销售分类树">
             <section v-for="category in filteredCategories" :key="category.id">
               <button
@@ -60,8 +74,10 @@
                 @click="selectCategory(category)"
               >
                 <span class="tree-caret">{{ same(category.id, selectedCategoryId) ? '⌄' : '›' }}</span>
-                <strong>{{ category.name }}</strong>
-                <em>{{ percentageLabel(category.share) }}</em>
+                <span class="category-row__copy">
+                  <span class="category-row__title"><i>大类</i><strong>{{ category.name }}</strong></span>
+                  <small>大类占总销售额 <em>{{ percentageLabel(category.share) }}</em></small>
+                </span>
                 <b>{{ formatMoney(category.salesAmount) }}</b>
               </button>
               <div
@@ -75,9 +91,11 @@
                   :class="{ active: same(subcategory.id, selectedSubcategoryId) }"
                   @click="selectSubcategory(subcategory)"
                 >
-                  <strong>{{ subcategory.name }}</strong>
+                  <span class="subcategory-row__copy">
+                    <span class="subcategory-row__title"><i>小类</i><strong>{{ subcategory.name }}</strong></span>
+                    <small>小类占总销售额 <em>{{ percentageLabel(overallShare(subcategory.salesAmount)) }}</em></small>
+                  </span>
                   <b>{{ formatMoney(subcategory.salesAmount) }}</b>
-                  <em>{{ percentageLabel(overallShare(subcategory.salesAmount)) }}</em>
                 </button>
                 <p v-if="detailLoading">正在加载分类…</p>
                 <p v-else-if="!subcategories.length">暂无小类</p>
@@ -127,22 +145,47 @@
           <header class="selection-heading">
             <div>
               <h2>{{ selectedCategoryName }} / {{ selectedSubcategoryName }}</h2>
-              <p>共 {{ selectedSubcategory?.goodsCount || visibleProducts.length }} 个商品 · {{ formatMoney(selectedSubcategory?.salesAmount || 0) }} · 占总销售额 {{ percentageLabel(selectedSubcategoryOverallShare) }}</p>
+              <p>查看本小类的成交商品、销量、均价和客户覆盖</p>
             </div>
             <label class="product-search"><span>⌕</span><input v-model.trim="keyword" placeholder="搜索商品名称、规格、条码" /></label>
           </header>
 
           <div class="selection-summary" aria-label="当前分类销售概览">
-            <article><strong>{{ formatMoney(selectedSubcategory?.salesAmount || 0) }}</strong><span>销售额</span></article>
-            <article><strong>{{ selectedSubcategory?.customerCount || 0 }} 家</strong><span>客户数</span></article>
-            <article><strong>{{ selectedSubcategory?.goodsCount || visibleProducts.length }} 种</strong><span>商品数</span></article>
-            <article><strong>{{ percentageLabel(selectedSubcategoryOverallShare) }}</strong><span>在总销售中的占比</span></article>
+            <article class="sales-total-card">
+              <span>小类成交总额</span>
+              <strong>{{ formatMoney(selectedSubcategory?.salesAmount || 0) }}</strong>
+              <small>该小类全部客户合计</small>
+            </article>
+            <article>
+              <span>成交客户</span>
+              <strong>{{ selectedSubcategory?.customerCount || 0 }} 家</strong>
+              <small>产生过成交的客户数</small>
+            </article>
+            <article>
+              <span>成交商品</span>
+              <strong>{{ selectedSubcategory?.goodsCount || visibleProducts.length }} 种</strong>
+              <small>该小类内的成交品种</small>
+            </article>
+            <article class="customer-average-card">
+              <span>平均每位客户成交</span>
+              <strong>{{ formatMoney(selectedSubcategoryCustomerAverage) }}</strong>
+              <small v-if="selectedSubcategory?.customerCount">总额 ÷ {{ selectedSubcategory.customerCount }} 家客户</small>
+              <small v-else>暂无成交客户</small>
+            </article>
           </div>
+
+          <section class="profit-summary-strip" aria-label="当前分类毛利概览">
+            <article><span>可核算销售额</span><strong>{{ formatOptionalMoney(selectedSubcategory?.profitEligibleSalesAmount) }}</strong></article>
+            <article><span>销售成本</span><strong>{{ formatOptionalMoney(selectedSubcategory?.costAmount) }}</strong></article>
+            <article><span>可核算毛利</span><strong :class="{ negative: Number(selectedSubcategory?.grossProfit) < 0 }">{{ formatOptionalMoney(selectedSubcategory?.grossProfit) }}</strong></article>
+            <article><span>毛利率</span><strong :class="{ negative: Number(selectedSubcategory?.grossMarginRate) < 0 }">{{ optionalPercentageLabel(selectedSubcategory?.grossMarginRate) }}</strong></article>
+            <small>{{ profitCoverageText(selectedSubcategory) }}</small>
+          </section>
 
           <div v-if="detailLoading" class="panel-state">正在加载商品明细…</div>
           <div v-else class="product-table-wrap">
             <table>
-              <thead><tr><th>商品</th><th>销售数量</th><th>成交销售额</th><th>加权平均单价</th><th>使用客户</th><th>重要客户</th><th aria-label="查看详情"></th></tr></thead>
+              <thead><tr><th>商品</th><th>销售数量</th><th>成交销售额</th><th>可核算毛利</th><th>毛利率</th><th>加权平均单价</th><th>使用客户</th><th>主要购买客户</th><th aria-label="查看详情"></th></tr></thead>
               <tbody>
                 <tr
                   v-for="(product, index) in visibleProducts"
@@ -162,12 +205,14 @@
                   </td>
                   <td>{{ formatQuantities(product.quantities) }}</td>
                   <td class="money">{{ formatMoney(product.salesAmount) }}</td>
+                  <td class="profit-value" :class="{ negative: Number(product.grossProfit) < 0 }">{{ formatOptionalMoney(product.grossProfit) }}</td>
+                  <td class="profit-value" :class="{ negative: Number(product.grossMarginRate) < 0 }">{{ optionalPercentageLabel(product.grossMarginRate) }}</td>
                   <td>{{ formatAveragePrices(product.averagePrices) }}</td>
                   <td>{{ product.customerCount }} 家</td>
                   <td><span class="customer-tags"><i v-for="customer in product.topCustomers" :key="customer.customerId">{{ customer.customerName }}</i></span></td>
                   <td><button class="row-open" type="button" :aria-label="`查看${product.goodsName}的客户分布`" @click.stop="selectProduct(product)">›</button></td>
                 </tr>
-                <tr v-if="!visibleProducts.length"><td colspan="7" class="empty-cell">没有符合条件的商品</td></tr>
+                <tr v-if="!visibleProducts.length"><td colspan="9" class="empty-cell">没有符合条件的商品</td></tr>
               </tbody>
             </table>
           </div>
@@ -201,6 +246,8 @@
       <footer class="data-note">
         <span>口径：{{ overview?.sourceTable || 'nx_department_order_history' }}</span>
         <span>分类：按当前配送目录归类</span>
+        <span>毛利：成交额扣除确认退货后减去订单成本</span>
+        <span v-if="summary.profitStatus === 'PARTIAL'">毛利依据不完整，缺 {{ summary.profitIneligibleLineCount || 0 }} 条</span>
         <span v-if="qualityIssueCount">数据质量待核对 {{ qualityIssueCount }} 条</span>
         <span v-else>有效成交行的数据质量检查通过</span>
       </footer>
@@ -217,7 +264,9 @@ import config from '../../../config';
 import {
   formatAveragePrices,
   formatMoney,
+  formatOptionalMoney,
   formatQuantities,
+  optionalPercentageLabel,
   percentageLabel,
   rangeForDays,
   resolveGoodsImage,
@@ -289,7 +338,11 @@ export default {
       return this.subcategories.find((row) => this.same(row.id, this.selectedSubcategoryId)) || null;
     },
     selectedSubcategoryName() { return this.selectedSubcategory?.name || '商品'; },
-    selectedSubcategoryOverallShare() { return this.overallShare(this.selectedSubcategory?.salesAmount); },
+    selectedSubcategoryCustomerAverage() {
+      const amount = Number(this.selectedSubcategory?.salesAmount) || 0;
+      const customerCount = Number(this.selectedSubcategory?.customerCount) || 0;
+      return customerCount > 0 ? amount / customerCount : 0;
+    },
     visibleProducts() {
       const key = this.keyword.toLowerCase();
       return (this.categoryDetail?.products || []).filter((product) => {
@@ -327,8 +380,17 @@ export default {
   methods: {
     formatAveragePrices,
     formatMoney,
+    formatOptionalMoney,
     formatQuantities,
+    optionalPercentageLabel,
     percentageLabel,
+    profitCoverageText(value) {
+      if (!value || value.profitStatus === 'NO_DATA') return '暂无毛利依据';
+      const coverage = optionalPercentageLabel(value.profitCoverageRate);
+      return value.profitStatus === 'COMPLETE'
+        ? `成本依据完整 · 覆盖 ${coverage}`
+        : `部分可核算 · 覆盖 ${coverage}`;
+    },
     goodsImage(product) {
       return resolveGoodsImage(product, this.imageServer, 'goodsImage/logo.jpg');
     },
@@ -571,10 +633,10 @@ export default {
 }
 
 .analysis-toolbar .summary-grid {
-  flex: 0 1 660px;
+  flex: 0 1 820px;
   min-width: 0;
   gap: 0;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .analysis-toolbar .summary-grid article {
@@ -589,6 +651,9 @@ export default {
 .analysis-toolbar .summary-grid article:first-child { padding-left: 0; }
 .analysis-toolbar .summary-grid article:last-child { border-right: 0; }
 .analysis-toolbar .summary-grid strong { font-size: 20px; }
+.analysis-toolbar .summary-grid .profit-card { background: #f4fbf7; }
+.analysis-toolbar .summary-grid .profit-card strong { color: #087f4c; }
+.analysis-toolbar .summary-grid strong.negative { color: #c43e48; }
 .analysis-mode-switch {
   width: 176px;
   height: 38px;
@@ -757,13 +822,40 @@ export default {
   font-size: 10px;
 }
 
+.category-share-guide {
+  flex: none;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #dfe8e3;
+  background: #f7fbf9;
+}
+.category-share-guide strong { color: #26362e; font-size: 13px; }
+.category-share-guide span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #64766d;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.category-share-guide i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10a05d;
+  box-shadow: 0 0 0 3px #dff3e9;
+}
 .category-tree { flex: 1; min-height: 0; overflow: auto; }
 .category-tree > section { border-bottom: 1px solid #e5ece8; }
 .category-row {
   width: 100%;
-  min-height: 46px;
+  min-height: 58px;
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) 54px 78px;
+  grid-template-columns: 18px minmax(0, 1fr) 76px;
   align-items: center;
   gap: 5px;
   padding: 7px 11px;
@@ -775,17 +867,47 @@ export default {
 }
 .category-row:hover { background: #f4faf7; }
 .category-row.active { background: #f7fbf9; }
-.category-row strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.category-row b { font-size: 11px; text-align: right; white-space: nowrap; }
-.category-row em { color: #079153; font-size: 10px; font-style: normal; text-align: right; }
+.category-row__copy { min-width: 0; display: block; }
+.category-row__title { min-width: 0; display: flex; align-items: center; gap: 6px; }
+.category-row__title i {
+  flex: none;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #137d4c;
+  color: #fff;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 800;
+}
+.category-row__copy strong,
+.category-row__copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.category-row__copy strong { min-width: 0; color: #25342d; font-size: 13px; }
+.category-row__copy small { margin-top: 5px; color: #7b8982; font-size: 9px; }
+.category-row__copy em {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: #e2f4ea;
+  color: #078b51;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+.category-row > b { color: #26372f; font-size: 12px; text-align: right; white-space: nowrap; }
 .tree-caret { color: #466057; font-size: 17px; }
 
-.subcategory-tree { padding: 0 8px 7px 30px; }
+.subcategory-tree {
+  margin-left: 17px;
+  padding: 0 8px 7px 13px;
+  border-left: 2px solid #d8e8df;
+}
 .subcategory-tree button {
+  position: relative;
   width: 100%;
-  min-height: 35px;
+  min-height: 49px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px 40px;
+  grid-template-columns: minmax(0, 1fr) 72px;
   align-items: center;
   gap: 5px;
   padding: 5px 8px;
@@ -795,10 +917,33 @@ export default {
   text-align: left;
   cursor: pointer;
 }
+.subcategory-tree button::before {
+  position: absolute;
+  top: 24px;
+  left: -13px;
+  width: 10px;
+  border-top: 2px solid #d8e8df;
+  content: '';
+}
 .subcategory-tree button.active { background: #e7f6ee; color: #176741; }
-.subcategory-tree button strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.subcategory-tree button b { font-size: 12px; text-align: right; white-space: nowrap; }
-.subcategory-tree button em { color: #6f7f77; font-size: 11px; font-style: normal; text-align: right; }
+.subcategory-row__copy { min-width: 0; display: block; }
+.subcategory-row__title { min-width: 0; display: flex; align-items: center; gap: 5px; }
+.subcategory-row__title i {
+  flex: none;
+  padding: 1px 4px;
+  border: 1px solid #abc9ba;
+  border-radius: 4px;
+  color: #577067;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 700;
+}
+.subcategory-row__copy strong,
+.subcategory-row__copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subcategory-row__copy strong { min-width: 0; font-size: 11px; }
+.subcategory-row__copy small { margin-top: 4px; color: #819087; font-size: 9px; }
+.subcategory-row__copy em { margin-left: 3px; color: #078b51; font-size: 10px; font-style: normal; font-weight: 800; }
+.subcategory-tree button b { color: #3d5147; font-size: 11px; text-align: right; white-space: nowrap; }
 .subcategory-tree p,
 .category-customer-tree p,
 .tree-empty { margin: 0; padding: 12px; color: #8b9791; font-size: 10px; text-align: center; }
@@ -849,13 +994,42 @@ export default {
 .selection-summary article { min-width: 0; padding: 13px 9px; border-right: 1px solid #dfe8e3; text-align: center; }
 .selection-summary article:last-child { border-right: 0; }
 .selection-summary strong,
-.selection-summary span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.selection-summary strong { color: #17241e; font-size: 20px; }
-.selection-summary span { margin-top: 5px; color: #7c8982; font-size: 10px; }
+.selection-summary span,
+.selection-summary small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selection-summary strong { margin-top: 6px; color: #17241e; font-size: 20px; }
+.selection-summary span { color: #5f7067; font-size: 10px; font-weight: 800; }
+.selection-summary small { margin-top: 5px; color: #8a9790; font-size: 9px; }
+.selection-summary .sales-total-card { background: #f0faf5; }
+.selection-summary .sales-total-card strong { color: #087f4c; }
+.selection-summary .customer-average-card { background: #f8faf9; }
+.selection-summary .customer-average-card span { color: #2f5f48; }
+
+.profit-summary-strip {
+  position: relative;
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: -5px 14px 14px;
+  padding-bottom: 22px;
+  border: 1px solid #cfe6d9;
+  border-radius: 8px;
+  background: #f4fbf7;
+  overflow: hidden;
+}
+.profit-summary-strip article { min-width: 0; padding: 10px; border-right: 1px solid #dcebe3; text-align: center; }
+.profit-summary-strip article:nth-child(4) { border-right: 0; }
+.profit-summary-strip span,
+.profit-summary-strip strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profit-summary-strip span { color: #668076; font-size: 9px; }
+.profit-summary-strip strong { margin-top: 4px; color: #087f4c; font-size: 15px; }
+.profit-summary-strip strong.negative,
+.product-table-wrap .profit-value.negative { color: #c43e48; }
+.profit-summary-strip > small { position: absolute; right: 10px; bottom: 5px; color: #6f8279; font-size: 8px; }
 
 .product-search { width: 250px; height: 32px; flex: none; padding: 0 9px; border-radius: 8px; }
 .product-table-wrap { flex: 1; min-height: 0; overflow: auto; }
-.product-table-wrap table { min-width: 760px; }
+.product-table-wrap table { min-width: 980px; }
+.product-table-wrap .profit-value { color: #087f4c; font-weight: 800; white-space: nowrap; }
 .product-table-wrap th,
 .product-table-wrap td { padding: 9px 10px; }
 .product-table-wrap th { position: sticky; top: 0; z-index: 1; font-size: 10px; }

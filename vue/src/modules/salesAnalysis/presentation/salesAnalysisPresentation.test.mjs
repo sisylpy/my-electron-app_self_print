@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import {
   formatAveragePrices,
+  formatOptionalMoney,
   formatQuantities,
+  optionalPercentageLabel,
   rangeForDays,
   relativeBarWidth,
   resolveGoodsImage,
@@ -9,6 +11,10 @@ import {
 
 assert.equal(formatQuantities([{ unit: '斤', quantity: 12.5 }, { unit: '箱', quantity: 2 }]), '12.5斤 · 2箱');
 assert.equal(formatAveragePrices([{ unit: '斤', price: 6 }, { unit: '箱', price: 20 }]), '¥6/斤 · ¥20/箱');
+assert.equal(formatOptionalMoney(null), '—');
+assert.equal(formatOptionalMoney(-12.5), '¥-12.5');
+assert.equal(optionalPercentageLabel(undefined), '—');
+assert.equal(optionalPercentageLabel(-5.25), '-5.25%');
 assert.equal(relativeBarWidth([{ salesAmount: 100 }, { salesAmount: 50 }], 50), '50%');
 assert.deepEqual(rangeForDays(7, new Date(2026, 8, 2)), {
   startDate: '2026-08-27',
