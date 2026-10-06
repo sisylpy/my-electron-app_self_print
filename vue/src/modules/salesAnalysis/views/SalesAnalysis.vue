@@ -94,6 +94,10 @@
                   <span class="subcategory-row__copy">
                     <span class="subcategory-row__title"><i>小类</i><strong>{{ subcategory.name }}</strong></span>
                     <small>小类占总销售额 <em>{{ percentageLabel(overallShare(subcategory.salesAmount)) }}</em></small>
+                    <small
+                      class="subcategory-row__profit"
+                      :class="{ negative: Number(subcategory.grossProfit) < 0 }"
+                    >毛利 {{ formatOptionalMoney(subcategory.grossProfit) }} · {{ optionalPercentageLabel(subcategory.grossMarginRate) }}</small>
                   </span>
                   <b>{{ formatMoney(subcategory.salesAmount) }}</b>
                 </button>
@@ -143,44 +147,19 @@
 
         <section v-if="displayMode === 'product'" class="product-analysis-panel">
           <header class="selection-heading">
-            <div>
+            <div class="selection-heading__main">
               <h2>{{ selectedCategoryName }} / {{ selectedSubcategoryName }}</h2>
-              <p>查看本小类的成交商品、销量、均价和客户覆盖</p>
+              <div class="selection-heading__metrics" aria-label="当前小类统计">
+                <span><i>客户</i><b>{{ selectedSubcategory?.customerCount || 0 }} 家</b></span>
+                <span><i>商品</i><b>{{ selectedSubcategory?.goodsCount || visibleProducts.length }} 种</b></span>
+                <span><i>客均</i><b>{{ formatMoney(selectedSubcategoryCustomerAverage) }}</b></span>
+                <span><i>可核算额</i><b>{{ formatOptionalMoney(selectedSubcategory?.profitEligibleSalesAmount) }}</b></span>
+                <span><i>成本</i><b>{{ formatOptionalMoney(selectedSubcategory?.costAmount) }}</b></span>
+                <span><i>覆盖</i><b>{{ optionalPercentageLabel(selectedSubcategory?.profitCoverageRate) }}</b></span>
+              </div>
             </div>
             <label class="product-search"><span>⌕</span><input v-model.trim="keyword" placeholder="搜索商品名称、规格、条码" /></label>
           </header>
-
-          <div class="selection-summary" aria-label="当前分类销售概览">
-            <article class="sales-total-card">
-              <span>小类成交总额</span>
-              <strong>{{ formatMoney(selectedSubcategory?.salesAmount || 0) }}</strong>
-              <small>该小类全部客户合计</small>
-            </article>
-            <article>
-              <span>成交客户</span>
-              <strong>{{ selectedSubcategory?.customerCount || 0 }} 家</strong>
-              <small>产生过成交的客户数</small>
-            </article>
-            <article>
-              <span>成交商品</span>
-              <strong>{{ selectedSubcategory?.goodsCount || visibleProducts.length }} 种</strong>
-              <small>该小类内的成交品种</small>
-            </article>
-            <article class="customer-average-card">
-              <span>平均每位客户成交</span>
-              <strong>{{ formatMoney(selectedSubcategoryCustomerAverage) }}</strong>
-              <small v-if="selectedSubcategory?.customerCount">总额 ÷ {{ selectedSubcategory.customerCount }} 家客户</small>
-              <small v-else>暂无成交客户</small>
-            </article>
-          </div>
-
-          <section class="profit-summary-strip" aria-label="当前分类毛利概览">
-            <article><span>可核算销售额</span><strong>{{ formatOptionalMoney(selectedSubcategory?.profitEligibleSalesAmount) }}</strong></article>
-            <article><span>销售成本</span><strong>{{ formatOptionalMoney(selectedSubcategory?.costAmount) }}</strong></article>
-            <article><span>可核算毛利</span><strong :class="{ negative: Number(selectedSubcategory?.grossProfit) < 0 }">{{ formatOptionalMoney(selectedSubcategory?.grossProfit) }}</strong></article>
-            <article><span>毛利率</span><strong :class="{ negative: Number(selectedSubcategory?.grossMarginRate) < 0 }">{{ optionalPercentageLabel(selectedSubcategory?.grossMarginRate) }}</strong></article>
-            <small>{{ profitCoverageText(selectedSubcategory) }}</small>
-          </section>
 
           <div v-if="detailLoading" class="panel-state">正在加载商品明细…</div>
           <div v-else class="product-table-wrap">
@@ -800,8 +779,19 @@ export default {
 .selection-heading p { margin: 0; }
 .section-heading h2,
 .selection-heading h2 { color: #202d27; font-size: 16px; }
-.selection-heading { min-height: 58px; padding-left: 17px; border-left: 3px solid #10a05d; }
-.selection-heading p { margin-top: 4px; color: #7d8983; font-size: 10px; }
+.selection-heading { min-height: 72px; padding-left: 17px; border-left: 3px solid #10a05d; }
+.selection-heading__main { min-width: 0; flex: 1; }
+.selection-heading__metrics {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 6px;
+}
+.selection-heading__metrics span { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.selection-heading__metrics i { color: #809088; font-size: 8px; font-style: normal; }
+.selection-heading__metrics b { color: #315444; font-size: 9px; }
 
 .product-search {
   display: flex;
@@ -905,7 +895,7 @@ export default {
 .subcategory-tree button {
   position: relative;
   width: 100%;
-  min-height: 49px;
+  min-height: 62px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 72px;
   align-items: center;
@@ -919,7 +909,7 @@ export default {
 }
 .subcategory-tree button::before {
   position: absolute;
-  top: 24px;
+  top: 30px;
   left: -13px;
   width: 10px;
   border-top: 2px solid #d8e8df;
@@ -943,6 +933,8 @@ export default {
 .subcategory-row__copy strong { min-width: 0; font-size: 11px; }
 .subcategory-row__copy small { margin-top: 4px; color: #819087; font-size: 9px; }
 .subcategory-row__copy em { margin-left: 3px; color: #078b51; font-size: 10px; font-style: normal; font-weight: 800; }
+.subcategory-row__copy .subcategory-row__profit { color: #087f4c; font-weight: 800; }
+.subcategory-row__copy .subcategory-row__profit.negative { color: #c43e48; }
 .subcategory-tree button b { color: #3d5147; font-size: 11px; text-align: right; white-space: nowrap; }
 .subcategory-tree p,
 .category-customer-tree p,
@@ -984,52 +976,11 @@ export default {
 
 .analysis-workspace.customer-mode { grid-template-columns: 290px minmax(620px, 1fr) 440px; }
 
-.selection-summary {
-  flex: none;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 14px;
-  border: 1px solid #dfe8e3;
-}
-.selection-summary article { min-width: 0; padding: 13px 9px; border-right: 1px solid #dfe8e3; text-align: center; }
-.selection-summary article:last-child { border-right: 0; }
-.selection-summary strong,
-.selection-summary span,
-.selection-summary small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.selection-summary strong { margin-top: 6px; color: #17241e; font-size: 20px; }
-.selection-summary span { color: #5f7067; font-size: 10px; font-weight: 800; }
-.selection-summary small { margin-top: 5px; color: #8a9790; font-size: 9px; }
-.selection-summary .sales-total-card { background: #f0faf5; }
-.selection-summary .sales-total-card strong { color: #087f4c; }
-.selection-summary .customer-average-card { background: #f8faf9; }
-.selection-summary .customer-average-card span { color: #2f5f48; }
-
-.profit-summary-strip {
-  position: relative;
-  flex: none;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: -5px 14px 14px;
-  padding-bottom: 22px;
-  border: 1px solid #cfe6d9;
-  border-radius: 8px;
-  background: #f4fbf7;
-  overflow: hidden;
-}
-.profit-summary-strip article { min-width: 0; padding: 10px; border-right: 1px solid #dcebe3; text-align: center; }
-.profit-summary-strip article:nth-child(4) { border-right: 0; }
-.profit-summary-strip span,
-.profit-summary-strip strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.profit-summary-strip span { color: #668076; font-size: 9px; }
-.profit-summary-strip strong { margin-top: 4px; color: #087f4c; font-size: 15px; }
-.profit-summary-strip strong.negative,
-.product-table-wrap .profit-value.negative { color: #c43e48; }
-.profit-summary-strip > small { position: absolute; right: 10px; bottom: 5px; color: #6f8279; font-size: 8px; }
-
 .product-search { width: 250px; height: 32px; flex: none; padding: 0 9px; border-radius: 8px; }
 .product-table-wrap { flex: 1; min-height: 0; overflow: auto; }
 .product-table-wrap table { min-width: 980px; }
 .product-table-wrap .profit-value { color: #087f4c; font-weight: 800; white-space: nowrap; }
+.product-table-wrap .profit-value.negative { color: #c43e48; }
 .product-table-wrap th,
 .product-table-wrap td { padding: 9px 10px; }
 .product-table-wrap th { position: sticky; top: 0; z-index: 1; font-size: 10px; }
