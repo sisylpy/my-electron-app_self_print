@@ -30,6 +30,12 @@ export function resolveGoodsImage(goods, serverBase, fallback = '') {
   return absoluteImageUrl(realImage || candidates[0] || cleanImagePath(fallback), serverBase);
 }
 
+export function resolveCategoryImage(category, serverBase) {
+  const path = cleanImagePath(category?.image);
+  if (!path || /^(?:\/)?goodsImage\/logo\.jpg$/i.test(path)) return '';
+  return absoluteImageUrl(path, serverBase);
+}
+
 export function formatMoney(value) {
   return `¥${number(value).toLocaleString('zh-CN', {
     minimumFractionDigits: 0,

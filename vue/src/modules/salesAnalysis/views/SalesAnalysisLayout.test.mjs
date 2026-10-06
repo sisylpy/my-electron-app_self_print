@@ -14,13 +14,18 @@ const customerPanelSource = fs.readFileSync(
   'utf8',
 );
 
-assert.match(viewSource, /百分比均为占总销售额/);
-assert.match(viewSource, /<i>大类<\/i>/);
-assert.match(viewSource, /大类占总销售额/);
-assert.match(viewSource, /<i>小类<\/i>/);
-assert.match(viewSource, /小类占总销售额/);
-assert.match(viewSource, /占总销售额 <em>\{\{ percentageLabel\(category\.share\) \}\}<\/em>/);
-assert.match(viewSource, /占总销售额 <em>\{\{ percentageLabel\(overallShare\(subcategory\.salesAmount\)\) \}\}<\/em>/);
+assert.match(viewSource, /category-mode-switch/);
+assert.doesNotMatch(viewSource, /analysis-mode-switch/);
+assert.match(viewSource, /占总销售额/);
+assert.match(viewSource, /category-icon/);
+assert.match(viewSource, /subcategory-icon/);
+assert.match(viewSource, /catalogImage\(category, 'category'\)/);
+assert.match(viewSource, /catalogImage\(subcategory, 'subcategory'\)/);
+assert.match(viewSource, /categoryColorStyle\(category\.color\)/);
+assert.match(viewSource, /category-row__progress/);
+assert.match(viewSource, /shareBarWidth\(category\.share\)/);
+assert.match(viewSource, /percentageLabel\(category\.share\)/);
+assert.match(viewSource, /percentageLabel\(overallShare\(subcategory\.salesAmount\)\)/);
 assert.doesNotMatch(viewSource, /在总销售中的占比/);
 assert.doesNotMatch(viewSource, /selectedSubcategoryOverallShare/);
 assert.match(viewSource, /selectedSubcategoryCustomerAverage/);

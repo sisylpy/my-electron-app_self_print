@@ -6,6 +6,7 @@ import {
   optionalPercentageLabel,
   rangeForDays,
   relativeBarWidth,
+  resolveCategoryImage,
   resolveGoodsImage,
 } from './salesAnalysisPresentation.js';
 
@@ -39,5 +40,10 @@ assert.equal(
   resolveGoodsImage({}, 'https://example.test/root/', 'goodsImage/logo.jpg'),
   'https://example.test/root/goodsImage/logo.jpg',
 );
+assert.equal(
+  resolveCategoryImage({ image: 'goodsImage/fresh-vegetables.jpg' }, 'https://example.test/root/'),
+  'https://example.test/root/goodsImage/fresh-vegetables.jpg',
+);
+assert.equal(resolveCategoryImage({ image: 'goodsImage/logo.jpg' }, 'https://example.test/root/'), '');
 
 console.log('salesAnalysisPresentation tests passed');

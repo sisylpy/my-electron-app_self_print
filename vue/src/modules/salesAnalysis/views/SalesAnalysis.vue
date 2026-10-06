@@ -17,18 +17,6 @@
         <article><span>成交商品</span><strong>{{ summary.goodsCount || 0 }} 种</strong><small>覆盖 {{ summary.subcategoryCount || 0 }} 个小类</small></article>
         <article><span>销售数量</span><strong>{{ primaryQuantity }}</strong><small>{{ otherQuantityText }}</small></article>
       </section>
-      <nav class="analysis-mode-switch" aria-label="销售分析显示方式">
-        <button
-          type="button"
-          :class="{ active: displayMode === 'product' }"
-          @click="setDisplayMode('product')"
-        >按商品</button>
-        <button
-          type="button"
-          :class="{ active: displayMode === 'customer' }"
-          @click="setDisplayMode('customer')"
-        >按客户</button>
-      </nav>
       <div class="analysis-filters">
         <nav aria-label="快捷统计范围">
           <button
@@ -62,11 +50,31 @@
       <section class="analysis-workspace" :class="{ 'customer-mode': displayMode === 'customer' }">
         <aside class="category-tree-panel">
           <div class="category-share-guide">
-            <strong>销售分类</strong>
-            <span><i aria-hidden="true"></i>百分比均为占总销售额</span>
+            <span class="category-share-guide__copy">
+              <strong>销售分类</strong>
+              <small><i aria-hidden="true"></i>占总销售额</small>
+            </span>
+            <nav class="category-mode-switch" aria-label="销售分析显示方式">
+              <button
+                type="button"
+                :class="{ active: displayMode === 'product' }"
+                @click="setDisplayMode('product')"
+              >商品</button>
+              <button
+                type="button"
+                :class="{ active: displayMode === 'customer' }"
+                @click="setDisplayMode('customer')"
+              >客户</button>
+            </nav>
           </div>
           <nav class="category-tree" aria-label="销售分类树">
-            <section v-for="category in filteredCategories" :key="category.id">
+            <section
+              v-for="(category, categoryIndex) in filteredCategories"
+              :key="category.id"
+              class="category-section"
+              :class="`tone-${categoryIndex % 4}`"
+              :style="categoryColorStyle(category.color)"
+            >
               <button
                 type="button"
                 class="category-row"
@@ -74,11 +82,26 @@
                 @click="selectCategory(category)"
               >
                 <span class="tree-caret">{{ same(category.id, selectedCategoryId) ? '⌄' : '›' }}</span>
-                <span class="category-row__copy">
-                  <span class="category-row__title"><i>大类</i><strong>{{ category.name }}</strong></span>
-                  <small>大类占总销售额 <em>{{ percentageLabel(category.share) }}</em></small>
+                <span class="category-icon" aria-hidden="true">
+                  <img
+                    v-if="catalogImage(category, 'category')"
+                    :src="catalogImage(category, 'category')"
+                    alt=""
+                    @error="markCatalogImageFailed(category, 'category')"
+                  />
+                  <svg v-else viewBox="0 0 32 32" role="presentation">
+                    <path d="M25 5C15 5.8 7.5 11.8 7.5 20.2c0 4 2.9 6.8 6.8 6.8C22 27 27.5 16.3 25 5Z" />
+                    <path d="M6 27c4.4-8.2 9.6-12.6 17-16.3" />
+                  </svg>
                 </span>
-                <b>{{ formatMoney(category.salesAmount) }}</b>
+                <span class="category-row__copy">
+                  <strong>{{ category.name }}</strong>
+                  <span class="category-row__share">
+                    <em>{{ percentageLabel(category.share) }}</em>
+                    <i class="category-row__progress" aria-hidden="true"><b :style="{ width: shareBarWidth(category.share) }"></b></i>
+                  </span>
+                </span>
+                <b class="category-row__amount">{{ formatMoney(category.salesAmount) }}</b>
               </button>
               <div
                 v-if="same(category.id, selectedCategoryId) && displayMode === 'product'"
@@ -91,13 +114,27 @@
                   :class="{ active: same(subcategory.id, selectedSubcategoryId) }"
                   @click="selectSubcategory(subcategory)"
                 >
+                  <span class="subcategory-icon" aria-hidden="true">
+                    <img
+                      v-if="catalogImage(subcategory, 'subcategory')"
+                      :src="catalogImage(subcategory, 'subcategory')"
+                      alt=""
+                      @error="markCatalogImageFailed(subcategory, 'subcategory')"
+                    />
+                    <svg v-else viewBox="0 0 24 24" role="presentation">
+                      <path d="M19 4.5C12 5 6.5 9.2 6.5 15.2c0 2.8 2 4.8 4.8 4.8C16.8 20 21 12.4 19 4.5Z" />
+                      <path d="M5 20c3.2-5.9 6.8-9 12-11.7" />
+                    </svg>
+                  </span>
                   <span class="subcategory-row__copy">
-                    <span class="subcategory-row__title"><i>小类</i><strong>{{ subcategory.name }}</strong></span>
-                    <small>小类占总销售额 <em>{{ percentageLabel(overallShare(subcategory.salesAmount)) }}</em></small>
-                    <small
-                      class="subcategory-row__profit"
-                      :class="{ negative: Number(subcategory.grossProfit) < 0 }"
-                    >毛利 {{ formatOptionalMoney(subcategory.grossProfit) }} · {{ optionalPercentageLabel(subcategory.grossMarginRate) }}</small>
+                    <strong>{{ subcategory.name }}</strong>
+                    <small>
+                      <em>{{ percentageLabel(overallShare(subcategory.salesAmount)) }}</em>
+                      <span
+                        class="subcategory-row__profit"
+                        :class="{ negative: Number(subcategory.grossProfit) < 0 }"
+                      >毛利 {{ formatOptionalMoney(subcategory.grossProfit) }} · {{ optionalPercentageLabel(subcategory.grossMarginRate) }}</span>
+                    </small>
                   </span>
                   <b>{{ formatMoney(subcategory.salesAmount) }}</b>
                 </button>
@@ -248,6 +285,7 @@ import {
   optionalPercentageLabel,
   percentageLabel,
   rangeForDays,
+  resolveCategoryImage,
   resolveGoodsImage,
 } from '../presentation/salesAnalysisPresentation';
 
@@ -273,6 +311,7 @@ export default {
       selectedProductId: null,
       selectedCustomerId: null,
       keyword: '',
+      failedCatalogImages: {},
       overviewLoading: false,
       detailLoading: false,
       productLoading: false,
@@ -373,10 +412,25 @@ export default {
     goodsImage(product) {
       return resolveGoodsImage(product, this.imageServer, 'goodsImage/logo.jpg');
     },
+    catalogImage(item, kind) {
+      const key = `${kind}:${item?.id ?? ''}`;
+      return this.failedCatalogImages[key] ? '' : resolveCategoryImage(item, this.imageServer);
+    },
+    markCatalogImageFailed(item, kind) {
+      this.failedCatalogImages[`${kind}:${item?.id ?? ''}`] = true;
+    },
+    categoryColorStyle(value) {
+      const color = String(value || '').trim();
+      return /^#[0-9a-f]{6}$/i.test(color) ? { '--category-accent': color } : {};
+    },
     same(left, right) { return String(left) === String(right); },
     overallShare(amount) {
       const total = Number(this.summary.salesAmount) || 0;
       return total > 0 ? (Number(amount) || 0) / total * 100 : 0;
+    },
+    shareBarWidth(value) {
+      const percentage = Math.max(0, Math.min(100, Number(value) || 0));
+      return `${percentage}%`;
     },
     applyPreset(days) {
       this.activePreset = days;
@@ -633,37 +687,11 @@ export default {
 .analysis-toolbar .summary-grid .profit-card { background: #f4fbf7; }
 .analysis-toolbar .summary-grid .profit-card strong { color: #087f4c; }
 .analysis-toolbar .summary-grid strong.negative { color: #c43e48; }
-.analysis-mode-switch {
-  width: 176px;
-  height: 38px;
-  flex: none;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 3px;
-  border: 1px solid #cfe0d7;
-  border-radius: 9px;
-  background: #f3f8f5;
-}
-.analysis-mode-switch button {
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #64736b;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-.analysis-mode-switch button.active {
-  background: #109c5c;
-  color: #fff;
-  box-shadow: 0 3px 8px rgba(16, 156, 92, .18);
-}
 .analysis-toolbar .analysis-filters { flex-shrink: 0; }
 
 @media (max-width: 1150px) {
   .analysis-toolbar { flex-direction: row; flex-wrap: wrap; align-items: center; }
   .analysis-toolbar .summary-grid { flex-basis: 100%; }
-  .analysis-mode-switch { margin-right: auto; }
 }
 
 @media (max-width: 640px) {
@@ -814,94 +842,138 @@ export default {
 
 .category-share-guide {
   flex: none;
-  min-height: 50px;
+  min-height: 58px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 10px;
+  padding: 8px 10px 8px 14px;
   border-bottom: 1px solid #dfe8e3;
-  background: #f7fbf9;
+  background: linear-gradient(135deg, #fbfefc 0%, #f1f9f5 100%);
 }
-.category-share-guide strong { color: #26362e; font-size: 13px; }
-.category-share-guide span {
+.category-share-guide__copy { min-width: 0; display: block; }
+.category-share-guide strong { display: block; color: #26362e; font-size: 14px; }
+.category-share-guide small {
+  margin-top: 4px;
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #64766d;
-  font-size: 9px;
+  color: #7c8b84;
+  font-size: 8px;
   white-space: nowrap;
 }
-.category-share-guide i {
-  width: 7px;
-  height: 7px;
+.category-share-guide small i {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #10a05d;
-  box-shadow: 0 0 0 3px #dff3e9;
+  box-shadow: 0 0 0 2px #dff3e9;
+}
+.category-mode-switch {
+  width: 108px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 3px;
+  border: 1px solid #cfe0d7;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .78);
+  box-shadow: inset 0 1px 2px rgba(31, 70, 49, .04);
+}
+.category-mode-switch button {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #6d7c74;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.category-mode-switch button.active {
+  background: #109c5c;
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(16, 156, 92, .2);
 }
 .category-tree { flex: 1; min-height: 0; overflow: auto; }
-.category-tree > section { border-bottom: 1px solid #e5ece8; }
+.category-tree > section { border-bottom: 1px solid #e8eeeb; }
+.category-section { --category-accent: #28a568; --category-soft: #e9f8ef; }
+.category-section.tone-1 { --category-accent: #42a57a; --category-soft: #eaf7f1; }
+.category-section.tone-2 { --category-accent: #68a65a; --category-soft: #eef8e9; }
+.category-section.tone-3 { --category-accent: #2f9989; --category-soft: #e8f6f3; }
 .category-row {
-  width: 100%;
-  min-height: 58px;
+  width: calc(100% - 12px);
+  min-height: 66px;
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) 76px;
+  grid-template-columns: 16px 42px minmax(0, 1fr) 68px;
   align-items: center;
-  gap: 5px;
-  padding: 7px 11px;
-  border: 0;
+  gap: 7px;
+  margin: 6px;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 10px;
   background: #fff;
   color: #25342d;
   text-align: left;
   cursor: pointer;
 }
 .category-row:hover { background: #f4faf7; }
-.category-row.active { background: #f7fbf9; }
-.category-row__copy { min-width: 0; display: block; }
-.category-row__title { min-width: 0; display: flex; align-items: center; gap: 6px; }
-.category-row__title i {
-  flex: none;
-  padding: 2px 5px;
-  border-radius: 4px;
-  background: #137d4c;
-  color: #fff;
-  font-size: 8px;
-  font-style: normal;
-  font-weight: 800;
+.category-row.active {
+  border-color: #d3eadf;
+  background: linear-gradient(100deg, var(--category-soft) 0%, #f8fcfa 100%);
+  box-shadow: 0 3px 12px rgba(23, 105, 63, .07);
 }
-.category-row__copy strong,
-.category-row__copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.category-row__copy strong { min-width: 0; color: #25342d; font-size: 13px; }
-.category-row__copy small { margin-top: 5px; color: #7b8982; font-size: 9px; }
-.category-row__copy em {
-  display: inline-block;
-  margin-left: 4px;
-  padding: 1px 5px;
-  border-radius: 8px;
-  background: #e2f4ea;
-  color: #078b51;
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 800;
+.category-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--category-soft);
+  color: var(--category-accent);
+}
+.category-icon svg { width: 28px; height: 28px; overflow: visible; }
+.category-icon img { width: 100%; height: 100%; display: block; border-radius: inherit; object-fit: cover; }
+.category-icon path:first-child { fill: currentColor; opacity: .22; }
+.category-icon path:last-child { fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; }
+.category-row__copy { min-width: 0; display: block; }
+.category-row__copy > strong { display: block; overflow: hidden; color: #25342d; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.category-row__share { min-width: 0; display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+.category-row__share em { flex: none; color: #078b51; font-size: 11px; font-style: normal; font-weight: 900; }
+.category-row__progress {
+  width: 58px;
+  height: 7px;
+  display: block;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #e7eeea;
+}
+.category-row__progress b {
+  min-width: 4px;
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--category-accent), #7fd8a8);
 }
 .category-row > b { color: #26372f; font-size: 12px; text-align: right; white-space: nowrap; }
 .tree-caret { color: #466057; font-size: 17px; }
 
 .subcategory-tree {
-  margin-left: 17px;
-  padding: 0 8px 7px 13px;
+  margin-left: 26px;
+  padding: 0 8px 8px 13px;
   border-left: 2px solid #d8e8df;
 }
 .subcategory-tree button {
   position: relative;
   width: 100%;
-  min-height: 62px;
+  min-height: 50px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px;
+  grid-template-columns: 24px minmax(0, 1fr) 64px;
   align-items: center;
-  gap: 5px;
-  padding: 5px 8px;
+  gap: 7px;
+  padding: 5px 7px;
   border: 0;
+  border-radius: 7px;
   background: #fff;
   color: #415149;
   text-align: left;
@@ -909,31 +981,26 @@ export default {
 }
 .subcategory-tree button::before {
   position: absolute;
-  top: 30px;
+  top: 24px;
   left: -13px;
   width: 10px;
   border-top: 2px solid #d8e8df;
   content: '';
 }
-.subcategory-tree button.active { background: #e7f6ee; color: #176741; }
+.subcategory-tree button:hover { background: #f4faf7; }
+.subcategory-tree button.active { background: #eaf7f0; color: #176741; }
+.subcategory-icon { width: 24px; height: 24px; display: grid; place-items: center; color: var(--category-accent); }
+.subcategory-icon svg { width: 21px; height: 21px; overflow: visible; }
+.subcategory-icon img { width: 100%; height: 100%; display: block; border-radius: 7px; object-fit: cover; }
+.subcategory-icon path:first-child { fill: currentColor; opacity: .16; }
+.subcategory-icon path:last-child { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .subcategory-row__copy { min-width: 0; display: block; }
-.subcategory-row__title { min-width: 0; display: flex; align-items: center; gap: 5px; }
-.subcategory-row__title i {
-  flex: none;
-  padding: 1px 4px;
-  border: 1px solid #abc9ba;
-  border-radius: 4px;
-  color: #577067;
-  font-size: 8px;
-  font-style: normal;
-  font-weight: 700;
-}
-.subcategory-row__copy strong,
-.subcategory-row__copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.subcategory-row__copy strong { min-width: 0; font-size: 11px; }
-.subcategory-row__copy small { margin-top: 4px; color: #819087; font-size: 9px; }
-.subcategory-row__copy em { margin-left: 3px; color: #078b51; font-size: 10px; font-style: normal; font-weight: 800; }
-.subcategory-row__copy .subcategory-row__profit { color: #087f4c; font-weight: 800; }
+.subcategory-row__copy > strong,
+.subcategory-row__copy > small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subcategory-row__copy > strong { min-width: 0; font-size: 11px; }
+.subcategory-row__copy > small { margin-top: 4px; color: #819087; font-size: 8px; }
+.subcategory-row__copy em { margin-right: 7px; color: #078b51; font-size: 10px; font-style: normal; font-weight: 900; }
+.subcategory-row__copy .subcategory-row__profit { color: #6f8178; font-size: 8px; font-weight: 700; }
 .subcategory-row__copy .subcategory-row__profit.negative { color: #c43e48; }
 .subcategory-tree button b { color: #3d5147; font-size: 11px; text-align: right; white-space: nowrap; }
 .subcategory-tree p,
