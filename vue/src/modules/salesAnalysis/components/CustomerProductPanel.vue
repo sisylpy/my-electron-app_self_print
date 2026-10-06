@@ -21,7 +21,7 @@
       <div v-else-if="loading" class="customer-product-state">正在加载该客户购买的商品…</div>
       <div v-else class="customer-product-table-wrap">
         <table>
-          <thead><tr><th>商品</th><th>数量</th><th>成交额</th><th>可核算毛利</th><th>毛利率</th><th>均价</th><th>次数</th></tr></thead>
+          <thead><tr><th>商品</th><th>数量</th><th>成交额</th><th>可核算毛利</th><th>毛利率</th><th>均价</th><th>次数</th><th aria-label="查看详情"></th></tr></thead>
           <tbody>
             <tr
               v-for="product in products"
@@ -43,8 +43,16 @@
               <td class="profit" :class="{ negative: Number(product.grossMarginRate) < 0 }">{{ optionalPercentageLabel(product.grossMarginRate) }}</td>
               <td>{{ formatAveragePrices(product.averagePrices) }}</td>
               <td>{{ product.orderCount || 0 }}</td>
+              <td>
+                <button
+                  class="row-open"
+                  type="button"
+                  :aria-label="`查看${product.goodsName}的客户分布`"
+                  @click.stop="$emit('select', product)"
+                >›</button>
+              </td>
             </tr>
-            <tr v-if="!products.length"><td colspan="7" class="empty-cell">该客户在此大类下暂无商品数据</td></tr>
+            <tr v-if="!products.length"><td colspan="8" class="empty-cell">该客户在此大类下暂无商品数据</td></tr>
           </tbody>
         </table>
       </div>
@@ -129,6 +137,7 @@ tbody tr[tabindex]:hover,tbody tr.selected { background: #eff9f4; }
 tbody tr[tabindex]:focus-visible { box-shadow: inset 0 0 0 2px #159d60; }
 td:first-child { min-width: 160px; }
 td:nth-child(2),td:nth-child(4) { min-width: 110px; }
+th:last-child,td:last-child { width: 44px; padding-right: 9px; padding-left: 3px; text-align: right; }
 td.money { color: #07814b; font-weight: 800; white-space: nowrap; }
 .customer-product-summary strong.negative,td.profit.negative { color: #c43e48; }
 td.profit { color: #087f4c; font-weight: 800; white-space: nowrap; }
@@ -139,6 +148,8 @@ td.profit { color: #087f4c; font-weight: 800; white-space: nowrap; }
 .customer-product-identity small { margin-top: 2px; color: #8a9690; font-size: 9px; }
 .customer-product-thumb { width: 34px; height: 34px; flex: none; overflow: hidden; border: 1px solid #e0e9e4; border-radius: 7px; background: #f3f7f5; }
 .customer-product-thumb img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.row-open { width: 30px; height: 30px; display: inline-grid; place-items: center; padding: 0; border: 1px solid #d7e4dd; border-radius: 8px; background: #fff; color: #0b8b52; font-size: 22px; line-height: 1; cursor: pointer; }
+.row-open:hover,.row-open:focus-visible { border-color: #a8d5bd; background: #edf8f2; outline: none; }
 .empty-cell { padding: 35px !important; color: #87938d; text-align: center !important; }
 .customer-product-state { flex: 1; min-height: 180px; display: grid; place-items: center; padding: 20px; color: #84918b; font-size: 11px; text-align: center; }
 .customer-product-state.error { color: #ac3c45; }

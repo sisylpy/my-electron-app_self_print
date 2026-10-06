@@ -71,5 +71,9 @@ assert.match(drawerSource, /summary\.grossProfit/);
 assert.match(drawerSource, /customer\.grossMarginRate/);
 assert.match(customerPanelSource, /resolvedCustomer\.grossProfit/);
 assert.match(customerPanelSource, /product\.grossMarginRate/);
+assert.match(customerPanelSource, /<th aria-label="查看详情"><\/th>/);
+assert.match(customerPanelSource, /class="row-open"/);
+assert.match(customerPanelSource, /@click\.stop="\$emit\('select', product\)"/);
+assert.match(customerPanelSource, /colspan="8"/);
 
 console.log('Sales analysis layout checks passed.');
