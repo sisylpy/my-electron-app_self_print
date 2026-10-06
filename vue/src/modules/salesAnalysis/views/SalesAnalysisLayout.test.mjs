@@ -67,6 +67,8 @@ assert.match(drawerSource, /event\.key === 'Escape'/);
 assert.doesNotMatch(drawerSource, /class="product-summary"/);
 assert.match(drawerSource, /<h3 id="customer-share-title">客户占比<\/h3>/);
 assert.match(drawerSource, /\.customer-section h3\{margin:0;font-size:21px\}/);
+assert.match(drawerSource, /\.customer-list dt\{color:#78867f;font-size:11px\}/);
+assert.match(drawerSource, /\.customer-list dd\{margin:4px 0 0;[^}]*font-size:13px/);
 assert.match(drawerSource, /商品内占比 \{\{ percentageLabel\(customer\.share\) \}\}/);
 assert.match(viewSource, /可核算毛利/);
 assert.match(viewSource, /profitCoverageText\(summary\)/);
