@@ -41,10 +41,6 @@
       <section class="analysis-workspace" :class="{ 'customer-mode': displayMode === 'customer' }">
         <aside class="category-tree-panel">
           <div class="category-share-guide">
-            <span class="category-share-guide__copy">
-              <strong>销售分类</strong>
-              <small><i aria-hidden="true"></i>占总销售额</small>
-            </span>
             <nav class="category-mode-switch" aria-label="销售分析显示方式">
               <button
                 type="button"
@@ -186,17 +182,13 @@
                   v-for="(product, index) in visibleProducts"
                   :key="product.goodsId"
                   :class="{ selected: same(product.goodsId, selectedProductId) }"
-                  role="button"
-                  tabindex="0"
-                  @click="selectProduct(product)"
-                  @keydown.enter.prevent="selectProduct(product)"
                 >
                   <td>
-                    <button class="product-identity" type="button" @click.stop="selectProduct(product)">
+                    <div class="product-identity">
                       <span class="product-index">{{ index + 1 }}</span>
                       <span class="product-thumb"><img :src="goodsImage(product)" :alt="product.goodsName" /></span>
                       <span class="product-copy"><strong>{{ product.goodsName }}</strong><small>{{ product.goodsStandard || '未标规格' }}</small></span>
-                    </button>
+                    </div>
                   </td>
                   <td>{{ formatQuantities(product.quantities) }}</td>
                   <td class="money">{{ formatMoney(product.salesAmount) }}</td>
@@ -205,7 +197,7 @@
                   <td>{{ formatAveragePrices(product.averagePrices) }}</td>
                   <td>{{ product.customerCount }} 家</td>
                   <td><span class="customer-tags"><i v-for="customer in product.topCustomers" :key="customer.customerId">{{ customer.customerName }}</i></span></td>
-                  <td><button class="row-open" type="button" :aria-label="`查看${product.goodsName}的客户分布`" @click.stop="selectProduct(product)">›</button></td>
+                  <td><button class="row-open" type="button" :aria-label="`查看${product.goodsName}的客户分布`" @click="openProductDrawer(product)">›</button></td>
                 </tr>
                 <tr v-if="!visibleProducts.length"><td colspan="9" class="empty-cell">没有符合条件的商品</td></tr>
               </tbody>
@@ -223,18 +215,18 @@
           :error="customerProductsError"
           :category-name="selectedCategoryName"
           :image-server="imageServer"
-          @select="selectProduct"
+          @select="openProductDrawer"
           @page="loadCustomerProductsPage"
         />
 
         <ProductCustomerDrawer
-          embedded
-          visible
+          :visible="productDrawerVisible"
           :product="selectedProduct"
           :detail="productDetail"
           :loading="productLoading"
           :error="productError"
           :image-server="imageServer"
+          @close="closeProductDrawer"
         />
       </section>
 
@@ -280,6 +272,7 @@ export default {
       overview: null,
       categoryDetail: null,
       productDetail: null,
+      productDrawerVisible: false,
       categoryCustomersDetail: null,
       customerProductsDetail: null,
       displayMode: 'product',
@@ -489,8 +482,7 @@ export default {
     async setDisplayMode(mode) {
       if (!['product', 'customer'].includes(mode) || mode === this.displayMode) return;
       this.displayMode = mode;
-      this.productRequestId += 1;
-      this.productLoading = false;
+      this.clearProductSelection();
       if (mode === 'product') {
         this.categoryCustomersRequestId += 1;
         this.customerProductsRequestId += 1;
@@ -498,19 +490,11 @@ export default {
         this.customerProductsLoading = false;
         if (!this.categoryDetail) {
           await this.loadCategoryDetail();
-        } else {
-          const firstProduct = (this.categoryDetail.products || [])
-            .find((product) => this.same(product.subcategoryId, this.selectedSubcategoryId));
-          if (firstProduct) this.selectProduct(firstProduct);
         }
         return;
       }
-      this.clearProductSelection();
       if (!this.categoryCustomersDetail) {
         await this.loadCategoryCustomers(1);
-      } else {
-        const firstProduct = this.customerProductsDetail?.products?.[0];
-        if (firstProduct) this.selectProduct(firstProduct);
       }
     },
     async loadCategoryCustomers(page = 1) {
@@ -560,9 +544,6 @@ export default {
         );
         if (requestId === this.customerProductsRequestId) {
           this.customerProductsDetail = detail;
-          const firstProduct = detail.products?.[0];
-          if (firstProduct) this.selectProduct(firstProduct);
-          else this.clearProductSelection();
         }
       } catch (error) {
         if (requestId === this.customerProductsRequestId) {
@@ -581,25 +562,28 @@ export default {
       this.productLoading = false;
       this.categoryCustomersLoading = false;
       this.customerProductsLoading = false;
+      this.productDrawerVisible = false;
     },
     selectSubcategory(subcategory) {
       this.selectedSubcategoryId = subcategory.id;
       this.keyword = '';
-      this.selectedProductId = null;
-      this.productDetail = null;
-      this.productError = '';
-      this.productLoading = false;
-      this.productRequestId += 1;
-      const firstProduct = (this.categoryDetail?.products || [])
-        .find((product) => this.same(product.subcategoryId, subcategory.id));
-      if (firstProduct) this.selectProduct(firstProduct);
+      this.clearProductSelection();
     },
     clearProductSelection() {
       this.productRequestId += 1;
+      this.productDrawerVisible = false;
       this.selectedProductId = null;
       this.productDetail = null;
       this.productError = '';
       this.productLoading = false;
+    },
+    openProductDrawer(product) {
+      if (!product?.goodsId) return;
+      this.productDrawerVisible = true;
+      this.selectProduct(product);
+    },
+    closeProductDrawer() {
+      this.clearProductSelection();
     },
     async selectProduct(product) {
       this.selectedProductId = product.goodsId;
@@ -722,7 +706,7 @@ export default {
   }
 }
 
-/* Redesigned three-column sales workspace. */
+/* Two-column workspace; product customers open in an overlay drawer. */
 .analysis-body {
   display: flex;
   min-height: 0;
@@ -740,7 +724,7 @@ export default {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 290px minmax(560px, 1fr) 440px;
+  grid-template-columns: 290px minmax(0, 1fr);
   overflow: hidden;
   border-bottom: 1px solid #dce7e1;
   background: #fff;
@@ -816,33 +800,15 @@ export default {
   min-height: 58px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px 8px 14px;
+  justify-content: center;
+  padding: 10px 12px;
   border-bottom: 1px solid #dfe8e3;
   background: linear-gradient(135deg, #fbfefc 0%, #f1f9f5 100%);
 }
-.category-share-guide__copy { min-width: 0; display: block; }
-.category-share-guide strong { display: block; color: #26362e; font-size: 14px; }
-.category-share-guide small {
-  margin-top: 4px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: #7c8b84;
-  font-size: 8px;
-  white-space: nowrap;
-}
-.category-share-guide small i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #10a05d;
-  box-shadow: 0 0 0 2px #dff3e9;
-}
 .category-mode-switch {
-  width: 108px;
-  height: 32px;
+  width: calc(100% - 20px);
+  max-width: 246px;
+  height: 38px;
   flex: none;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -857,7 +823,7 @@ export default {
   border-radius: 6px;
   background: transparent;
   color: #6d7c74;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -1007,7 +973,7 @@ export default {
   overflow: hidden;
 }
 
-.analysis-workspace.customer-mode { grid-template-columns: 290px minmax(620px, 1fr) 440px; }
+.analysis-workspace.customer-mode { grid-template-columns: 290px minmax(0, 1fr); }
 
 .product-search { width: 250px; height: 32px; flex: none; padding: 0 9px; border-radius: 8px; }
 .product-table-wrap { flex: 1; min-height: 0; overflow: auto; }
@@ -1018,9 +984,9 @@ export default {
 .product-table-wrap td { padding: 9px 10px; }
 .product-table-wrap th { position: sticky; top: 0; z-index: 1; font-size: 10px; }
 .product-table-wrap td { font-size: 13px; }
-.product-table-wrap td > button strong { font-size: 13px; }
-.product-table-wrap td > button small { margin-top: 2px; font-size: 10px; }
 .product-table-wrap .product-identity { min-width: 170px; gap: 8px; }
+.product-table-wrap .product-copy strong { display: block; font-size: 13px; }
+.product-table-wrap .product-copy small { display: block; margin-top: 2px; color: #76847d; font-size: 10px; }
 .product-index { width: 22px; flex: none; color: #607169; font-size: 12px; font-weight: 800; text-align: center; }
 .product-thumb { width: 38px; height: 38px; border-radius: 7px; }
 .customer-tags i { padding: 3px 7px; border-radius: 8px; font-size: 11px; }
@@ -1048,8 +1014,8 @@ export default {
 }
 
 @media (max-width: 1500px) {
-  .analysis-workspace { grid-template-columns: 260px minmax(520px, 1fr) 390px; }
-  .analysis-workspace.customer-mode { grid-template-columns: 260px minmax(560px, 1fr) 390px; }
+  .analysis-workspace { grid-template-columns: 260px minmax(0, 1fr); }
+  .analysis-workspace.customer-mode { grid-template-columns: 260px minmax(0, 1fr); }
 }
 
 .analysis-filters nav button { font-size: 13px; }
@@ -1057,6 +1023,6 @@ export default {
 @media (max-width: 1120px) {
   .analysis-body { overflow: auto; }
   .analysis-workspace { min-height: 760px; grid-template-columns: 240px minmax(520px, 1fr); overflow: visible; }
-  .analysis-workspace.customer-mode { grid-template-columns: 240px minmax(600px, 1fr); }
+  .analysis-workspace.customer-mode { grid-template-columns: 240px minmax(520px, 1fr); }
 }
 </style>
