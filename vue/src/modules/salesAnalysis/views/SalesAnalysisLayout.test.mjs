@@ -16,11 +16,14 @@ const customerPanelSource = fs.readFileSync(
 
 assert.match(viewSource, /category-mode-switch/);
 assert.doesNotMatch(viewSource, /analysis-mode-switch/);
+assert.doesNotMatch(viewSource, /近7天|近30天|近90天|快捷统计范围/);
+assert.doesNotMatch(viewSource, /presets|activePreset|applyPreset/);
+assert.match(viewSource, /\.analysis-filters input\{[^}]*height:44px[^}]*font-size:15px/);
+assert.match(viewSource, /input::\-webkit-calendar-picker-indicator\{[^}]*width:18px[^}]*height:18px/);
 assert.match(viewSource, /占总销售额/);
 assert.match(viewSource, /category-icon/);
-assert.match(viewSource, /subcategory-icon/);
+assert.doesNotMatch(viewSource, /subcategory-icon/);
 assert.match(viewSource, /catalogImage\(category, 'category'\)/);
-assert.match(viewSource, /catalogImage\(subcategory, 'subcategory'\)/);
 assert.match(viewSource, /categoryColorStyle\(category\.color\)/);
 assert.match(viewSource, /category-row__progress/);
 assert.match(viewSource, /shareBarWidth\(category\.share\)/);
