@@ -50,7 +50,7 @@ const crypto = require('crypto');
 const https = require('https');
 const http = require('http');
 const { pathToFileURL } = require('url');
-const { execFile } = require('child_process');
+const { execFile, execSync } = require('child_process');
 const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
@@ -1506,46 +1506,53 @@ function setupIpcHandlers() {
     }
   });
 
-  // 退货交接单/收货单：使用桌面端默认打印机静默打印，并把真实打印回执返回页面。
+  // 退货交接单/收货单：必须复用配送单的正式打印链路。
+  // 不在这里另建一套 webContents.print 参数，否则 Epson 针式驱动会把
+  // 240x140 / 240x93 的退货纸型自动旋转，造成退货单与配送单方向相差 90°。
   ipcMain.handle('print-return-document', async (event, htmlContent) => {
     assertTrustedRendererEvent(event);
     assertPrintHtml(htmlContent);
-    return new Promise((resolve) => {
-      const printWindow = new BrowserWindow({
-        show: false,
-        webPreferences: {
-          nodeIntegration: false,
-          contextIsolation: true
-        }
-      });
-      let settled = false;
-      const finish = (result) => {
-        if (settled) return;
-        settled = true;
-        if (!printWindow.isDestroyed()) printWindow.destroy();
-        resolve(result);
-      };
-
-      printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
-      printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
-      printWindow.webContents.on('did-finish-load', () => {
-        printWindow.webContents.setZoomFactor(PRINT_RUNTIME_CONFIG.hiddenWindowZoomFactor);
-        const printerName = getDefaultPrinterName();
-        setTimeout(() => {
-          printWindow.webContents.print(
-            createSilentPrintOptions(printerName, { includeLegacyMargins: true }),
-            (success, error) => finish({
-              success: Boolean(success),
-              printerName: printerName || '',
-              error: success ? '' : serializePrintError(error || '打印失败')
-            })
-          );
-        }, PRINT_RUNTIME_CONFIG.renderDelayMs);
-      });
-      printWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
-        finish({ success: false, error: `打印页面加载失败: ${errorDescription}`, errorCode });
-      });
+    const configuredPrinterName = getDefaultPrinterName();
+    const widthMatch = htmlContent.match(/data-print-width-mm=["'](\d+(?:\.\d+)?)["']/i);
+    const heightMatch = htmlContent.match(/data-print-height-mm=["'](\d+(?:\.\d+)?)["']/i);
+    const widthMm = Number(widthMatch?.[1]);
+    const heightMm = Number(heightMatch?.[1]);
+    const pageSize = Number.isFinite(widthMm) && Number.isFinite(heightMm)
+      ? { width: Math.round(widthMm * 1000), height: Math.round(heightMm * 1000) }
+      : null;
+    appLogger.append('info', 'return-print', 'submit-document', {
+      profile: htmlContent.match(/data-print-profile=["']([^"']+)["']/i)?.[1] || '',
+      pageSize,
+      printerName: configuredPrinterName || '',
     });
+    try {
+      const result = await runTrackedPrintJob(
+        '退货单打印',
+        () => printContentToWindowWithCallback(
+          htmlContent,
+          -1,
+          -1,
+          'return-document',
+          0,
+          1,
+          false,
+          true,
+          [],
+          pageSize ? { pageSize } : {}
+        )
+      );
+      return {
+        ...result,
+        printerName: result?.printerName || configuredPrinterName || '',
+        error: ''
+      };
+    } catch (error) {
+      return {
+        success: false,
+        printerName: error?.printer || configuredPrinterName || '',
+        error: serializePrintError(error || '打印失败')
+      };
+    }
   });
 }
 
@@ -3720,7 +3727,7 @@ function printContentToWindow(printContent, depFatherId, depId, tradeNo, userId,
 }
 
 // 新的打印函数：返回Promise，支持IPC回执。isHistoryOrder=true 时跳过保存接口和刷新客户列表
-function printContentToWindowWithCallback(printContent, depFatherId, depId, tradeNo, userId, paperCount, shouldSave = true, isHistoryOrder = false, orderIds) {
+function printContentToWindowWithCallback(printContent, depFatherId, depId, tradeNo, userId, paperCount, shouldSave = true, isHistoryOrder = false, orderIds, printOptionOverrides = {}) {
   console.log('🚀 [printContentToWindowWithCallback] ========== 开始创建打印窗口 ==========');
   console.log('🚀 [printContentToWindowWithCallback] 参数:', { depFatherId, depId, tradeNo, userId, paperCount, shouldSave, isHistoryOrder });
   console.log('🚀 [printContentToWindowWithCallback] HTML长度:', printContent ? printContent.length : 0);
@@ -3878,7 +3885,13 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
         // 1. 使用 marginsType: 0 (默认边距)，比 'none' 更稳健
         // 2. 移除自定义 DPI，让驱动自己决定（针式打印机对 DPI 很敏感）
         // 3. 开启 printBackground 防止样式丢失
-        const printOptions = createSilentPrintOptions(finalPrinterName);
+        const printOptions = createSilentPrintOptions(finalPrinterName, printOptionOverrides);
+        appLogger.append('info', 'print', 'silent-print-options', {
+          tradeNo,
+          printerName: finalPrinterName || defaultPrinter || '',
+          pageSize: printOptions.pageSize || null,
+          marginsType: printOptions.marginsType,
+        });
         
         console.log('🖨️ [printContentToWindowWithCallback] 打印参数:', printOptions);
         console.log('🖨️ [printContentToWindowWithCallback] 优化说明:');
@@ -3947,7 +3960,12 @@ function printContentToWindowWithCallback(printContent, depFatherId, depId, trad
               console.log('⏭️ [IPC回执] 跳过保存，非最后一页');
             }
             
-            resolve({ success: true, tradeNo, saved });
+            resolve({
+              success: true,
+              tradeNo,
+              saved,
+              printerName: finalPrinterName || defaultPrinter || ''
+            });
           } else {
             console.error('❌ [IPC回执] ========== 打印失败 ==========');
             console.error('❌ [IPC回执] error:', error);
@@ -4483,12 +4501,56 @@ app.whenReady().then(async () => {
   //   渲染端 triggerPrintDeliveryOrder 要求 task.type==='nx_delivery' 才触发（App.vue:221），
   //   并自行按 departmentId/printMode/subDepartmentId 调 phoneGetToFillDepOrders 拉明细（Bills.vue 行为），
   //   故仅补 type 常量，禁止填假值/空串/默认 0。
+  // ===== 微信状态探测（用于连接器就绪自检 + 桌面端红条提示）=====
+  // open：本地微信进程是否运行（pgrep，macOS）；loggedIn：微信 Reader 能否列出已登录账号
+  //   （仅当微信已开且 Reader 已初始化时探测，避免强制拉起 Reader 子进程）。
+  // 结果缓存 15s，避免每个轮询周期都重算。
+  let _wechatStateCache = { open: null, loggedIn: null, at: 0 };
+  async function detectWechatState() {
+    const now = Date.now();
+    if (now - _wechatStateCache.at < 15000) return _wechatStateCache;
+    let open = false;
+    try { open = !!execSync('pgrep -x WeChat 2>/dev/null').toString().trim(); } catch (e) { open = false; }
+    let loggedIn = null;
+    if (open) {
+      // 必须用 getter 懒初始化 reader 服务：模块变量 wechatReaderService 在桥轮询阶段恒为 null，
+      // 不初始化则 loggedIn 永远停在 null，导致「微信停在登录窗口」被误判为「已就绪」。
+      const reader = getWechatReaderService();
+      if (reader) {
+        try {
+          const r = await reader.listAccounts();
+          // 真实当前登录态：listAccounts 现在返回每个账号的 isCurrentLogin
+          // （微信仅打开当前登录账号的 db_storage，已修正真实检测）；
+          // 据此判断而非账号数量，否则历史账号会误判为「已登录」。
+          const accounts = (r && r.ok && Array.isArray(r.result)) ? r.result : [];
+          loggedIn = accounts.some(a => a.isCurrentLogin === true);
+        } catch (e) { loggedIn = null; }
+      }
+    }
+    _wechatStateCache = { open, loggedIn, at: now };
+    return _wechatStateCache;
+  }
+
+  // 把桥连接状态推给渲染端，用于顶部红条提示（GrainPrint 未登录 / 微信未开 / 微信未登录）。
+  function sendBridgeStatus(loginDisId, wechatState) {
+    const target = (mainWindow && !mainWindow.isDestroyed())
+      ? mainWindow
+      : (BrowserWindow.getAllWindows() || [])[0];
+    if (!target || target.isDestroyed()) return;
+    target.webContents.send('mcp-bridge-status', {
+      grainPrintConnected: !!loginDisId,
+      loginDisId: loginDisId || null,
+      wechat: wechatState || { open: null, loggedIn: null },
+    });
+  }
+
   async function bridgePollTick() {
+    const wechatState = await detectWechatState();
     const deps = {
       getLoggedInDisId: () => mcpBridgeClient.getLoggedInDisId(),
       markExecuted: (taskId) => mcpBridgeClient.markExecuted(taskId),
       acceptTask: (taskId) => mcpBridgeClient.acceptTask(taskId),
-      reportIdentity: (disId, printerAvailable) => mcpBridgeClient.reportIdentity(disId, printerAvailable),
+      reportIdentity: (disId, printerAvailable) => mcpBridgeClient.reportIdentity(disId, printerAvailable, wechatState),
       reportHeartbeat: () => mcpBridgeClient.reportHeartbeat(),
       fetchTasks: (disId) => mcpBridgeClient.fetchTasks(disId),
       getDefaultPrinterName: () => {
@@ -4502,7 +4564,7 @@ app.whenReady().then(async () => {
           : (BrowserWindow.getAllWindows() || [])[0];
         if (!target || target.isDestroyed()) return { ok: false, error: 'no-window' };
         const enriched = Object.assign({}, task, {
-          type: 'nx_delivery',
+          type: task.type || 'nx_delivery',
           taskId: task.taskId || task.id,
           id: task.id
         });
@@ -4513,6 +4575,8 @@ app.whenReady().then(async () => {
     try {
       const r = await taskRunner.pollOnce(deps);
       if (r && r.fetched) console.log('[MCP-3010] 本轮:', JSON.stringify(r));
+      const loginDisId = await mcpBridgeClient.getLoggedInDisId();
+      sendBridgeStatus(loginDisId, wechatState);
     } catch (e) {
       console.warn('[MCP-3010] 轮询异常:', e && e.message);
     }

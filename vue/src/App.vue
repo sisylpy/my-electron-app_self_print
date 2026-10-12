@@ -1,6 +1,10 @@
 ﻿
 <template>
   <div id="app-container">
+    <div v-if="bridgeBanner.show" class="bridge-status-banner" :class="'bridge-' + bridgeBanner.type">
+      <span class="bridge-status-icon">{{ bridgeBanner.icon }}</span>
+      <span class="bridge-status-text">{{ bridgeBanner.message }}</span>
+    </div>
     <LoadingOverlay />
     <ProductShell v-if="$route && $route.meta.shell !== false">
       <router-view />
@@ -31,7 +35,14 @@ export default {
       _mcpLastTaskId: null,
       _mcpLastTaskAt: 0,
       _mcpPrintCleanup: null,
+      // 主进程推送的桥连接状态（GrainPrint 登录 / 微信打开/登录），用于顶部红条提示
+      bridgeStatus: { grainPrintConnected: true, loginDisId: null, wechat: { open: null, loggedIn: null } },
+      bridgeStatusCleanup: null,
     }
+  },
+  // 把桥连接状态（含微信运行状态）下发给子组件（如微信获取订单弹窗），避免重复监听 preload 单例通道。
+  provide() {
+    return { bridgeStatus: this.bridgeStatus };
   },
   mounted() {
     // 自动清理设备配置缓存
@@ -193,8 +204,33 @@ export default {
     } else {
       console.warn('⚠️ [MCP] electronAPI.onMcpPrintTrigger 不可用');
     }
+
+    // 监听主进程桥连接状态（GrainPrint 登录 / 微信打开·登录）。
+    // 只更新属性、不替换 bridgeStatus 对象引用，以便 provide/inject 下发给子组件保持响应式。
+    // 微信状态仅用于「微信获取订单」弹窗内的提示，不在顶部全局显示。
+    if (window.electronAPI && window.electronAPI.onMcpBridgeStatus) {
+      this.bridgeStatusCleanup = window.electronAPI.onMcpBridgeStatus((status) => {
+        const s = status || {};
+        this.bridgeStatus.grainPrintConnected = !!s.grainPrintConnected;
+        this.bridgeStatus.loginDisId = s.loginDisId || null;
+        this.bridgeStatus.wechat = s.wechat || { open: null, loggedIn: null };
+      });
+    }
   },
   
+  computed: {
+    // 顶部红条：仅保留对所有功能（含打印）都必需的基础状态（GrainPrint 登录）。
+    // 微信相关提示刻意不放在全局——只有打开「微信获取订单」弹窗时才显示（见 WechatOrderImportModal），
+    // 避免不通过微信下单的配送商/用户被无关的微信警告打扰。
+    bridgeBanner() {
+      const s = this.bridgeStatus || {};
+      if (!s.grainPrintConnected) {
+        return { show: true, type: 'error', icon: '⛔', message: 'GrainPrint 未登录：请登录配送商账号后，连接器功能方可使用' };
+      }
+      return { show: false, type: 'ok', icon: '✅', message: '连接器就绪' };
+    },
+  },
+
   methods: {
     /** @param {'ipc'} source */
     handleMcpPrintTaskFromMain(task, source) {
@@ -220,6 +256,10 @@ export default {
       } catch (e) {}
       if (task && task.type === 'nx_delivery') {
         this.triggerPrintDeliveryOrder(task);
+      } else if (task && task.type === 'wechat_order') {
+        this.triggerOpenWechatOrders(task);
+      } else if (task && task.type === 'wechat_save_orders') {
+        this.triggerSaveWechatOrders(task);
       } else {
         console.warn('⚠️ [MCP] 未知的任务类型:', task && task.type);
       }
@@ -334,6 +374,54 @@ export default {
           }
         } catch (e) {}
       }
+    },
+
+    // 触发「打开微信订单工作台 + 全面检查」（由 MCP 任务触发）。
+    // 工作台视图(OrderWorkbenchV2)是主窗口内的懒加载视图：先置位待执行标记，
+    // 再导航过去；视图挂载后消费该标记运行全面检查。若已在该视图，则直接派发事件。
+    triggerOpenWechatOrders(task) {
+      const summary = `[MCP] App triggerOpenWechatOrders taskId=${task && task.taskId}`;
+      console.log('📲 [MCP] ▼', summary, task);
+      try {
+        if (window.electronAPI && typeof window.electronAPI.rendererConsoleLog === 'function') {
+          window.electronAPI.rendererConsoleLog(summary);
+        }
+      } catch (e) {}
+      // 标记待执行的全面检查，供 OrderWorkbenchV2 挂载后消费（覆盖冷启动导航场景）
+      window.__grainPendingWechatScan = true;
+      // 用户明确说了「并保存」时，MCP 任务会带 save=true —— 工作台巡查结束后自动逐条保存解析完整的订单；
+      // 只说「打开/查看」时不带 save，这里置 false，绝不擅自保存。
+      window.__grainAutoSaveWechatOrders = !!(task && task.save);
+      // 记录本次 MCP 任务号：工作台巡查结束后据此把结果回报给桥（3011），
+      // 让 MCP 侧任务从「已受理」闭环为「已完成/失败」。手动点击全面检查时该值为空，不回报。
+      window.__grainMcpWechatScanTaskId = (task && task.taskId) || null;
+      this.$router.push({ name: 'OrderWorkbenchV2' }).catch((err) => {
+        if (err && err.name !== 'NavigationDuplicated') {
+          console.error('📲 [MCP] 进入 OrderWorkbenchV2 失败:', err);
+        }
+      });
+      // 若已在该视图（监听器已就绪），立即派发事件触发全面检查（覆盖已挂载场景）
+      window.dispatchEvent(new CustomEvent('grain-mcp-wechat-scan'));
+    },
+
+    // MCP「保存微信订单」：进入订单工作台并把本次任务号交给它，
+    // 由工作台逐个保存「解析完整」的订单，并把结果回报给桥（3011）。
+    triggerSaveWechatOrders(task) {
+      const summary = `[MCP] App triggerSaveWechatOrders taskId=${task && task.taskId}`;
+      console.log('📲 [MCP] ▼', summary, task);
+      try {
+        if (window.electronAPI && typeof window.electronAPI.rendererConsoleLog === 'function') {
+          window.electronAPI.rendererConsoleLog(summary);
+        }
+      } catch (e) {}
+      window.__grainMcpWechatSaveTaskId = (task && task.taskId) || null;
+      this.$router.push({ name: 'OrderWorkbenchV2' }).catch((err) => {
+        if (err && err.name !== 'NavigationDuplicated') {
+          console.error('📲 [MCP] 进入 OrderWorkbenchV2 失败:', err);
+        }
+      });
+      // 已在视图内时监听器已就绪，立即派发；冷启动场景由工作台挂载后消费待执行标记。
+      window.dispatchEvent(new CustomEvent('grain-mcp-wechat-save-orders'));
     }
   },
   
@@ -341,6 +429,10 @@ export default {
     if (typeof this._mcpPrintCleanup === 'function') {
       this._mcpPrintCleanup();
       this._mcpPrintCleanup = null;
+    }
+    if (typeof this.bridgeStatusCleanup === 'function') {
+      this.bridgeStatusCleanup();
+      this.bridgeStatusCleanup = null;
     }
     // 清理计时器和事件监听器
     if (this.inactivityTimer) {
@@ -350,4 +442,36 @@ export default {
   }
 };
 </script>
- 
+
+<style scoped>
+.bridge-status-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+.bridge-status-banner .bridge-status-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.bridge-error {
+  background: #fdecea;
+  color: #b71c1c;
+  border-bottom: 2px solid #ef9a9a;
+}
+.bridge-ok {
+  background: #e8f5e9;
+  color: #1b5e20;
+  border-bottom: 2px solid #a5d6a7;
+}
+</style>
+

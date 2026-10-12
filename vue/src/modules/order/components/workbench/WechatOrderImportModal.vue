@@ -117,6 +117,7 @@
 
             <main class="wechat-import-modal__workspace">
               <p v-if="workspaceWarning && !activeItem && !selectedConversation" class="wechat-import-modal__warning">{{ workspaceWarning }}</p>
+              <p v-if="wechatWarning && !activeItem && !selectedConversation && !busy" class="wechat-import-modal__warning">{{ wechatWarning }}</p>
               <div
                 v-if="selectedConversation"
                 class="wechat-import-modal__current is-history"
@@ -704,7 +705,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, inject } from 'vue';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -754,6 +755,19 @@ const emit = defineEmits([
   'dismiss-action-message',
   'refresh-selected-conversation',
 ]);
+
+// 微信运行状态：由祖先 App.vue 通过 provide('bridgeStatus') 下发（避免重复监听 preload 单例通道）。
+// 仅在本「微信获取订单」弹窗内用于提示，不在全局显示——不通过微信下单的配送商不会打开本弹窗。
+const bridgeStatus = inject('bridgeStatus', { grainPrintConnected: true, loginDisId: null, wechat: { open: null, loggedIn: null } });
+// 仅当微信未打开/未登录时，在弹窗内提示；busy（正在扫描）/ 已选中会话时不重复打扰。
+const wechatWarning = computed(() => {
+  const w = (bridgeStatus && bridgeStatus.wechat) || {};
+  if (w.open === false) return '微信未打开：请打开微信客户端并保持运行，否则无法读取微信客户订单';
+  if (w.open === true && w.loggedIn !== true) return w.loggedIn === false
+    ? '微信未登录：请在微信中登录账号后，本功能方可读取微信订单'
+    : '微信登录状态无法确认：请在微信中登录账号后重试';
+  return null;
+});
 
 const customerMatchQuery = ref('');
 const selectedMatchCustomerId = ref('');

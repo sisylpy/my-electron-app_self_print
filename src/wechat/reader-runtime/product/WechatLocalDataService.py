@@ -143,6 +143,13 @@ class WechatLocalDataService:
     # ===================== listAccounts =====================
     def listAccounts(self, warmMessages: bool = False) -> List[WechatAccount]:
         self._ensure_accounts()
+        # 实时检测当前登录账号（不缓存进 _accounts，否则微信在桌面端运行后才
+        # 登录会漏判）；返回当前被微信进程打开的 db_storage 完整目录集合。
+        current_roots: set = set()
+        try:
+            current_roots = self._provider.detect_current_open_db_roots()
+        except Exception:
+            current_roots = set()
         out = []
         for meta in self._accounts.values():
             # 有访问材料时，从本账号的只读 contact 库取微信昵称作为友好展示名。
@@ -155,11 +162,14 @@ class WechatLocalDataService:
                         display_hint = nick.strip()
                 except WechatServiceError:
                     pass
+            # 真实当前登录态：微信只打开当前登录账号的 db_storage；
+            # 历史账号或登录窗口下 db_root 不在 current_roots 中 -> 未登录。
+            is_current = meta.db_root in current_roots
             out.append(
                 WechatAccount(
                     id=meta.account_id,
                     displayHint=display_hint,
-                    isCurrentLogin=None,
+                    isCurrentLogin=is_current,
                     databaseCount=self._count_dbs(meta.db_root),
                     hasAccessMaterial=meta.has_material,
                 )

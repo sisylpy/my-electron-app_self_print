@@ -11,17 +11,26 @@ const path = require('path');
 const os = require('os');
 const http = require('http');
 
-const DEFAULT_PORT = Number(process.env.GRAIN_BRIDGE_PORT || 3010);
+// 惰性获取 electron app（非 electron 环境如测试下不会触发）
+function electronApp() {
+  try { return require('electron').app; } catch (e) { return null; }
+}
+
+// 桥端口选择：显式 GRAIN_BRIDGE_PORT 优先；否则统一默认 3011。
+// 3011 是 grain-print-connector 本地桥端口，开发模式（`npm run start`）与
+// 正式打包版（GrainPrint.app）共用，保证「装好正式版 → 连接器直接连通」，无需手带环境变量。
+// 与已废弃的 3010（旧打包版）不再混用，避免桌面端与桥端口错配导致「GrainPrint 未连接」。
+function defaultBridgePort() {
+  if (process.env.GRAIN_BRIDGE_PORT) return Number(process.env.GRAIN_BRIDGE_PORT);
+  return 3011;
+}
+
+const DEFAULT_PORT = defaultBridgePort();
 const SECRET_PATH = process.env.GRAIN_BRIDGE_SECRET_PATH ||
   path.join(os.homedir(), '.grain-print-mcp', 'bridge-secret');
 
 function readSecret() {
   try { return fs.readFileSync(SECRET_PATH, 'utf8').trim(); } catch (e) { return null; }
-}
-
-// 惰性获取 electron app（非 electron 环境如测试下不会触发）
-function electronApp() {
-  try { return require('electron').app; } catch (e) { return null; }
 }
 
 // 执行端防重复：本地持久记录已执行的任务 id（进程重启后依然有效）。
@@ -96,10 +105,15 @@ function getLoggedInDisId() {
   });
 }
 
-async function reportIdentity(disId, printerAvailable) {
+async function reportIdentity(disId, printerAvailable, wechat) {
   const secret = readSecret();
   if (!secret) return;
-  await postJSON('/bridge/identity', { disId: String(disId), printerAvailable: !!printerAvailable, version: '1.0.0' }, secret);
+  await postJSON('/bridge/identity', {
+    disId: String(disId),
+    printerAvailable: !!printerAvailable,
+    version: '1.0.0',
+    wechat: wechat || null,
+  }, secret);
 }
 async function reportHeartbeat() {
   const secret = readSecret();

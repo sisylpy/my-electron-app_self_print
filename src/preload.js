@@ -15,6 +15,7 @@ function listen(channel, callback) {
 }
 
 let mcpPrintTriggerCleanup = null;
+let mcpBridgeStatusCleanup = null;
 
 const electronAPI = Object.freeze({
   // 打印：保留现有方法名、参数顺序和返回语义，避免影响现场打印。
@@ -319,6 +320,19 @@ const electronAPI = Object.freeze({
       if (mcpPrintTriggerCleanup) {
         mcpPrintTriggerCleanup();
         mcpPrintTriggerCleanup = null;
+      }
+    };
+  },
+
+  // 桥连接状态（GrainPrint 是否登录 / 微信是否打开/登录）：主进程每轮询周期推送，
+  // 渲染端据此在顶部显示红条提示，避免审核/使用时因环境缺项而静默失败。
+  onMcpBridgeStatus: (callback) => {
+    if (mcpBridgeStatusCleanup) mcpBridgeStatusCleanup();
+    mcpBridgeStatusCleanup = listen('mcp-bridge-status', (status) => callback(status));
+    return () => {
+      if (mcpBridgeStatusCleanup) {
+        mcpBridgeStatusCleanup();
+        mcpBridgeStatusCleanup = null;
       }
     };
   },

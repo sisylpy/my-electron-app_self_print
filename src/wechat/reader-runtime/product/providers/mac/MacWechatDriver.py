@@ -71,6 +71,51 @@ class MacWechatDriver:
             self._accounts[a.account_id] = a
         return out
 
+    # ---------------- 当前登录检测（实时） ----------------
+    def detect_current_open_db_roots(self) -> set:
+        """返回微信进程当前真正打开的 db_storage 完整目录集合（实时）。
+
+        原理（已实测验证）：微信登录后才会打开当前账号的 db_storage
+        文件（contact/session/message 库）；停在登录窗口或完全退出时
+        不打开任何账号库。用 pgrep 拿进程 PID + lsof 列出其持有文件，
+        截出 db_storage 之前的账号目录名，即可区分「历史账号」与
+        「当前登录账号」。信号版本无关、不依赖微信内部格式，
+        且不向上暴露任何 wxid / 路径（仅在 Driver 内部流转）。
+
+        无微信进程 / lsof 不可用 / 无命中 -> 返回空集（即无当前登录账号）。
+        """
+        import subprocess
+
+        try:
+            pid_out = subprocess.run(
+                ["pgrep", "-x", "WeChat"],
+                capture_output=True, text=True, timeout=3,
+            )
+        except Exception:
+            return set()
+        pids = [p.strip() for p in pid_out.stdout.split() if p.strip()]
+        if not pids:
+            return set()
+        roots = set()
+        try:
+            proc = subprocess.run(
+                ["lsof", "-p", ",".join(pids)],
+                capture_output=True, text=True, timeout=5,
+            )
+            for line in proc.stdout.splitlines():
+                idx = line.find("db_storage")
+                if idx == -1:
+                    continue
+                # 路径形如 .../xwechat_files/<name>/db_storage/...
+                # 截到 db_storage 之前，取最后一段目录即 <name>
+                head = line[:idx].rstrip("/")
+                parts = [p for p in head.split("/") if p]
+                if parts:
+                    roots.add(os.path.join(MAC_XWECHAT_ROOT, parts[-1], "db_storage"))
+        except Exception:
+            return set()
+        return roots
+
     # ---------------- 取材料 ----------------
     def acquire(self, account_id: AccountId) -> AccessMaterial:
         meta = self._accounts.get(account_id)
