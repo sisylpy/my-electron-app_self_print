@@ -228,6 +228,18 @@ const apiMethods = {
       ...config // 合并传入的配置（如 showLoading: false）
     });
   },
+  // 千问视觉识别图片订单并落库（供 WorkBuddy 连接器自动保存图片订单使用）
+  // 与 recognizeOrderOCR 的区别：解析环节换成千问视觉模型，落库/训练/商品匹配链路一致，
+  // 返回结构与 recognizeOrderFast 对齐：{ taskId, task, data(订单列表) }
+  recognizeOrderQwen(data, config = {}) {
+    return axiosInstance.post('ocr/recognizeOrderQwen', data, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 300000, // 千问识别 + 落库，给足超时
+      ...config
+    });
+  },
   // 保存订单项（备用接口）
   saveOrderItems(data) {
     return axiosInstance.post('nxdepartmentorders/saveOrderItems', data, {

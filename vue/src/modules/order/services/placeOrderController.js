@@ -59,6 +59,10 @@ import api from '../services/orderApi';
                 type: String,
                 default: ''
             },
+            wechatConversationName: {
+                type: String,
+                default: ''
+            },
             initialUploadType: {
                 type: String,
                 default: 'manual',
@@ -109,6 +113,15 @@ import api from '../services/orderApi';
             },
             imageTTSState() {
                 return this.getTTSState('image');
+            },
+            imageCropperWechatName() {
+                return String(this.wechatConversationName || '').trim();
+            },
+            imageCropperCustomerDetail() {
+                const customerName = String(this.selectedCustomerName || '').trim();
+                const wechatName = this.imageCropperWechatName;
+                if (!customerName || !wechatName || customerName === wechatName) return '';
+                return `对应客户：${customerName}`;
             },
             // 从 Vuex store 获取 disUser
             disUser() {
@@ -3609,6 +3622,94 @@ import api from '../services/orderApi';
                 }
             },
 
+
+            // ===== MCP「保存微信订单」批量流程专用（静默版：不弹窗、不打断整批） =====
+            // 校验规则与 checkOrderContent 完全一致，只是把 alertDialog 换成结构化返回值，
+            // 便于批量时跳过「解析不完整」的任务并统一汇总。
+
+            /** 静默校验订单内容：返回 { ok: true } 或 { ok: false, reason } */
+            isOrderContentReady(orderArr = null) {
+                const orders = orderArr || this.orderItems;
+                if (!Array.isArray(orders) || orders.length === 0) {
+                    return { ok: false, reason: '未解析出可保存的商品（会话消息里没有「商品名+数量+规格」）' };
+                }
+                for (let i = 0; i < orders.length; i++) {
+                    const order = orders[i];
+                    const rowNum = i + 1;
+                    if (!order.nxDoGoodsName || String(order.nxDoGoodsName).trim() === '') {
+                        return { ok: false, reason: `第${rowNum}条订单商品名称为空` };
+                    }
+                    const qty = order.nxDoQuantity;
+                    if (qty === undefined || qty === null || String(qty).trim() === '') {
+                        return { ok: false, reason: `第${rowNum}条订单数量为空` };
+                    }
+                    const qtyNum = Number(qty);
+                    if (Number.isNaN(qtyNum)) {
+                        return { ok: false, reason: `第${rowNum}条订单数量必须是数字` };
+                    }
+                    if (qtyNum <= 0) {
+                        return { ok: false, reason: `第${rowNum}条订单数量必须大于 0` };
+                    }
+                    const spec = String(order.nxDoStandard || '').trim();
+                    if (!spec) {
+                        return { ok: false, reason: `第${rowNum}条订单规格为空` };
+                    }
+                    if (!/^[\u4e00-\u9fff]+$/.test(spec)) {
+                        return { ok: false, reason: `第${rowNum}条订单规格必须为汉字` };
+                    }
+                    if (spec.length > 2) {
+                        return { ok: false, reason: `第${rowNum}条订单规格汉字数量不能大于 2 个` };
+                    }
+                }
+                return { ok: true };
+            },
+
+            /**
+             * 静默提交当前订单（与 pastSavePasteOrders 走同一后端接口 pasteSearchGoods），
+             * 但不弹 AlertDialog、不切全局 loading，返回结构化结果供批量流程汇总：
+             *   { ok: true, taskId, count } 或 { ok: false, error }
+             */
+            async saveCurrentOrdersSilently() {
+                const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
+                const orderData = this.orderItems.map(item => ({
+                    ...item,
+                    nxDoDepartmentId: targetDepId,
+                    nxDoDepartmentFatherId: this.selectedAllCustomer,
+                    nxDoDistributerId: this.disUser.nxDiuDistributerId,
+                    nxDoIsAgent: this.disUser.nxDistributerUserId || this.disUser.nxDiuDistributerId
+                }));
+
+                const res = await api.pasteSearchGoods({
+                    orderList: orderData,
+                    pasteText: this.pasteInputText || '',
+                    type: 3,
+                    ...(this.uploadType === 'wechat' && this.wechatOrderSource
+                        ? {wechatOrderSource: this.wechatOrderSource}
+                        : {}),
+                });
+
+                if (res && res.data && res.data.code === 0) {
+                    const taskId = res.data.taskId;
+                    const task = res.data.task;
+                    this.orderItems = res.data.data;
+                    if (taskId != null && task) {
+                        this.currentTaskId = taskId;
+                        this.currentTask = task;
+                        this.pasteSaveCount = this.orderItems.length > 0 ? this.orderItems.length : null;
+                        this.$nextTick(() => {
+                            if (this.$refs.pasteUploadRef && this.$refs.pasteUploadRef.addOrUpdateTaskAndSelect) {
+                                this.$refs.pasteUploadRef.addOrUpdateTaskAndSelect(task);
+                            }
+                        });
+                    }
+                    this.resetSearchAndMatchedGoodsState();
+                    this.wechatOrderSource = null;
+                    this.$emit('task-added');
+                    return { ok: true, taskId, count: (res.data.data || []).length };
+                }
+                return { ok: false, error: (res && res.data && (res.data.msg || res.data.message)) || '保存失败' };
+            },
+
             /** 将 nxOcrTaskOcrText 中的 CSV 解析为表格行数组（与 excelPasteTableData 结构一致），不足 50 行用空行补齐 */
             parseCsvToExcelPasteTableData(csvText) {
                 const columns = ['goodsName', 'quantity', 'specification', 'specificationWeight', 'cartonQuantity', 'cartonName', 'remark'];
@@ -5157,6 +5258,7 @@ import api from '../services/orderApi';
                 const isImageTask = images.length > 0;
 
                 this.wechatOrderSource = payload.source;
+                this.wechatQwenAutoSaved = null;
                 // 微信图片只负责把原图交给系统现有的图片识别流程。不要在
                 // 微信粘贴区再生成第二套图片预览/识别结果界面。
                 const initialText = isImageTask ? '' : text;
@@ -5170,14 +5272,16 @@ import api from '../services/orderApi';
                 this.pasteNoValidOrder = false;
                 if (isImageTask) {
                     if (!this.isCurrentWechatOrderLoad(requestId)) return;
-                    await this.openWechatImageInOriginalRecognizer(images[0], requestId);
+                    // 连接器自动保存：跳过裁剪弹窗，直接用千问识别并落库
+                    const autoRecognize = payload.autoRecognize === true;
+                    await this.openWechatImageInOriginalRecognizer(images[0], requestId, autoRecognize);
                     return;
                 }
                 if (!this.isCurrentWechatOrderLoad(requestId)) return;
                 if (text) await this.handlePasteLocalParse();
             },
 
-            async openWechatImageInOriginalRecognizer(image, requestId = null) {
+            async openWechatImageInOriginalRecognizer(image, requestId = null, autoRecognize = false) {
                 const dataUrl = String(image?.dataUrl || '').trim();
                 if (!/^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(dataUrl)) {
                     throw new Error('微信原图内容无效，请重新获取该消息');
@@ -5218,7 +5322,63 @@ import api from '../services/orderApi';
 
                 await this.$nextTick();
                 if (requestId !== null && !this.isCurrentWechatOrderLoad(requestId)) return;
+                // 连接器自动保存：不弹裁剪窗，直接千问识别 + 落库
+                if (autoRecognize) {
+                    await this.handleQwenAutoRecognize(dataUrl);
+                    return;
+                }
                 this.showImagePreviewModal = true;
+            },
+
+            /**
+             * 千问视觉识别图片订单并落库（仅连接器自动保存链路使用）。
+             * 与人工「直接识别 / AI识别」完全隔离：那两条仍走腾讯 OCR 的单列/多列接口。
+             * 服务端已在同一接口内完成落库，返回 taskId + 订单列表，这里只做状态同步，
+             * 并通过 wechatQwenAutoSaved 告知批量流程「已保存」，避免重复下单。
+             */
+            async handleQwenAutoRecognize(imageDataUrl) {
+                const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
+                if (!targetDepId || !this.disUser) {
+                    throw new Error('未选择客户或登录信息缺失');
+                }
+                if (!/^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(String(imageDataUrl || ''))) {
+                    throw new Error('图片内容无效，请重新获取该消息');
+                }
+                const imageBase64 = imageDataUrl.slice(imageDataUrl.indexOf(',') + 1);
+                const ocrData = {
+                    ImageBase64: imageBase64,
+                    depId: targetDepId,
+                    depFatherId: this.selectedAllCustomer,
+                    disId: this.disUser.nxDiuDistributerId,
+                    userId: this.disUser.nxDistributerUserId || this.disUser.nxDiuDistributerId
+                };
+                if (this.wechatOrderSource) {
+                    ocrData.wechatOrderSource = this.wechatOrderSource;
+                }
+                const res = await api.recognizeOrderQwen(ocrData);
+                if (res && res.data && res.data.code === 0) {
+                    const taskId = res.data.taskId;
+                    const task = res.data.task;
+                    const items = res.data.data || [];
+                    this.currentTaskId = taskId;
+                    this.currentTask = task;
+                    this.orderItems = items;
+                    this.wechatQwenAutoSaved = { taskId, count: items.length };
+                    this.wechatOrderSource = null;
+                    if (taskId != null && task) {
+                        this.$nextTick(() => {
+                            const imageUploadRef = this.$refs.imageUploadRef;
+                            if (imageUploadRef && typeof imageUploadRef.loadTaskList === 'function') {
+                                const taskType = task.nxOcrTaskType != null ? task.nxOcrTaskType : 1;
+                                imageUploadRef.loadTaskList(taskId, { type: taskType });
+                            }
+                        });
+                    }
+                    this.resetSearchAndMatchedGoodsState();
+                    this.$emit('task-added', { qwen: true, taskId, count: items.length });
+                    return this.wechatQwenAutoSaved;
+                }
+                throw new Error((res && res.data && (res.data.msg || res.data.message)) || '千问图片识别失败');
             },
 
             dismissWechatImport() {

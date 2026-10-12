@@ -139,6 +139,9 @@ export function createPlaceOrderState() {
     pasteOriginText: '',
     pasteInputContent: '',
     wechatOrderSource: null,
+    // 连接器自动保存图片订单：千问识别并落库后写入 { taskId, count }，
+    // 批量流程据此直接返回，避免再走一次 pasteSearchGoods 造成重复订单。
+    wechatQwenAutoSaved: null,
     // Incremented for every imported WeChat task so stale OCR responses cannot
     // write into a task the user has already left.
     wechatOrderLoadSequence: 0,

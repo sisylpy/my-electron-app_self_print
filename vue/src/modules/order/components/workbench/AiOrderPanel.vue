@@ -47,6 +47,9 @@
         :selected-sub-department="selectedDepartmentId"
         :selected-customer-entity="selectedCustomer"
         :selected-customer-name="selectedCustomerName"
+        :wechat-conversation-name="pendingWechatImport
+          ? (pendingWechatImport.conversationTitle || selectedCustomer?.nxDepartmentWechatDisplayName || '')
+          : ''"
         initial-upload-type="paste"
         new-task-only
         :show-mode-selector="false"
@@ -86,6 +89,9 @@ const props = defineProps({
   customerError: { type: String, default: '' },
   pendingWechatImport: { type: Object, default: null },
   wechatImportMode: { type: Boolean, default: false },
+  // MCP「保存微信订单」批量模式：由 OrderWorkbenchV2 置位。
+  // 解析完成后自动静默校验 + 提交，并把结果 emit 回父组件统一汇总。
+  batchSaveMode: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -97,6 +103,7 @@ const emit = defineEmits([
   'show-today-orders',
   'wechat-import-error',
   'wechat-tasks-loaded',
+  'wechat-batch-save-result',
 ]);
 
 const newTaskSequence = ref(0);
@@ -122,6 +129,10 @@ watch(
     workspaceKey.value,
   ],
   async ([token, importCustomerId, selectedCustomerId]) => {
+    // 批量保存由父组件原子驱动（解析 + 校验 + 保存一次完成）。
+    // 这里必须跳过：切换客户会让 workspaceKey 变化而重复触发本 watch，
+    // 重复解析会对着刚重建的空工作台做校验，把已成功的任务误判成「没有可保存的订单」。
+    if (props.batchSaveMode) return;
     const pendingImport = props.pendingWechatImport;
     if (!token || appliedWechatImportToken.value === token) return;
     if (String(importCustomerId) !== String(selectedCustomerId)) return;
@@ -153,6 +164,8 @@ function handleTaskAdded(event) {
     ? { ...(event && typeof event === 'object' ? event : {}), wechatImportToken: token }
     : event);
   appliedWechatImportToken.value = null;
+  // 批量模式：不重置录入区，由父组件驱动下一个任务，避免打断连续保存。
+  if (props.batchSaveMode) return;
   clearTimeout(workspaceResetTimer);
   workspaceResetTimer = setTimeout(() => {
     selectedMode.value = 'paste';
@@ -178,7 +191,52 @@ function dismissPendingWechatImport() {
   placeOrderRef.value?.dismissWechatImport?.();
 }
 
-defineExpose({ dismissPendingWechatImport });
+// 批量保存的原子入口：解析 → 静默校验 → 提交，一次完成并返回结果。
+// 由父组件（OrderWorkbenchV2）在「客户上下文 + 工作区实例」都稳定之后调用，
+// 刻意不经过上面的 watch —— 否则切换客户引发的 workspaceKey 变化会重复触发解析，
+// 第二次就对着刚重建的空工作台校验，把本已成功的任务误判成「没有可保存的订单」。
+async function runWechatImportAndSave(payload) {
+  let target = placeOrderRef.value;
+  try {
+    selectedMode.value = 'wechat';
+    await nextTick();
+    if (!target?.applyWechatImport) return { ok: false, reason: '订单录入区尚未就绪' };
+    // 图片订单交给千问：autoRecognize 让服务端一次完成「识别 + 落库」，不再弹裁剪窗等人确认。
+    const importPayload = { ...payload, autoRecognize: true };
+    await target.applyWechatImport(importPayload);
+    // 解析期间若工作区被重建，解析结果会留在旧实例上；改用当前实例重新解析一次。
+    if (placeOrderRef.value !== target) {
+      target = placeOrderRef.value;
+      if (!target?.applyWechatImport) return { ok: false, reason: '订单录入区尚未就绪' };
+      await target.applyWechatImport(importPayload);
+    }
+    // 千问链路已在服务端落库，直接采纳结果，避免再走一次 pasteSearchGoods 造成重复订单。
+    if (target.wechatQwenAutoSaved) {
+      const qwenSaved = target.wechatQwenAutoSaved;
+      target.wechatQwenAutoSaved = null;
+      return { ok: true, taskId: qwenSaved.taskId, count: qwenSaved.count, engine: 'qwen' };
+    }
+    if (!target.isOrderContentReady || !target.saveCurrentOrdersSilently) {
+      return { ok: false, reason: '订单录入区尚未就绪' };
+    }
+    let ready = target.isOrderContentReady();
+    // 兜底：判定为「没有商品」时，多半是解析结果没落到当前实例上，重新解析一次再判，
+    // 避免把已经能解析出来的订单误报成「没有可保存的订单」。
+    if (ready && !ready.ok && /未解析出可保存的商品|没有可保存的订单/.test(ready.reason || '')) {
+      await target.applyWechatImport(payload);
+      ready = target.isOrderContentReady();
+    }
+    if (!ready || !ready.ok) return { ok: false, reason: (ready && ready.reason) || '订单内容不完整' };
+    const saved = await target.saveCurrentOrdersSilently();
+    return saved && saved.ok
+      ? { ok: true, taskId: saved.taskId, count: saved.count }
+      : { ok: false, reason: (saved && saved.error) || '保存失败' };
+  } catch (error) {
+    return { ok: false, reason: (error && error.message) || '保存失败' };
+  }
+}
+
+defineExpose({ dismissPendingWechatImport, runWechatImportAndSave });
 
 onBeforeUnmount(() => {
   clearTimeout(workspaceResetTimer);
