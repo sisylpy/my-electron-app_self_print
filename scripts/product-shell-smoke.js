@@ -115,6 +115,7 @@ check(
 );
 check(
   router.includes("reason: 'remember-flag-off'")
+    && /if \(to\.name === 'Home'[\s\S]*?next\(\);[\s\S]*?return;[\s\S]*?\}/.test(router)
     && /if \(!remember\) \{[\s\S]*?next\(loginRoute\('login-required'\)\);[\s\S]*?return;[\s\S]*?\}/.test(router)
     && router.includes('rememberedOrderSessionIsValid(query.disId)')
     && router.includes("next(loginRoute('session-expired'"),

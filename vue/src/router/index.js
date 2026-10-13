@@ -108,7 +108,7 @@ function loginRoute(reason, returnTo = '') {
 router.beforeEach(async (to, from, next) => {
   const currentUser = store.state.disUser || parseStoredDisUser();
   if (to.name === 'Home' || (to.path || '').replace(/\/$/, '') === '/home') {
-    next(loginRoute('login-required'));
+    next();
     return;
   }
 
