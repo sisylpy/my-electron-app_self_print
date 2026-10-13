@@ -1771,12 +1771,47 @@ async function importWechatConversationForCustomer(
   timing = null,
   preferredAvatar = ''
 ) {
-  const { row, result } = await prepareWechatConversationForCustomer(
+  const prepared = await prepareWechatConversationForCustomer(
     customer,
     title,
     timing,
     preferredAvatar
   );
+  const { row } = prepared;
+  let { result } = prepared;
+  if (!result.payload) {
+    // “读取当前微信”强调的是用户眼前这个会话。未读图片可能已经画在
+    // 微信窗口里，但本地消息库尚未把它提交到 Reader 的第一份快照。
+    // 主动点开当前会话后再读一次，避免仅凭旧快照误报“已经生成过订单”。
+    timing?.phase('selected-conversation-fallback', {
+      status: result.status || '',
+      latestObservedMessageTimeMs: result.latestObservedMessageTimeMs,
+    });
+    const focusWarning = await timeWechatOrderPhase(
+      timing,
+      'selected-conversation-focus',
+      () => focusWechatImportConversation({ conversationTitle: title })
+    );
+    if (focusWarning) throw new Error(focusWarning);
+    result = await prepareWechatOrderImport({
+      customerId: customerId(customer),
+      binding: row.binding,
+      retryDelaysMs: selectedWechatRetryDelaysMs,
+      onTiming: event => recordWechatServiceTiming(timing, event),
+    });
+    timing?.phase('import-result', {
+      status: result.status,
+      pendingCount: Number(result.pendingCount) || 0,
+      readMode: 'focused-verification',
+    });
+    if (result.payload) {
+      result.conversationAvatar = await resolveWechatConversationAvatar(
+        title,
+        result.binding || row.binding,
+        preferredAvatar
+      );
+    }
+  }
   if (!result.payload) {
     throw new Error(result.message || '已关联该微信好友，但当前没有未处理的新订单');
   }

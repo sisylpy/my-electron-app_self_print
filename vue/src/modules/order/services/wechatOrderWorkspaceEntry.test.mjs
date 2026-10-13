@@ -150,6 +150,13 @@ assert.match(selectedAction, /confirmation-page-visible/);
 assert.doesNotMatch(selectedAction, /loadBoundWechatCustomers|allowedTitles/);
 assert.match(workbench, /async function importWechatConversationForCustomer/);
 assert.match(workbench, /loadCustomerWechatBinding\(selectedCustomerId\)/);
+const selectedCustomerImport = workbench.match(
+  /async function importWechatConversationForCustomer\([\s\S]*?\n\}\n\nasync function importSelectedWechatConversation/,
+)?.[0] || '';
+assert.match(selectedCustomerImport, /if \(!result\.payload\)/);
+assert.match(selectedCustomerImport, /selected-conversation-fallback/);
+assert.match(selectedCustomerImport, /focusWechatImportConversation\(\{ conversationTitle: title \}\)/);
+assert.match(selectedCustomerImport, /readMode: 'focused-verification'/);
 assert.match(workbench, /writeAppLog\('info', 'wechat-order-timing', 'phase'/);
 assert.match(workbench, /writeAppLog\(outcome === 'success' \? 'info' : 'warn', 'wechat-order-timing', 'summary'/);
 
