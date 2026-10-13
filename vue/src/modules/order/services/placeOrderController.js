@@ -5313,7 +5313,11 @@ import api from '../services/orderApi';
                     lastModified: Number(image?.messageTimeMs) || Date.now(),
                     dataUrl,
                 };
-                this.imagePreview = null;
+                // 左侧原始订单图片必须与右侧 OCR 商品结果同屏显示。ImageUpload 的
+                // <img> 绑定的是 imagePreview（非 previewImageDataUrl），微信图片任务
+                // 此前把它置空，导致原始图片区域整块空白。这里用原始 dataUrl 填充，
+                // 与手动上传路径（handleImageUpload 同样赋值 imagePreview）保持一致。
+                this.imagePreview = dataUrl;
                 this.previewImageDataUrl = dataUrl;
                 this.imageScale = 1;
                 this.imageTranslateX = 0;
