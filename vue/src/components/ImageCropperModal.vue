@@ -3,12 +3,28 @@
         <div v-if="isOpen" class="icm-backdrop" @click.self="onCancel">
             <div class="icm-modal" role="dialog" aria-modal="true">
                 <!-- Header -->
-                <div class="icm-header">
-                    <div class="icm-title">{{ title }}</div>
-                    <div class="icm-subtitle">
-                        原图：{{ naturalWidth }} × {{ naturalHeight }} px
-                        <span v-if="fileSize">｜文件：{{ formatFileSize(fileSize) }}</span>
-                        ｜缩放：{{ Math.round(zoom * 100) }}%
+                <div class="icm-header" :class="{ 'has-source': sourceName }">
+                    <div v-if="sourceName" class="icm-source-banner">
+                        <span class="icm-source-icon" aria-hidden="true">
+                            <svg viewBox="0 0 32 32">
+                                <path d="M6 12.2A7.2 7.2 0 0 1 13.2 5h3.6A7.2 7.2 0 0 1 24 12.2v2.1a7.2 7.2 0 0 1-7.2 7.2H15l-4.2 3.3v-4A7.2 7.2 0 0 1 6 14.3z" />
+                                <circle cx="12.4" cy="13.2" r="1.2" />
+                                <circle cx="17.8" cy="13.2" r="1.2" />
+                            </svg>
+                        </span>
+                        <span class="icm-source-copy">
+                            <small>{{ sourceLabel }}</small>
+                            <strong :title="sourceName">{{ sourceName }}</strong>
+                            <em v-if="sourceDetail">{{ sourceDetail }}</em>
+                        </span>
+                    </div>
+                    <div class="icm-heading-copy">
+                        <div class="icm-title">{{ title }}</div>
+                        <div class="icm-subtitle">
+                            原图：{{ naturalWidth }} × {{ naturalHeight }} px
+                            <span v-if="fileSize">｜文件：{{ formatFileSize(fileSize) }}</span>
+                            ｜缩放：{{ Math.round(zoom * 100) }}%
+                        </div>
                     </div>
                     <button class="icm-close" type="button" @click="onCancel">✕</button>
                 </div>
@@ -135,6 +151,9 @@
             src: { type: String, default: '' },
             title: { type: String, default: "图片预览与裁剪" },
             fileSize: { type: Number, default: 0 },
+            sourceName: { type: String, default: '' },
+            sourceLabel: { type: String, default: '微信图片订单来源' },
+            sourceDetail: { type: String, default: '' },
 
             // 初始裁剪框占图片可视区域比例
             initialCropRatio: { type: Number, default: 0.8 },
@@ -795,9 +814,68 @@
 
     .icm-header {
         position: relative;
+        display: flex;
+        align-items: center;
+        gap: 18px;
         padding: 14px 44px 12px 16px;
         border-bottom: 1px solid #eee;
         background: #fafafa;
+    }
+
+    .icm-header.has-source {
+        min-height: 66px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        border-bottom-color: #cde7d9;
+        background: linear-gradient(90deg, #eefaf4 0%, #f8fbf9 58%, #fafafa 100%);
+    }
+
+    .icm-source-banner {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-width: 0;
+        flex: 1 1 56%;
+    }
+
+    .icm-source-icon {
+        display: grid;
+        width: 44px;
+        height: 44px;
+        flex: 0 0 auto;
+        border-radius: 13px;
+        color: #fff;
+        background: linear-gradient(145deg, #1aab68, #087a49);
+        box-shadow: 0 8px 18px rgba(12, 126, 75, .2);
+        place-items: center;
+    }
+
+    .icm-source-icon svg {
+        width: 28px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2.3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .icm-source-copy {
+        display: block;
+        min-width: 0;
+        text-align: left;
+    }
+
+    .icm-source-copy small,
+    .icm-source-copy strong,
+    .icm-source-copy em { display: block; }
+    .icm-source-copy small { margin-bottom: 2px; color: #31805c; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+    .icm-source-copy strong { overflow: hidden; color: #173e2c; font-size: 22px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+    .icm-source-copy em { margin-top: 3px; color: #6f8278; font-size: 11px; font-style: normal; }
+
+    .icm-heading-copy {
+        min-width: 0;
+        flex: 0 1 auto;
+        text-align: left;
     }
 
     .icm-title {
@@ -820,6 +898,13 @@
         font-size: 18px;
         cursor: pointer;
         line-height: 1;
+    }
+
+    @media (max-width: 700px) {
+        .icm-header.has-source { align-items: flex-start; gap: 7px; flex-direction: column; }
+        .icm-source-banner { width: 100%; flex-basis: auto; }
+        .icm-source-copy strong { font-size: 19px; }
+        .icm-heading-copy { padding-left: 55px; }
     }
 
     .icm-body {

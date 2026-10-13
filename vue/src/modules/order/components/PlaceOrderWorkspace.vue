@@ -854,6 +854,8 @@
     <ImageCropperModal
             v-model="showImagePreviewModal"
             :src="previewImageDataUrl"
+            :source-name="imageCropperWechatName"
+            :source-detail="imageCropperCustomerDetail"
             title="图片预览与裁剪"
             @cancel="closeImagePreviewModal"
             @direct-recognize="handleDirectRecognize"
