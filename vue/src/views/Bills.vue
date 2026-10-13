@@ -1369,8 +1369,8 @@
              */
             async runMcpDeliveryPrint(params) {
                 this.mcpTeeLog(`runMcpDeliveryPrint 开始 ${JSON.stringify(params)}`);
-                // R2 结果回传：把 3010 taskId 透传到出纸完成边界，向主进程回传成功/失败。
-                // 仅当 taskId 存在（来自 3010 桥的任务）才回传；旧 3002 任务 taskId 为空，不回传，避免污染。
+                // R2 结果回传：把 3011 taskId 透传到出纸完成边界，向主进程回传成功/失败。
+                // 仅当 taskId 存在（来自 3011 桥的任务）才回传。
                 const _mcpTaskId = params && params.taskId != null ? String(params.taskId) : null;
                 const _mcpReport = (success, message) => {
                     try {

@@ -7,8 +7,6 @@
     "start": "concurrently \"npm run dev:vue\" \"npm run dev:electron\"",
     "dev:vue": "cd vue && vite",
     "dev:electron": "node scripts/start-electron-dev.cjs",
-    "start:test": "npm run start",
-    "dev:electron:test": "npm run dev:electron",
     "build:vue": "cd vue && vite build",
     "test:security": "node scripts/security-smoke.js",
     "test:print-contract": "node scripts/print-contract-smoke.js",

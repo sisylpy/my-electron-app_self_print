@@ -48,7 +48,6 @@ const Key = { Enter: 'Enter' };
 const os = require('os');
 const crypto = require('crypto');
 const https = require('https');
-const http = require('http');
 const { pathToFileURL } = require('url');
 const { execFile, execFileSync } = require('child_process');
 const { promisify } = require('util');
@@ -64,30 +63,18 @@ const { createWechatWorkspaceWindowService } = require('./wechat/workspace-windo
 const { createMacKeychainEducation } = require('./security/mac-keychain-education');
 const { PRODUCTION_API_BASE_URL } = require('./api-runtime');
 
-// MCP 服务器模块
-let mcpServer = null;
-const mcpModule = require('./mcp-server');
 const {
   pushMcpPrintTaskToRenderer,
   acknowledgeMcpPrintTask,
   clearMcpPrintDeliveriesForWebContents
 } = require('./mcp-print-push');
-const {
-  readOrCreateToken,
-  getMcpCliBridgeTokenPath,
-  readOrCreateMcpCliBridgeToken
-} = require('./mcp-auth');
-
-// ===== 3010 本地安全桥客户端（grain-print-mcp 连接器）=====
+// ===== 3011 本地安全桥客户端（grain-print-mcp 连接器）=====
 // 只做「连接/查询/订单预览」拉取与执行端防重复；真实出纸仍由既有渲染链路完成。
-// 3002（mcp-server-cli.js 轮询）与 3001（mcp-server.js）本轮保留不删，待 3010 替代链路本机验证后另议退出。
 const mcpBridgeClient = require('./mcp-bridge-client');
 const taskRunner = require('./mcp-task-runner');
 
 let mainWindowRef = null; // 保存 mainWindow 引用供 MCP 使用
-/** Stdio MCP（mcp-server-cli.js）打印任务轮询定时器，需在 will-quit 中清理 */
-let mcpCliPollingInterval = null;
-/** 3010 桥轮询定时器，需在 will-quit 中清理 */
+/** 3011 桥轮询定时器，需在 will-quit 中清理 */
 let bridgePollingInterval = null;
 
 // 注意：当前使用 HTTP API（一句话识别），不需要 WebSocket
@@ -102,7 +89,6 @@ const VUE3_DEVTOOLS_ID = 'ljjemllljcmogpfapbkkighbhhppjdbg';
 const electron = require('electron');
 const isDev = !electron.app.isPackaged; // 使用 app.isPackaged 来检测开发模式
 let mainWindow;
-let mcpSessionUser = null;
 let dispatchGateway = null;
 let orderWriteGateway = null;
 let orderSessionGateway = null;
@@ -465,32 +451,6 @@ function beginWindowsWechatSelectionObservation() {
   scheduleWindowsWechatSelectionObservation();
 }
 
-function sanitizeMcpSessionUser(value) {
-  if (!value || typeof value !== 'object') return null;
-  const rawId = value.nxDiuDistributerId;
-  const id = Number(rawId);
-  if (!Number.isSafeInteger(id) || id <= 0) return null;
-  const distributorName =
-    value.nxDistributerEntity &&
-    typeof value.nxDistributerEntity.nxDistributerName === 'string'
-      ? value.nxDistributerEntity.nxDistributerName.slice(0, 100)
-      : '';
-  return {
-    nxDiuDistributerId: id,
-    nxDistributerEntity: {
-      nxDistributerName: distributorName
-    }
-  };
-}
-
-function getEmbeddedMcpTokenPath() {
-  return path.join(app.getPath('userData'), 'mcp-auth-token');
-}
-
-function getEmbeddedMcpToken() {
-  return readOrCreateToken(getEmbeddedMcpTokenPath());
-}
-
 function getCustomerFoldersConfigPath() {
   return path.join(app.getPath('userData'), 'customer-folders.json');
 }
@@ -537,65 +497,6 @@ function assertAuthorizedCustomerPath(candidatePath) {
   if (!roots.some((root) => isPathWithin(candidatePath, root))) {
     throw new Error('文件路径不在已授权的客户文件夹内');
   }
-}
-
-const MCP_BACKEND_ROUTES = [
-  {
-    method: 'GET',
-    pattern: /^nxdepartmentorders\/webNxDisGetTodayOrderCustomer\/\d+$/
-  },
-  {
-    method: 'POST',
-    pattern: /^nxdepartmentorders\/phoneGetToFillDepOrders$/
-  }
-];
-
-async function callMcpBackendApi(apiPath, method = 'GET', data = null) {
-  const normalizedMethod = String(method || 'GET').toUpperCase();
-  const normalizedPath = String(apiPath || '');
-  const allowed = MCP_BACKEND_ROUTES.some(
-    (route) => route.method === normalizedMethod && route.pattern.test(normalizedPath)
-  );
-  if (!allowed) {
-    throw new Error('MCP 后端接口不在白名单中');
-  }
-
-  const config = mcpModule.loadMcpConfig();
-  const requestUrl = new URL(normalizedPath, config.backendUrl).toString();
-  const cookieList =
-    mainWindow && !mainWindow.isDestroyed()
-      ? await mainWindow.webContents.session.cookies.get({ url: requestUrl })
-      : [];
-  const cookieHeader = cookieList
-    .map((cookie) => `${cookie.name}=${cookie.value}`)
-    .join('; ');
-  const headers = cookieHeader ? { Cookie: cookieHeader } : {};
-
-  if (normalizedMethod === 'GET') {
-    const response = await axios.get(requestUrl, {
-      headers,
-      timeout: 15000,
-      maxRedirects: 0
-    });
-    return response.data;
-  }
-
-  const form = new URLSearchParams();
-  if (data && typeof data === 'object' && !Array.isArray(data)) {
-    for (const [key, value] of Object.entries(data)) {
-      if (value == null) continue;
-      form.append(key, String(value));
-    }
-  }
-  const response = await axios.post(requestUrl, form.toString(), {
-    headers: {
-      ...headers,
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    timeout: 15000,
-    maxRedirects: 0
-  });
-  return response.data;
 }
 
 // 低内存优化：生产环境下启用 Chromium 内存节省开关（客户电脑内存不足时减少卡顿）
@@ -1059,7 +960,6 @@ function setupIpcHandlers() {
         message: error?.message,
       });
     }
-    mcpSessionUser = null;
 
     let dispatchResult = { ok: true };
     try {
@@ -1287,7 +1187,7 @@ function setupIpcHandlers() {
     acknowledgeMcpPrintTask(event.sender.id, taskId);
   });
 
-  // R2 结果回传（main 侧）：渲染端 OrderPrint 组件实际出纸完成后，由 Bills 经此 IPC 回传 3010 taskId + success。
+  // R2 结果回传（main 侧）：渲染端 OrderPrint 组件实际出纸完成后，由 Bills 经此 IPC 回传 3011 taskId + success。
   // 注意：仅回传「真实出纸结果」；受理(accept)≠完成，执行结果未知时不自动重打。
   // 渲染端→main 的 taskId 透传（Bills.vue runMcpDeliveryPrint → OrderPrint.printOnly 完成后发送）为后续打印验证步骤，
   // 本轮连接/查询/预览测试不触发打印，故该 handler 不会在本轮被实际调用。
@@ -1303,43 +1203,26 @@ function setupIpcHandlers() {
       message = p.message || '';
     } catch (e) { /* ignore parse error */ }
     if (!taskId) {
-      console.warn('[MCP-3010] mcp-print-result 缺少 taskId，忽略');
+      console.warn('[MCP-3011] mcp-print-result 缺少 taskId，忽略');
       return;
     }
     try {
       mcpBridgeClient.reportResult(taskId, success, message);
-      console.log(`[MCP-3010] 已回传打印结果 taskId=${taskId} success=${success}`);
+      console.log(`[MCP-3011] 已回传打印结果 taskId=${taskId} success=${success}`);
     } catch (e) {
-      console.warn('[MCP-3010] 回传打印结果失败:', e && e.message);
+      console.warn('[MCP-3011] 回传打印结果失败:', e && e.message);
     }
   });
-
-  ipcMain.on('mcp-session-user', (event, user) => {
-    assertTrustedRendererEvent(event);
-    mcpSessionUser = sanitizeMcpSessionUser(user);
-  });
   
-  // 获取 MCP 服务器状态
+  // 获取统一的 3011 连接器状态。
   ipcMain.handle('get-mcp-status', async (event) => {
     assertTrustedRendererEvent(event);
-    const config = mcpModule.loadMcpConfig();
+    const status = await mcpBridgeClient.getBridgeStatus();
     return {
-      running: mcpServer !== null,
-      port: config.port,
-      host: config.host,
-      authRequired: true,
-      tokenFile: getEmbeddedMcpTokenPath()
-    };
-  });
-  
-  // 更新 MCP 配置
-  ipcMain.handle('update-mcp-config', async (event, config) => {
-    assertTrustedRendererEvent(event);
-    const normalized = mcpModule.saveMcpConfig(config);
-    return {
-      success: true,
-      config: normalized,
-      restartRequired: true
+      running: status.ok,
+      port: mcpBridgeClient.DEFAULT_PORT,
+      host: '127.0.0.1',
+      authRequired: true
     };
   });
   
@@ -1706,7 +1589,6 @@ async function createWindow() {
     clearMcpPrintDeliveriesForWebContents(mainWindowWebContentsId);
     mainWindow = null;
     mainWindowRef = null;
-    mcpSessionUser = null;
   });
 
   console.log('Window created');
@@ -4424,121 +4306,9 @@ app.whenReady().then(async () => {
   
   createWindow();
   
-  // 启动 MCP HTTP 服务器
-  try {
-    const mcpConfig = mcpModule.loadMcpConfig();
-    const mcpAuthToken = getEmbeddedMcpToken();
-    mcpServer = await mcpModule.createMcpServer(mcpConfig.port, mcpConfig.host, {
-      authToken: mcpAuthToken,
-      backendUrl: mcpConfig.backendUrl,
-      getDisUser: async () => mcpSessionUser,
-      callBackendApi: callMcpBackendApi,
-      sendPrintTask: (task) => {
-        const target =
-          mainWindow && !mainWindow.isDestroyed()
-            ? mainWindow
-            : BrowserWindow.getAllWindows()[0];
-        if (!target || target.isDestroyed()) {
-          return { ok: false, error: '无法找到应用窗口，请确保应用正在运行' };
-        }
-        return pushMcpPrintTaskToRenderer(target.webContents, task)
-          ? { ok: true }
-          : { ok: false, error: '打印任务投递失败' };
-      }
-    });
-    console.log(`[MCP] 服务器已启动，监听 http://${mcpConfig.host}:${mcpConfig.port}`);
-    console.log('[MCP] 鉴权令牌文件:', getEmbeddedMcpTokenPath());
-  } catch (error) {
-    console.error('[MCP] 启动失败:', error);
-  }
-
-  // 轮询 Stdio MCP（mcp-server-cli.js）的 HTTP 队列，端口 3002；用 127.0.0.1 避免与 localhost → IPv6 绑定不一致
-  const MCP_CLI_PRINT_TASKS_URL = 'http://127.0.0.1:3002/print-tasks';
-  const mcpCliBridgeToken = readOrCreateMcpCliBridgeToken();
-  console.log('[MCP] Stdio 打印桥鉴权令牌文件:', getMcpCliBridgeTokenPath());
-  let mcpCliPollConnectWarned = false;
-
-  function pollMcpCliPrintTasks() {
-    const target =
-      mainWindow && !mainWindow.isDestroyed()
-        ? mainWindow
-        : BrowserWindow.getAllWindows()[0];
-    if (!target || target.isDestroyed()) {
-      return;
-    }
-    const req = http.get(
-      MCP_CLI_PRINT_TASKS_URL,
-      {
-        headers: {
-          Authorization: `Bearer ${mcpCliBridgeToken}`
-        }
-      },
-      (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        if (res.statusCode !== 200) {
-          return;
-        }
-        mcpCliPollConnectWarned = false;
-        try {
-          const parsed = JSON.parse(data);
-          const tasks = parsed.tasks;
-          if (!Array.isArray(tasks) || tasks.length === 0) {
-            return;
-          }
-          console.log(
-            '[MCP] 收到来自 CodeBuddy 的打印任务:',
-            tasks.length,
-            tasks.map((t) => ({
-              taskId: t.taskId,
-              departmentId: t.departmentId,
-              name: t.departmentName
-            }))
-          );
-          tasks.forEach((task) => {
-            const wc = target.webContents;
-            const payload = JSON.stringify(task);
-            console.log('[MCP] ── 即将 IPC mcp-print-trigger 到渲染进程 ──');
-            console.log('[MCP] webContents.id=', wc.id, 'url=', wc.getURL());
-            console.log('[MCP] 任务 JSON:', payload);
-            console.log('[MCP] 使用 IPC + ack 投递；终端中应出现 [MCP] App 收到(ipc)。');
-            pushMcpPrintTaskToRenderer(wc, task);
-            console.log(
-              '[MCP] 已派发任务（含后援）',
-              task.taskId,
-              task.departmentName,
-              'depId=',
-              task.departmentId,
-              'type=',
-              task.type
-            );
-          });
-        } catch (e) {
-          console.warn('[MCP] CLI 轮询响应解析失败:', e.message);
-        }
-      });
-      }
-    );
-    req.on('error', (err) => {
-      if (!mcpCliPollConnectWarned) {
-        console.warn(
-          '[MCP] 无法连接 127.0.0.1:3002（请确认 Cursor/WorkBuddy 已启动 grain-print MCP: mcp-server-cli.js）',
-          err.code || err.message
-        );
-        mcpCliPollConnectWarned = true;
-      }
-    });
-    req.setTimeout(1500, () => req.destroy());
-  }
-
-  pollMcpCliPrintTasks();
-  mcpCliPollingInterval = setInterval(pollMcpCliPrintTasks, 2000);
-
-  // ===== 3010 本地安全桥轮询（grain-print-mcp 连接器）=====
-  // 与 3002 链路并行存在，但消费不同任务源（3010 桥任务）；3002 队列当前无写入源，不会双打。
+  // ===== 3011 本地安全桥轮询（grain-print-mcp 连接器）=====
   // 同一任务靠 mcp-bridge-client 的持久化 markExecuted 去重，严守「同一条打印任务只走一条有效路径」。
-  // 字段映射（R1）：3010 任务仅含 {id,taskId,disId,departmentId,printMode,subDepartmentId,purpose,orderVersion}，
+  // 字段映射（R1）：3011 任务仅含 {id,taskId,disId,departmentId,printMode,subDepartmentId,purpose,orderVersion}，
   //   渲染端 triggerPrintDeliveryOrder 要求 task.type==='nx_delivery' 才触发（App.vue:221），
   //   并自行按 departmentId/printMode/subDepartmentId 调 phoneGetToFillDepOrders 拉明细（Bills.vue 行为），
   //   故仅补 type 常量，禁止填假值/空串/默认 0。
@@ -4622,11 +4392,11 @@ app.whenReady().then(async () => {
     };
     try {
       const r = await taskRunner.pollOnce(deps);
-      if (r && r.fetched) console.log('[MCP-3010] 本轮:', JSON.stringify(r));
+      if (r && r.fetched) console.log('[MCP-3011] 本轮:', JSON.stringify(r));
       const loginDisId = await mcpBridgeClient.getLoggedInDisId();
       sendBridgeStatus(loginDisId, wechatState);
     } catch (e) {
-      console.warn('[MCP-3010] 轮询异常:', e && e.message);
+      console.warn('[MCP-3011] 轮询异常:', e && e.message);
     }
   }
   bridgePollTick();
@@ -4677,17 +4447,9 @@ app.on('will-quit', () => {
     dispatchGateway.dispose();
     dispatchGateway = null;
   }
-  if (mcpCliPollingInterval) {
-    clearInterval(mcpCliPollingInterval);
-    console.log('[MCP] 轮询已停止');
-  }
   if (bridgePollingInterval) {
     clearInterval(bridgePollingInterval);
-    console.log('[MCP-3010] 桥轮询已停止');
-  }
-  if (mcpServer) {
-    mcpServer.close();
-    console.log('[MCP] 服务器已关闭');
+    console.log('[MCP-3011] 桥轮询已停止');
   }
 });
 

@@ -29,9 +29,7 @@ const runtimeFiles = [
   'src/dispatch/dispatch-gateway.js',
   'src/order/order-write-gateway.js',
   'src/main.js',
-  'src/mcp-config.json',
-  'src/mcp-server.js',
-  'src/mcp-server-cli.js',
+  'src/mcp-bridge-client.js',
 ];
 
 for (const file of runtimeFiles) {
@@ -58,6 +56,12 @@ check(
     && devElectronLauncher.includes('NXL_ORDER_API_BASE_URL: testApiBaseUrl')
     && devElectronLauncher.includes('GRAIN_API_URL: testApiBaseUrl'),
   'npm run start 的 Electron 主进程与 Vue 共用测试服务器'
+);
+check(
+  !packageJson.scripts['start:test']
+    && !packageJson.scripts['dev:electron:test']
+    && read('src/mcp-bridge-client.js').includes('return 3011;'),
+  '本地启动命令唯一，连接器统一使用 3011'
 );
 check(
   read('src/dispatch/dispatch-gateway.js').includes(

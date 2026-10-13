@@ -4,7 +4,6 @@ import pageHeader from './modules/pageHeader';
 import dispatch from '@/modules/dispatch/store';
 import axiosInstance from '@/api/axios'; // 使用配置好的 Axios 实例
 import { desktopOrderSessionRequest, isPackagedDesktop } from '@/api/desktopOrderSession';
-import { mcpSessionUserSummary } from '@/utils/mcpSessionUser.mjs';
 
 // 从 localStorage 恢复 disUser
 const restoreDisUser = () => {
@@ -27,15 +26,6 @@ const state = {
   /** MCP 配送单打印任务 FIFO 队列（多店/多任务排队，避免覆盖丢失） */
   mcpPrintQueue: [],
 };
-
-function syncMcpSessionUser(value) {
-  try {
-    // Vuex state 是 Proxy，Electron IPC 不能 structured-clone；仅发送主进程需要的摘要。
-    window.electronAPI?.setMcpSessionUser?.(mcpSessionUserSummary(value));
-  } catch (error) {
-    console.warn('[MCP] 同步内存会话摘要失败:', error);
-  }
-}
 
 function clearBrowserCookies() {
   try {
@@ -91,7 +81,6 @@ const store = createStore({  // 使用 createStore 替代 Vuex.Store
       } else {
         localStorage.removeItem('disUser');
       }
-      syncMcpSessionUser(value);
     },
     SET_USER(state, value) { // 修改为与 action 提交一致的名称
       state.user = value;
@@ -121,7 +110,6 @@ const store = createStore({  // 使用 createStore 替代 Vuex.Store
       state.pasteArr = '';
       state.mcpPrintQueue = [];
       removeUserCache();
-      syncMcpSessionUser(null);
     },
   },
   actions: {

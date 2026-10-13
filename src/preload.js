@@ -312,10 +312,8 @@ const electronAPI = Object.freeze({
     loadTile: (tile) => ipcRenderer.invoke('dispatch-map-load-tile', tile),
   }),
 
-  // MCP 仅暴露状态、受限配置、内存会话摘要和打印任务监听。
+  // MCP 仅暴露 3011 连接器状态和打印任务监听。
   getMcpStatus: () => ipcRenderer.invoke('get-mcp-status'),
-  updateMcpConfig: (config) => ipcRenderer.invoke('update-mcp-config', config),
-  setMcpSessionUser: (user) => ipcRenderer.send('mcp-session-user', user),
   onMcpPrintTrigger: (callback) => {
     if (mcpPrintTriggerCleanup) {
       mcpPrintTriggerCleanup();
@@ -348,7 +346,7 @@ const electronAPI = Object.freeze({
   },
 
   // R2 打印结果回传：OrderPrint 组件实际出纸（或失败/超时）后，由 Bills 经此 IPC 通知主进程，
-  // 主进程再上报 3010 桥。仅透传「真实出纸结果」；受理(accept)≠完成。
+  // 主进程再上报 3011 桥。仅透传「真实出纸结果」；受理(accept)≠完成。
   reportPrintResult: (taskId, success, message) =>
     ipcRenderer.send('mcp-print-result', { taskId, success: !!success, message: message || '' }),
 });

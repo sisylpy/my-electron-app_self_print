@@ -1,5 +1,5 @@
 'use strict';
-// GrainPrint 任务通信层：与本地 MCP 桥（grain-print-mcp 服务，仅 127.0.0.1:3010）安全通信。
+// GrainPrint 任务通信层：与本地 MCP 桥（grain-print-mcp 服务，仅 127.0.0.1:3011）安全通信。
 // 职责边界：仅负责 身份上报 / 心跳 / 领取任务 / 结果回传 / 执行端防重复。
 // 不重写打印业务（模板、渲染、出纸仍由 GrainPrint 既有逻辑完成）。
 //
@@ -127,6 +127,17 @@ async function fetchTasks(disId) {
   if (!r.ok || !r.json) return [];
   return r.json.tasks || [];
 }
+
+async function getBridgeStatus() {
+  const secret = readSecret();
+  if (!secret) return { ok: false, port: DEFAULT_PORT, error: 'no-secret' };
+  const result = await getJSON('/bridge/tasks?disId=0', secret);
+  return {
+    ok: Boolean(result.ok && result.json && Array.isArray(result.json.tasks)),
+    port: DEFAULT_PORT,
+    error: result.error || null,
+  };
+}
 async function reportResult(taskId, success, message) {
   const secret = readSecret();
   if (!secret || !taskId) return;
@@ -141,6 +152,6 @@ async function acceptTask(taskId) {
 }
 
 module.exports = {
-  getLoggedInDisId, reportIdentity, reportHeartbeat, fetchTasks, reportResult, acceptTask, markExecuted,
+  getLoggedInDisId, getBridgeStatus, reportIdentity, reportHeartbeat, fetchTasks, reportResult, acceptTask, markExecuted,
   DEFAULT_PORT, SECRET_PATH,
 };

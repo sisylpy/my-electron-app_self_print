@@ -2,7 +2,6 @@
 import App from './App.vue';
 import router from './router';
 import store from './store'; // 引入 store
-import { mcpSessionUserSummary } from './utils/mcpSessionUser.mjs';
 import { writeAppLog } from './utils/appLog';
 import { ORDER_SESSION_EXPIRED_EVENT } from './utils/sessionExpiry';
 import toast from './plugins/toast';
@@ -98,7 +97,6 @@ window.addEventListener('unhandledrejection', (event) => {
 const mountElement = document.getElementById('app');
 if (mountElement) {
   app.mount('#app');
-  window.electronAPI?.setMcpSessionUser?.(mcpSessionUserSummary(store.state.disUser));
   console.log('✅ Vue 应用已挂载到 #app');
   writeAppLog('info', 'renderer', 'vue-app-mounted', {
     hash: typeof window !== 'undefined' ? window.location.hash : ''

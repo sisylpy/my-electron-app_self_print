@@ -123,20 +123,8 @@ async function run() {
   assert(main.includes("if (!isDev) return { ok: false, status: 403, message: '测试 ID 登录仅在开发态可用' }"));
   assert(preload.includes('orderSession: Object.freeze'));
   assert(!preload.includes('JSESSIONID'));
-  const storeSource = fs.readFileSync(path.join(__dirname, '../vue/src/store/index.js'), 'utf8');
-  const rendererMain = fs.readFileSync(path.join(__dirname, '../vue/src/main.js'), 'utf8');
-  assert(storeSource.includes('setMcpSessionUser?.(mcpSessionUserSummary(value))'));
-  assert(rendererMain.includes('setMcpSessionUser?.(mcpSessionUserSummary(store.state.disUser))'));
-  const { mcpSessionUserSummary } = await import('../vue/src/utils/mcpSessionUser.mjs');
-  const reactiveUser = new Proxy({
-    nxDiuDistributerId: 160,
-    nxDistributerEntity: new Proxy({ nxDistributerName: '米线李' }, {}),
-  }, {});
-  assert.throws(() => structuredClone(reactiveUser));
-  assert.deepEqual(structuredClone(mcpSessionUserSummary(reactiveUser)), {
-    nxDiuDistributerId: 160,
-    nxDistributerEntity: { nxDistributerName: '米线李' },
-  });
+  assert(!main.includes("ipcMain.on('mcp-session-user'"), '旧 3001 会话同步接口已移除');
+  assert(!preload.includes('setMcpSessionUser'), '渲染端不再暴露旧 MCP 会话接口');
   console.log('Packaged order session smoke passed.');
 }
 

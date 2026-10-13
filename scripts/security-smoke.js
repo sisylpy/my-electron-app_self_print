@@ -19,8 +19,7 @@ function check(condition, message) {
 
 const main = read('src/main.js');
 const preload = read('src/preload.js');
-const mcpServer = read('src/mcp-server.js');
-const mcpCli = read('src/mcp-server-cli.js');
+const mcpBridge = read('src/mcp-bridge-client.js');
 const mcpPush = read('src/mcp-print-push.js');
 const orderWriteGateway = read('src/order/order-write-gateway.js');
 const dispatchGateway = read('src/dispatch/dispatch-gateway.js');
@@ -31,7 +30,6 @@ const historyOrders = read('vue/src/components/HistoryOrders.vue');
 const customerOcrTraining = read('vue/src/modules/customer/components/CustomerOcrTrainingPanel.vue');
 const publicConfig = read('vue/src/config/index.js');
 const packageJson = JSON.parse(read('package.json'));
-const mcpConfig = JSON.parse(read('src/mcp-config.json'));
 
 check(!main.includes('executeJavaScript'), '主进程不执行渲染脚本文本');
 check(!main.match(/\bexec\s*\(/), '主进程不通过 shell 拼接执行系统命令');
@@ -40,7 +38,6 @@ check(
     && !main.includes('execSync('),
   '系统命令使用参数数组执行'
 );
-check(!mcpServer.includes('executeJavaScript'), '内嵌 MCP 不执行渲染脚本文本');
 check(!mcpPush.includes('executeJavaScript'), 'MCP 打印投递仅使用 IPC');
 check(!preload.match(/\bipcRenderer\s*:\s*ipcRenderer\b/), 'preload 不暴露原始 ipcRenderer');
 check(!preload.includes('mcpCallApi'), 'preload 不暴露任意 MCP API 代理');
@@ -92,19 +89,17 @@ check(preload.includes('salesAnalysis: Object.freeze')
   '销售分析通过主进程只读白名单网关查询');
 check(!main.includes("'mcp-call-api'"), '主进程没有任意 MCP API IPC');
 check(!main.includes("'get-login-info-for-mcp'"), 'MCP 不通过脚本读取 localStorage');
-check(!mcpServer.includes("Access-Control-Allow-Origin"), '内嵌 MCP 不开放 CORS');
-check(!mcpCli.includes("Access-Control-Allow-Origin"), 'Stdio 打印桥不开放 CORS');
-check(mcpServer.includes('Browser-origin requests are not allowed'), '内嵌 MCP 拒绝浏览器来源');
-check(mcpCli.includes('Browser-origin requests are not allowed'), 'Stdio 打印桥拒绝浏览器来源');
-check(mcpServer.includes('WWW-Authenticate'), '内嵌 MCP 要求 Bearer Token');
-check(mcpCli.includes('WWW-Authenticate'), 'Stdio 打印桥要求 Bearer Token');
-check(mcpServer.includes('PRODUCTION_BACKEND_ORIGIN'), '内嵌 MCP 限制生产后端来源');
 check(
-  mcpCli.includes('normalizeNongxinleApiBaseUrl'),
-  'Stdio MCP 复用统一的生产后端来源校验'
+  mcpBridge.includes("host: '127.0.0.1'")
+    && mcpBridge.includes("'X-Bridge-Secret': secret")
+    && mcpBridge.includes('return 3011;'),
+  '统一 MCP 桥仅连接本机 3011 并使用密钥鉴权'
 );
-check(main.includes('maxRedirects: 0'), 'MCP 后端请求禁止跨来源重定向');
-check(mcpConfig.host === '127.0.0.1', '项目 MCP 配置只绑定 IPv4 回环地址');
+check(!main.includes("require('./mcp-server')")
+  && !main.includes('127.0.0.1:3002')
+  && !preload.includes('updateMcpConfig')
+  && !preload.includes('setMcpSessionUser'),
+  '旧 3001/3002 MCP 运行入口与渲染 IPC 已移除');
 check(!placeOrder.includes('api.deepseek.com'), '下单页不直连 DeepSeek');
 check(!placeOrder.includes('DEEPSEEK_API_KEY'), '下单页不读取 DeepSeek Key');
 check(!/(secretId|secretKey|apiKey)\s*[:=]\s*['"][A-Za-z0-9_-]{16,}['"]/i.test(publicConfig),
