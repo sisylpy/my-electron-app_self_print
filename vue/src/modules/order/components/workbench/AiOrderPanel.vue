@@ -159,13 +159,19 @@ watch(
 );
 
 function handleTaskAdded(event) {
+  // 批量保存必须由 runWechatImportAndSave 收到服务端成功结果后，再由父组件
+  // 统一移出当前任务。此前这里会带着人工预览阶段残留的 token 提前移走任务，
+  // 使正在等待千问响应的录入区被卸载，并诱发同一张图片被再次提交。
+  if (props.batchSaveMode) {
+    appliedWechatImportToken.value = null;
+    emit('task-added', event);
+    return;
+  }
   const token = appliedWechatImportToken.value;
   emit('task-added', token
     ? { ...(event && typeof event === 'object' ? event : {}), wechatImportToken: token }
     : event);
   appliedWechatImportToken.value = null;
-  // 批量模式：不重置录入区，由父组件驱动下一个任务，避免打断连续保存。
-  if (props.batchSaveMode) return;
   clearTimeout(workspaceResetTimer);
   workspaceResetTimer = setTimeout(() => {
     selectedMode.value = 'paste';
@@ -196,19 +202,33 @@ function dismissPendingWechatImport() {
 // 刻意不经过上面的 watch —— 否则切换客户引发的 workspaceKey 变化会重复触发解析，
 // 第二次就对着刚重建的空工作台校验，把本已成功的任务误判成「没有可保存的订单」。
 async function runWechatImportAndSave(payload) {
-  let target = placeOrderRef.value;
   try {
+    // 任务可能在自动保存前已被人工预览过。清掉预览阶段留下的 token，避免
+    // 千问成功事件被误当成人工保存事件，导致父页面过早切走当前任务。
+    appliedWechatImportToken.value = null;
     selectedMode.value = 'wechat';
     await nextTick();
+    let target = placeOrderRef.value;
     if (!target?.applyWechatImport) return { ok: false, reason: '订单录入区尚未就绪' };
     // 图片订单交给千问：autoRecognize 让服务端一次完成「识别 + 落库」，不再弹裁剪窗等人确认。
     const importPayload = { ...payload, autoRecognize: true };
-    await target.applyWechatImport(importPayload);
-    // 解析期间若工作区被重建，解析结果会留在旧实例上；改用当前实例重新解析一次。
-    if (placeOrderRef.value !== target) {
+    const autoSaved = await target.applyWechatImport(importPayload);
+    // 千问接口本身已经落库。直接使用这次请求的返回值作为唯一成功凭证，
+    // 绝不能因为界面组件在请求期间被重建，就把同一张图片再提交一次。
+    if (autoSaved && autoSaved.taskId != null) {
+      return {
+        ok: true,
+        taskId: autoSaved.taskId,
+        count: Number(autoSaved.count) || 0,
+        engine: 'qwen',
+      };
+    }
+    // 文本任务只做本地解析，没有服务端落库副作用；若工作区确实发生重建，
+    // 可以安全地在当前实例重新载入一次文本后再校验。
+    if (placeOrderRef.value !== target && !(Array.isArray(payload?.images) && payload.images.length)) {
       target = placeOrderRef.value;
       if (!target?.applyWechatImport) return { ok: false, reason: '订单录入区尚未就绪' };
-      await target.applyWechatImport(importPayload);
+      await target.applyWechatImport(payload);
     }
     // 千问链路已在服务端落库，直接采纳结果，避免再走一次 pasteSearchGoods 造成重复订单。
     if (target.wechatQwenAutoSaved) {

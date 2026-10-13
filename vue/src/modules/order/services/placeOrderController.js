@@ -444,7 +444,7 @@ import api from '../services/orderApi';
                     this.handleUploadTypeChange('wechat');
                     await this.$nextTick();
                 }
-                await this.loadWechatOrderTask(payload);
+                return this.loadWechatOrderTask(payload);
             },
 
             // 停止所有正在进行的朗读
@@ -5288,8 +5288,7 @@ import api from '../services/orderApi';
                     if (!this.isCurrentWechatOrderLoad(requestId)) return;
                     // 连接器自动保存：跳过裁剪弹窗，直接用千问识别并落库
                     const autoRecognize = payload.autoRecognize === true;
-                    await this.openWechatImageInOriginalRecognizer(images[0], requestId, autoRecognize);
-                    return;
+                    return this.openWechatImageInOriginalRecognizer(images[0], requestId, autoRecognize);
                 }
                 if (!this.isCurrentWechatOrderLoad(requestId)) return;
                 if (text) await this.handlePasteLocalParse();
@@ -5342,8 +5341,7 @@ import api from '../services/orderApi';
                 if (requestId !== null && !this.isCurrentWechatOrderLoad(requestId)) return;
                 // 连接器自动保存：不弹裁剪窗，直接千问识别 + 落库
                 if (autoRecognize) {
-                    await this.handleQwenAutoRecognize(dataUrl);
-                    return;
+                    return this.handleQwenAutoRecognize(dataUrl);
                 }
                 this.showImagePreviewModal = true;
             },
