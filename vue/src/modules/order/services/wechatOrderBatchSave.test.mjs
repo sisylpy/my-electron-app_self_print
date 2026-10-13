@@ -9,6 +9,10 @@ const controller = fs.readFileSync(
   'vue/src/modules/order/services/placeOrderController.js',
   'utf8',
 );
+const workbench = fs.readFileSync(
+  'vue/src/modules/order/views/OrderWorkbenchV2.vue',
+  'utf8',
+);
 
 const taskAdded = panel.match(
   /function handleTaskAdded\(event\) \{([\s\S]*?)\n\}\n\nfunction handleWechatTasksLoaded/,
@@ -39,5 +43,14 @@ const applyWechatImport = controller.match(
 assert.match(applyWechatImport, /return this\.loadWechatOrderTask\(payload\)/);
 assert.match(controller, /return this\.openWechatImageInOriginalRecognizer\(images\[0\], requestId, autoRecognize\)/);
 assert.match(controller, /return this\.handleQwenAutoRecognize\(dataUrl\)/);
+
+assert.match(workbench, /:batch-save-mode="wechatBatchSaving"/);
+assert.match(workbench, /function onMcpWechatScan\(\)/);
+assert.match(workbench, /function onMcpWechatSaveOrders\(\)/);
+assert.match(workbench, /async function batchSaveAllWechatOrders/);
+assert.match(workbench, /const outcome = await panel\.runWechatImportAndSave\(item\.payload\)/);
+assert.match(workbench, /await removeWechatImport\(item\.token\)/);
+assert.match(workbench, /const saveOutcome = await batchSaveAllWechatOrders\(\{ reportMode: 'merged' \}\)/);
+assert.doesNotMatch(workbench, /仍走腾讯 OCR/);
 
 console.log('wechatOrderBatchSave tests passed');

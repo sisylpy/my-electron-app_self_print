@@ -1,6 +1,6 @@
 <template>
   <main class="order-workbench">
-    <Teleport v-if="activeView === 'overview'" to="#product-header-context">
+    <Teleport v-if="activeView === 'overview'" defer to="#product-header-context">
       <nav class="order-workbench__header-stages" aria-label="订单阶段">
         <button
           v-for="stage in stageOptions"
@@ -140,6 +140,7 @@
         :customer-error="customerContext.error.value"
         :pending-wechat-import="activeWechatImport"
         wechat-import-mode
+        :batch-save-mode="wechatBatchSaving"
         @select-customer="customerContext.selectCustomer"
         @select-department="customerContext.selectDepartment"
         @retry-customers="customerContext.reload"
@@ -243,7 +244,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useStore } from 'vuex';
 import AiOrderPanel from '../components/workbench/AiOrderPanel.vue';
 import OrderFlowInbox from '../components/workbench/OrderFlowInbox.vue';
@@ -313,6 +314,9 @@ const wechatScanProgress = ref({ current: 0, total: 0, title: '', customerName: 
 const wechatScanResults = ref([]);
 const wechatImportQueue = ref([]);
 const wechatImportBatch = ref([]);
+// MCP「保存微信订单」批量流程状态：置位后 AiOrderPanel 进入批量模式（解析完即静默保存）。
+const wechatBatchSaving = ref(false);
+const wechatBatchSaveProgress = ref({ done: 0, total: 0 });
 const wechatImportCompletedTokens = ref([]);
 const activeWechatImportToken = ref(null);
 const activeWechatImportPanelRef = ref(null);
@@ -1428,6 +1432,23 @@ const removeWechatConversationListener = window.electronAPI?.wechatUi
     void handleWechatConversationChanged(payload);
   });
 
+function discardWechatImportSession() {
+  // The native window close button means “结束本轮处理”. Close any image
+  // preview first, then remove every task collected for this confirmation
+  // session. The in-page “稍后处理” action intentionally does not call this
+  // function, so its queue remains available from “继续微信订单”.
+  activeWechatImportPanelRef.value?.dismissPendingWechatImport?.();
+  wechatImportQueue.value = [];
+  wechatImportBatch.value = [];
+  wechatImportCompletedTokens.value = [];
+  activeWechatImportToken.value = null;
+  wechatScanResults.value = [];
+  wechatScanProgress.value = { current: 0, total: 0, title: '', customerName: '' };
+  wechatScanMessage.value = '';
+  wechatScanStatus.value = 'info';
+  wechatWorkspaceWarning.value = '';
+}
+
 function resetWechatImportModalState() {
   wechatConversationObservationRequestId += 1;
   wechatConversationObservationRunning = false;
@@ -1448,8 +1469,11 @@ function resetWechatImportModalState() {
 const removeWechatWorkspaceCloseRequestedListener = window.electronAPI?.wechatUi
   ?.onWorkspaceCloseRequested?.(() => {
     // The main process has intercepted the native red close button and is
-    // already restoring the BrowserWindow. Only reset page state here; calling
-    // closeWorkspace again would race the same recovery a second time.
+    // already restoring the BrowserWindow. Native close discards this round's
+    // fetched task cache; “稍后处理” uses closeWechatImportModal instead and
+    // deliberately preserves it. Calling closeWorkspace here would race the
+    // same recovery a second time.
+    discardWechatImportSession();
     resetWechatImportModalState();
   });
 
@@ -1471,7 +1495,34 @@ onBeforeUnmount(() => {
   }
   removeWechatConversationListener?.();
   removeWechatWorkspaceCloseRequestedListener?.();
+  window.removeEventListener('grain-mcp-wechat-scan', onMcpWechatScan);
+  window.removeEventListener('grain-mcp-wechat-save-orders', onMcpWechatSaveOrders);
   void window.electronAPI?.wechatUi?.closeWorkspace?.();
+});
+
+// 由 MCP「打开微信订单」指令触发：进入本视图后运行全面检查。
+// 两种场景都覆盖：① 冷启动导航——App.vue 先置位 window.__grainPendingWechatScan，
+//    本视图挂载后再消费；② 已在视图内——App.vue 直接派发 grain-mcp-wechat-scan 事件。
+function onMcpWechatScan() {
+  if (window.__grainPendingWechatScan) {
+    window.__grainPendingWechatScan = false;
+    void scanAllBoundWechatOrders();
+  }
+}
+
+// 由 MCP「保存微信订单」指令触发：进入本视图后逐个保存「解析完整」的订单。
+// 与巡查同样覆盖两种场景：冷启动导航（App.vue 置位任务号）与已在视图内（直接派发事件）。
+function onMcpWechatSaveOrders() {
+  if (!window.__grainMcpWechatSaveTaskId) return;
+  void batchSaveAllWechatOrders();
+}
+
+onMounted(() => {
+  window.addEventListener('grain-mcp-wechat-scan', onMcpWechatScan);
+  window.addEventListener('grain-mcp-wechat-save-orders', onMcpWechatSaveOrders);
+  // 进入视图前若已置位待执行标记（冷启动导航场景），立即消费并运行全面检查。
+  onMcpWechatScan();
+  onMcpWechatSaveOrders();
 });
 
 async function loadBoundWechatCustomers({ refreshCustomers = false } = {}) {
@@ -2163,8 +2214,240 @@ async function readUnreadWechatOrders() {
   }
 }
 
+// Markdown 表格里不能让竖线/换行破坏结构。
+function scanReportCell(value) {
+  return String(value == null ? '' : value).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ').trim();
+}
+
+// 与「微信订单工作台」巡查卡片同构的状态文案（发现订单 / 没有新订单 / 未找到 / 失败）。
+function scanReportResultMark(item) {
+  const status = item && item.status;
+  const label = status === 'found'
+    ? '🟢 发现订单'
+    : status === 'empty'
+      ? '⚪ 没有新订单'
+      : status === 'not-found'
+        ? '🟠 未找到会话'
+        : status === 'error'
+          ? '🔴 检查失败'
+          : '⚪ 未完成';
+  const detail = scanReportCell(item && item.message);
+  return detail ? `${label} · ${detail}` : label;
+}
+
+// 把巡查结果整理成一份与 GrainPrint 界面逐项一致的 Markdown 报告（汇总统计 + 逐条会话明细），
+// 供 WorkBuddy 侧原样呈现。信息口径与卡片一致：
+//   已巡查 N 个会话 / M 位客户 / K 个订单任务 / P 条新消息，以及每一家会话的结果。
+function buildWechatScanReportMarkdown(summary) {
+  const checkedCount = Number(summary && summary.checkedCount) || 0;
+  const orderingCount = Number(summary && summary.orderCustomerCount) || 0;
+  const taskCount = Number(summary && summary.taskCount) || 0;
+  const messageCount = Number(summary && summary.messageCount) || 0;
+  const warningCount = Number(summary && summary.warningCount) || 0;
+  const rows = wechatScanResults.value.filter(item => item && item.title && item.status !== 'checking');
+
+  const lines = [];
+  lines.push('## ✅ 巡查完成');
+  lines.push('');
+  lines.push(taskCount
+    ? `已巡查 ${checkedCount} 个关联微信会话，发现 ${orderingCount} 位客户的 ${taskCount} 个订单任务（${messageCount} 条新消息）`
+    : `已巡查 ${checkedCount} 个关联微信会话，没有发现未处理的新订单`);
+  lines.push('');
+  lines.push(`**本次巡查结果：${orderingCount} 家订货** · 已搜索 ${checkedCount} 家关联微信`);
+  lines.push('');
+  lines.push('| 已搜索 | 订货客户 | 订单任务 |');
+  lines.push('| :---: | :---: | :---: |');
+  lines.push(`| ${checkedCount} | ${orderingCount} | ${taskCount} |`);
+
+  if (rows.length) {
+    lines.push('');
+    lines.push(`**实时查询结果 ${rows.length} / ${checkedCount || rows.length}**`);
+    lines.push('');
+    lines.push('| 微信会话 | 客户 | 结果 |');
+    lines.push('| --- | --- | --- |');
+    rows.forEach(item => {
+      const customer = item.customerName && item.customerName !== item.title ? item.customerName : '—';
+      lines.push(`| ${scanReportCell(item.title)} | ${scanReportCell(customer)} | ${scanReportResultMark(item)} |`);
+    });
+  }
+
+  if (warningCount) {
+    lines.push('');
+    lines.push(`> 另有 ${warningCount} 项需人工检查（会话未找到或读取失败），详见工作台。`);
+  }
+  lines.push('');
+  if (summary.saveOutcome) {
+    const saved = summary.saveOutcome.saved || [];
+    const skipped = summary.saveOutcome.skipped || [];
+    lines.push('');
+    if (saved.length) {
+      lines.push(`### ✅ 已自动保存 ${saved.length} 个订单`);
+      lines.push('');
+      lines.push('| 微信会话 | 客户 | 订单条数 | 订单任务号 |');
+      lines.push('| --- | --- | :---: | --- |');
+      saved.forEach((row) => lines.push(`| ${row.conversation} | ${row.customer} | ${row.count} | ${row.taskId} |`));
+    } else {
+      lines.push('### ⚠️ 没有自动保存任何订单');
+    }
+    if (skipped.length) {
+      lines.push('');
+      lines.push(`**另有 ${skipped.length} 个任务未保存（仍保留在微信订单任务列表中，可手动处理）：**`);
+      lines.push('');
+      lines.push('| 微信会话 | 客户 | 未保存原因 |');
+      lines.push('| --- | --- | --- |');
+      skipped.forEach((row) => lines.push(`| ${row.conversation} | ${row.customer} | ${row.reason} |`));
+    }
+    lines.push('');
+    lines.push('> 已保存的订单已从「微信订单任务」列表移出，可在订单任务中查看。');
+  } else {
+    lines.push('> 结果已在 GrainPrint「微信订单工作台」中保留，可先检查异常项，再逐条确认为订单任务。');
+  }
+  return lines.join('\n');
+}
+
+// 巡查结束后，若本次巡查由 MCP「打开微信订单」指令触发，则把结果回报给桥（3011），
+// 让 MCP 侧任务卡从「已受理」闭环为「已完成/失败」。用户手动点击全面检查时任务号为空，不回报。
+function reportMcpWechatScanResult(outcome, summary) {
+  const taskId = window.__grainMcpWechatScanTaskId;
+  if (!taskId) return;
+  window.__grainMcpWechatScanTaskId = null;
+  const report = window.electronAPI?.reportPrintResult;
+  if (typeof report !== 'function') return;
+  try {
+    if (outcome === 'failed') {
+      report(taskId, false, (summary && summary.error) || '未知错误');
+      return;
+    }
+    report(taskId, true, buildWechatScanReportMarkdown(summary));
+  } catch {
+    // 回报失败不影响工作台本身；MCP 侧仍可通过 get_print_task_status 查询。
+  }
+}
+
+// ===== MCP「保存微信订单」批量流程 =====
+
+// 每个任务都在「切换客户 → 等工作区重建结束 → 原子执行解析/校验/保存」之后才取结果，
+// 避免对着刚重建的空工作台做校验（那会把已成功的任务误判成「没有可保存的订单」）。
+
+function buildWechatSaveReportMarkdown(saved, skipped) {
+  const lines = [];
+  if (saved.length) {
+    lines.push(`## ✅ 已保存 ${saved.length} 个微信订单`);
+    lines.push('');
+    lines.push('| 微信会话 | 客户 | 订单条数 | 订单任务号 |');
+    lines.push('| --- | --- | :---: | --- |');
+    saved.forEach((row) => {
+      lines.push(`| ${row.conversation} | ${row.customer} | ${row.count} | ${row.taskId} |`);
+    });
+  } else {
+    lines.push('## ⚠️ 没有保存任何订单');
+  }
+  if (skipped.length) {
+    lines.push('');
+    lines.push(`**另有 ${skipped.length} 个任务未保存（仍保留在微信订单任务列表中，可手动处理）：**`);
+    lines.push('');
+    lines.push('| 微信会话 | 客户 | 未保存原因 |');
+    lines.push('| --- | --- | --- |');
+    skipped.forEach((row) => {
+      lines.push(`| ${row.conversation} | ${row.customer} | ${row.reason} |`);
+    });
+  }
+  lines.push('');
+  lines.push('> 已保存的订单已从「微信订单任务」列表移出，可在订单任务中查看。');
+  return lines.join('\n');
+}
+
+// 批量保存结束后回报给桥（3011），闭环 MCP 侧任务卡。
+function reportMcpWechatSaveResult(outcome, payload) {
+  const taskId = window.__grainMcpWechatSaveTaskId;
+  if (!taskId) return;
+  window.__grainMcpWechatSaveTaskId = null;
+  const report = window.electronAPI?.reportPrintResult;
+  if (typeof report !== 'function') return;
+  try {
+    if (outcome === 'failed') {
+      report(taskId, false, (payload && payload.error) || '未知错误');
+      return;
+    }
+    report(taskId, true, buildWechatSaveReportMarkdown((payload && payload.saved) || [], (payload && payload.skipped) || []));
+  } catch {
+    // 回报失败不影响工作台本身；MCP 侧仍可通过 get_print_task_status 查询。
+  }
+}
+
+// 逐个保存：只处理「解析完整」的任务；保存成功的从微信订单任务列表移出（后端订单任务保留）。
+// reportMode：'own'    = 用自己的 MCP 任务号单独回报（独立的「保存微信订单」指令）
+//              'merged' = 不单独回报，由巡查流程把结果并进巡查报告（用户说「打开并保存」时走这条）
+async function batchSaveAllWechatOrders({ reportMode = 'own' } = {}) {
+  const own = reportMode !== 'merged';
+  const bail = (error) => {
+    if (own) reportMcpWechatSaveResult('failed', { error });
+    return { saved: [], skipped: [], error };
+  };
+  if (wechatBatchSaving.value) return bail('批量保存正在进行中，本次指令未执行');
+  if (!wechatImportModalOpen.value) return bail('微信订单工作台未打开，请先执行「打开微信客户订单」');
+  const snapshot = wechatImportBatch.value.slice();
+  if (!snapshot.length) return bail('当前没有待处理的微信订单任务，请先执行「打开微信客户订单」');
+  const saved = [];
+  const skipped = [];
+  wechatBatchSaving.value = true;
+  wechatBatchSaveProgress.value = { done: 0, total: snapshot.length };
+  try {
+    for (const item of snapshot) {
+      const label = {
+        conversation: item.conversationTitle || item.customerName || '未知会话',
+        customer: item.customerName || '未知客户',
+      };
+      // 图片任务交给千问视觉模型：runWechatImportAndSave 内部带 autoRecognize，
+      // 由服务端一次完成「识别 + 落库」，不再要求人工点「直接识别 / AI识别」。
+      // 千问解析或落库失败时 outcome.ok=false，会自然落入下方 skipped 分支，
+      // 任务仍保留在微信订单列表里交人工处理，不会丢单。
+      // 人工在界面上点识别的两条入口（单列 / 多列）也已统一走千问，
+      // 这里只负责连接器批量保存时的无弹窗调用。
+      // 切到该任务：设置激活项并同步客户上下文（不打开工作台、不切换微信窗口）。
+      activeWechatImportToken.value = item.token;
+      const opened = await openActiveWechatImport({ openWorkspace: false, focusConversation: false });
+      if (!opened) {
+        skipped.push({ ...label, reason: '无法匹配客户资料' });
+        wechatBatchSaveProgress.value.done += 1;
+        continue;
+      }
+      // 等客户切换引起的工作区重建彻底结束，再取到稳定的录入区实例做「解析→校验→保存」。
+      await nextTick();
+      await nextTick();
+      await nextTick();
+      const panel = activeWechatImportPanelRef.value;
+      if (!panel?.runWechatImportAndSave) {
+        skipped.push({ ...label, reason: '订单录入区尚未就绪' });
+        wechatBatchSaveProgress.value.done += 1;
+        continue;
+      }
+      const outcome = await panel.runWechatImportAndSave(item.payload);
+      if (outcome && outcome.ok) {
+        saved.push({ ...label, count: outcome.count, taskId: outcome.taskId });
+        try {
+          // 保存成功：把该任务从微信订单任务列表移出（仅移除待处理卡片，不删后端订单任务）。
+          await removeWechatImport(item.token);
+        } catch (error) {
+          console.warn('[MCP] 移出微信任务列表失败:', item.token, error);
+        }
+      } else {
+        skipped.push({ ...label, reason: (outcome && outcome.reason) || '保存失败' });
+      }
+      wechatBatchSaveProgress.value.done += 1;
+    }
+  } finally {
+    wechatBatchSaving.value = false;
+  }
+  if (own) reportMcpWechatSaveResult('success', { saved, skipped });
+  return { saved, skipped };
+}
+
 async function scanAllBoundWechatOrders() {
-  if (wechatScanBusy.value || wechatSelectedImportBusy.value) return;
+  if (wechatScanBusy.value || wechatSelectedImportBusy.value) {
+    reportMcpWechatScanResult('failed', { error: '工作台正在巡查中，本次指令未执行' });
+    return;
+  }
   const timing = createWechatOrderTiming('scan-all-bound-wechat');
   let timingOutcome = 'failed';
   let timingSummary = {
@@ -2410,6 +2693,15 @@ async function scanAllBoundWechatOrders() {
     );
     await focusWechatWorkspaceApp();
     timing.finish(timingOutcome, timingSummary);
+    // 用户明确说了「并保存」（MCP 任务带 save=true）→ 检查完自动逐条保存解析完整的订单，
+    // 结果并进同一份巡查报告，不额外再要用户说一句「保存」。
+    if (timingOutcome === 'success' && window.__grainAutoSaveWechatOrders) {
+      const saveOutcome = await batchSaveAllWechatOrders({ reportMode: 'merged' });
+      if (saveOutcome) timingSummary = { ...timingSummary, saveOutcome };
+    }
+    window.__grainAutoSaveWechatOrders = false;
+    // 由 MCP 指令触发时，把最终结果回报给桥，完成「受理 → 执行 → 结果」闭环。
+    reportMcpWechatScanResult(timingOutcome, timingSummary);
   }
 }
 

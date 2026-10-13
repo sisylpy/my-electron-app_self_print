@@ -37,9 +37,26 @@ const closeEntry = workbench.match(
 assert.match(closeEntry, /const shouldCloseWechatWorkspace = wechatWorkspaceReady\.value/);
 assert.match(closeEntry, /resetWechatImportModalState\(\)/);
 assert.match(closeEntry, /if \(!shouldCloseWechatWorkspace\) return/);
+assert.doesNotMatch(closeEntry, /discardWechatImportSession\(\)/);
 assert.match(workbench, /onWorkspaceCloseRequested/);
 assert.match(workbench, /removeWechatWorkspaceCloseRequestedListener/);
 assert.match(workbench, /function resetWechatImportModalState\(\)/);
+
+const discardEntry = workbench.match(
+  /function discardWechatImportSession\(\) \{([\s\S]*?)\n\}\n\nfunction resetWechatImportModalState/,
+)?.[1] || '';
+assert.match(discardEntry, /dismissPendingWechatImport/);
+assert.match(discardEntry, /wechatImportQueue\.value = \[\]/);
+assert.match(discardEntry, /wechatImportBatch\.value = \[\]/);
+assert.match(discardEntry, /wechatImportCompletedTokens\.value = \[\]/);
+assert.match(discardEntry, /activeWechatImportToken\.value = null/);
+assert.match(discardEntry, /wechatScanResults\.value = \[\]/);
+
+const nativeCloseEntry = workbench.match(
+  /onWorkspaceCloseRequested\?\.\(\(\) => \{([\s\S]*?)\n  \}\);/,
+)?.[1] || '';
+assert.match(nativeCloseEntry, /discardWechatImportSession\(\)/);
+assert.match(nativeCloseEntry, /resetWechatImportModalState\(\)/);
 
 const unreadAction = workbench.match(
   /async function readUnreadWechatOrders\(\) \{([\s\S]*?)\n\}\n\nasync function scanAllBoundWechatOrders/,
