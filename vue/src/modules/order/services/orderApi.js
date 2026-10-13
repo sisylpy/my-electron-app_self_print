@@ -28,6 +28,9 @@ const ALLOWED_METHODS = [
   'recognizeOrderFromExcel',
   'recognizeOrderOCR',
   'recognizeOrderOCRWithAi',
+  // 千问视觉识别图片订单并落库：仅 WorkBuddy 连接器自动保存图片订单时使用。
+  // 人工「直接识别」（单列）/「AI识别」（多列）仍走 recognizeOrderOCR / recognizeOrderOCRWithAi。
+  'recognizeOrderQwen',
   'revertTaskOrder',
   'saveManulOrder',
   'saveNxDisLinshiGoods',
