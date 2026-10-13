@@ -1,6 +1,6 @@
 <template>
   <section class="order-flow" aria-label="进行中订单工作台">
-    <Teleport to="#product-header-context">
+    <Teleport defer to="#product-header-context">
       <div class="order-flow__header-tools" aria-label="客户操作">
         <div :class="['order-flow__search-control', { 'is-open': searchOpen }]">
           <button
@@ -177,7 +177,7 @@
           />
         </div>
 
-        <div v-else-if="stageFilter === 'all' || stageFilter === 'progress' || stageFilter === 'price'" class="order-flow__stage-page is-progress">
+        <div v-else-if="stageFilter === 'progress' || stageFilter === 'price'" class="order-flow__stage-page is-progress">
           <div class="order-flow__progress-orders">
             <TodayOrders
               :today-order-list="stageOrders"

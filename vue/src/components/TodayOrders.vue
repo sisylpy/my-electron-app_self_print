@@ -10,10 +10,10 @@
             :disabled="!printableOrders.length"
             @change="toggleAllPrintable($event.target.checked)"
           >
-          全选
+          全选可打印订单
         </label>
         <button class="btn btn-primary btn-sm" :disabled="!canDownloadExcel" @click="handlePrintDeliveryOrder">
-          打印并保存本批（{{ selectedPrintOrders.length }}项）
+          生成并打印（{{ selectedPrintOrders.length }}项）
         </button>
       </div>
     </div>
@@ -48,10 +48,12 @@
           <div v-if="order.nxDoStatus > -2" class="d-flex align-items-center">
             <div style="width: 70px; flex-shrink: 0;" class="text-center fw-bold table-cell order-batch-cell">
               <input
-                v-if="batchPrintMode && isPrintableOrder(order)"
+                v-if="batchPrintMode"
                 type="checkbox"
                 :checked="isOrderSelected(order)"
-                :aria-label="`选择第${index + 1}项加入本批配送单`"
+                :disabled="!isPrintableOrder(order)"
+                :title="isPrintableOrder(order) ? '选择此订单生成配送单' : '仅已出库、已有单价且状态为2的订单可以打印'"
+                :aria-label="isPrintableOrder(order) ? `选择第${index + 1}项加入本批配送单` : `第${index + 1}项暂不可打印`"
                 @change="togglePrintOrder(order, $event.target.checked)"
               >
               <span>{{ index + 1 }}</span>
@@ -161,6 +163,13 @@
           </div>
           <div v-else class="d-flex align-items-center">
             <div style="width: 70px; flex-shrink: 0;" class="text-center fw-bold table-cell order-batch-cell">
+              <input
+                v-if="batchPrintMode"
+                type="checkbox"
+                disabled
+                title="未确认订单暂不可打印"
+                :aria-label="`第${index + 1}项暂不可打印`"
+              >
               <span>{{ index + 1 }}</span>
             </div>
             <div style="width: 200px; flex-shrink: 0;" class="table-cell">
@@ -226,10 +235,12 @@
               <div v-if="order.nxDoStatus > -2" class="d-flex align-items-center">
                 <div style="width: 70px; flex-shrink: 0;" class="text-center fw-bold table-cell order-batch-cell">
                   <input
-                    v-if="batchPrintMode && isPrintableOrder(order)"
+                    v-if="batchPrintMode"
                     type="checkbox"
                     :checked="isOrderSelected(order)"
-                    :aria-label="`选择${dep.depName}第${index + 1}项加入本批配送单`"
+                    :disabled="!isPrintableOrder(order)"
+                    :title="isPrintableOrder(order) ? '选择此订单生成配送单' : '仅已出库、已有单价且状态为2的订单可以打印'"
+                    :aria-label="isPrintableOrder(order) ? `选择${dep.depName}第${index + 1}项加入本批配送单` : `${dep.depName}第${index + 1}项暂不可打印`"
                     @change="togglePrintOrder(order, $event.target.checked)"
                   >
                   <span>{{ index + 1 }}</span>
@@ -337,6 +348,13 @@
               </div>
               <div v-else class="d-flex align-items-center">
                 <div style="width: 70px; flex-shrink: 0;" class="text-center fw-bold table-cell order-batch-cell">
+                  <input
+                    v-if="batchPrintMode"
+                    type="checkbox"
+                    disabled
+                    title="未确认订单暂不可打印"
+                    :aria-label="`${dep.depName}第${index + 1}项暂不可打印`"
+                  >
                   <span>{{ index + 1 }}</span>
                 </div>
                 <div style="width: 200px; flex-shrink: 0;" class="table-cell">
@@ -773,18 +791,10 @@ import TodayOrderActions from './TodayOrderActions.vue';
 import TodayOrderMoreActions from './TodayOrderMoreActions.vue';
 import { isPrintableOrder as eligibleForBatchPrint } from '../modules/order/services/orderWorkbenchStage';
 import { getTodayOrderActionPolicy, validateFinishOutbound } from '../modules/order/services/todayOrderActionPolicy';
-
-const VALID_DEP_PRINT_NAMES = ['ApplyPanel', 'ApplyFiftyPanel', 'ApplyHalfPanel', 'ApplyHalfWholePanel', 'ApplyThirtyPanel', 'ApplyThirtyWholePanel'];
-
-// Apply 打印组件按需加载，减少首屏内存（仅在实际打印时加载对应模板）
-const applyComponentMap = {
-  ApplyPanel: () => import('./Applys/ApplyPanel.vue'),
-  ApplyFiftyPanel: () => import('./Applys/ApplyFiftyPanel.vue'),
-  ApplyHalfPanel: () => import('./Applys/ApplyHalfPanel.vue'),
-  ApplyHalfWholePanel: () => import('./Applys/ApplyHalfWholePanel.vue'),
-  ApplyThirtyPanel: () => import('./Applys/ApplyThirtyPanel.vue'),
-  ApplyThirtyWholePanel: () => import('./Applys/ApplyThirtyWholePanel.vue')
-};
+import {
+  DELIVERY_PRINT_TEMPLATE_LOADERS as applyComponentMap,
+  resolveDeliveryPrintTemplateName,
+} from '../modules/print/services/deliveryPrintTemplateRegistry';
 
 export default {
   name: 'TodayOrders',
@@ -933,8 +943,7 @@ export default {
     },
     // 有效的打印组件名（必须是已注册的 6 种之一）
     effectiveDepPrintName() {
-      const name = this.selectedCustomerDepPrintName || 'ApplyPanel';
-      return VALID_DEP_PRINT_NAMES.includes(name) ? name : 'ApplyPanel';
+      return resolveDeliveryPrintTemplateName(this.selectedCustomerDepPrintName);
     },
     // 日期选择器的最大日期（今天）
     maxDate() {
@@ -1263,10 +1272,8 @@ export default {
         this.$store.commit('SET_LOADING', true);
         const orderCopy = { ...order, hasChoice: true };
         const disUser = this.$store.state.disUser;
-        const businessTypeId = disUser?.nxDistributerEntity?.nxDistributerBusinessTypeId
-          ?? disUser?.nxDistributerBusinessTypeId
-          ?? 0;
-        const apiMethod = businessTypeId > 2
+        const shelfMode = disUser?.nxDistributerEntity?.nxDistributerShelfMode === true;
+        const apiMethod = shelfMode
           ? api.giveOrderWeightListForStockShelfGoods
           : api.giveOrderWeightListForStockAndFinish;
         const res = await apiMethod([orderCopy]);
@@ -2897,6 +2904,11 @@ export default {
   width: 15px;
   height: 15px;
   accent-color: #119b5d;
+}
+
+.order-batch-cell input:disabled {
+  cursor: not-allowed;
+  opacity: .28;
 }
 
 .order-edit-overlay {

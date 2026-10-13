@@ -57,9 +57,22 @@ const handover = buildReturnDocumentHtml({
   originalBillNo: 'LZPS-08-30-001',
   job: { nxDrpjDocumentType: 'CUSTOMER_HANDOVER', nxDrpjAttemptCount: 3 },
   salesReturn: salesReturn([item()]),
-}, '测试配送商');
+}, '测试配送商', {
+  safeLeftMm: 12,
+  safeRightMm: 15,
+  distributorNameFontSize: 19,
+  orderContentFontSize: 15,
+  headerFontSize: 14,
+  lineHeight: 25,
+  zoomFactor: 1,
+  maxPrintableWidth: 200,
+});
 
 assert.match(handover, /客户退货取货交接单/);
+assert.match(handover, /class="document-header__title-row"/);
+assert.match(handover, /class="meta-grid"/);
+assert.match(handover, /class="settlement-panel"/);
+assert.equal((handover.match(/class="signature-item"/g) || []).length, 3);
 assert.match(handover, /取货日期/);
 assert.match(handover, /原配送单/);
 assert.match(handover, /LZPS-08-30-001/);
@@ -69,6 +82,11 @@ assert.match(handover, /客户确认/);
 assert.match(handover, /测试&lt;门店&gt;/);
 assert.doesNotMatch(handover, /测试<门店>/);
 assert.doesNotMatch(handover, /打印次数|模板：|A4 portrait/);
+assert.match(handover, /@page\{size:240mm 140mm;margin:0\}/);
+assert.match(handover, /font-size:14\.0px/);
+assert.match(handover, /padding:7\.00mm 15\.00mm 4\.00mm 12\.00mm/);
+assert.match(handover, /border:2px solid #000/);
+assert.doesNotMatch(handover, /#59625d|#eef1ef|#f5f7f5/);
 
 const adaptiveSingle = buildReturnDocumentHtml({
   customerPrintName: 'ApplyFiftyPanel',

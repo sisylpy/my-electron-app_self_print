@@ -95,6 +95,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useStore } from 'vuex';
 import returnApi from '../api/returnApi';
 import { buildReturnDocumentHtml } from '../services/returnDocumentTemplate';
+import { loadPrinterProfile } from '@/utils/printerProfile';
 
 const store = useStore();
 const jobs = ref([]);
@@ -172,6 +173,13 @@ async function payloadFor(job) {
   return unwrap(await returnApi.getPrintPayload(job.nxDrpjId, scope()));
 }
 
+async function documentHtml(payload) {
+  // 退货单和打印中心正式配送单共用同一台打印机的现场校准参数，
+  // 避免退货单另用一套边距、字号和缩放后出现字小、线淡或越界。
+  const printerProfile = await loadPrinterProfile();
+  return buildReturnDocumentHtml(payload, distributerName.value, printerProfile);
+}
+
 function openPreview(html) {
   const previewWindow = window.open('', '_blank', 'width=1000,height=760');
   if (!previewWindow) throw new Error('预览窗口被浏览器拦截，请允许弹出窗口');
@@ -186,7 +194,7 @@ async function preview(job) {
   busyJobId.value = job.nxDrpjId;
   try {
     const payload = await payloadFor(job);
-    const html = buildReturnDocumentHtml(payload, distributerName.value);
+    const html = await documentHtml(payload);
     if (window.electronAPI?.previewReturnDocument) {
       const result = await window.electronAPI.previewReturnDocument(html);
       if (!result?.success) throw new Error(result?.error || '桌面端未能打开预览窗口');
@@ -209,20 +217,20 @@ async function desktopPrint(html) {
   return { success: true, printerName: '浏览器打印' };
 }
 
-async function printJob(job) {
+async function printJob(job, preparedHtml = '') {
   if (busyJobId.value) return;
   busyJobId.value = job.nxDrpjId;
   let started = false;
   let deliveredToPrinter = false;
   let finishWriteFailed = false;
   try {
-    const payload = await payloadFor(job);
+    const html = preparedHtml || await documentHtml(await payloadFor(job));
     const defaultPrinter = await window.electronAPI?.getDefaultPrinter?.();
     const printerName = defaultPrinter?.printerName || defaultPrinter?.displayName || '系统默认打印机';
     unwrap(await returnApi.startPrint(job.nxDrpjId, { ...scope(), printerName }));
     started = true;
 
-    const result = await desktopPrint(buildReturnDocumentHtml(payload, distributerName.value));
+    const result = await desktopPrint(html);
     if (!result?.success) throw new Error(result?.error || '打印机未接受任务');
     deliveredToPrinter = true;
     unwrap(await returnApi.finishPrint(job.nxDrpjId, { ...scope(), success: true, errorMessage: '' }));
@@ -264,14 +272,18 @@ async function retry(job) {
 async function reprint(job) {
   busyJobId.value = job.nxDrpjId;
   try {
-    unwrap(await returnApi.retryPrint(job.nxDrpjId, scope()));
+    // 在改变任务状态之前先固定完整 HTML。这样审核重打和首次打印使用
+    // 完全相同的客户纸型、页面尺寸和现场校准参数，避免 Windows 驱动
+    // 在第二次静默打印时回退到默认 A4 纵向。
+    const preparedHtml = await documentHtml(await payloadFor(job));
+    const pendingJob = unwrap(await returnApi.retryPrint(job.nxDrpjId, scope()));
+    busyJobId.value = null;
+    await printJob(pendingJob || { ...job, nxDrpjStatus: 'PENDING' }, preparedHtml);
   } catch (error) {
     busyJobId.value = null;
     showMessage(error?.message || '申请重打失败', 'error');
     return;
   }
-  busyJobId.value = null;
-  await printJob({ ...job, nxDrpjStatus: 'PENDING' });
 }
 
 function isBusy(job) { return busyJobId.value === job.nxDrpjId; }

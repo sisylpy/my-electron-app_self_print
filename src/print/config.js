@@ -41,6 +41,20 @@ function createSilentPrintOptions(deviceName, options = {}) {
     ...getDriverManagedDpiOptions(),
   };
 
+  // Windows 的 Epson 针式驱动在连续纸第二次静默打印时，偶尔会退回
+  // 打印机默认的 A4 纵向纸型。退货单可以把模板中的物理尺寸显式传进来，
+  // 配送单未传 pageSize 时继续保持原有、已经现场验证过的驱动行为。
+  if (options.pageSize
+    && Number.isFinite(options.pageSize.width)
+    && Number.isFinite(options.pageSize.height)
+    && options.pageSize.width >= 353
+    && options.pageSize.height >= 353) {
+    printOptions.pageSize = {
+      width: Math.round(options.pageSize.width),
+      height: Math.round(options.pageSize.height),
+    };
+  }
+
   // 历史打印入口一直显式声明 marginType:none，保留该行为。
   if (options.includeLegacyMargins) {
     printOptions.margins = { marginType: 'none' };

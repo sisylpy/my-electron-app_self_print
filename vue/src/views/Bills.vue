@@ -436,15 +436,7 @@
     import TaskOrder from '@/modules/order/components/TaskOrderWorkspace.vue';
     import HistoryOrders from '@/components/HistoryOrders.vue';
     import { customerOrderStats } from '@/modules/order/services/orderWorkbenchStage';
-
-    const applyComponentMap = {
-        ApplyPanel: () => import('../components/Applys/ApplyPanel.vue'),
-        ApplyFiftyPanel: () => import('../components/Applys/ApplyFiftyPanel.vue'),
-        ApplyHalfPanel: () => import('../components/Applys/ApplyHalfPanel.vue'),
-        ApplyHalfWholePanel: () => import('../components/Applys/ApplyHalfWholePanel.vue'),
-        ApplyThirtyPanel: () => import('../components/Applys/ApplyThirtyPanel.vue'),
-        ApplyThirtyWholePanel: () => import('../components/Applys/ApplyThirtyWholePanel.vue')
-    };
+    import { DELIVERY_PRINT_TEMPLATE_LOADERS as applyComponentMap } from '@/modules/print/services/deliveryPrintTemplateRegistry';
 
     export default {
         name: "Bills",

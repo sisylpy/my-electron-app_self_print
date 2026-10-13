@@ -30,6 +30,7 @@ Thumbs.db
 *.pyo
 /src/wechat/ui-automation/mac/artifacts/
 /work/
+/tmp/
 
 # Archives
 *.zip
