@@ -39,7 +39,7 @@ class AccessibilityFocusTest(unittest.TestCase):
         self.assertFalse(result.retried)
         self.assertEqual(result.header, "调料群 (3)")
         run_script.assert_called_once()
-        self.assertEqual(run_script.call_args.args[-1], "调料群")
+        self.assertEqual(run_script.call_args.args[-2:], ("调料群", "0"))
         script_lines = run_script.call_args.args[0]
         self.assertIn('return "OPENED_RETRY" & tab & retryHeader', script_lines)
         self.assertIn("set retryHeader to my searchAndRead(expectedTitle, 0.9, 1.0)", script_lines)
@@ -53,6 +53,21 @@ class AccessibilityFocusTest(unittest.TestCase):
         self.assertTrue(result.matched)
         self.assertTrue(result.already_open)
         self.assertFalse(result.retried)
+
+    @patch("automation.accessibility_focus._osascript")
+    def test_force_search_bypasses_already_open_shortcut(self, run_script) -> None:
+        run_script.return_value = "OPENED\tFangfang"
+
+        result = focus_conversation_with_accessibility("Fangfang", force_search=True)
+
+        self.assertTrue(result.matched)
+        self.assertFalse(result.already_open)
+        self.assertEqual(run_script.call_args.args[-2:], ("Fangfang", "1"))
+        script_lines = run_script.call_args.args[0]
+        self.assertIn(
+            "if (not forceSearch) and my headerMatches(currentHeader, expectedTitle) then",
+            script_lines,
+        )
 
     @patch("automation.accessibility_focus._osascript")
     def test_focus_reports_successful_retry(self, run_script) -> None:

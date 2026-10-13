@@ -60,7 +60,9 @@ def current_conversation_header() -> str:
     return _GROUP_MEMBER_COUNT.sub("", visible).strip()
 
 
-def focus_conversation_with_accessibility(target: str) -> AccessibilityFocusResult:
+def focus_conversation_with_accessibility(
+    target: str, *, force_search: bool = False
+) -> AccessibilityFocusResult:
     """Open one exact conversation through WeChat's accessibility search field.
 
     This path avoids three full-window OCR passes for every customer. The
@@ -109,6 +111,10 @@ def focus_conversation_with_accessibility(target: str) -> AccessibilityFocusResu
             "end searchAndRead",
             "on run argv",
             "set expectedTitle to item 1 of argv",
+            "set forceSearch to false",
+            "if (count of argv) > 1 then",
+            'if item 2 of argv is "1" then set forceSearch to true',
+            "end if",
             'tell application "WeChat" to reopen',
             'tell application "System Events" to tell process "WeChat"',
             "set frontmost to true",
@@ -121,7 +127,7 @@ def focus_conversation_with_accessibility(target: str) -> AccessibilityFocusResu
             "end tell",
             "delay 0.1",
             "set currentHeader to my readHeader()",
-            "if my headerMatches(currentHeader, expectedTitle) then",
+            "if (not forceSearch) and my headerMatches(currentHeader, expectedTitle) then",
             'return "ALREADY_OPEN" & tab & currentHeader',
             "end if",
             "set openedHeader to my searchAndRead(expectedTitle, 0.45, 0.75)",
@@ -140,6 +146,7 @@ def focus_conversation_with_accessibility(target: str) -> AccessibilityFocusResu
             "end run",
         ],
         expected,
+        "1" if force_search else "0",
     )
     state, separator, opened_header = output.partition(_FOCUS_RESULT_SEPARATOR)
     if not separator:

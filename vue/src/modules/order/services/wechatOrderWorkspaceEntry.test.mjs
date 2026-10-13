@@ -155,7 +155,10 @@ const selectedCustomerImport = workbench.match(
 )?.[0] || '';
 assert.match(selectedCustomerImport, /if \(!result\.payload\)/);
 assert.match(selectedCustomerImport, /selected-conversation-fallback/);
-assert.match(selectedCustomerImport, /focusWechatImportConversation\(\{ conversationTitle: title \}\)/);
+assert.match(
+  selectedCustomerImport,
+  /focusWechatImportConversation\([\s\S]*?\{ conversationTitle: title \},[\s\S]*?\{ forceReselect: true \}/,
+);
 assert.match(selectedCustomerImport, /readMode: 'focused-verification'/);
 assert.match(workbench, /writeAppLog\('info', 'wechat-order-timing', 'phase'/);
 assert.match(workbench, /writeAppLog\(outcome === 'success' \? 'info' : 'warn', 'wechat-order-timing', 'summary'/);
@@ -275,10 +278,10 @@ assert.match(desktopSelectionListener, /await syncWechatSelectionFromDesktop\(pa
 assert.match(desktopSelectionListener, /await focusWechatWorkspaceApp\(\)/);
 assert.match(workbench, /void handleWechatConversationChanged\(payload\)/);
 const focusConversationAction = workbench.match(
-  /async function focusWechatImportConversation\(item\) \{([\s\S]*?)\n\}\n\nasync function openWechatWorkspace/,
+  /async function focusWechatImportConversation\(item, options = \{\}\) \{([\s\S]*?)\n\}\n\nasync function openWechatWorkspace/,
 )?.[1] || '';
 assert.match(focusConversationAction, /wechatConversationSwitching\.value = true/);
-assert.match(focusConversationAction, /await focusApi\(conversationTitle\)/);
+assert.match(focusConversationAction, /await focusApi\(conversationTitle,[\s\S]*?forceReselect/);
 assert.match(focusConversationAction, /UNSUPPORTED_PLATFORM/);
 assert.match(focusConversationAction, /wechatConversationSwitching\.value = false/);
 assert.match(workbench, /selectedWechatTodayInbox = useTodayOrderInbox\(disUser\)/);

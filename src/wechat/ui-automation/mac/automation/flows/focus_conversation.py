@@ -77,9 +77,11 @@ class FocusConversationFlow:
         self,
         *,
         target: str,
+        force_search: bool = False,
         artifact_root: Path = Path("artifacts/private"),
     ) -> None:
         self.target = target.strip()
+        self.force_search = force_search
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         self.artifact_dir = artifact_root / timestamp
         self.artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -137,7 +139,10 @@ class FocusConversationFlow:
     def run(self) -> OperationResult:
         try:
             try:
-                fast_focus = focus_conversation_with_accessibility(self.target)
+                fast_focus = focus_conversation_with_accessibility(
+                    self.target,
+                    force_search=self.force_search,
+                )
                 if fast_focus.matched:
                     self.details.append(
                         "ACCESSIBILITY_CURRENT_CONVERSATION"
@@ -183,7 +188,7 @@ class FocusConversationFlow:
             # verified conversation active is enough for WeChat to clear its
             # unread badge. Avoid reopening search, which would temporarily
             # take focus away from the current conversation.
-            if self._header_matches(shot, items):
+            if not self.force_search and self._header_matches(shot, items):
                 self.details.append("CURRENT_CONVERSATION_ACTIVATED")
                 return self._finish(
                     ResultCode.SUCCESS,

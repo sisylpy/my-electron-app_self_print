@@ -865,6 +865,7 @@ function setupIpcHandlers() {
       // cannot have been changed by the user. Re-clicking that same task is a
       // no-op and should not flash a several-second switching mask.
       if (process.platform === 'win32'
+          && input?.forceReselect !== true
           && requestedTitle
           && mainWindow?.isFocused?.()
           && windowsWechatVerifiedConversationTitle === requestedTitle) {
@@ -891,6 +892,7 @@ function setupIpcHandlers() {
       // hint therefore costs one check but can never open/read the wrong chat.
       if (!result
           && process.platform === 'win32'
+          && input?.forceReselect !== true
           && requestedTitle
           && windowsWechatSelectionObservationLastTitle === requestedTitle) {
         const verifyStartedAt = Date.now();

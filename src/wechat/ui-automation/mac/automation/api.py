@@ -31,6 +31,7 @@ def current_conversation(
 def focus_conversation(
     target: str,
     *,
+    force_search: bool = False,
     artifact_root: Path | None = None,
 ) -> OperationResult:
     """Open one exact visible conversation without sending or changing data."""
@@ -44,6 +45,7 @@ def focus_conversation(
         )
     return FocusConversationFlow(
         target=target,
+        force_search=force_search,
         artifact_root=artifact_root or DEFAULT_PRIVATE_ARTIFACT_ROOT,
     ).run()
 

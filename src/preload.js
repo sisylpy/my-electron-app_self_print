@@ -205,8 +205,11 @@ const electronAPI = Object.freeze({
       ipcRenderer.invoke('wechat-ui-current-conversation', {
         requireForeground: options?.requireForeground === true,
       }),
-    focusConversation: (title) =>
-      ipcRenderer.invoke('wechat-ui-focus-conversation', { title }),
+    focusConversation: (title, options = {}) =>
+      ipcRenderer.invoke('wechat-ui-focus-conversation', {
+        title,
+        forceReselect: options?.forceReselect === true,
+      }),
     openWorkspace: () => ipcRenderer.invoke('wechat-ui-workspace-open'),
     focusWorkspace: () => ipcRenderer.invoke('wechat-ui-workspace-focus'),
     closeWorkspace: () => ipcRenderer.invoke('wechat-ui-workspace-close'),

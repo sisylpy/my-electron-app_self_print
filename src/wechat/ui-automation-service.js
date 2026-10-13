@@ -59,8 +59,11 @@ function normalizeConversationTitle(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('微信会话切换参数无效');
   }
-  if (Object.keys(input).some(key => key !== 'title')) {
+  if (Object.keys(input).some(key => key !== 'title' && key !== 'forceReselect')) {
     throw new Error('微信会话切换包含未允许的参数');
+  }
+  if (input.forceReselect !== undefined && typeof input.forceReselect !== 'boolean') {
+    throw new Error('微信会话强制重选参数无效');
   }
   const [title] = normalizeAllowedTitles({ allowedTitles: [input.title] });
   return title;
@@ -184,6 +187,9 @@ function parseAutomationOutput(stdout, allowedTitles) {
     code: payload.code,
     message: typeof payload.message === 'string' ? payload.message : '',
     metrics: payload.metrics && typeof payload.metrics === 'object' ? payload.metrics : {},
+    details: Array.isArray(payload.details)
+      ? payload.details.filter(detail => typeof detail === 'string')
+      : [],
     openedTitles,
     candidateTitles,
   };
@@ -412,7 +418,7 @@ function createWechatUiAutomationService(options = {}) {
     });
   }
 
-  function runMacFocus(root, title) {
+  function runMacFocus(root, title, forceReselect = false) {
     const script = path.join(root, 'scripts', 'focus_conversation.py');
     if (!fs.existsSync(script)) {
       return Promise.resolve({
@@ -422,6 +428,7 @@ function createWechatUiAutomationService(options = {}) {
     }
     const python = resolveMacPythonCommand(options);
     const args = [script, '--title', title];
+    if (forceReselect) args.push('--force-search');
     if (artifactRoot) args.push('--artifact-root', artifactRoot);
     return runProcess(python, args, root, [title], {
       classifyEmptyOutput: classifyMacPythonFailure,
@@ -624,6 +631,7 @@ function createWechatUiAutomationService(options = {}) {
       }
       try {
         const title = normalizeConversationTitle(input);
+        const forceReselect = input?.forceReselect === true;
         if (platform === 'win32') {
           return await runWindowsFocusConversation(
             resolveWindowsFocusConversationScript(options),
@@ -652,7 +660,7 @@ function createWechatUiAutomationService(options = {}) {
             };
           }
         }
-        return await runMacFocus(resolveMacAutomationRoot(options), title);
+        return await runMacFocus(resolveMacAutomationRoot(options), title, forceReselect);
       } catch (error) {
         return { ok: false, error: { code: 'INVALID_ARGUMENT', message: error.message } };
       }

@@ -19,6 +19,14 @@ const {
 } = require('../src/wechat/ui-automation-service');
 
 assert.strictEqual(normalizeConversationTitle({ title: ' 金调料 ' }), '金调料');
+assert.strictEqual(
+  normalizeConversationTitle({ title: ' 金调料 ', forceReselect: true }),
+  '金调料'
+);
+assert.throws(
+  () => normalizeConversationTitle({ title: '测试', forceReselect: 'yes' }),
+  /强制重选参数无效/
+);
 assert.throws(() => normalizeConversationTitle({ title: '测试', command: 'bad' }), /未允许/);
 
 assert.deepStrictEqual(
@@ -44,9 +52,11 @@ const parsed = parseAutomationOutput(JSON.stringify({
     { title: '未绑定', status: 'OPENED' },
     { title: '金调料', status: 'OPENED' },
   ],
+  details: ['ACCESSIBILITY_SEARCH_VERIFIED'],
 }), ['金调料']);
 assert.deepStrictEqual(parsed.openedTitles, ['金调料']);
 assert.strictEqual(parsed.metrics.UNREAD_OPENED, '2');
+assert.deepStrictEqual(parsed.details, ['ACCESSIBILITY_SEARCH_VERIFIED']);
 
 const unreadSummary = parseUnreadSummaryOutput(JSON.stringify({
   code: 'SUCCESS',
@@ -514,10 +524,11 @@ async function verifyMacConversationFocus() {
       return child;
     },
   });
-  const result = await service.focusConversation({ title: '金调料' });
+  const result = await service.focusConversation({ title: '金调料', forceReselect: true });
   assert.strictEqual(result.ok, true);
   assert.ok(spawnedArgs.some(arg => String(arg).endsWith('focus_conversation.py')));
   assert.ok(spawnedArgs.includes('金调料'));
+  assert.ok(spawnedArgs.includes('--force-search'));
 }
 
 async function verifyWindowsConversationFocus() {

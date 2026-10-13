@@ -908,7 +908,7 @@ function mergeActiveWechatImport() {
   activeWechatImportToken.value = refreshed.token;
 }
 
-async function focusWechatImportConversation(item) {
+async function focusWechatImportConversation(item, options = {}) {
   const conversationTitle = String(item?.conversationTitle || '').trim();
   const focusApi = window.electronAPI?.wechatUi?.focusConversation;
   if (!conversationTitle || !focusApi) return '';
@@ -916,7 +916,9 @@ async function focusWechatImportConversation(item) {
   wechatConversationSwitching.value = true;
   wechatConversationSwitchingTitle.value = conversationTitle;
   try {
-    const result = await focusApi(conversationTitle);
+    const result = await focusApi(conversationTitle, {
+      forceReselect: options.forceReselect === true,
+    });
     if (result?.error?.code === 'UNSUPPORTED_PLATFORM') return '';
     return result?.ok
       ? ''
@@ -1790,7 +1792,10 @@ async function importWechatConversationForCustomer(
     const focusWarning = await timeWechatOrderPhase(
       timing,
       'selected-conversation-focus',
-      () => focusWechatImportConversation({ conversationTitle: title })
+      () => focusWechatImportConversation(
+        { conversationTitle: title },
+        { forceReselect: true }
+      )
     );
     if (focusWarning) throw new Error(focusWarning);
     result = await prepareWechatOrderImport({
