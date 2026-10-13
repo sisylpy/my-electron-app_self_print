@@ -182,7 +182,10 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router'; // 导入 useRouter
 import deviceAdminApi from '../api/deviceAdmin.js';
-import { REMEMBER_PRINTER_USER_KEY } from '../utils/rememberPrinterUser';
+import {
+  isRememberPrinterUserEnabled,
+  setRememberPrinterUserEnabled,
+} from '../utils/rememberPrinterUser';
   // 使用 import 来引入图片
   import ad1 from '../assets/ad/ad1.png'
   import ad2 from '@/assets/ad/ad2.png';
@@ -198,29 +201,16 @@ import { REMEMBER_PRINTER_USER_KEY } from '../utils/rememberPrinterUser';
       // 获取路由对象
       const router = useRouter();
 
-      const readRememberInitial = () => localStorage.getItem(REMEMBER_PRINTER_USER_KEY) === '1';
+      const rememberUser = ref(isRememberPrinterUserEnabled());
 
-      const rememberUser = ref(readRememberInitial());
-
-      /** 仅写 localStorage（同步）+ 异步同步 userData，不用 sendSync，避免界面卡顿、勾选延迟 */
       const persistRememberUser = () => {
-        const on = !!rememberUser.value;
-        if (on) {
-          localStorage.setItem(REMEMBER_PRINTER_USER_KEY, '1');
-        } else {
-          localStorage.removeItem(REMEMBER_PRINTER_USER_KEY);
-        }
-        try {
-          window.electronAPI?.rememberPrinterUserSetAsync?.(on);
-        } catch (e) {
-          console.warn('[记住用户] 异步写入 userData 失败:', e);
-        }
+        rememberUser.value = setRememberPrinterUserEnabled(rememberUser.value);
       };
 
       /** 主菜单「文件 → 取消自动登录」通过 preload 白名单事件同步取消勾选。 */
       const onMenuClearAutoLogin = () => {
         rememberUser.value = false;
-        localStorage.removeItem(REMEMBER_PRINTER_USER_KEY);
+        setRememberPrinterUserEnabled(false);
       };
       let clearRememberUserCleanup = null;
 

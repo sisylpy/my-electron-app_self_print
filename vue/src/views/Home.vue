@@ -1,32 +1,55 @@
 ﻿<template>
   <div class="login-container">
-    <div class="login-box">
-      <div class="login-logo">
-        <b>请用微信扫描</b>
-      </div>
-      <div class="login-box-body">
-        <p class="login-box-msg">京采接单小程序登录</p>
+    <LoginStoryPanel />
 
-        <!-- 显示二维码或错误信息 -->
-        <div class="qr-code-container">
-          <img v-if="qrCodeUrl && !showMarketError" :src="qrCodeUrl" alt="扫码登录" class="qr-code" />
-          
-        <!-- 市场不匹配错误 -->
-        <div v-if="showMarketError" class="market-error">
-          <div class="error-icon">⚠️</div>
-          <h3>设备配置不匹配</h3>
-          <p>当前设备配置与您的市场不匹配</p>
-          <p>请联系管理员重新配置设备</p>
-          
-          
-          <div class="countdown">
-            <p>{{ countdown }}秒后自动返回上一页</p>
+    <main class="login-panel">
+      <section class="login-box" aria-labelledby="login-title">
+        <header class="login-heading">
+          <span class="login-heading__icon" aria-hidden="true">
+            <svg viewBox="0 0 32 32">
+              <path d="M7 11.8A7.8 7.8 0 0 1 14.8 4h2.4A7.8 7.8 0 0 1 25 11.8v2.6a7.8 7.8 0 0 1-7.8 7.8H16l-4.5 3.5v-4A7.8 7.8 0 0 1 7 14.4z" />
+              <circle cx="13" cy="13" r="1.3" />
+              <circle cx="19" cy="13" r="1.3" />
+            </svg>
+          </span>
+          <span>
+            <strong>微信安全登录</strong>
+            <small>配送商桌面端</small>
+          </span>
+        </header>
+        <div class="login-box-body">
+          <h2 id="login-title">微信扫码登录</h2>
+          <p class="login-box-msg">请使用微信扫一扫，确认后自动进入“录单”工作台</p>
+
+        <div class="qr-code-container" :class="{ 'has-error': showMarketError }">
+          <template v-if="!showMarketError">
+            <span class="qr-corner corner-one"></span>
+            <span class="qr-corner corner-two"></span>
+            <span class="qr-corner corner-three"></span>
+            <span class="qr-corner corner-four"></span>
+            <img v-if="qrCodeUrl" :src="qrCodeUrl" alt="微信扫码登录二维码" class="qr-code" />
+            <div v-else class="qr-loading" role="status" aria-label="正在生成二维码">
+              <i></i><span>正在生成二维码</span>
+            </div>
+            <span v-if="qrCodeUrl" class="scan-line" aria-hidden="true"></span>
+          </template>
+
+          <div v-else class="market-error" role="alert">
+            <span class="error-icon" aria-hidden="true">!</span>
+            <h3>这台电脑与账号不匹配</h3>
+            <p>当前账号不属于这台电脑配置的配送市场，请联系管理员检查设备配置。</p>
+            <div class="countdown">{{ countdown }} 秒后自动返回</div>
+            <button class="retry-btn" type="button" @click="restartLogin">换一个账号登录</button>
           </div>
-          <button class="retry-btn" @click="restartLogin">重新登录</button>
-        </div>
         </div>
 
-        <p v-if="loginError" class="test-login__error" role="alert">{{ loginError }}</p>
+        <div v-if="!showMarketError" class="login-status">
+          <span><i></i>二维码仅用于本次登录</span>
+          <button type="button" @click="restartLogin">刷新二维码</button>
+        </div>
+
+        <p v-if="loginNotice" class="login-notice" role="status">{{ loginNotice }}</p>
+        <p v-if="loginError" class="test-login__error login-error" role="alert">{{ loginError }}</p>
         <div v-if="showTestLogin" class="test-login-divider"><span>测试服务器临时入口</span></div>
         <form v-if="showTestLogin" class="test-login" @submit.prevent="loginWithTestUserId">
           <label for="test-distributer-user-id">配送商用户 ID</label>
@@ -48,10 +71,14 @@
           <p v-if="testLoginError" class="test-login__error">{{ testLoginError }}</p>
         </form>
 
-        <!-- 登录提示 -->
-        <p class="login-instructions" @click="goScreen">退出登录</p>
-      </div>
-    </div>
+        <footer class="login-help">
+          <span>打开微信 → 扫一扫 → 确认登录</span>
+          <button type="button" @click="goScreen">返回</button>
+        </footer>
+        </div>
+      </section>
+      <p class="login-panel__footer">安全登录 · 订单数据只在授权后读取</p>
+    </main>
   </div>
 </template>
 
@@ -63,10 +90,12 @@ import QRCode from 'qrcode'
 import { defaultRouteNameForUser } from '@/utils/disUserRole'
 import config from '@/config'
 import { desktopOrderSessionRequest, isPackagedDesktop } from '@/api/desktopOrderSession'
+import LoginStoryPanel from '@/components/login/LoginStoryPanel.vue'
 
 
 export default {
   name: "Home",
+  components: { LoginStoryPanel },
   data() {
     return {
       qrCodeUrl: '',  // 保存二维码生成的 URL
@@ -80,6 +109,7 @@ export default {
       testLoggingIn: false,
       testLoginError: '',
       loginError: '',
+      loginNotice: '',
       showTestLogin: import.meta.env.DEV,
     }
   },
@@ -88,6 +118,9 @@ mounted() {
   // 重置所有状态
   this.showMarketError = false;
   this.countdown = 10;
+  this.loginNotice = this.$route.query.reason === 'session-expired'
+    ? '登录状态已失效，请重新用微信扫码登录'
+    : (this.$route.query.reason === 'login-required' ? '请先用微信扫码登录' : '');
   
   this.generateQRCode();  // 页面加载后生成二维码
   this.startPolling();    // 启动轮询
@@ -337,6 +370,7 @@ mounted() {
 
     // 重新开始登录
     restartLogin() {
+      this.stopPolling();
       this.showMarketError = false;
       this.loginError = '';
       this.countdown = 10;
@@ -490,6 +524,17 @@ mounted() {
   line-height: 1.5;
 }
 
+.login-notice {
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  border: 1px solid #b8dfcc;
+  border-radius: 8px;
+  color: #116c46;
+  background: #eefaf4;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 /* 市场错误样式 */
 .market-error {
   text-align: center;
@@ -589,6 +634,207 @@ mounted() {
     width: 120px;
     height: 120px;
   }
+}
+</style>
+
+<style scoped>
+.login-container {
+  display: grid;
+  grid-template-columns: minmax(520px, 1fr) minmax(410px, 520px);
+  width: 100%;
+  min-width: 0;
+  height: 100vh;
+  min-height: 560px;
+  overflow: hidden;
+  color: #1e3429;
+  background:
+    radial-gradient(circle at 9% 10%, rgba(255, 233, 211, .72), transparent 28%),
+    radial-gradient(circle at 78% 8%, rgba(195, 231, 214, .52), transparent 30%),
+    linear-gradient(135deg, #fbfaf6 0%, #f2f7f3 52%, #edf5f1 100%);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.login-panel {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 38px clamp(30px, 4vw, 58px) 24px;
+  border-left: 1px solid rgba(46, 85, 65, .08);
+  background: rgba(247, 250, 248, .7);
+  backdrop-filter: blur(22px);
+}
+
+.login-box {
+  box-sizing: border-box;
+  width: min(100%, 424px);
+  padding: 30px 34px 25px;
+  border: 1px solid rgba(40, 82, 60, .09);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 28px 70px rgba(34, 71, 52, .13), 0 4px 14px rgba(34, 71, 52, .05);
+  text-align: center;
+}
+
+.login-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  text-align: left;
+}
+
+.login-heading__icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border-radius: 13px;
+  color: #fff;
+  background: linear-gradient(145deg, #1aae69, #087847);
+  box-shadow: 0 9px 22px rgba(12, 127, 75, .2);
+  place-items: center;
+}
+
+.login-heading__icon svg {
+  width: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.login-heading strong,
+.login-heading small { display: block; }
+.login-heading strong { color: #244236; font-size: 15px; font-weight: 800; }
+.login-heading small { margin-top: 2px; color: #91a098; font-size: 10px; letter-spacing: .12em; }
+
+.login-box-body { margin-top: 22px; }
+.login-box-body h2 { margin: 0; color: #172e23; font-size: 27px; font-weight: 850; letter-spacing: -.02em; }
+.login-box-msg { max-width: 310px; margin: 9px auto 0; color: #78877f; font-size: 13px; line-height: 1.65; }
+
+.qr-code-container {
+  position: relative;
+  display: grid;
+  box-sizing: border-box;
+  width: 222px;
+  height: 222px;
+  margin: 21px auto 13px;
+  padding: 18px;
+  overflow: hidden;
+  border: 1px solid #e5ece8;
+  border-radius: 22px;
+  background: #fff;
+  place-items: center;
+}
+
+.qr-code-container.has-error {
+  width: 100%;
+  height: auto;
+  min-height: 260px;
+  padding: 22px;
+  border-color: #f0d9d3;
+  background: #fffaf8;
+}
+
+.qr-code { width: 184px; height: 184px; margin: 0; object-fit: contain; }
+.qr-corner { position: absolute; z-index: 2; width: 23px; height: 23px; border-color: #139d5f; border-style: solid; }
+.corner-one { top: 8px; left: 8px; border-width: 2px 0 0 2px; border-radius: 8px 0 0; }
+.corner-two { top: 8px; right: 8px; border-width: 2px 2px 0 0; border-radius: 0 8px 0 0; }
+.corner-three { bottom: 8px; left: 8px; border-width: 0 0 2px 2px; border-radius: 0 0 0 8px; }
+.corner-four { right: 8px; bottom: 8px; border-width: 0 2px 2px 0; border-radius: 0 0 8px; }
+.scan-line { position: absolute; z-index: 3; top: 24px; right: 22px; left: 22px; height: 2px; border-radius: 99px; background: linear-gradient(90deg, transparent, #20bd73 18%, #20bd73 82%, transparent); box-shadow: 0 0 9px rgba(32, 189, 115, .48); animation: qr-scan 3.2s ease-in-out infinite; }
+
+.qr-loading { display: grid; gap: 13px; color: #85958d; font-size: 12px; place-items: center; }
+.qr-loading i { width: 30px; height: 30px; border: 3px solid #dbe8e1; border-top-color: #119b5d; border-radius: 50%; animation: qr-spin .8s linear infinite; }
+
+.login-status { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #84928b; font-size: 11px; }
+.login-status span { display: inline-flex; align-items: center; gap: 6px; }
+.login-status span i { width: 6px; height: 6px; border-radius: 50%; background: #20af69; box-shadow: 0 0 0 4px rgba(32, 175, 105, .1); }
+.login-status button, .login-help button { padding: 0; border: 0; color: #178858; background: transparent; font: inherit; cursor: pointer; }
+.login-status button:hover, .login-help button:hover { color: #096c41; }
+
+.login-notice, .login-error {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  border: 1px solid #c4e4d4;
+  border-radius: 9px;
+  color: #106a44;
+  background: #eff9f4;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.login-error { border-color: #f0d3ce; color: #a8473d; background: #fff6f4; }
+
+.market-error { margin: 0; padding: 2px 0; border: 0; background: transparent; }
+.error-icon { display: grid; width: 43px; height: 43px; margin: 0 auto 12px; border-radius: 50%; color: #fff; background: #d96b59; font-size: 23px; font-weight: 850; place-items: center; }
+.market-error h3 { margin: 0; color: #6e3029; font-size: 18px; }
+.market-error p { max-width: 285px; margin: 9px auto 0; color: #866a65; font-size: 12px; line-height: 1.7; }
+.countdown { margin: 12px 0 0; padding: 0; border: 0; color: #a4774b; background: transparent; font-size: 11px; }
+.retry-btn { height: 37px; margin-top: 15px; padding: 0 17px; border: 0; border-radius: 10px; color: #fff; background: #15965b; font-size: 12px; font-weight: 750; cursor: pointer; }
+.retry-btn:hover { background: #0c7c49; }
+
+.test-login-divider { display: flex; align-items: center; gap: 10px; margin: 14px 0 12px; color: #84938b; font-size: 11px; }
+.test-login-divider::before, .test-login-divider::after { height: 1px; flex: 1; background: #e1e9e5; content: ''; }
+.test-login { padding: 13px; border: 1px solid #d4e5dc; border-radius: 11px; background: #f6faf8; text-align: left; }
+.test-login label { display: block; margin-bottom: 7px; color: #3a5d4c; font-size: 12px; font-weight: 700; }
+.test-login__controls { display: grid; grid-template-columns: minmax(0, 1fr) 88px; gap: 8px; }
+.test-login input, .test-login button { box-sizing: border-box; height: 36px; border-radius: 8px; font-size: 12px; }
+.test-login input { min-width: 0; padding: 0 10px; border: 1px solid #cddbd4; outline: none; background: #fff; }
+.test-login input:focus { border-color: #15945d; box-shadow: 0 0 0 3px rgba(21, 148, 93, .1); }
+.test-login button { border: 1px solid #15945d; color: #fff; background: #15945d; cursor: pointer; font-weight: 700; }
+.test-login button:disabled { border-color: #a8c8b8; background: #a8c8b8; cursor: not-allowed; }
+.test-login__error { margin: 8px 0 0; color: #b9473d; font-size: 11px; line-height: 1.5; }
+
+.login-help { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #edf1ef; color: #89968f; font-size: 11px; }
+.login-panel__footer { margin: 20px 0 0; color: #95a099; font-size: 10px; letter-spacing: .03em; }
+
+@keyframes qr-spin { to { transform: rotate(360deg); } }
+@keyframes qr-scan { 0%, 100% { opacity: .35; transform: translateY(0); } 50% { opacity: .95; transform: translateY(170px); } }
+
+@media (max-height: 760px) and (min-width: 781px) {
+  .login-panel { padding-top: 20px; padding-bottom: 14px; }
+  .login-box { padding: 22px 29px 20px; border-radius: 23px; }
+  .login-box-body { margin-top: 14px; }
+  .login-box-body h2 { font-size: 24px; }
+  .qr-code-container { width: 190px; height: 190px; margin-top: 13px; padding: 15px; }
+  .qr-code { width: 158px; height: 158px; }
+  .scan-line { right: 19px; left: 19px; animation-name: qr-scan-compact; }
+  .login-help { margin-top: 12px; padding-top: 12px; }
+  .login-panel__footer { margin-top: 11px; }
+}
+
+@keyframes qr-scan-compact { 0%, 100% { opacity: .35; transform: translateY(0); } 50% { opacity: .95; transform: translateY(138px); } }
+
+@media (max-width: 980px) {
+  .login-container { grid-template-columns: minmax(400px, 1fr) minmax(360px, 430px); }
+  .login-panel { padding-right: 28px; padding-left: 28px; }
+}
+
+@media (max-width: 780px) {
+  .login-container { grid-template-columns: 1fr; grid-template-rows: minmax(255px, 35vh) minmax(0, 1fr); min-height: 700px; overflow: auto; }
+  .login-panel { justify-content: flex-start; padding: 22px 28px 28px; border-top: 1px solid rgba(46, 85, 65, .08); border-left: 0; }
+  .login-box { width: min(100%, 500px); }
+}
+
+@media (max-width: 560px) {
+  .login-container { grid-template-rows: 210px minmax(0, 1fr); min-height: 650px; }
+  .login-panel { padding: 17px 16px 24px; }
+  .login-box { padding: 20px 22px 18px; border-radius: 22px; }
+  .login-heading { display: none; }
+  .login-box-body { margin-top: 0; }
+  .login-box-body h2 { font-size: 23px; }
+  .qr-code-container { width: 188px; height: 188px; margin-top: 13px; padding: 15px; }
+  .qr-code { width: 156px; height: 156px; }
+  .scan-line { right: 19px; left: 19px; animation-name: qr-scan-compact; }
+  .login-panel__footer { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-line, .qr-loading i { animation: none; }
 }
 </style>
 

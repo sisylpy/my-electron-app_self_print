@@ -66,6 +66,58 @@
       <article class="settings-card">
         <header>
           <div>
+            <span>启动与登录</span>
+            <h2>桌面客户端偏好</h2>
+          </div>
+        </header>
+        <div class="preference-list">
+          <div class="preference-row">
+            <div>
+              <strong>自动登录</strong>
+              <p>下次启动时使用当前已保存的配送商账号进入工作台。</p>
+            </div>
+            <button
+              type="button"
+              class="preference-switch"
+              :class="{ 'is-on': autoLoginEnabled }"
+              role="switch"
+              :aria-checked="autoLoginEnabled"
+              @click="toggleAutoLogin"
+            >
+              <span></span>
+              {{ autoLoginEnabled ? '已开启' : '已关闭' }}
+            </button>
+          </div>
+          <div class="preference-row">
+            <div>
+              <strong>开机自启</strong>
+              <p>登录电脑后自动启动农心乐配送商桌面端。</p>
+            </div>
+            <button
+              type="button"
+              class="preference-switch"
+              :class="{ 'is-on': launchAtLogin.enabled }"
+              role="switch"
+              :aria-checked="launchAtLogin.enabled"
+              :disabled="launchAtLogin.loading || !launchAtLogin.supported"
+              @click="toggleLaunchAtLogin"
+            >
+              <span></span>
+              {{ launchAtLogin.loading ? '读取中…' : (launchAtLogin.enabled ? '已开启' : '已关闭') }}
+            </button>
+          </div>
+        </div>
+        <p v-if="launchAtLogin.message" class="settings-card__feedback">
+          {{ launchAtLogin.message }}
+        </p>
+        <p class="settings-card__note">
+          关闭自动登录后，应用仍会停留在欢迎页，不会清除当前已登录会话。
+        </p>
+      </article>
+
+      <article class="settings-card">
+        <header>
+          <div>
             <span>连接器授权</span>
             <h2>WorkBuddy 连接</h2>
           </div>
@@ -165,6 +217,10 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useStore } from 'vuex';
+import {
+  isRememberPrinterUserEnabled,
+  setRememberPrinterUserEnabled,
+} from '@/utils/rememberPrinterUser';
 
 const loading = ref(false);
 const printerName = ref('');
@@ -173,6 +229,57 @@ const printerError = ref('');
 const mcpStatus = reactive({
   running: false,
 });
+const autoLoginEnabled = ref(isRememberPrinterUserEnabled());
+const launchAtLogin = reactive({
+  enabled: false,
+  supported: false,
+  loading: true,
+  message: '',
+});
+let clearRememberUserCleanup = null;
+
+function toggleAutoLogin() {
+  autoLoginEnabled.value = setRememberPrinterUserEnabled(!autoLoginEnabled.value);
+}
+
+async function loadLaunchAtLogin() {
+  const action = window.electronAPI?.appPreferences?.getLaunchAtLogin;
+  if (typeof action !== 'function') {
+    launchAtLogin.loading = false;
+    launchAtLogin.supported = false;
+    launchAtLogin.message = '请在安装后的桌面客户端中设置开机自启';
+    return;
+  }
+  launchAtLogin.loading = true;
+  try {
+    const result = await action();
+    launchAtLogin.enabled = Boolean(result?.enabled);
+    launchAtLogin.supported = Boolean(result?.supported);
+    launchAtLogin.message = result?.message || '';
+  } catch (error) {
+    launchAtLogin.supported = false;
+    launchAtLogin.message = error?.message || '开机自启状态读取失败';
+  } finally {
+    launchAtLogin.loading = false;
+  }
+}
+
+async function toggleLaunchAtLogin() {
+  if (launchAtLogin.loading || !launchAtLogin.supported) return;
+  launchAtLogin.loading = true;
+  launchAtLogin.message = '';
+  try {
+    const result = await window.electronAPI.appPreferences
+      .setLaunchAtLogin(!launchAtLogin.enabled);
+    launchAtLogin.enabled = Boolean(result?.enabled);
+    launchAtLogin.supported = Boolean(result?.supported);
+    launchAtLogin.message = result?.message || '';
+  } catch (error) {
+    launchAtLogin.message = error?.message || '开机自启设置失败';
+  } finally {
+    launchAtLogin.loading = false;
+  }
+}
 
 const runtimeAvailable = computed(() => Boolean(window.electronAPI));
 const runtimeLabel = computed(() => (runtimeAvailable.value ? 'Electron 桌面端' : '浏览器预览'));
@@ -398,12 +505,21 @@ watch(
 );
 
 onMounted(() => {
+  autoLoginEnabled.value = isRememberPrinterUserEnabled();
+  clearRememberUserCleanup = window.electronAPI?.onClearRememberPrinterUser?.(() => {
+    autoLoginEnabled.value = false;
+  }) || null;
+  loadLaunchAtLogin();
   loadStatus();
   loadDispatchSession();
   loadCredentials();
 });
 
 onUnmounted(() => {
+  if (typeof clearRememberUserCleanup === 'function') {
+    clearRememberUserCleanup();
+    clearRememberUserCleanup = null;
+  }
   issuedCredential.value = null;
   credentials.value = [];
 });
@@ -601,6 +717,65 @@ onUnmounted(() => {
 
 .settings-card__feedback {
   color: var(--product-primary);
+}
+
+.preference-list {
+  padding: 0 16px;
+}
+
+.preference-row {
+  display: flex;
+  min-height: 82px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.preference-row:last-child {
+  border-bottom: 0;
+}
+
+.preference-row > div {
+  min-width: 0;
+}
+
+.preference-row strong {
+  color: var(--product-text);
+  font-size: 14px;
+}
+
+.preference-row p {
+  margin: 5px 0 0;
+  color: var(--product-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings-card .preference-switch {
+  display: inline-flex;
+  min-width: 92px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: var(--product-text-secondary);
+}
+
+.preference-switch span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #b7c0ca;
+}
+
+.settings-card .preference-switch.is-on {
+  border-color: var(--product-primary);
+  color: var(--product-primary);
+  background: var(--product-primary-soft);
+}
+
+.preference-switch.is-on span {
+  background: var(--product-primary);
 }
 
 @media (max-width: 1280px) {

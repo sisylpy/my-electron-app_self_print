@@ -1,4 +1,4 @@
-﻿/** 与 Screen.vue「记住用户」共用：以 localStorage 为准；userData 标志由主进程异步备份（菜单「取消自动登录」会删文件） */
+﻿/** 与 Screen.vue 及「设备与设置」共用：localStorage 与主进程 userData 标志双写。 */
 export const REMEMBER_PRINTER_USER_KEY = 'rememberPrinterUser';
 
 export function parseStoredDisUser() {
@@ -13,9 +13,31 @@ export function parseStoredDisUser() {
   }
 }
 
-/** 路由守卫只用 localStorage，避免 sendSync 拖慢导航；与界面勾选一致 */
 export function isRememberPrinterUserEnabled() {
-  return localStorage.getItem(REMEMBER_PRINTER_USER_KEY) === '1';
+  if (localStorage.getItem(REMEMBER_PRINTER_USER_KEY) === '1') return true;
+  try {
+    const enabled = window.electronAPI?.getRememberPrinterUserSync?.() === true;
+    if (enabled) localStorage.setItem(REMEMBER_PRINTER_USER_KEY, '1');
+    return enabled;
+  } catch {
+    return false;
+  }
+}
+
+/** 所有入口统一写入，保证欢迎页、设置页和下次启动的状态一致。 */
+export function setRememberPrinterUserEnabled(enabled) {
+  const normalized = Boolean(enabled);
+  if (normalized) {
+    localStorage.setItem(REMEMBER_PRINTER_USER_KEY, '1');
+  } else {
+    localStorage.removeItem(REMEMBER_PRINTER_USER_KEY);
+  }
+  try {
+    window.electronAPI?.rememberPrinterUserSetAsync?.(normalized);
+  } catch {
+    // 浏览器预览或主进程不可用时，localStorage 仍可用。
+  }
+  return normalized;
 }
 
 /** 首次导航时 to.name 可能尚未带上，用 matched / path 兜底 */

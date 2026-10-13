@@ -150,6 +150,13 @@ const electronAPI = Object.freeze({
   onClearRememberPrinterUser: (callback) =>
     listen('clear-remember-printer-user', callback),
 
+  // 应用启动偏好：主进程负责读写 macOS / Windows 系统登录项。
+  appPreferences: Object.freeze({
+    getLaunchAtLogin: () => ipcRenderer.invoke('app-launch-at-login-get'),
+    setLaunchAtLogin: (enabled) =>
+      ipcRenderer.invoke('app-launch-at-login-set', Boolean(enabled)),
+  }),
+
   // 客户历史订单由主进程携带安全会话查询，令牌不进入页面。
   customerHistory: Object.freeze({
     loadMonths: (departmentId) =>

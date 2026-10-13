@@ -25,7 +25,7 @@ export function canAccessModule(moduleName, user) {
 
 export function defaultRouteNameForUser(user) {
   const role = getDisUserRole(user);
-  if (role === DIS_USER_ROLE_ADMIN) return 'Bills';
+  if (role === DIS_USER_ROLE_ADMIN) return 'OrderWorkbenchV2';
   if (role === DIS_USER_ROLE_CLERK) return 'OrderIntake';
   if (role === DIS_USER_ROLE_STAFF) return 'ReturnPrintWorkbench';
   if (role === DIS_USER_ROLE_SALES) return 'CustomerCenter';

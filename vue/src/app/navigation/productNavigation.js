@@ -13,7 +13,7 @@ export const PRODUCT_NAVIGATION = Object.freeze([
     items: Object.freeze([
       Object.freeze({
         key: 'order-workbench-v2',
-        label: '工作台',
+        label: '录单',
         description: '下单、待确认、出货与分批打印',
         icon: '单',
         iconImg: iconOrderWorkbench,

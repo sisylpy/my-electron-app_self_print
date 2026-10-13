@@ -23,7 +23,7 @@ export const orderRoutes = [
       module: 'order',
       navKey: 'order-workbench-v2',
       moduleLabel: '订单中心',
-      title: '订单工作台',
+      title: '录单',
       description: 'AI 下单、识别待确认、出货进度与分批打印',
       requiresDisUser: true,
     },

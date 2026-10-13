@@ -2,16 +2,17 @@
   <div class="product-shell">
     <ProductSidebar :network-online="networkOnline" />
     <section class="product-shell__main" :class="{ 'has-header': isOrderWorkbench }">
+      <ProductWorkspace class="product-shell__workspace">
+        <slot />
+      </ProductWorkspace>
       <ProductHeader
         v-if="isOrderWorkbench"
+        class="product-shell__header"
         :network-online="networkOnline"
         :printer-name="printerName"
         :mcp-running="mcpRunning"
         :runtime-available="runtimeAvailable"
       />
-      <ProductWorkspace>
-        <slot />
-      </ProductWorkspace>
       <PrintJobStatus />
     </section>
   </div>
@@ -119,5 +120,17 @@ onBeforeUnmount(() => {
 
 .product-shell__main.has-header {
   grid-template-rows: var(--product-header-height) minmax(0, 1fr);
+}
+
+.product-shell__workspace {
+  grid-row: 1;
+}
+
+.product-shell__main.has-header .product-shell__workspace {
+  grid-row: 2;
+}
+
+.product-shell__header {
+  grid-row: 1;
 }
 </style>

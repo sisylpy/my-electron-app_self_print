@@ -2,6 +2,7 @@
 import axios from 'axios';
 import store from '../store'; // 引入 Vuex Store
 import config from '../config'; // 引入配置文件
+import { notifyOrderSessionExpired } from '../utils/sessionExpiry';
 
 // 获取环境变量中的 API 地址
 // 开发环境使用 Vite 代理（相对路径），生产环境使用远程地址
@@ -115,7 +116,15 @@ axiosInstance.interceptors.response.use(
   }
 );
 
-
-
+// 业务接口明确返回 401 时，统一通知应用回到扫码登录页。
+axiosInstance.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (Number(error?.response?.status) === 401) {
+      notifyOrderSessionExpired('axios');
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default axiosInstance;

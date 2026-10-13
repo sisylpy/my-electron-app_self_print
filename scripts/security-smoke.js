@@ -35,7 +35,11 @@ const mcpConfig = JSON.parse(read('src/mcp-config.json'));
 
 check(!main.includes('executeJavaScript'), '主进程不执行渲染脚本文本');
 check(!main.match(/\bexec\s*\(/), '主进程不通过 shell 拼接执行系统命令');
-check(main.includes("const { execFile } = require('child_process')"), '系统命令使用参数数组执行');
+check(
+  /const\s*\{[^}]*\bexecFile\b[^}]*\}\s*=\s*require\('child_process'\)/.test(main)
+    && !main.includes('execSync('),
+  '系统命令使用参数数组执行'
+);
 check(!mcpServer.includes('executeJavaScript'), '内嵌 MCP 不执行渲染脚本文本');
 check(!mcpPush.includes('executeJavaScript'), 'MCP 打印投递仅使用 IPC');
 check(!preload.match(/\bipcRenderer\s*:\s*ipcRenderer\b/), 'preload 不暴露原始 ipcRenderer');

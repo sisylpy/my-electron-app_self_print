@@ -4,6 +4,7 @@ import router from './router';
 import store from './store'; // 引入 store
 import { mcpSessionUserSummary } from './utils/mcpSessionUser.mjs';
 import { writeAppLog } from './utils/appLog';
+import { ORDER_SESSION_EXPIRED_EVENT } from './utils/sessionExpiry';
 import toast from './plugins/toast';
 import jQuery from 'jquery'
 import { BootstrapVue3 } from 'bootstrap-vue-3';
@@ -28,6 +29,40 @@ app.use(store);  // 使用 Vue Router
 app.use(toast); // 使用 Toast 插件
 app.use(BootstrapVue3);
 app.use(VXETable); // 使用 vxe-table
+
+let sessionExpiryRedirecting = false;
+window.addEventListener(ORDER_SESSION_EXPIRED_EVENT, async (event) => {
+  const currentRoute = router.currentRoute.value;
+  const requiresDisUser = currentRoute.matched.some(
+    (record) => record.meta?.requiresDisUser
+  ) || currentRoute.meta?.requiresDisUser === true;
+  if (!requiresDisUser || sessionExpiryRedirecting) return;
+
+  sessionExpiryRedirecting = true;
+  writeAppLog('warn', 'renderer', 'order-session-expired', {
+    source: event?.detail?.source || 'unknown',
+    route: currentRoute.fullPath,
+  });
+  try {
+    await store.dispatch('logoutUserSession');
+  } catch (error) {
+    store.commit('CLEAR_USER_SESSION_CACHE');
+    writeAppLog('warn', 'renderer', 'order-session-expired:cleanup-failed', {
+      message: error?.message || String(error),
+    });
+  }
+  try {
+    await router.replace({
+      name: 'Home',
+      query: {
+        reason: 'session-expired',
+        returnTo: String(currentRoute.name || ''),
+      },
+    });
+  } finally {
+    sessionExpiryRedirecting = false;
+  }
+});
 
 // Vue 运行时错误 → 控制台 + 应用日志
 app.config.errorHandler = (err, instance, info) => {

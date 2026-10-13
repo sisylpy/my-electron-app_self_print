@@ -50,7 +50,7 @@ const crypto = require('crypto');
 const https = require('https');
 const http = require('http');
 const { pathToFileURL } = require('url');
-const { execFile, execSync } = require('child_process');
+const { execFile, execFileSync } = require('child_process');
 const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
@@ -716,6 +716,33 @@ function getRememberPrinterUserFlagPath() {
   return path.join(app.getPath('userData'), 'remember-printer-user.flag');
 }
 
+function getLaunchAtLoginState() {
+  const platformSupported = process.platform === 'darwin' || process.platform === 'win32';
+  if (!platformSupported) {
+    return {
+      ok: true,
+      supported: false,
+      enabled: false,
+      message: '当前系统不支持开机自启设置',
+    };
+  }
+  if (!app.isPackaged) {
+    return {
+      ok: true,
+      supported: false,
+      enabled: false,
+      message: '安装后的正式桌面客户端支持开机自启',
+    };
+  }
+  const settings = app.getLoginItemSettings();
+  return {
+    ok: true,
+    supported: true,
+    enabled: Boolean(settings.openAtLogin),
+    message: '',
+  };
+}
+
 async function clearAutoLoginFromMenu() {
   try {
     const p = getRememberPrinterUserFlagPath();
@@ -746,6 +773,18 @@ async function clearAutoLoginFromMenu() {
 
 /** 注册 IPC handlers（只执行一次，避免 createWindow 多次调用时重复注册导致报错） */
 function setupIpcHandlers() {
+  ipcMain.handle('app-launch-at-login-get', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getLaunchAtLoginState();
+  });
+  ipcMain.handle('app-launch-at-login-set', async (event, enabled) => {
+    assertTrustedRendererEvent(event);
+    const current = getLaunchAtLoginState();
+    if (!current.supported) return current;
+    app.setLoginItemSettings({ openAtLogin: enabled === true });
+    return getLaunchAtLoginState();
+  });
+
   // 正式包的 file:// 页面不直接持有跨站订单会话；只暴露扫码轮询和两条固定订单读取接口。
   ipcMain.handle('order-session-poll-login', async (event, sessionId) => {
     assertTrustedRendererEvent(event);
@@ -4512,7 +4551,14 @@ app.whenReady().then(async () => {
     const now = Date.now();
     if (now - _wechatStateCache.at < 15000) return _wechatStateCache;
     let open = false;
-    try { open = !!execSync('pgrep -x WeChat 2>/dev/null').toString().trim(); } catch (e) { open = false; }
+    try {
+      open = Boolean(execFileSync('pgrep', ['-x', 'WeChat'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim());
+    } catch (e) {
+      open = false;
+    }
     let loggedIn = null;
     if (open) {
       // 必须用 getter 懒初始化 reader 服务：模块变量 wechatReaderService 在桥轮询阶段恒为 null，

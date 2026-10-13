@@ -41,8 +41,23 @@ const app = read('vue/src/App.vue');
 const main = read('vue/src/main.js');
 const router = read('vue/src/router/index.js');
 const navigation = read('vue/src/app/navigation/productNavigation.js');
+const disUserRole = read('vue/src/utils/disUserRole.js');
+const axiosClient = read('vue/src/api/axios.js');
+const desktopOrderSession = read('vue/src/api/desktopOrderSession.js');
+const home = read('vue/src/views/Home.vue');
+const loginStoryPanel = read('vue/src/components/login/LoginStoryPanel.vue');
 const bills = read('vue/src/views/Bills.vue');
 const shell = read('vue/src/app/layout/ProductShell.vue');
+const orderWorkbench = read('vue/src/modules/order/views/OrderWorkbenchV2.vue');
+const orderFlowInbox = read('vue/src/modules/order/components/workbench/OrderFlowInbox.vue');
+const aiOrderPanel = read('vue/src/modules/order/components/workbench/AiOrderPanel.vue');
+const placeOrderWorkspace = read('vue/src/modules/order/components/PlaceOrderWorkspace.vue');
+const placeOrderController = read('vue/src/modules/order/services/placeOrderController.js');
+const imageCropper = read('vue/src/components/ImageCropperModal.vue');
+const settingsCenter = read('vue/src/modules/setting/views/SettingsCenter.vue');
+const rememberPrinterUser = read('vue/src/utils/rememberPrinterUser.js');
+const preload = read('src/preload.js');
+const electronMain = read('src/main.js');
 
 for (const name of [
   'ApplyPanel', 'ApplyFiftyPanel', 'ApplyHalfPanel',
@@ -88,6 +103,72 @@ for (const routeName of [
 }
 
 check(
+  navigation.includes("label: '录单'")
+    && !navigation.includes("label: '工作台'"),
+  '首个订单入口显示为录单'
+);
+check(
+  disUserRole.includes("if (role === DIS_USER_ROLE_ADMIN) return 'OrderWorkbenchV2';")
+    && router.includes('const targetRoute = defaultRouteNameForUser(user);')
+    && router.includes('name: targetRoute'),
+  '老板账号和记住登录入口默认进入首个录单页面'
+);
+check(
+  router.includes("reason: 'remember-flag-off'")
+    && /if \(!remember\) \{[\s\S]*?next\(\);[\s\S]*?return;[\s\S]*?\}/.test(router)
+    && router.includes('rememberedOrderSessionIsValid(query.disId)')
+    && router.includes("next(loginRoute('session-expired'"),
+  '未开启自动登录时保留欢迎页，仅在会话过期时进入扫码登录'
+);
+check(
+  settingsCenter.includes('自动登录')
+    && settingsCenter.includes('开机自启')
+    && settingsCenter.includes('setRememberPrinterUserEnabled')
+    && settingsCenter.includes('appPreferences')
+    && rememberPrinterUser.includes('getRememberPrinterUserSync')
+    && preload.includes('getLaunchAtLogin')
+    && electronMain.includes("ipcMain.handle('app-launch-at-login-get'")
+    && electronMain.includes('app.setLoginItemSettings'),
+  '设备与设置提供双写自动登录和系统开机自启开关'
+);
+check(
+  main.includes('ORDER_SESSION_EXPIRED_EVENT')
+    && main.includes("reason: 'session-expired'")
+    && axiosClient.includes("notifyOrderSessionExpired('axios')")
+    && desktopOrderSession.includes('notifyOrderSessionExpired(`desktop-order-session:${method}`)'),
+  '运行中的订单会话失效会统一清理并返回扫码登录'
+);
+check(
+  home.includes("this.$route.query.reason === 'session-expired'")
+    && home.includes('登录状态已失效，请重新用微信扫码登录'),
+  '扫码登录页会通俗说明需要重新登录的原因'
+);
+check(
+  home.includes('<LoginStoryPanel />')
+    && home.includes('微信扫码登录')
+    && home.includes('二维码仅用于本次登录')
+    && home.includes('this.stopPolling();'),
+  '扫码登录页使用产品动画双栏布局，刷新二维码前会停止旧轮询'
+);
+check(
+  loginStoryPanel.includes('微信消息，自动汇成订单')
+    && loginStoryPanel.includes('零散内容，快速变成清单')
+    && loginStoryPanel.includes('录单、出库、打印，一套完成')
+    && loginStoryPanel.includes('prefers-reduced-motion')
+    && loginStoryPanel.includes('beforeUnmount()'),
+  '登录页三段产品动画会自动切换，并支持减少动态效果及定时器清理'
+);
+check(
+  aiOrderPanel.includes(':wechat-conversation-name="pendingWechatImport')
+    && placeOrderWorkspace.includes(':source-name="imageCropperWechatName"')
+    && placeOrderController.includes('imageCropperWechatName()')
+    && placeOrderController.includes('对应客户：${customerName}')
+    && imageCropper.includes('微信图片订单来源')
+    && imageCropper.includes('icm-source-banner'),
+  '图片裁剪框顶部突出显示真实微信好友或群名，并在需要时显示对应客户'
+);
+
+check(
   bills.includes('async applyProductRoute')
     && bills.includes("billsView === 'order'")
     && bills.includes("billsView === 'task'")
@@ -126,6 +207,14 @@ check(shell.includes('.product-sidebar__navigation a') && shell.includes('flex: 
   '侧栏菜单项按可用高度均匀分配并保留最小点击高度');
 check(shell.includes('.product-sidebar__navigation') && shell.includes('overflow-y: auto'),
   '侧栏在窗口高度不足时允许导航区滚动');
+check(
+  shell.indexOf('<ProductWorkspace') < shell.indexOf('<ProductHeader')
+    && shell.includes('class="product-shell__workspace"')
+    && shell.includes('class="product-shell__header"')
+    && orderWorkbench.includes('defer to="#product-header-context"')
+    && orderFlowInbox.includes('defer to="#product-header-context"'),
+  '订单工作区先于标题栏卸载，顶部 Teleport 不会残留失效 DOM 节点'
+);
 
 if (failures > 0) {
   console.error(`ProductShell smoke failed: ${failures}`);

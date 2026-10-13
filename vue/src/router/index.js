@@ -59,19 +59,76 @@ const router = createRouter({
   routes,
 });
 
+function routeRequiresDisUser(route) {
+  return route.matched.some((record) => record.meta?.requiresDisUser)
+    || route.meta?.requiresDisUser === true;
+}
+
+async function rememberedOrderSessionIsValid(disId) {
+  const action = window.electronAPI?.orderSession?.todayCustomers;
+  if (typeof action !== 'function') return true;
+  try {
+    const result = await action(disId);
+    return !(result?.ok === false && Number(result?.status) === 401);
+  } catch (error) {
+    writeAppLog('warn', 'router', 'remember-auto-login:validation-unavailable', {
+      disId,
+      message: error?.message || String(error),
+    });
+    return true;
+  }
+}
+
+async function clearExpiredRememberedSession() {
+  store.commit('CLEAR_USER_SESSION_CACHE');
+  try {
+    await window.electronAPI?.userSession?.logout?.();
+  } catch (error) {
+    writeAppLog('warn', 'router', 'remember-auto-login:clear-session-failed', {
+      message: error?.message || String(error),
+    });
+  }
+}
+
+function loginRoute(reason, returnTo = '') {
+  return {
+    name: 'Home',
+    query: {
+      reason,
+      ...(returnTo ? { returnTo } : {}),
+    },
+    replace: true,
+  };
+}
+
 /**
- * 保留现有记住用户行为：只在轮播入口自动进入 Bills。
+ * 保留现有记住用户行为：只在轮播入口自动进入当前角色的默认页面。
  * /dispatch 不参与自动重定向，也不会改变打印入口。
  */
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const currentUser = store.state.disUser || parseStoredDisUser();
+  if (to.name === 'Home' || (to.path || '').replace(/\/$/, '') === '/home') {
+    next();
+    return;
+  }
+
+  if (routeRequiresDisUser(to)) {
+    const currentQuery = resolveBillsQueryFromDisUser(currentUser);
+    if (!currentQuery) {
+      next(loginRoute('login-required', String(to.name || '')));
+      return;
+    }
+    if (from.matched.length === 0
+        && !await rememberedOrderSessionIsValid(currentQuery.disId)) {
+      await clearExpiredRememberedSession();
+      next(loginRoute('session-expired', String(to.name || '')));
+      return;
+    }
+  }
+
   if (currentUser && to.meta?.module
       && !canAccessModule(to.meta.module, currentUser)) {
     next({ name: defaultRouteNameForUser(currentUser), replace: true });
-    return;
-  }
-  if (to.name === 'Home' || (to.path || '').replace(/\/$/, '') === '/home') {
-    next();
     return;
   }
   if (!isKioskEntryRoute(to)) {
@@ -106,12 +163,23 @@ router.beforeEach((to, from, next) => {
     next();
     return;
   }
-  writeAppLog('info', 'router', 'remember-auto-login:redirect-bills', {
+  if (!await rememberedOrderSessionIsValid(query.disId)) {
+    writeAppLog('info', 'router', 'remember-auto-login:session-expired', {
+      disId: query.disId,
+      to: to.fullPath,
+    });
+    await clearExpiredRememberedSession();
+    next(loginRoute('session-expired'));
+    return;
+  }
+  const targetRoute = defaultRouteNameForUser(user);
+  writeAppLog('info', 'router', 'remember-auto-login:redirect-default-route', {
     disId: query.disId,
+    routeName: targetRoute,
     to: to.fullPath,
   });
   next({
-    name: 'Bills',
+    name: targetRoute,
     query: {
       disId: query.disId,
       disName: query.disName,

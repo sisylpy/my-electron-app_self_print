@@ -1,3 +1,5 @@
+import { notifyOrderSessionExpired } from '@/utils/sessionExpiry';
+
 // 打包后的 file:// 页面只通过白名单 IPC 使用扫码建立的订单会话。
 // Vite 开发态仍使用原来的同源 /api 代理。
 export function isPackagedDesktop() {
@@ -12,6 +14,9 @@ export async function desktopOrderSessionRequest(method, ...args) {
   }
   const result = await action(...args);
   if (!result?.ok) {
+    if (Number(result?.status) === 401) {
+      notifyOrderSessionExpired(`desktop-order-session:${method}`);
+    }
     const error = new Error(result?.message || '订单服务暂不可用');
     error.response = { status: result?.status || 0, data: result?.data || null };
     throw error;
