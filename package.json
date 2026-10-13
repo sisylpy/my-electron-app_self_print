@@ -1,12 +1,14 @@
 {
   "name": "grain-print-app",
-  "version": "1.0.4",
+  "version": "1.0.11",
   "description": "A Self Print For Distributer",
   "main": "src/main.js",
   "scripts": {
     "start": "concurrently \"npm run dev:vue\" \"npm run dev:electron\"",
     "dev:vue": "cd vue && vite",
     "dev:electron": "wait-on http://localhost:3000 && electron .",
+    "start:test": "concurrently \"npm run dev:vue\" \"npm run dev:electron:test\"",
+    "dev:electron:test": "wait-on http://localhost:3000 && NXL_DISPATCH_API_BASE_URL=https://test-api.grainservice.club/nongxinle/api/ NXL_ORDER_API_BASE_URL=https://test-api.grainservice.club/nongxinle/api/ GRAIN_API_URL=https://test-api.grainservice.club/nongxinle/api/ electron .",
     "build:vue": "cd vue && vite build",
     "test:security": "node scripts/security-smoke.js",
     "test:print-contract": "node scripts/print-contract-smoke.js",

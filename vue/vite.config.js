@@ -7,6 +7,9 @@ import vue from '@vitejs/plugin-vue';
 import path from 'path';
 
 const PRODUCTION_API_BASE_URL = 'https://grainservice.club:8443/nongxinle/api/';
+// 联调专用：测试服务器（62.234.114.61，域名 test-api.grainservice.club）。
+const TEST_API_BASE_URL = 'https://test-api.grainservice.club/nongxinle/api/';
+const testBackendUrl = new URL(TEST_API_BASE_URL);
 
 function resolveApiTarget(value) {
   const parsed = new URL(value || PRODUCTION_API_BASE_URL);
@@ -14,11 +17,15 @@ function resolveApiTarget(value) {
     parsed.protocol === 'https:' &&
     parsed.origin === 'https://grainservice.club:8443' &&
     parsed.pathname === '/nongxinle/api/';
+  const isTestBackend =
+    parsed.protocol === testBackendUrl.protocol &&
+    parsed.origin === testBackendUrl.origin &&
+    parsed.pathname === testBackendUrl.pathname;
   const isLocalBackend =
     parsed.protocol === 'http:' &&
     ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
-  if (!isProductionBackend && !isLocalBackend) {
-    throw new Error('VITE_API_URL 只允许正式服务器或本机开发地址');
+  if (!isProductionBackend && !isTestBackend && !isLocalBackend) {
+    throw new Error('VITE_API_URL 只允许正式服务器、测试服务器或本机开发地址');
   }
   return parsed.toString().replace(/\/+$/, '') + '/';
 }
