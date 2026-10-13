@@ -117,6 +117,7 @@ class WechatReadOnlyDB:
         # a main DB or WAL change invalidates it immediately.
         self._message_query_cache = {}
         self._image_resource_query_cache = {}
+        self._image_resource_identity_cache = {}
         self._message_table_columns_cache: Dict[Tuple[str, str], set] = {}
         self._sender_username_cache: Dict[Tuple[str, int], Optional[str]] = {}
         self._distinct_sender_cache = {}
@@ -471,6 +472,43 @@ class WechatReadOnlyDB:
         rows = self._run(resource_db, sql)
         self._image_resource_query_cache[cache_key] = (
             tr,
+            self._message_database_state(resource_db),
+            [list(row) for row in rows],
+        )
+        return rows
+
+    def image_resource_identities(self, username: str, local_ids: List[int]) -> List[list]:
+        """Return identity-only image resource rows for local-id collision checks.
+
+        ``message_local_id`` is not globally stable: when a resource-only image
+        never reaches ``Msg_*``, WeChat may reuse that local id for a later
+        message.  These lightweight rows let the service disambiguate the later
+        message even when the earlier resource lies outside the current cursor
+        time window.
+        """
+        normalized_ids = tuple(sorted({
+            int(value) for value in local_ids
+            if isinstance(value, int) and value >= 0
+        }))
+        if not normalized_ids:
+            return []
+        resource_db = os.path.join(self.m.db_root, "message", "message_resource.db")
+        if not os.path.isfile(resource_db):
+            return []
+        cache_key = (username, normalized_ids)
+        database_state = self._message_database_state(resource_db)
+        cached = self._image_resource_identity_cache.get(cache_key)
+        if cached and cached[0] == database_state:
+            return [list(row) for row in cached[1]]
+        sql = (
+            "SELECT m.message_local_id, m.message_svr_id, m.message_create_time "
+            "FROM MessageResourceInfo AS m "
+            "WHERE m.chat_id = (SELECT rowid FROM ChatName2Id WHERE user_name = %s) "
+            "AND m.message_local_type IN (3, 47) AND m.message_local_id IN (%s)"
+            % (_sql_text_literal(username), ",".join(str(value) for value in normalized_ids))
+        )
+        rows = self._run(resource_db, sql)
+        self._image_resource_identity_cache[cache_key] = (
             self._message_database_state(resource_db),
             [list(row) for row in rows],
         )

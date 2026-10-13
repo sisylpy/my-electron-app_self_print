@@ -388,9 +388,14 @@ class WechatLocalDataService:
         # Image delivery can reach message_resource.db before the corresponding
         # Msg_* row. Merge those resource records as a fallback, while keeping
         # the traditional Msg_* row authoritative when both copies exist.
+        resource_identities: List[list] = []
         if like is None:
             try:
                 resources = db.query_image_resources(meta.username, tr, fetch_limit, 0)
+                resource_identities = db.image_resource_identities(
+                    meta.username,
+                    [int(row[0] or 0) for kind, _shard, row in pairs if kind == "message"],
+                )
             except WechatServiceError:
                 # Some historical installations use different access material
                 # for the optional resource database. Text/normal image reads
@@ -408,12 +413,19 @@ class WechatLocalDataService:
             if has_more else len(pairs)
         )
         sliced = pairs[page.offset: page.offset + page.limit]
-        items = [
-            self._to_message(conversation, meta.kind, acct.wxid, db, shard, row)
-            if kind == "message" else
-            self._to_resource_message(conversation, meta, acct, db, row)
-            for kind, shard, row in sliced
-        ]
+        items = []
+        for kind, shard, row in sliced:
+            message_id = self._stable_message_id(
+                conversation, kind, row, resource_identities
+            )
+            if kind == "message":
+                items.append(self._to_message(
+                    conversation, meta.kind, acct.wxid, db, shard, row, message_id
+                ))
+            else:
+                items.append(self._to_resource_message(
+                    conversation, meta, acct, db, row, message_id
+                ))
         return PageResult(items=items, total=total, hasMore=has_more)
 
     @staticmethod
@@ -435,6 +447,34 @@ class WechatLocalDataService:
         kind, _shard, row = pair
         return int(row[1] or 0) if kind == "message" else int(row[2] or 0)
 
+    @staticmethod
+    def _stable_message_id(
+        conv_id: ConversationId,
+        kind: str,
+        row: list,
+        resource_identities: List[list],
+    ) -> MessageId:
+        local_id = int(row[0] or 0) if kind == "message" else int(row[1] or 0)
+        create_time = int(row[1] or 0) if kind == "message" else int(row[2] or 0)
+        server_id = int(row[6] or 0) if len(row) >= 8 else 0
+        base = "%s:%d" % (conv_id, local_id)
+        if not server_id:
+            return MessageId(base)
+        # Preserve the historical ``conversation:local_id`` fingerprint for
+        # the first image. Only a later row created after WeChat reused that id
+        # receives a server-id suffix. This keeps already-processed orders
+        # compatible while preventing a new image from inheriting their state.
+        reused = any(
+            int(identity[0] or 0) == local_id
+            and int(identity[1] or 0) not in (0, server_id)
+            and int(identity[2] or 0) < create_time
+            for identity in resource_identities
+            if len(identity) >= 3
+        )
+        if reused:
+            return MessageId("%s:s%s" % (base, _hex(str(server_id), 12)))
+        return MessageId(base)
+
     def _to_resource_message(
         self,
         conv_id: ConversationId,
@@ -442,6 +482,7 @@ class WechatLocalDataService:
         acct: AccountMeta,
         db: WechatReadOnlyDB,
         row: list,
+        message_id: MessageId,
     ) -> Message:
         local_id = int(row[1] or 0)
         create_time = int(row[2] or 0)
@@ -450,8 +491,7 @@ class WechatLocalDataService:
         nick = db.contact_nick(uname) if uname else None
         sender_name = nick or uname or "(未知)"
         pid = ParticipantId(_fp(uname)) if uname else ParticipantId(_fp("resource:unknown"))
-        message_id = MessageId("%s:%d" % (conv_id, local_id))
-        attachment_id = AttachmentId(_fp("%s:%d" % (conv_id, local_id)))
+        attachment_id = AttachmentId(_fp(str(message_id)))
         self._attachment_index[str(attachment_id)] = {
             "kind": "image",
             "account_id": meta.account_id,
@@ -477,7 +517,7 @@ class WechatLocalDataService:
     def _to_message(
         self, conv_id: ConversationId, conversation_kind: str, account_wxid: str,
         db: WechatReadOnlyDB,
-        shard: str, row: list,
+        shard: str, row: list, message_id: MessageId,
     ) -> Message:
         local_id = int(row[0] or 0)
         create_time = int(row[1] or 0)
@@ -495,7 +535,7 @@ class WechatLocalDataService:
         )
         att: Optional[AttachmentRef] = None
         if mtype != "text":
-            att = AttachmentRef(id=AttachmentId(_fp("%s:%d" % (conv_id, local_id))), kind=mtype)
+            att = AttachmentRef(id=AttachmentId(_fp(str(message_id))), kind=mtype)
             self._attachment_index[str(att.id)] = {
                 "kind": mtype,
                 "account_id": self._conv_meta(conv_id).account_id,
@@ -503,7 +543,7 @@ class WechatLocalDataService:
                 "packed_hex": row[-1] if len(row) > 5 else None,
             }
         return Message(
-            id=MessageId("%s:%d" % (conv_id, local_id)),
+            id=message_id,
             conversationId=conv_id,
             timestamp=datetime.fromtimestamp(create_time).astimezone(),
             senderId=pid,
