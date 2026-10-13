@@ -3,6 +3,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const productionBase = 'https://grainservice.club:8443/nongxinle/api/';
+const testBase = 'https://test-api.grainservice.club/nongxinle/api/';
 const localBackendPattern = /localhost:808[01]|nongxinle_(?:server|master|war).*war_exploded|nongxinle_war_exploded/;
 let failures = 0;
 
@@ -41,7 +42,22 @@ for (const file of runtimeFiles) {
 check(
   read('vue/vite.config.js').includes(`const PRODUCTION_API_BASE_URL = '${productionBase}'`) &&
     read('vue/vite.config.js').includes('target: apiTarget'),
-  'Vue 开发代理指向正式服务器'
+  'Vue 代理保留正式服务器默认值'
+);
+check(
+  read('vue/.env.development').includes(`VITE_API_URL=${testBase}`)
+    && read('vue/.env.production').includes(`VITE_API_URL=${productionBase}`),
+  '本地开发使用测试服务器，正式构建使用正式服务器'
+);
+const packageJson = JSON.parse(read('package.json'));
+const devElectronLauncher = read('scripts/start-electron-dev.cjs');
+check(
+  packageJson.scripts['dev:electron'] === 'node scripts/start-electron-dev.cjs'
+    && devElectronLauncher.includes(`const testApiBaseUrl = '${testBase}'`)
+    && devElectronLauncher.includes('NXL_DISPATCH_API_BASE_URL: testApiBaseUrl')
+    && devElectronLauncher.includes('NXL_ORDER_API_BASE_URL: testApiBaseUrl')
+    && devElectronLauncher.includes('GRAIN_API_URL: testApiBaseUrl'),
+  'npm run start 的 Electron 主进程与 Vue 共用测试服务器'
 );
 check(
   read('src/dispatch/dispatch-gateway.js').includes(
