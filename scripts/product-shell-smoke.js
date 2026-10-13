@@ -115,10 +115,10 @@ check(
 );
 check(
   router.includes("reason: 'remember-flag-off'")
-    && /if \(!remember\) \{[\s\S]*?next\(\);[\s\S]*?return;[\s\S]*?\}/.test(router)
+    && /if \(!remember\) \{[\s\S]*?next\(loginRoute\('login-required'\)\);[\s\S]*?return;[\s\S]*?\}/.test(router)
     && router.includes('rememberedOrderSessionIsValid(query.disId)')
     && router.includes("next(loginRoute('session-expired'"),
-  '未开启自动登录时保留欢迎页，仅在会话过期时进入扫码登录'
+  '未开启自动登录或会话过期时直接进入动画扫码登录页'
 );
 check(
   settingsCenter.includes('自动登录')

@@ -111,7 +111,7 @@
           {{ launchAtLogin.message }}
         </p>
         <p class="settings-card__note">
-          关闭自动登录后，应用仍会停留在欢迎页，不会清除当前已登录会话。
+          关闭自动登录后，下次启动会直接进入动画扫码登录页，不会清除当前已登录会话。
         </p>
       </article>
 

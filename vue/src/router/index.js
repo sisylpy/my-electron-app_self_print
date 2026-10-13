@@ -108,7 +108,7 @@ function loginRoute(reason, returnTo = '') {
 router.beforeEach(async (to, from, next) => {
   const currentUser = store.state.disUser || parseStoredDisUser();
   if (to.name === 'Home' || (to.path || '').replace(/\/$/, '') === '/home') {
-    next();
+    next(loginRoute('login-required'));
     return;
   }
 
@@ -142,7 +142,7 @@ router.beforeEach(async (to, from, next) => {
       to: to.fullPath,
       name: to.name,
     });
-    next();
+    next(loginRoute('login-required'));
     return;
   }
   let user = store.state.disUser;
@@ -160,7 +160,7 @@ router.beforeEach(async (to, from, next) => {
       name: to.name,
       hasLocalDis: !!parseStoredDisUser(),
     });
-    next();
+    next(loginRoute('login-required'));
     return;
   }
   if (!await rememberedOrderSessionIsValid(query.disId)) {
