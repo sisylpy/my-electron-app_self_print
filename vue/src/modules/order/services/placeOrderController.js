@@ -4319,9 +4319,8 @@ import api from '../services/orderApi';
                     type: 'image/jpeg',
                     dataUrl: imageDataUrl
                 };
-                const imageBase64 = imageDataUrl.includes(',') ? imageDataUrl.split(',')[1] : imageDataUrl;
                 const ocrData = {
-                    ImageBase64: imageBase64,
+                    ImageBase64: imageDataUrl,
                     depId: targetDepId,
                     depFatherId: this.selectedAllCustomer,
                     disId: this.disUser.nxDiuDistributerId,
@@ -4335,6 +4334,7 @@ import api from '../services/orderApi';
                         this.currentTaskId = taskId;
                         this.currentTask = task;
                         this.orderItems = res.data.items;
+                        await this.showQwenReviewItems(res.data.qwenRejectedItems);
                         // fast 模式：刷新任务列表并默认选中本次返回的任务
                         if (taskId != null && task && this.uploadType === 'image') {
                             this.$nextTick(() => {
@@ -4351,6 +4351,22 @@ import api from '../services/orderApi';
                 } catch (err) {
                     await this.$refs.alertDialog.alert(err?.message || '单列识别失败，请重试');
                 }
+            },
+
+            async showQwenReviewItems(reviewItems) {
+                if (!Array.isArray(reviewItems) || reviewItems.length === 0) return;
+                const preview = reviewItems.slice(0, 8).map((item, index) => {
+                    const rawText = String(item?.rawText || '未读取到原文').trim();
+                    const reason = String(item?.reason || '需要人工确认').trim();
+                    return `${index + 1}. ${rawText}（${reason}）`;
+                }).join('\n');
+                const suffix = reviewItems.length > 8
+                    ? `\n另有 ${reviewItems.length - 8} 行，请在待修正订单中确认。`
+                    : '';
+                await this.$refs.alertDialog.alert(
+                    `千问已保存可识别内容，以下行需要人工确认：\n${preview}${suffix}`,
+                    'warning'
+                );
             },
 
             // 点击「添加新图片」：先保存当前状态，再清空显示上传区
@@ -4824,9 +4840,7 @@ import api from '../services/orderApi';
                 // 确定要使用的部门ID（如果有子部门选择，使用子部门ID，否则使用父部门ID）
                 const targetDepId = this.selectedSubDepartment || this.selectedAllCustomer;
 
-                // 将图片DataURL转换为Base64（去掉data:image/...;base64,前缀）
-                const imageBase64 = imageDataUrl.includes(',') ? imageDataUrl.split(',')[1] : imageDataUrl;
-
+                // 保留完整 DataURL，后端需要真实 MIME 传给千问视觉。
                 // 确保 uploadedImageFile 已设置
                 if (!this.uploadedImageFile) {
                     const fileName = this.originalImageFile?.name || 'image.jpg';
@@ -4852,7 +4866,7 @@ import api from '../services/orderApi';
                 try {
                     // 调用AI识别接口（模式2：图片模式）
                     const requestData = {
-                        ImageBase64: imageBase64,
+                        ImageBase64: imageDataUrl,
                         depId: targetDepId,
                         depFatherId: this.selectedAllCustomer,
                         disId: this.disUser?.nxDiuDistributerId,
@@ -5336,7 +5350,7 @@ import api from '../services/orderApi';
 
             /**
              * 千问视觉识别图片订单并落库（仅连接器自动保存链路使用）。
-             * 与人工「直接识别 / AI识别」完全隔离：那两条仍走腾讯 OCR 的单列/多列接口。
+             * 人工单列/复杂入口也已由后端统一切到千问；这里保留连接器自动保存的独立交互。
              * 服务端已在同一接口内完成落库，返回 taskId + 订单列表，这里只做状态同步，
              * 并通过 wechatQwenAutoSaved 告知批量流程「已保存」，避免重复下单。
              */
@@ -5348,9 +5362,8 @@ import api from '../services/orderApi';
                 if (!/^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(String(imageDataUrl || ''))) {
                     throw new Error('图片内容无效，请重新获取该消息');
                 }
-                const imageBase64 = imageDataUrl.slice(imageDataUrl.indexOf(',') + 1);
                 const ocrData = {
-                    ImageBase64: imageBase64,
+                    ImageBase64: imageDataUrl,
                     depId: targetDepId,
                     depFatherId: this.selectedAllCustomer,
                     disId: this.disUser.nxDiuDistributerId,
@@ -5367,6 +5380,7 @@ import api from '../services/orderApi';
                     this.currentTaskId = taskId;
                     this.currentTask = task;
                     this.orderItems = items;
+                    await this.showQwenReviewItems(res.data.qwenRejectedItems);
                     this.wechatQwenAutoSaved = { taskId, count: items.length };
                     this.wechatOrderSource = null;
                     if (taskId != null && task) {
@@ -6884,7 +6898,11 @@ data[] 中每条订单对象必须包含字段：
                 }
 
                 // 使用 base64 数据（已经是 base64 格式）
-                const imageBase64 = readResult.data;
+                const ext = String(file.fileName || '').toLowerCase().split('.').pop();
+                const mimeType = ext === 'png' ? 'image/png'
+                    : (ext === 'webp' ? 'image/webp' : 'image/jpeg');
+                const imageBase64 = String(readResult.data || '').startsWith('data:')
+                    ? readResult.data : `data:${mimeType};base64,${readResult.data}`;
 
                 // 调用 OCR 识别接口
                 const ocrData = {
@@ -6904,6 +6922,7 @@ data[] 中每条订单对象必须包含字段：
                     this.currentTaskId = res.data.taskId;
                     this.currentTask = res.data.task;
                     this.orderItems = res.data.items;
+                    await this.showQwenReviewItems(res.data.qwenRejectedItems);
                     if (res.data.taskId != null) this.$emit('task-added');
                 }
             },

@@ -34,10 +34,14 @@ async function executeImageTask(task, onComplete, onFailed) {
       // 图片转 Base64（如果已经是 base64，直接使用）
       let imageBase64;
       if (image.base64) {
-        imageBase64 = image.base64;
+        const rawBase64 = String(image.base64);
+        const mimeType = image.type && /^image\/(jpeg|png|webp)$/.test(image.type)
+          ? image.type : 'image/jpeg';
+        imageBase64 = rawBase64.startsWith('data:')
+          ? rawBase64 : `data:${mimeType};base64,${rawBase64}`;
       } else if (image.dataUrl) {
-        // 如果是 DataURL，提取 base64 部分
-        imageBase64 = image.dataUrl.includes(',') ? image.dataUrl.split(',')[1] : image.dataUrl;
+        // 保留 DataURL 的真实 MIME，后端千问视觉会原样透传 JPG/PNG/WebP。
+        imageBase64 = image.dataUrl;
       } else {
         console.error(`❌ [taskExecutor] 图片 ${i} 缺少 base64 数据`);
         continue;
@@ -67,7 +71,8 @@ async function executeImageTask(task, onComplete, onFailed) {
             type: 'saved',
             savedOrders: res.data.data,
             taskId: backendTaskId,
-            task: backendTask
+            task: backendTask,
+            qwenRejectedItems: res.data.qwenRejectedItems || []
           });
           return;
         }
@@ -81,7 +86,8 @@ async function executeImageTask(task, onComplete, onFailed) {
             type: 'parsed',
             items: items,
             taskId: backendTaskId,
-            task: backendTask
+            task: backendTask,
+            qwenRejectedItems: res.data.qwenRejectedItems || []
           });
           return;
         }
