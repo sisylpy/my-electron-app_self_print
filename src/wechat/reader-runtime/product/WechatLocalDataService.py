@@ -107,6 +107,7 @@ class WechatLocalDataService:
         self._materials: Dict[AccountId, AccessMaterial] = {}
         self._databases: Dict[AccountId, WechatReadOnlyDB] = {}
         self._attachment_index: Dict[str, dict] = {}
+        self._resource_sender_index: Dict[str, dict] = {}
         # 连续分页必须复用同一份会话快照，否则每页都会重新扫描数千联系人。
         self._conv_snapshot: Dict[str, Tuple[float, List[Tuple[_ConversationMeta, Conversation]]]] = {}
         self._conv_snapshot_ttl = 10.0
@@ -310,6 +311,18 @@ class WechatLocalDataService:
 
     # ===================== resolveSender =====================
     def resolveSender(self, message: MessageId) -> Participant:
+        resource_sender = self._resource_sender_index.get(str(message))
+        if resource_sender is not None:
+            uname = resource_sender.get("username")
+            acct = self._account_meta(resource_sender["account_id"])
+            db = self._db_for(acct)
+            nick = db.contact_nick(uname) if uname else None
+            return Participant(
+                id=ParticipantId(_fp(uname)) if uname else ParticipantId(_fp("resource:unknown")),
+                displayName=nick or uname or "(未知)",
+                isSelf=(uname == acct.wxid),
+                inAddressBook=(nick is not None),
+            )
         # MessageId = "<ConversationId>:<local_id>"；ConversationId 本身含 ':'，故从右侧切分
         cid, _, local_id_s = message.rpartition(":")
         if not local_id_s:
@@ -364,14 +377,31 @@ class WechatLocalDataService:
         db = self._db_for(acct)
         tr = (_iso_to_epoch(timeRange.start) if timeRange else None,
               _iso_to_epoch(timeRange.end) if timeRange else None)
-        pairs: List[Tuple[str, list]] = []
+        pairs: List[Tuple[str, Optional[str], list]] = []
         fetch_limit = page.offset + page.limit + 1
         locations = db.locate_message_table(meta.username)
         for shard, table in locations:
             rows = db.query_messages(shard, table, tr, limit=fetch_limit, offset=0, like=like)
             for r in rows:
-                pairs.append((shard, r))
-        pairs.sort(key=lambda p: int(p[1][1] or 0), reverse=True)
+                pairs.append(("message", shard, r))
+
+        # Image delivery can reach message_resource.db before the corresponding
+        # Msg_* row. Merge those resource records as a fallback, while keeping
+        # the traditional Msg_* row authoritative when both copies exist.
+        if like is None:
+            try:
+                resources = db.query_image_resources(meta.username, tr, fetch_limit, 0)
+            except WechatServiceError:
+                # Some historical installations use different access material
+                # for the optional resource database. Text/normal image reads
+                # must continue to work in that case.
+                resources = []
+            message_keys = {self._message_row_key(row) for kind, _shard, row in pairs if kind == "message"}
+            for resource_row in resources:
+                if self._resource_row_key(resource_row) not in message_keys:
+                    pairs.append(("resource", None, resource_row))
+
+        pairs.sort(key=self._pair_create_time, reverse=True)
         has_more = len(pairs) > page.offset + page.limit
         total = (
             sum(db.count_messages(shard, table, tr, like=like) for shard, table in locations)
@@ -380,9 +410,69 @@ class WechatLocalDataService:
         sliced = pairs[page.offset: page.offset + page.limit]
         items = [
             self._to_message(conversation, meta.kind, acct.wxid, db, shard, row)
-            for shard, row in sliced
+            if kind == "message" else
+            self._to_resource_message(conversation, meta, acct, db, row)
+            for kind, shard, row in sliced
         ]
         return PageResult(items=items, total=total, hasMore=has_more)
+
+    @staticmethod
+    def _message_row_key(row: list) -> tuple:
+        server_id = int(row[6] or 0) if len(row) >= 8 else 0
+        if server_id:
+            return ("server", server_id)
+        return ("fallback", int(row[0] or 0), int(row[1] or 0), int(row[4] or 0))
+
+    @staticmethod
+    def _resource_row_key(row: list) -> tuple:
+        server_id = int(row[6] or 0)
+        if server_id:
+            return ("server", server_id)
+        return ("fallback", int(row[1] or 0), int(row[2] or 0), int(row[4] or 0))
+
+    @staticmethod
+    def _pair_create_time(pair: tuple) -> int:
+        kind, _shard, row = pair
+        return int(row[1] or 0) if kind == "message" else int(row[2] or 0)
+
+    def _to_resource_message(
+        self,
+        conv_id: ConversationId,
+        meta: _ConversationMeta,
+        acct: AccountMeta,
+        db: WechatReadOnlyDB,
+        row: list,
+    ) -> Message:
+        local_id = int(row[1] or 0)
+        create_time = int(row[2] or 0)
+        local_type = int(row[4] or 0)
+        uname = row[5] if len(row) > 5 and row[5] else None
+        nick = db.contact_nick(uname) if uname else None
+        sender_name = nick or uname or "(未知)"
+        pid = ParticipantId(_fp(uname)) if uname else ParticipantId(_fp("resource:unknown"))
+        message_id = MessageId("%s:%d" % (conv_id, local_id))
+        attachment_id = AttachmentId(_fp("%s:%d" % (conv_id, local_id)))
+        self._attachment_index[str(attachment_id)] = {
+            "kind": "image",
+            "account_id": meta.account_id,
+            "conversation_username": meta.username,
+            "packed_hex": row[7] if len(row) > 7 else None,
+        }
+        self._resource_sender_index[str(message_id)] = {
+            "account_id": meta.account_id,
+            "username": uname,
+        }
+        return Message(
+            id=message_id,
+            conversationId=conv_id,
+            timestamp=datetime.fromtimestamp(create_time).astimezone(),
+            senderId=pid,
+            senderName=sender_name,
+            type=_msg_type(local_type),
+            text="",
+            attachmentRef=AttachmentRef(id=attachment_id, kind="image"),
+            source="local_wechat_db",
+        )
 
     def _to_message(
         self, conv_id: ConversationId, conversation_kind: str, account_wxid: str,

@@ -116,6 +116,7 @@ class WechatReadOnlyDB:
         # database has not changed. Cache only the latest query per table/page;
         # a main DB or WAL change invalidates it immediately.
         self._message_query_cache = {}
+        self._image_resource_query_cache = {}
         self._message_table_columns_cache: Dict[Tuple[str, str], set] = {}
         self._sender_username_cache: Dict[Tuple[str, int], Optional[str]] = {}
         self._distinct_sender_cache = {}
@@ -409,7 +410,7 @@ class WechatReadOnlyDB:
         packed_select = "hex(m.%s)" % packed_column if packed_column else "NULL"
         sql = (
             "SELECT local_id, create_time, real_sender_id, hex(message_content), local_type, "
-            "(SELECT user_name FROM Name2Id WHERE rowid = m.real_sender_id), %s "
+            "(SELECT user_name FROM Name2Id WHERE rowid = m.real_sender_id), server_id, %s "
             "FROM %s AS m%s ORDER BY m.create_time DESC LIMIT %d OFFSET %d"
             % (packed_select, table, self._where(tr, like), limit, offset)
         )
@@ -424,12 +425,63 @@ class WechatReadOnlyDB:
         )
         return rows
 
+    def query_image_resources(
+        self,
+        username: str,
+        tr: Tuple[Optional[int], Optional[int]],
+        limit: int,
+        offset: int,
+    ) -> List[list]:
+        """Read image metadata that WeChat has not materialized in ``Msg_*`` yet.
+
+        WeChat 4.1 can update ``SessionTable`` and ``message_resource.db`` as soon
+        as an image arrives while delaying (or omitting) the corresponding row
+        in the numbered message shard.  The resource index still contains the
+        stable local/server ids, sender and packed media metadata needed by the
+        order importer, so it is a safe read-only fallback for image messages.
+        """
+        resource_db = os.path.join(self.m.db_root, "message", "message_resource.db")
+        if not os.path.isfile(resource_db):
+            return []
+        cache_key = (username, limit, offset)
+        database_state = self._message_database_state(resource_db)
+        cached = self._image_resource_query_cache.get(cache_key)
+        if cached and cached[0] == tr and cached[1] == database_state:
+            return [list(row) for row in cached[2]]
+
+        lo, hi = tr
+        conds = [
+            "m.chat_id = (SELECT rowid FROM ChatName2Id WHERE user_name = %s)"
+            % _sql_text_literal(username),
+            "m.message_local_type IN (3, 47)",
+        ]
+        if lo is not None:
+            conds.append("m.message_create_time >= %d" % lo)
+        if hi is not None:
+            conds.append("m.message_create_time <= %d" % hi)
+        sql = (
+            "SELECT m.message_id, m.message_local_id, m.message_create_time, m.sender_id, "
+            "m.message_local_type, "
+            "(SELECT user_name FROM SenderName2Id WHERE rowid = m.sender_id), "
+            "m.message_svr_id, hex(m.packed_info) "
+            "FROM MessageResourceInfo AS m WHERE %s "
+            "ORDER BY m.message_create_time DESC LIMIT %d OFFSET %d"
+            % (" AND ".join(conds), limit, offset)
+        )
+        rows = self._run(resource_db, sql)
+        self._image_resource_query_cache[cache_key] = (
+            tr,
+            self._message_database_state(resource_db),
+            [list(row) for row in rows],
+        )
+        return rows
+
     def message_by_local_id(self, shard: str, table: str, local_id: int) -> Optional[list]:
         packed_column = self._packed_info_column(shard, table)
         packed_select = "hex(m.%s)" % packed_column if packed_column else "NULL"
         sql = (
             "SELECT local_id, create_time, real_sender_id, hex(message_content), local_type, "
-            "(SELECT user_name FROM Name2Id WHERE rowid = m.real_sender_id), %s "
+            "(SELECT user_name FROM Name2Id WHERE rowid = m.real_sender_id), server_id, %s "
             "FROM %s AS m WHERE local_id = %d" % (packed_select, table, local_id)
         )
         rows = self._run(shard, sql)
