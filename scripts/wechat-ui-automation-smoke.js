@@ -235,7 +235,11 @@ assert.strictEqual(
 assert.match(windowsCurrentConversationScript, /AutomationElement/);
 assert.match(windowsCurrentConversationScript, /OcrEngine/);
 assert.match(windowsCurrentConversationScript, /Console\]::OutputEncoding/);
-assert.match(windowsCurrentConversationScript, /\$rect\.X -lt 400/);
+assert.match(windowsCurrentConversationScript, /\$rect\.X -lt \$minimumCandidateX/);
+assert.match(windowsCurrentConversationScript, /Read-TitleFromWindowsOcrScreenshot/);
+assert.match(windowsCurrentConversationScript, /\$primary\.Title -ne '群'/);
+assert.match(windowsCurrentConversationScript, /Save-HeaderScreenshot \$window \$compactScreenshotPath 3 2/);
+assert.match(windowsCurrentConversationScript, /\$compact\.Title\.EndsWith\('群'\)/);
 assert.ok(
   windowsCurrentConversationScript.indexOf('Get-TitleFromWindowsOcr $window')
     < windowsCurrentConversationScript.indexOf('Get-TitleFromAutomation $window'),

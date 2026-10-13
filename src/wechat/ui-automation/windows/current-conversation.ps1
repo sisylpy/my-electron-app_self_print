@@ -224,7 +224,12 @@ function Get-TitleFromAutomation($window) {
   }
 }
 
-function Save-HeaderScreenshot($window, [string]$targetPath) {
+function Save-HeaderScreenshot(
+  $window,
+  [string]$targetPath,
+  [int]$scaleNumerator = 3,
+  [int]$scaleDenominator = 1
+) {
   # In a wide Weixin window the conversation list occupies the first third;
   # when it is narrow that list collapses and the chat title moves next to the
   # navigation rail. Capture both layouts, while the short crop below still
@@ -244,8 +249,15 @@ function Save-HeaderScreenshot($window, [string]$targetPath) {
     )
     # The title font is only about 14 physical pixels high on a 1080p desktop.
     # Upscaling this tiny header materially improves the built-in Windows OCR.
-    $scale = 3
-    $scaled = New-Object System.Drawing.Bitmap ($cropWidth * $scale), ($cropHeight * $scale)
+    $scaledWidth = [math]::Max(
+      1,
+      [math]::Round($cropWidth * $scaleNumerator / $scaleDenominator)
+    )
+    $scaledHeight = [math]::Max(
+      1,
+      [math]::Round($cropHeight * $scaleNumerator / $scaleDenominator)
+    )
+    $scaled = New-Object System.Drawing.Bitmap $scaledWidth, $scaledHeight
     $scaledGraphics = [System.Drawing.Graphics]::FromImage($scaled)
     try {
       $scaledGraphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
@@ -279,16 +291,10 @@ function Await-WinRt($operation, [Type]$resultType) {
   return $task.Result
 }
 
-function Get-TitleFromWindowsOcr($window, [string]$screenshotPath) {
-  Add-Type -AssemblyName System.Runtime.WindowsRuntime
-  $null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]
-  $null = [Windows.Storage.Streams.IRandomAccessStream, Windows.Storage.Streams, ContentType = WindowsRuntime]
-  $null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
-  $null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
-  $null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]
-  $null = [Windows.Media.Ocr.OcrResult, Windows.Foundation, ContentType = WindowsRuntime]
-
-  Save-HeaderScreenshot $window $screenshotPath
+function Read-TitleFromWindowsOcrScreenshot(
+  [string]$screenshotPath,
+  [double]$minimumCandidateX
+) {
   $file = Await-WinRt (
     [Windows.Storage.StorageFile]::GetFileFromPathAsync($screenshotPath)
   ) ([Windows.Storage.StorageFile])
@@ -319,7 +325,7 @@ function Get-TitleFromWindowsOcr($window, [string]$screenshotPath) {
         # add button on its left.  Windows OCR can read either icon as "O".
         # The actual chat title begins to the right of that fixed header area
         # in both compact and wide Weixin layouts.
-        if ($rect.Y -gt 150 -or $rect.X -lt 400) { continue }
+        if ($rect.Y -gt 150 -or $rect.X -lt $minimumCandidateX) { continue }
         [void]$candidates.Add([pscustomobject]@{
           Title = $title
           Left = $rect.X
@@ -341,6 +347,43 @@ function Get-TitleFromWindowsOcr($window, [string]$screenshotPath) {
   } finally {
     $stream.Dispose()
   }
+}
+
+function Get-TitleFromWindowsOcr($window, [string]$screenshotPath) {
+  Add-Type -AssemblyName System.Runtime.WindowsRuntime
+  $null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]
+  $null = [Windows.Storage.Streams.IRandomAccessStream, Windows.Storage.Streams, ContentType = WindowsRuntime]
+  $null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
+  $null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
+  $null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]
+  $null = [Windows.Media.Ocr.OcrResult, Windows.Foundation, ContentType = WindowsRuntime]
+
+  Save-HeaderScreenshot $window $screenshotPath
+  $primary = Read-TitleFromWindowsOcrScreenshot $screenshotPath 400
+  if ($primary.Title -ne '群') { return $primary }
+
+  # Windows OCR can read a bold group header such as "蔬菜群 (3)" as only
+  # "群" at the normal 3x verification scale. The same pixels at 1.5x are
+  # consistently recognized as the complete group name on Windows 10. Retry
+  # only for that unmistakable truncated result so personal-chat titles keep
+  # using the sharper 3x path that works best for names such as "金调料".
+  $compactScreenshotPath = [System.IO.Path]::Combine(
+    [System.IO.Path]::GetDirectoryName($screenshotPath),
+    ([System.IO.Path]::GetFileNameWithoutExtension($screenshotPath) + '-compact.png')
+  )
+  try {
+    Save-HeaderScreenshot $window $compactScreenshotPath 3 2
+    $compact = Read-TitleFromWindowsOcrScreenshot $compactScreenshotPath 200
+    if ($compact.Title.Length -gt $primary.Title.Length -and $compact.Title.EndsWith('群')) {
+      return [pscustomobject]@{
+        Title = $compact.Title
+        Count = [int]$primary.Count + [int]$compact.Count
+      }
+    }
+  } finally {
+    Remove-Item -Force -ErrorAction SilentlyContinue $compactScreenshotPath
+  }
+  return $primary
 }
 
 # focus-conversation.ps1 imports these verified title-reading functions into
