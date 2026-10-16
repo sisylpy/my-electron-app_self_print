@@ -396,10 +396,18 @@ function createOrderSessionGateway({
     }
   }
 
-  async function logout() {
+  /**
+   * 退出订单会话。
+   *
+   * `keepRememberToken: true`（侧栏「退出登录」）只结束当前会话，保留「记住用户」
+   * 开关对应的本机令牌——自动登录是用户在设置里明确开启的偏好，退出登录不应该
+   * 把它一起关掉；只有设置开关关闭 / 菜单「取消自动登录」才会撤销令牌。
+   */
+  async function logout(options = {}) {
+    const keepRememberToken = options?.keepRememberToken === true;
     let remoteFailed = false;
     const rememberedToken = await rememberTokenStore.read();
-    if (rememberedToken) {
+    if (rememberedToken && !keepRememberToken) {
       try {
         await http.post(
           'desktop-order-session/v1/revoke',

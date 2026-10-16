@@ -911,10 +911,10 @@ function setupIpcHandlers() {
     if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理识别订单' };
     return getOrderSessionGateway().recognizeOrderAsync(input);
   });
-  ipcMain.handle('order-session-logout', async (event) => {
+  ipcMain.handle('order-session-logout', async (event, options) => {
     assertTrustedRendererEvent(event);
     if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理退出登录' };
-    return getOrderSessionGateway().logout();
+    return getOrderSessionGateway().logout(options);
   });
 
   // 订单写请求由主进程发送，避免 Electron 渲染层的 file/localhost Origin 被服务端拒绝。
@@ -1147,27 +1147,33 @@ function setupIpcHandlers() {
     }
     return getDispatchGateway().adoptLoginSession(auth, options);
   });
-  ipcMain.handle('user-session-logout', async (event) => {
+  ipcMain.handle('user-session-logout', async (event, options) => {
     assertTrustedRendererEvent(event);
     const cleanupWarnings = [];
     if (!isDev) {
       try {
-        const orderSessionLogout = await getOrderSessionGateway().logout();
+        // 「记住用户」是设置里明确开启的偏好：退出登录只结束当前会话，
+        // 不撤销自动登录令牌，否则下次启动又要求扫码，偏好形同虚设。
+        const orderSessionLogout = await getOrderSessionGateway()
+          .logout({ keepRememberToken: true });
         if (!orderSessionLogout.ok) cleanupWarnings.push(orderSessionLogout.message);
       } catch (error) {
         cleanupWarnings.push(error?.message || '订单会话清理失败');
       }
     }
-    const rememberFlagPath = getRememberPrinterUserFlagPath();
-    try {
-      if (fs.existsSync(rememberFlagPath)) {
-        fs.unlinkSync(rememberFlagPath);
+    if (options?.clearRememberPreference === true) {
+      const rememberFlagPath = getRememberPrinterUserFlagPath();
+      try {
+        if (fs.existsSync(rememberFlagPath)) {
+          fs.unlinkSync(rememberFlagPath);
+        }
+        await getRememberTokenStore().clear();
+      } catch (error) {
+        cleanupWarnings.push(error?.message || '自动登录标志清理失败');
+        appLogger.append('warn', 'logout', 'remember-user-flag-clear-failed', {
+          message: error?.message,
+        });
       }
-    } catch (error) {
-      cleanupWarnings.push(error?.message || '自动登录标志清理失败');
-      appLogger.append('warn', 'logout', 'remember-user-flag-clear-failed', {
-        message: error?.message,
-      });
     }
 
     let dispatchResult = { ok: true };

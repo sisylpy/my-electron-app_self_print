@@ -256,7 +256,7 @@ const electronAPI = Object.freeze({
     recognizeOrderAsync: (input) => ipcRenderer.invoke('order-session-recognize-async', input),
     refreshSession: () => ipcRenderer.invoke('order-session-refresh'),
     issueRememberToken: () => ipcRenderer.invoke('order-session-issue-token'),
-    logout: () => ipcRenderer.invoke('order-session-logout'),
+    logout: (options) => ipcRenderer.invoke('order-session-logout', options),
   }),
 
   // 销售分析只开放固定只读查询，配送商身份由主进程安全会话提供。
@@ -296,9 +296,9 @@ const electronAPI = Object.freeze({
     revokeAll: () => ipcRenderer.invoke('connector-credential-revoke-all'),
   }),
 
-  // 用户退出：由主进程清除安全会话、Cookie、网络缓存和自动登录标志。
+  // 用户退出：由主进程清除安全会话、Cookie、网络缓存；「记住用户」偏好保留。
   userSession: Object.freeze({
-    logout: () => ipcRenderer.invoke('user-session-logout'),
+    logout: (options) => ipcRenderer.invoke('user-session-logout', options),
     testLogin: (userId) => ipcRenderer.invoke('user-session-test-login', userId),
   }),
 

@@ -131,6 +131,12 @@ const store = createStore({  // 使用 createStore 替代 Vuex.Store
       let desktopResult = { ok: true };
       let orderSessionError = null;
       let readCancelError = null;
+      // 「记住用户 / 自动登录」是设置里明确开启的偏好：退出登录只结束当前会话，
+      // 本地偏好与用户资料要保留，否则下次启动无法自动登录（令牌还在也没用）。
+      const keepRememberAutoLogin = localStorage.getItem('rememberPrinterUser') === '1';
+      const keepRememberedDisUser = keepRememberAutoLogin
+        ? localStorage.getItem('disUser')
+        : null;
       try {
         await dispatch('dispatch/cancelRead');
       } catch (error) {
@@ -157,6 +163,12 @@ const store = createStore({  // 使用 createStore 替代 Vuex.Store
       } finally {
         commit('dispatch/RESET_RUNTIME_STATE');
         commit('CLEAR_USER_SESSION_CACHE');
+        if (keepRememberAutoLogin) {
+          localStorage.setItem('rememberPrinterUser', '1');
+          if (keepRememberedDisUser) {
+            localStorage.setItem('disUser', keepRememberedDisUser);
+          }
+        }
       }
       if (orderSessionError || readCancelError) {
         return {
