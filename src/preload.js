@@ -252,6 +252,7 @@ const electronAPI = Object.freeze({
     pollLogin: (sessionId) => ipcRenderer.invoke('order-session-poll-login', sessionId),
     todayCustomers: (disId) => ipcRenderer.invoke('order-session-today-customers', disId),
     phoneOrders: (input) => ipcRenderer.invoke('order-session-phone-orders', input),
+    recognizeOrderQwen: (input) => ipcRenderer.invoke('order-session-recognize-qwen', input),
     logout: () => ipcRenderer.invoke('order-session-logout'),
   }),
 

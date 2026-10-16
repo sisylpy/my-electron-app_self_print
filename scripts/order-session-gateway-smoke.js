@@ -90,6 +90,39 @@ async function run() {
   assert.equal(new URLSearchParams(calls.at(-1).body).get('disId'), '160');
   assert.equal(calls.at(-1).config.headers.Cookie, 'JSESSIONID=opaque-session-value');
 
+  nextResponse = {
+    status: 200,
+    data: { code: 0, taskId: 99, task: {}, data: [{ nxDoGoodsName: '土豆' }] },
+  };
+  const qwen = await gateway.recognizeOrderQwen({
+    ImageBase64: 'data:image/jpeg;base64,SGVsbG8=',
+    depId: 12,
+    depFatherId: 12,
+    disId: 160,
+    userId: 312,
+    wechatOrderSource: { customerId: 12 },
+  });
+  assert.equal(qwen.ok, true);
+  assert.equal(qwen.data.taskId, 99);
+  assert.equal(calls.at(-1).url, 'ocr/recognizeOrderQwen');
+  assert.equal(calls.at(-1).config.headers.Cookie, 'JSESSIONID=opaque-session-value');
+  assert.equal(calls.at(-1).config.timeout, 300_000);
+  assert.equal(calls.at(-1).body.disId, 160);
+  assert.equal((await gateway.recognizeOrderQwen({
+    ImageBase64: 'data:image/jpeg;base64,SGVsbG8=',
+    depId: 12,
+    depFatherId: 12,
+    disId: 161,
+    userId: 312,
+  })).status, 403);
+  assert.equal((await gateway.recognizeOrderQwen({
+    ImageBase64: 'not-an-image',
+    depId: 12,
+    depFatherId: 12,
+    disId: 160,
+    userId: 312,
+  })).status, 400);
+
   nextResponse = { status: 401, data: { code: 401, msg: '未登录' } };
   assert.equal((await gateway.todayCustomers(160)).status, 401);
   assert.equal(cookies.length, 0, '401 清除失效会话');
@@ -134,8 +167,11 @@ async function run() {
   assert(bills.includes('订单登录会话已失效，请重新扫码登录'));
   assert(main.includes("ipcMain.handle('order-session-today-customers'"));
   assert(main.includes("ipcMain.handle('order-session-test-login'"));
+  assert(main.includes("ipcMain.handle('order-session-recognize-qwen'"));
   assert(main.includes('if (!runtimeProfile.allowsTestLogin)'));
   assert(preload.includes('orderSession: Object.freeze'));
+  assert(preload.includes('recognizeOrderQwen'));
+  assert(api.includes("desktopOrderSessionRequest(\n        'recognizeOrderQwen'"));
   assert(!preload.includes('JSESSIONID'));
   assert(!main.includes("ipcMain.on('mcp-session-user'"), '旧 3001 会话同步接口已移除');
   assert(!preload.includes('setMcpSessionUser'), '渲染端不再暴露旧 MCP 会话接口');

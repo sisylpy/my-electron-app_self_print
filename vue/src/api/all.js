@@ -232,6 +232,12 @@ const apiMethods = {
   // 与 recognizeOrderOCR 的区别：解析环节换成千问视觉模型，落库/训练/商品匹配链路一致，
   // 返回结构与 recognizeOrderFast 对齐：{ taskId, task, data(订单列表) }
   recognizeOrderQwen(data, config = {}) {
+    if (isPackagedDesktop()) {
+      return desktopOrderSessionRequest(
+        'recognizeOrderQwen',
+        toIpcCloneableJson(data, '图片订单识别数据')
+      );
+    }
     return axiosInstance.post('ocr/recognizeOrderQwen', data, {
       headers: {
         'Content-Type': 'application/json'

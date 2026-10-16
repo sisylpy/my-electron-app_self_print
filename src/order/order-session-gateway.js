@@ -5,6 +5,7 @@ const {
 
 const SESSION_COOKIE = 'JSESSIONID';
 const LOGIN_SESSION_PATTERN = /^session-[a-z0-9]{9}$/;
+const MAX_QWEN_REQUEST_BYTES = 30 * 1024 * 1024;
 
 function failure(status, data, fallback) {
   return {
@@ -28,6 +29,41 @@ function sessionCookieFromHeaders(headers) {
     if (match && /^[A-Za-z0-9._-]+$/.test(match[1])) return match[1];
   }
   return null;
+}
+
+function cloneAndValidateQwenPayload(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('图片订单识别参数无效');
+  }
+  const imageBase64 = typeof input.ImageBase64 === 'string' ? input.ImageBase64 : '';
+  if (!/^data:image\/(?:jpeg|jpg|png|webp|gif|bmp);base64,[A-Za-z0-9+/=\r\n]+$/i.test(imageBase64)) {
+    throw new Error('图片订单原图内容无效');
+  }
+  const depId = positiveId(input.depId);
+  const depFatherId = positiveId(input.depFatherId);
+  const disId = positiveId(input.disId);
+  const userId = positiveId(input.userId);
+  if (!depId || !depFatherId || !disId || !userId) {
+    throw new Error('图片订单客户或登录身份无效');
+  }
+
+  const payload = { ImageBase64: imageBase64, depId, depFatherId, disId, userId };
+  if (input.wechatOrderSource != null) {
+    // 来源元数据已经由微信读取链路生成；这里仍通过 JSON 往返去掉 Vue Proxy、函数等
+    // structured-clone 不支持的值，主进程只向固定接口转发普通数据。
+    payload.wechatOrderSource = input.wechatOrderSource;
+  }
+
+  let serialized;
+  try {
+    serialized = JSON.stringify(payload);
+  } catch {
+    throw new Error('图片订单识别参数无法序列化');
+  }
+  if (Buffer.byteLength(serialized, 'utf8') > MAX_QWEN_REQUEST_BYTES) {
+    throw new Error('图片订单原图过大，请压缩后重试');
+  }
+  return JSON.parse(serialized);
 }
 
 function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl, rememberEnabled = () => false }) {
@@ -161,6 +197,40 @@ function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl, rememberEna
     }
   }
 
+  async function recognizeOrderQwen(input) {
+    let payload;
+    try {
+      payload = cloneAndValidateQwenPayload(input);
+    } catch (error) {
+      return failure(400, null, error.message);
+    }
+    if (authenticatedDisId && payload.disId !== authenticatedDisId) {
+      return failure(403, null, '登录身份与配送商不一致');
+    }
+    const cookie = await cookieHeader();
+    if (!cookie) return failure(401, null, '订单登录会话已失效，请重新扫码登录');
+    try {
+      const response = await http.post('ocr/recognizeOrderQwen', payload, {
+        headers: {
+          Cookie: cookie,
+          'Content-Type': 'application/json',
+        },
+        timeout: 300_000,
+      });
+      if (response.status === 401) {
+        await clear();
+        authenticatedDisId = null;
+      }
+      if (response.status < 200 || response.status >= 300
+          || Number(response.data?.code) !== 0) {
+        return failure(response.status, response.data, '图片订单识别保存失败');
+      }
+      return { ok: true, status: response.status, data: response.data };
+    } catch {
+      return failure(0, null, '无法连接图片订单识别服务');
+    }
+  }
+
   function todayCustomers(disId) {
     const id = positiveId(disId);
     if (!id) return Promise.resolve(failure(400, null, '配送商 ID 无效'));
@@ -225,7 +295,7 @@ function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl, rememberEna
       : { ok: true };
   }
 
-  return { pollLogin, testLogin, todayCustomers, phoneOrders, logout };
+  return { pollLogin, testLogin, todayCustomers, phoneOrders, recognizeOrderQwen, logout };
 }
 
-module.exports = { createOrderSessionGateway };
+module.exports = { createOrderSessionGateway, cloneAndValidateQwenPayload };
