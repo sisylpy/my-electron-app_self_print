@@ -20,6 +20,7 @@ public static class GrainPrintFocusWeixinWin32 {
   public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
   [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int command);
@@ -30,6 +31,7 @@ public static class GrainPrintFocusWeixinWin32 {
   public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 }
 '@
+[void][GrainPrintFocusWeixinWin32]::SetProcessDPIAware()
 
 $verificationScriptPath = if ($CurrentConversationScript) {
   $CurrentConversationScript
@@ -50,9 +52,9 @@ if (Test-Path $verificationScriptPath) {
 }
 
 function Normalize-ConversationTitle([string]$value) {
-  $normalized = [string]$value
+  $normalized = ([string]$value).Normalize([System.Text.NormalizationForm]::FormKC)
   $normalized = $normalized.Trim()
-  $normalized = $normalized -replace '[\r\n\t]+', ' '
+  $normalized = $normalized -replace '\s+', ' '
   $normalized = $normalized -replace '(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])', ''
   $normalized = $normalized -replace '\s*[（(]\s*\d+\s*[）)]\s*$', ''
   return $normalized.Trim()
@@ -229,7 +231,9 @@ function Find-ExactSearchResult($window, [string]$target) {
 }
 
 function Get-VisibleConversationTitle($window, [string]$scriptPath) {
-  if (-not $scriptPath -or -not (Test-Path $scriptPath)) { return '' }
+  if (-not $scriptPath -or -not (Test-Path $scriptPath)) {
+    return [pscustomobject]@{ Title = ''; Method = 'missing-verifier' }
+  }
   if ($inlineTitleVerificationAvailable) {
     $artifactDirectory = Join-Path (
       [System.IO.Path]::GetTempPath()
@@ -238,10 +242,20 @@ function Get-VisibleConversationTitle($window, [string]$scriptPath) {
     try {
       [void](New-Item -ItemType Directory -Force -Path $artifactDirectory)
       $ocr = Get-TitleFromWindowsOcr $window $screenshotPath
-      if ($ocr.Title) { return Normalize-ConversationTitle $ocr.Title }
+      if ($ocr.Title) {
+        return [pscustomobject]@{
+          Title = Normalize-ConversationTitle $ocr.Title
+          Method = 'windows-ocr'
+        }
+      }
       $automation = Get-TitleFromAutomation $window
-      if ($automation.Title) { return Normalize-ConversationTitle $automation.Title }
-      return ''
+      if ($automation.Title) {
+        return [pscustomobject]@{
+          Title = Normalize-ConversationTitle $automation.Title
+          Method = 'uia-fallback'
+        }
+      }
+      return [pscustomobject]@{ Title = ''; Method = 'none' }
     } finally {
       Remove-Item -Force -ErrorAction SilentlyContinue $screenshotPath
       Remove-Item -Force -ErrorAction SilentlyContinue $artifactDirectory
@@ -251,13 +265,22 @@ function Get-VisibleConversationTitle($window, [string]$scriptPath) {
   $json = $rows |
     Where-Object { ([string]$_).Trim().StartsWith('{') } |
     Select-Object -Last 1
-  if (-not $json) { return '' }
+  if (-not $json) { return [pscustomobject]@{ Title = ''; Method = 'no-output' } }
   try {
     $payload = ([string]$json) | ConvertFrom-Json
-    if ($payload.code -ne 'SUCCESS') { return '' }
-    return Normalize-ConversationTitle $payload.conversationTitle
+    if ($payload.code -ne 'SUCCESS') {
+      return [pscustomobject]@{ Title = ''; Method = 'child-process' }
+    }
+    $method = 'child-process'
+    if ($null -ne $payload.metrics -and $payload.metrics.method) {
+      $method = [string]$payload.metrics.method
+    }
+    return [pscustomobject]@{
+      Title = Normalize-ConversationTitle $payload.conversationTitle
+      Method = $method
+    }
   } catch {
-    return ''
+    return [pscustomobject]@{ Title = ''; Method = 'invalid-output' }
   }
 }
 
@@ -330,8 +353,16 @@ try {
   Start-Sleep -Milliseconds 650
   Add-ElapsedDetail 'RESULT_SETTLED'
 
-  $openedTitle = Get-VisibleConversationTitle $window $verificationScriptPath
-  Add-ElapsedDetail 'TITLE_READ'
+  $openedTitle = ''
+  for ($attempt = 1; $attempt -le 2; $attempt += 1) {
+    $verification = Get-VisibleConversationTitle $window $verificationScriptPath
+    $openedTitle = Normalize-ConversationTitle $verification.Title
+    [void]$details.Add("TITLE_METHOD_ATTEMPT_$attempt=$($verification.Method)")
+    [void]$details.Add("VERIFIED_TITLE_ATTEMPT_$attempt=$openedTitle")
+    Add-ElapsedDetail "TITLE_READ_$attempt"
+    if ($openedTitle -ceq $targetTitle) { break }
+    if ($attempt -lt 2) { Start-Sleep -Milliseconds 450 }
+  }
   if ($openedTitle -cne $targetTitle) {
     [void]$details.Add("VERIFIED_TITLE=$openedTitle")
     Write-Result -code 'VERIFY_FAILED' -message "微信切换后未能核验会话“$targetTitle”" -status '' -details ([string[]]@($details)) -elapsedMilliseconds ([long]$stopwatch.ElapsedMilliseconds)

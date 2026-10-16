@@ -19,6 +19,7 @@ public static class GrainPrintCurrentWeixinWin32 {
   public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
   [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
@@ -28,6 +29,7 @@ public static class GrainPrintCurrentWeixinWin32 {
   public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 }
 '@
+[void][GrainPrintCurrentWeixinWin32]::SetProcessDPIAware()
 
 function Write-Result(
   [string]$code,
@@ -148,9 +150,9 @@ function Show-WeixinWindow([switch]$MustAlreadyBeForeground) {
 }
 
 function Normalize-ConversationTitle([string]$value) {
-  $title = [string]$value
+  $title = ([string]$value).Normalize([System.Text.NormalizationForm]::FormKC)
   $title = $title.Trim()
-  $title = $title -replace '[\r\n\t]+', ' '
+  $title = $title -replace '\s+', ' '
   # Windows OCR often inserts a space between every Chinese glyph even when
   # the visible Weixin title has none (for example, "李 沛 谊").
   $title = $title -replace '(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])', ''
@@ -167,6 +169,10 @@ function Test-ConversationTitle([string]$value) {
     '表情', '文件', '截图', '关闭', '最小化', '最大化', '还原'
   )
   if ($ignored -contains $title) { return $false }
+  # Search-overlay counters and the magnifier/add glyph are not chat titles.
+  # They have appeared as "O", "0" and "0 全部 6" on scaled Windows desktops.
+  if ($title -match '^[O0〇○]$') { return $false }
+  if ($title -match '^(?:[O0〇○]|\d+)?\s*全部\s*\d+$') { return $false }
   if ($title -match '^\d{1,2}:\d{2}$') { return $false }
   if ($title -match '^(昨天|星期[一二三四五六日天]|周[一二三四五六日天])$') { return $false }
   return $true

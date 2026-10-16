@@ -1,6 +1,6 @@
 {
   "name": "grain-print-app",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "A Self Print For Distributer",
   "main": "src/main.js",
   "grainRuntimeMode": "production",

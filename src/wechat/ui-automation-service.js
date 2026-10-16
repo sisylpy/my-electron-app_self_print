@@ -626,6 +626,13 @@ function createWechatUiAutomationService(options = {}) {
           error: { code: 'UNSUPPORTED_PLATFORM', message: '当前系统暂不支持自动切换微信会话' },
         };
       }
+      // Opening the docked Windows workspace starts a short background title
+      // read. A scan can begin before that helper exits, so wait for that one
+      // known read to finish instead of rejecting the first customer as BUSY.
+      // Other automation remains single-flight and still returns BUSY below.
+      if (platform === 'win32' && currentConversationPromise) {
+        await currentConversationPromise;
+      }
       if (activePromise) {
         return { ok: false, error: { code: 'BUSY', message: '微信界面自动化正在运行' } };
       }

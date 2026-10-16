@@ -253,6 +253,9 @@ assert.match(windowsCurrentConversationScript, /'TARGET_NOT_FOUND'/);
 assert.match(windowsCurrentConversationScript, /\[switch\]\$RequireForeground/);
 assert.match(windowsCurrentConversationScript, /GetForegroundWindow/);
 assert.match(windowsCurrentConversationScript, /'NOT_FOREGROUND'/);
+assert.match(windowsCurrentConversationScript, /NormalizationForm\]::FormKC/);
+assert.match(windowsCurrentConversationScript, /SetProcessDPIAware/);
+assert.match(windowsCurrentConversationScript, /\\s\*全部\\s\*\\d\+\$/);
 
 const windowsFocusConversationScript = fs.readFileSync(
   path.join(
@@ -276,6 +279,10 @@ assert.match(windowsFocusConversationScript, /Clipboard\]::SetText\(\$targetTitl
 assert.match(windowsFocusConversationScript, /EXACT_SEARCH_RESULT_CLICKED/);
 assert.match(windowsFocusConversationScript, /VISIBLE_HEADER_VERIFIED/);
 assert.match(windowsFocusConversationScript, /current-conversation\.ps1/);
+assert.match(windowsFocusConversationScript, /NormalizationForm\]::FormKC/);
+assert.match(windowsFocusConversationScript, /SetProcessDPIAware/);
+assert.match(windowsFocusConversationScript, /TITLE_METHOD_ATTEMPT_/);
+assert.match(windowsFocusConversationScript, /\$attempt -le 2/);
 
 const bundledMacScript = fs.readFileSync(
   path.join(
@@ -600,6 +607,48 @@ async function verifyWindowsCurrentConversationDeduplicates() {
   assert.strictEqual(buttonResult.result.title, '李沛谊');
 }
 
+async function verifyWindowsFocusWaitsForBackgroundConversationRead() {
+  const spawnedScripts = [];
+  const service = createWechatUiAutomationService({
+    platform: 'win32',
+    moduleDir: path.join(__dirname, '..', 'src', 'wechat'),
+    spawnProcess: (_command, args) => {
+      const fileIndex = args.indexOf('-File');
+      const script = fileIndex >= 0 ? String(args[fileIndex + 1]) : '';
+      spawnedScripts.push(path.basename(script));
+      const child = new EventEmitter();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => {};
+      const isCurrentConversation = script.endsWith('current-conversation.ps1');
+      setTimeout(() => {
+        child.stdout.end(JSON.stringify(isCurrentConversation ? {
+          code: 'SUCCESS',
+          message: 'matched',
+          conversationTitle: '金调料',
+        } : {
+          code: 'SUCCESS',
+          message: 'focused',
+          selectedTitle: '金调料',
+          conversations: [{ title: '金调料', status: 'OPENED' }],
+        }));
+        child.stderr.end();
+        child.emit('close', 0);
+      }, isCurrentConversation ? 20 : 0);
+      return child;
+    },
+  });
+  const backgroundRead = service.currentConversation({ requireForeground: true });
+  const focusResult = await service.focusConversation({ title: '金调料' });
+  const backgroundResult = await backgroundRead;
+  assert.strictEqual(backgroundResult.ok, true);
+  assert.strictEqual(focusResult.ok, true);
+  assert.deepStrictEqual(spawnedScripts, [
+    'current-conversation.ps1',
+    'focus-conversation.ps1',
+  ]);
+}
+
 async function verifyWindowsCurrentConversationForegroundGuard() {
   let spawnedArgs = [];
   const service = createWechatUiAutomationService({
@@ -739,6 +788,7 @@ verifyMacAccessibilityStopsBeforeAutomation()
   .then(() => verifyMacConversationFocus())
   .then(() => verifyWindowsConversationFocus())
   .then(() => verifyWindowsCurrentConversationDeduplicates())
+  .then(() => verifyWindowsFocusWaitsForBackgroundConversationRead())
   .then(() => verifyWindowsCurrentConversationForegroundGuard())
   .then(() => verifyMacCurrentConversation())
   .then(() => verifyMacReturnsOnlyExactCandidates())
