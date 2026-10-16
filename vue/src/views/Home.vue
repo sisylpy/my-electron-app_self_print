@@ -110,7 +110,7 @@ export default {
       testLoginError: '',
       loginError: '',
       loginNotice: '',
-      showTestLogin: import.meta.env.DEV,
+      showTestLogin: ['development', 'test'].includes(import.meta.env.VITE_RUNTIME_MODE),
     }
   },
 

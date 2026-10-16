@@ -113,14 +113,15 @@ async function run() {
   const bills = fs.readFileSync(path.join(__dirname, '../vue/src/views/Bills.vue'), 'utf8');
   const main = fs.readFileSync(path.join(__dirname, '../src/main.js'), 'utf8');
   const preload = fs.readFileSync(path.join(__dirname, '../src/preload.js'), 'utf8');
-  assert(home.includes('v-if="showTestLogin"') && home.includes('showTestLogin: import.meta.env.DEV'));
+  assert(home.includes('v-if="showTestLogin"')
+    && home.includes("['development', 'test'].includes(import.meta.env.VITE_RUNTIME_MODE)"));
   assert(home.includes('v-if="loginError"') && home.includes("this.loginError = error?.message"));
   assert(home.includes("desktopOrderSessionRequest('pollLogin', sessionId)"));
   assert(api.includes("desktopOrderSessionRequest('todayCustomers', disId)"));
   assert(api.includes("desktopOrderSessionRequest('phoneOrders', data)"));
   assert(bills.includes('订单登录会话已失效，请重新扫码登录'));
   assert(main.includes("ipcMain.handle('order-session-today-customers'"));
-  assert(main.includes("if (!isDev) return { ok: false, status: 403, message: '测试 ID 登录仅在开发态可用' }"));
+  assert(main.includes('if (!runtimeProfile.allowsTestLogin)'));
   assert(preload.includes('orderSession: Object.freeze'));
   assert(!preload.includes('JSESSIONID'));
   assert(!main.includes("ipcMain.on('mcp-session-user'"), '旧 3001 会话同步接口已移除');

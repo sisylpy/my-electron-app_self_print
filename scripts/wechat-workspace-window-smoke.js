@@ -17,7 +17,7 @@ assert.deepStrictEqual(parseBounds('10,20,800,700\n'), {
 assert.throws(() => parseBounds('invalid'), /无法读取微信窗口位置/);
 assert.match(
   fs.readFileSync(path.join(__dirname, 'after-pack.js'), 'utf8'),
-  /codesign[\s\S]*?'--deep'[\s\S]*?'--sign'[\s\S]*?'-'/,
+  /GRAIN_MAC_SIGNING_IDENTITY[\s\S]*?codesign[\s\S]*?'--deep'[\s\S]*?'--sign'[\s\S]*?identity/,
 );
 
 const layout = computeWorkspaceLayout({ x: 0, y: 25, width: 1920, height: 1055 });

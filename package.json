@@ -3,11 +3,13 @@
   "version": "1.0.11",
   "description": "A Self Print For Distributer",
   "main": "src/main.js",
+  "grainRuntimeMode": "production",
   "scripts": {
     "start": "concurrently \"npm run dev:vue\" \"npm run dev:electron\"",
-    "dev:vue": "cd vue && vite",
+    "dev:vue": "cd vue && vite --mode development",
     "dev:electron": "node scripts/start-electron-dev.cjs",
-    "build:vue": "cd vue && vite build",
+    "build:vue": "cd vue && vite build --mode production",
+    "build:vue:test": "cd vue && vite build --mode test",
     "test:security": "node scripts/security-smoke.js",
     "test:print-contract": "node scripts/print-contract-smoke.js",
     "test:slice0": "node scripts/slice0-architecture-smoke.js",
@@ -28,7 +30,8 @@
     "test:phase2-slice1": "npm run test:slice0 && npm run test:slice1 && npm run test:phase1 && npm run build:vue",
     "test:phase2-slice3": "npm run test:slice0 && npm run test:slice3 && npm run test:phase1 && npm run build:vue",
     "dist": "npm run build:vue && electron-builder",
-    "dist:mac": "npm run build:vue && electron-builder --mac",
+    "dist:mac": "npm run build:vue && GRAIN_BUILD_FLAVOR=production electron-builder --mac --config.extraMetadata.grainRuntimeMode=production",
+    "dist:mac:test": "npm run build:vue:test && GRAIN_BUILD_FLAVOR=test electron-builder --mac --config.appId=club.grainservice.www.dev --config.productName=GrainPrint-Test --config.directories.output=release-test --config.extraMetadata.grainRuntimeMode=test",
     "dist:win": "npm run build:vue && electron-builder --win"
   },
   "build": {
@@ -89,6 +92,7 @@
       "language": "2052"
     },
     "mac": {
+      "identity": null,
       "category": "public.app-category.productivity",
       "icon": "vue/src/assets/icons.icns",
       "extendInfo": {

@@ -2,40 +2,31 @@
 
 
 // vue/vite.config.js
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import path from 'path';
 
 const PRODUCTION_API_BASE_URL = 'https://grainservice.club:8443/nongxinle/api/';
 // 联调专用：测试服务器（62.234.114.61，域名 test-api.grainservice.club）。
 const TEST_API_BASE_URL = 'https://test-api.grainservice.club/nongxinle/api/';
-const testBackendUrl = new URL(TEST_API_BASE_URL);
-
-function resolveApiTarget(value) {
-  const parsed = new URL(value || PRODUCTION_API_BASE_URL);
-  const isProductionBackend =
-    parsed.protocol === 'https:' &&
-    parsed.origin === 'https://grainservice.club:8443' &&
-    parsed.pathname === '/nongxinle/api/';
-  const isTestBackend =
-    parsed.protocol === testBackendUrl.protocol &&
-    parsed.origin === testBackendUrl.origin &&
-    parsed.pathname === testBackendUrl.pathname;
-  const isLocalBackend =
-    parsed.protocol === 'http:' &&
-    ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
-  if (!isProductionBackend && !isTestBackend && !isLocalBackend) {
-    throw new Error('VITE_API_URL 只允许正式服务器、测试服务器或本机开发地址');
-  }
-  return parsed.toString().replace(/\/+$/, '') + '/';
-}
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, __dirname, '');
-  const apiTarget = resolveApiTarget(env.VITE_API_URL);
+  const expectedRuntime = mode === 'development'
+    ? { runtimeMode: 'development', apiUrl: TEST_API_BASE_URL }
+    : mode === 'test'
+      ? { runtimeMode: 'test', apiUrl: TEST_API_BASE_URL }
+      : mode === 'production'
+        ? { runtimeMode: 'production', apiUrl: PRODUCTION_API_BASE_URL }
+        : null;
+  if (!expectedRuntime) throw new Error(`不支持的 Vue 运行模式：${mode}`);
+  const apiTarget = expectedRuntime.apiUrl;
   return ({
   plugins: [vue()],
   base: './', // 设置为相对路径
+  define: {
+    'import.meta.env.VITE_API_URL': JSON.stringify(apiTarget),
+    'import.meta.env.VITE_RUNTIME_MODE': JSON.stringify(expectedRuntime.runtimeMode),
+  },
   server: {
     host: 'localhost', // 改回localhost
     port: 3000, // 设置为 3000 端口

@@ -4,7 +4,14 @@ const path = require('path');
 const CONTINUE_URL = 'https://keychain-help.grainprint.local/continue';
 const CANCEL_URL = 'https://keychain-help.grainprint.local/cancel';
 
-function buildMacKeychainEducationHtml() {
+function buildMacKeychainEducationHtml(appName = '粒子') {
+  const safeAppName = String(appName).replace(/[&<>"']/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[character]));
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -209,7 +216,7 @@ function buildMacKeychainEducationHtml() {
     <ol class="steps">
       <li><span class="step-number">1</span><span>点击下方“继续”，等待 macOS 系统密码框出现。</span></li>
       <li><span class="step-number">2</span><span>输入 Mac 开机/登录密码，再点“始终允许”（推荐）或“允许”。</span></li>
-      <li><span class="step-number">3</span><span>系统窗口里的“粒子 Safe Storage”就是本程序的本机安全存储，属于正常提示。</span></li>
+      <li><span class="step-number">3</span><span>系统窗口里的“${safeAppName} Safe Storage”就是本程序的本机安全存储，属于正常提示。</span></li>
     </ol>
 
     <p class="privacy">🔒 密码由 macOS 系统直接验证，本程序看不到、不会读取，也不会保存你的系统密码。</p>
@@ -237,7 +244,7 @@ function createMacKeychainEducation({ app, BrowserWindow, getParentWindow }) {
   function hasCurrentMarker() {
     try {
       const marker = JSON.parse(fs.readFileSync(markerPath(), 'utf8'));
-      return marker?.version === 1 && marker?.appVersion === app.getVersion();
+      return [1, 2].includes(marker?.version) && Boolean(marker?.confirmedAt);
     } catch {
       return false;
     }
@@ -252,8 +259,7 @@ function createMacKeychainEducation({ app, BrowserWindow, getParentWindow }) {
     const target = markerPath();
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, JSON.stringify({
-      version: 1,
-      appVersion: app.getVersion(),
+      version: 2,
       confirmedAt: new Date().toISOString(),
     }), { encoding: 'utf8', mode: 0o600 });
     try {
@@ -315,7 +321,7 @@ function createMacKeychainEducation({ app, BrowserWindow, getParentWindow }) {
         win.show();
         win.focus();
       });
-      win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildMacKeychainEducationHtml())}`);
+      win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildMacKeychainEducationHtml(app.getName()))}`);
     });
   }
 

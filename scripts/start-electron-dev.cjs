@@ -13,6 +13,7 @@ async function start() {
     stdio: 'inherit',
     env: {
       ...process.env,
+      GRAIN_RUNTIME_MODE: 'development',
       NXL_DISPATCH_API_BASE_URL: testApiBaseUrl,
       NXL_ORDER_API_BASE_URL: testApiBaseUrl,
       GRAIN_API_URL: testApiBaseUrl,

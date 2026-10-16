@@ -14,6 +14,75 @@ const {
 } = require('electron');
 const path = require('path')
 const fs = require('fs')
+const packageMetadata = require('../package.json');
+const {
+  PRODUCTION_API_BASE_URL,
+  TEST_API_BASE_URL,
+  normalizeNongxinleApiBaseUrl,
+} = require('./api-runtime');
+
+const isDev = !app.isPackaged;
+
+function resolveRuntimeMode() {
+  const requestedMode = String(process.env.GRAIN_RUNTIME_MODE || '').trim();
+  if (isDev) {
+    if (requestedMode && requestedMode !== 'development') {
+      throw new Error(`本地开发只允许 development 模式，收到：${requestedMode}`);
+    }
+    return 'development';
+  }
+  const packagedMode = String(packageMetadata.grainRuntimeMode || '').trim();
+  if (!['test', 'production'].includes(packagedMode)) {
+    throw new Error(`安装包缺少有效的 grainRuntimeMode：${packagedMode || '空'}`);
+  }
+  if (requestedMode && requestedMode !== packagedMode) {
+    throw new Error(`安装包运行模式不可由环境变量覆盖：${packagedMode} != ${requestedMode}`);
+  }
+  return packagedMode;
+}
+
+const runtimeMode = resolveRuntimeMode();
+const runtimeProfile = Object.freeze({
+  development: {
+    appName: '粒子-dev',
+    userDataDirectory: '粒子-dev',
+    apiBaseUrl: TEST_API_BASE_URL,
+    allowsTestLogin: true,
+  },
+  test: {
+    appName: '粒子测试版',
+    userDataDirectory: '粒子-test',
+    apiBaseUrl: TEST_API_BASE_URL,
+    allowsTestLogin: true,
+  },
+  production: {
+    appName: '粒子',
+    userDataDirectory: '粒子',
+    apiBaseUrl: PRODUCTION_API_BASE_URL,
+    allowsTestLogin: false,
+  },
+}[runtimeMode]);
+
+const runtimeApiBaseUrl = normalizeNongxinleApiBaseUrl(
+  runtimeProfile.apiBaseUrl,
+  `${runtimeMode} 运行环境 API`
+);
+for (const variableName of [
+  'NXL_DISPATCH_API_BASE_URL',
+  'NXL_ORDER_API_BASE_URL',
+  'GRAIN_API_URL',
+]) {
+  const configuredValue = process.env[variableName];
+  if (configuredValue
+      && normalizeNongxinleApiBaseUrl(configuredValue, variableName) !== runtimeApiBaseUrl) {
+    throw new Error(`${variableName} 与 ${runtimeMode} 运行环境不匹配`);
+  }
+  process.env[variableName] = runtimeApiBaseUrl;
+}
+process.env.GRAIN_RUNTIME_MODE = runtimeMode;
+app.setName(runtimeProfile.appName);
+app.setPath('userData', path.join(app.getPath('appData'), runtimeProfile.userDataDirectory));
+
 const appLogger = require('./appLogger')
 const {
   PRINT_RUNTIME_CONFIG,
@@ -62,8 +131,6 @@ const { createWechatUiAutomationService } = require('./wechat/ui-automation-serv
 const { createWechatWorkspaceWindowService } = require('./wechat/workspace-window-service');
 const { createWechatAutoReadScheduler } = require('./wechat/auto-read-scheduler');
 const { createMacKeychainEducation } = require('./security/mac-keychain-education');
-const { PRODUCTION_API_BASE_URL } = require('./api-runtime');
-
 const {
   pushMcpPrintTaskToRenderer,
   acknowledgeMcpPrintTask,
@@ -87,8 +154,6 @@ let bridgePollingInterval = null;
 const VUE3_DEVTOOLS_ID = 'ljjemllljcmogpfapbkkighbhhppjdbg';
 
 
-const electron = require('electron');
-const isDev = !electron.app.isPackaged; // 使用 app.isPackaged 来检测开发模式
 let mainWindow;
 let dispatchGateway = null;
 let orderWriteGateway = null;
@@ -98,6 +163,7 @@ let wechatUiAutomationService = null;
 let wechatWorkspaceWindowService = null;
 let wechatAutoReadScheduler = null;
 let macKeychainEducation = null;
+let macAccessibilityPromptRequested = false;
 let wechatWorkspaceNativeCloseInProgress = false;
 let windowsWechatSelectionObservationTimer = null;
 let windowsWechatSelectionObservationRunning = false;
@@ -282,7 +348,11 @@ async function allowMacSecureStorage(intent) {
 
 function getOrderWriteGateway() {
   if (!orderWriteGateway) {
-    orderWriteGateway = createOrderWriteGateway({ axios, appLogger });
+    orderWriteGateway = createOrderWriteGateway({
+      axios,
+      appLogger,
+      apiBaseUrl: runtimeApiBaseUrl,
+    });
   }
   return orderWriteGateway;
 }
@@ -291,6 +361,7 @@ function getOrderSessionGateway() {
   if (!orderSessionGateway) {
     orderSessionGateway = createOrderSessionGateway({
       axios,
+      apiBaseUrl: runtimeApiBaseUrl,
       cookieStore: electronSession.defaultSession.cookies,
       rememberEnabled: () => {
         try {
@@ -311,11 +382,18 @@ function getWechatReaderService() {
   return wechatReaderService;
 }
 
+function isMacAccessibilityTrusted(prompt = false) {
+  if (process.platform !== 'darwin') return true;
+  const shouldPrompt = prompt === true && !macAccessibilityPromptRequested;
+  if (shouldPrompt) macAccessibilityPromptRequested = true;
+  return systemPreferences.isTrustedAccessibilityClient(shouldPrompt);
+}
+
 function getWechatUiAutomationService() {
   if (!wechatUiAutomationService) {
     wechatUiAutomationService = createWechatUiAutomationService({
       artifactRoot: path.join(app.getPath('userData'), 'wechat-ui-private-artifacts'),
-      ensureMacAccessibility: () => systemPreferences.isTrustedAccessibilityClient(true),
+      ensureMacAccessibility: () => isMacAccessibilityTrusted(true),
       getMacScreenAccessStatus: () => systemPreferences.getMediaAccessStatus('screen'),
     });
   }
@@ -336,7 +414,7 @@ function getWechatWorkspaceWindowService() {
       desktopCapturer,
       execFileAsync,
       getMainWindow: () => mainWindow,
-      ensureMacAccessibility: prompt => systemPreferences.isTrustedAccessibilityClient(prompt),
+      ensureMacAccessibility: prompt => isMacAccessibilityTrusted(prompt),
     });
   }
   return wechatWorkspaceWindowService;
@@ -1052,7 +1130,9 @@ function setupIpcHandlers() {
   });
   ipcMain.handle('user-session-test-login', async (event, userId) => {
     assertTrustedRendererEvent(event);
-    if (!isDev) return { ok: false, status: 403, message: '测试 ID 登录仅在开发态可用' };
+    if (!runtimeProfile.allowsTestLogin) {
+      return { ok: false, status: 403, message: '测试 ID 登录仅在开发版或测试安装版可用' };
+    }
     return getDispatchGateway().testLogin(userId);
   });
   ipcMain.handle('dispatch-get-capabilities', async (event) => {
@@ -4027,7 +4107,7 @@ async function savePrintBill(depFatherId, depId, tradeNo, userId, paperCount, or
     depFatherId, depId, tradeNo, userId, paperCount
   });
 
-  const apiUrl = `${PRODUCTION_API_BASE_URL}nxdepartmentbill/saveAccountBillPrinter/`;
+  const apiUrl = `${runtimeApiBaseUrl}nxdepartmentbill/saveAccountBillPrinter/`;
 
   console.log('🌐 [savePrintBill] 请求URL:', apiUrl);
 
@@ -4107,7 +4187,7 @@ ipcMain.on('device-config-response', (event, deviceConfig, printParams) => {
     return;
   }
   
-  const apiUrl = `${PRODUCTION_API_BASE_URL}machine/print/record`;
+  const apiUrl = `${runtimeApiBaseUrl}machine/print/record`;
 
   // 构建设备记录数据 - 按照后端接口要求，确保数据类型正确
   const deviceRecordData = {
@@ -4206,7 +4286,7 @@ ipcMain.on('device-config-response-for-merge', async (event, deviceConfig, print
       throw new Error('打印设备配置已失效，请重新选择打印设备');
     }
 
-    const apiUrl = `${PRODUCTION_API_BASE_URL}nxdepartmentbill/saveAccountBillPrinterSelf`;
+    const apiUrl = `${runtimeApiBaseUrl}nxdepartmentbill/saveAccountBillPrinterSelf`;
     const mergeData = {
       depFatherId: parseInt(printParams.depFatherId || 0),
       depId: parseInt(printParams.depId || 0),
@@ -4290,7 +4370,7 @@ ipcMain.on('device-config-check-result', async (event, hasDeviceConfig, printPar
 function savePrintBillGb(gbDepFatherId, gbDepId, tradeNo, userId, nxDisId, paperCount) {
   console.log('GB订单保存:', gbDepFatherId, gbDepId, tradeNo, userId, nxDisId);
 
-  const apiUrl = `${PRODUCTION_API_BASE_URL}nxdepartmentbill/saveAccountBillPrinterGb/`;
+  const apiUrl = `${runtimeApiBaseUrl}nxdepartmentbill/saveAccountBillPrinterGb/`;
 
   // 发起请求
   const postData = {
@@ -4332,7 +4412,7 @@ function savePrintBillGb(gbDepFatherId, gbDepId, tradeNo, userId, nxDisId, paper
 function savePrintBillGbPb(gbBatchId, paperCount) {
   console.log("gbBatchId",gbBatchId, '0000保gbBatchIdgbBatchId');
 
-  const apiUrl = `${PRODUCTION_API_BASE_URL}gbdistributerpurchasebatch/nxDisPrintGbPurBatch/`;
+  const apiUrl = `${runtimeApiBaseUrl}gbdistributerpurchasebatch/nxDisPrintGbPurBatch/`;
     axios.get(`${apiUrl}${gbBatchId}`)
     .then(response => {
       console.log('GB批次保存成功:', response.data);
@@ -4354,12 +4434,15 @@ function savePrintBillGbPb(gbBatchId, paperCount) {
 }
 
 
-// 设置应用名称为"粒子"
-app.setName('粒子');
-
 app.whenReady().then(async () => {
   // 日志目录、会话头、主进程异常、渲染进程 app-log IPC
   appLogger.init(ipcMain, shell, assertTrustedRendererEvent);
+  appLogger.append('info', 'main', 'runtime-profile', {
+    mode: runtimeMode,
+    appName: runtimeProfile.appName,
+    userData: app.getPath('userData'),
+    apiBaseUrl: runtimeApiBaseUrl,
+  });
   // 创建中文菜单
   createMenu();
   wechatAutoReadScheduler = createWechatAutoReadScheduler({
