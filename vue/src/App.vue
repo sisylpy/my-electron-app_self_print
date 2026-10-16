@@ -1,10 +1,6 @@
 ﻿
 <template>
   <div id="app-container">
-    <div v-if="bridgeBanner.show" class="bridge-status-banner" :class="'bridge-' + bridgeBanner.type">
-      <span class="bridge-status-icon">{{ bridgeBanner.icon }}</span>
-      <span class="bridge-status-text">{{ bridgeBanner.message }}</span>
-    </div>
     <LoadingOverlay />
     <ProductShell v-if="$route && $route.meta.shell !== false">
       <router-view />
@@ -226,19 +222,6 @@ export default {
     }
   },
   
-  computed: {
-    // 顶部红条：仅保留对所有功能（含打印）都必需的基础状态（GrainPrint 登录）。
-    // 微信相关提示刻意不放在全局——只有打开「微信获取订单」弹窗时才显示（见 WechatOrderImportModal），
-    // 避免不通过微信下单的配送商/用户被无关的微信警告打扰。
-    bridgeBanner() {
-      const s = this.bridgeStatus || {};
-      if (!s.grainPrintConnected) {
-        return { show: true, type: 'error', icon: '⛔', message: 'GrainPrint 未登录：请登录配送商账号后，连接器功能方可使用' };
-      }
-      return { show: false, type: 'ok', icon: '✅', message: '连接器就绪' };
-    },
-  },
-
   methods: {
     triggerScheduledWechatAutoRead(trigger) {
       if (!trigger?.runId) return;
@@ -472,36 +455,3 @@ export default {
   }
 };
 </script>
-
-<style scoped>
-.bridge-status-banner {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 9998;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.4;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
-}
-.bridge-status-banner .bridge-status-icon {
-  font-size: 16px;
-  flex-shrink: 0;
-}
-.bridge-error {
-  background: #fdecea;
-  color: #b71c1c;
-  border-bottom: 2px solid #ef9a9a;
-}
-.bridge-ok {
-  background: #e8f5e9;
-  color: #1b5e20;
-  border-bottom: 2px solid #a5d6a7;
-}
-</style>
-
