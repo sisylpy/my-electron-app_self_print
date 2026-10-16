@@ -37,6 +37,17 @@ async function run() {
   assert.equal((await gateway.todayCustomers(160)).status, 401);
   assert.equal(calls.length, 0, '无会话时不请求订单接口');
 
+  nextResponse = {
+    status: 200,
+    data: { code: 0, data: { nxDistributerUserId: 312, nxDiuDistributerId: 160 } },
+    headers: { 'set-cookie': ['JSESSIONID=test-login-session; Path=/nongxinle; HttpOnly'] },
+  };
+  const testLogin = await gateway.testLogin(312);
+  assert.equal(testLogin.ok, true);
+  assert.equal(testLogin.data.nxDiuDistributerId, 160);
+  assert.equal(cookies[0].value, 'test-login-session');
+  await gateway.logout();
+
   nextResponse = { status: 200, data: { code: 0, loggedIn: false }, headers: {} };
   assert.equal((await gateway.pollLogin('session-abcdefghi')).data.loggedIn, false);
   assert.equal(cookies.length, 0);
@@ -117,10 +128,12 @@ async function run() {
     && home.includes("['development', 'test'].includes(import.meta.env.VITE_RUNTIME_MODE)"));
   assert(home.includes('v-if="loginError"') && home.includes("this.loginError = error?.message"));
   assert(home.includes("desktopOrderSessionRequest('pollLogin', sessionId)"));
+  assert(home.includes("desktopOrderSessionRequest('testLogin', userId)"));
   assert(api.includes("desktopOrderSessionRequest('todayCustomers', disId)"));
   assert(api.includes("desktopOrderSessionRequest('phoneOrders', data)"));
   assert(bills.includes('订单登录会话已失效，请重新扫码登录'));
   assert(main.includes("ipcMain.handle('order-session-today-customers'"));
+  assert(main.includes("ipcMain.handle('order-session-test-login'"));
   assert(main.includes('if (!runtimeProfile.allowsTestLogin)'));
   assert(preload.includes('orderSession: Object.freeze'));
   assert(!preload.includes('JSESSIONID'));

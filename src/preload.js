@@ -248,6 +248,7 @@ const electronAPI = Object.freeze({
 
   // 正式包只暴露扫码轮询及两个固定订单读取动作；会话 Cookie 留在主进程。
   orderSession: Object.freeze({
+    testLogin: (userId) => ipcRenderer.invoke('order-session-test-login', userId),
     pollLogin: (sessionId) => ipcRenderer.invoke('order-session-poll-login', sessionId),
     todayCustomers: (disId) => ipcRenderer.invoke('order-session-today-customers', disId),
     phoneOrders: (input) => ipcRenderer.invoke('order-session-phone-orders', input),

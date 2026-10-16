@@ -825,6 +825,13 @@ function setupIpcHandlers() {
   });
 
   // 正式包的 file:// 页面不直接持有跨站订单会话；只暴露扫码轮询和两条固定订单读取接口。
+  ipcMain.handle('order-session-test-login', async (event, userId) => {
+    assertTrustedRendererEvent(event);
+    if (!runtimeProfile.allowsTestLogin) {
+      return { ok: false, status: 403, message: '测试 ID 登录仅在开发版或测试安装版可用' };
+    }
+    return getOrderSessionGateway().testLogin(userId);
+  });
   ipcMain.handle('order-session-poll-login', async (event, sessionId) => {
     assertTrustedRendererEvent(event);
     if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理登录' };

@@ -213,14 +213,21 @@ mounted() {
           }
           desktopSessionStored = true;
         }
-        // 测试开关只由服务器决定。网页会话由同源响应设置 HttpOnly Cookie；
-        // 不把 Electron 主进程保存的调度令牌交给页面。
-        const response = await axiosInstance.post('desktop-test-login/v1/browser-session',
-          { userId }, { showLoading: false });
-        const user = response?.data?.data;
-        if (Number(response?.data?.code) !== 0 || !user) {
-          throw new Error(response?.data?.msg || '测试订单会话建立失败');
+        // 测试开关只由服务器决定。打包版 file:// 页面不能可靠接收跨站
+        // HttpOnly Cookie，因此由现有主进程白名单会话网关建立订单会话。
+        let user;
+        if (isPackagedDesktop()) {
+          const response = await desktopOrderSessionRequest('testLogin', userId);
+          user = response?.data;
+        } else {
+          const response = await axiosInstance.post('desktop-test-login/v1/browser-session',
+            { userId }, { showLoading: false });
+          user = response?.data?.data;
+          if (Number(response?.data?.code) !== 0) {
+            throw new Error(response?.data?.msg || '测试订单会话建立失败');
+          }
         }
+        if (!user) throw new Error('测试订单会话建立失败');
         const accepted = await this.completeLogin(user, null, desktopSessionStored);
         if (!accepted) {
           await this.clearOrderSession();

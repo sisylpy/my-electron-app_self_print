@@ -55,6 +55,24 @@ function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl, rememberEna
     await cookieStore.remove(baseURL, SESSION_COOKIE);
   }
 
+  async function storeAuthenticatedCookie(value, disId) {
+    const cookieOptions = {
+      url: baseURL,
+      name: SESSION_COOKIE,
+      value,
+      path: '/nongxinle',
+      secure: baseURL.startsWith('https:'),
+      httpOnly: true,
+      sameSite: 'strict',
+    };
+    if (rememberEnabled()) {
+      // 仅勾选「记住用户」时跨重启保留；服务端 HttpSession 过期仍需登录。
+      cookieOptions.expirationDate = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60;
+    }
+    await cookieStore.set(cookieOptions);
+    authenticatedDisId = disId;
+  }
+
   async function pollLogin(sessionId) {
     if (typeof sessionId !== 'string' || !LOGIN_SESSION_PATTERN.test(sessionId)) {
       return failure(400, null, '扫码会话标识无效');
@@ -81,25 +99,40 @@ function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl, rememberEna
         }
         // 主进程保存 HttpOnly 会话；file:// 页面不能直接依赖跨站 Cookie。
         // Strict 阻止渲染进程跨站请求自动携带它，只在下方白名单接口显式使用。
-        const cookieOptions = {
-          url: baseURL,
-          name: SESSION_COOKIE,
-          value,
-          path: '/nongxinle',
-          secure: baseURL.startsWith('https:'),
-          httpOnly: true,
-          sameSite: 'strict',
-        };
-        if (rememberEnabled()) {
-          // 仅勾选「记住用户」时跨重启保留；服务端 HttpSession 过期仍需扫码。
-          cookieOptions.expirationDate = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60;
-        }
-        await cookieStore.set(cookieOptions);
-        authenticatedDisId = Number(body.user.nxDiuDistributerId);
+        await storeAuthenticatedCookie(value, Number(body.user.nxDiuDistributerId));
       }
       return { ok: true, status: response.status, data: body };
     } catch {
       return failure(0, null, '无法连接扫码登录服务');
+    }
+  }
+
+  async function testLogin(userId) {
+    const normalizedUserId = positiveId(userId);
+    if (!normalizedUserId) return failure(400, null, '配送商用户 ID 无效');
+    try {
+      await clear();
+      pendingSessionId = null;
+      authenticatedDisId = null;
+      const response = await http.post(
+        'desktop-test-login/v1/browser-session',
+        { userId: normalizedUserId },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      const body = response.data && typeof response.data === 'object' ? response.data : {};
+      const user = body.data && typeof body.data === 'object' ? body.data : null;
+      const value = sessionCookieFromHeaders(response.headers);
+      const disId = positiveId(user?.nxDiuDistributerId);
+      if (response.status < 200 || response.status >= 300 || Number(body.code) !== 0) {
+        return failure(response.status, body, '测试订单会话建立失败');
+      }
+      if (!value || !positiveId(user?.nxDistributerUserId) || !disId) {
+        return failure(502, null, '测试服务器未建立有效订单会话');
+      }
+      await storeAuthenticatedCookie(value, disId);
+      return { ok: true, status: response.status, data: user };
+    } catch {
+      return failure(0, null, '无法连接测试订单会话服务');
     }
   }
 
@@ -192,7 +225,7 @@ function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl, rememberEna
       : { ok: true };
   }
 
-  return { pollLogin, todayCustomers, phoneOrders, logout };
+  return { pollLogin, testLogin, todayCustomers, phoneOrders, logout };
 }
 
 module.exports = { createOrderSessionGateway };
