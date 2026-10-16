@@ -207,7 +207,15 @@ const apiMethods = {
   },
 
  // OCR识别订单（后台异步处理，接口很快返回；不显示全局蒙板，由调用方自行展示“识别中”等状态）
+ // 打包版走主进程会话网关：同一接口 ocr/recognizeOrderAsync、同样参数与千问 Max 模型，
+ // 只由主进程补上扫码会话 Cookie，避免 file:// 页面裸 axios 被判 401。
  recognizeOrderOCRWithAi(data, config = {}) {
+  if (isPackagedDesktop()) {
+    return desktopOrderSessionRequest(
+      'recognizeOrderAsync',
+      toIpcCloneableJson(data, '双列图片订单识别数据')
+    );
+  }
   return axiosInstance.post('ocr/recognizeOrderAsync', data, {
     headers: {
       'Content-Type': 'application/json'

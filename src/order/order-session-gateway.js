@@ -231,6 +231,43 @@ function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl, rememberEna
     }
   }
 
+  // 双列/复杂图片订单：前端 recognizeOrderOCRWithAi 走的就是 ocr/recognizeOrderAsync，
+  // 后端固定按 complex=true 使用千问 Max 模型。这里只替换传输通道（补会话 Cookie），
+  // 不改变接口、参数与模型选择。
+  async function recognizeOrderAsync(input) {
+    let payload;
+    try {
+      payload = cloneAndValidateQwenPayload(input);
+    } catch (error) {
+      return failure(400, null, error.message);
+    }
+    if (authenticatedDisId && payload.disId !== authenticatedDisId) {
+      return failure(403, null, '登录身份与配送商不一致');
+    }
+    const cookie = await cookieHeader();
+    if (!cookie) return failure(401, null, '订单登录会话已失效，请重新扫码登录');
+    try {
+      const response = await http.post('ocr/recognizeOrderAsync', payload, {
+        headers: {
+          Cookie: cookie,
+          'Content-Type': 'application/json',
+        },
+        timeout: 300_000,
+      });
+      if (response.status === 401) {
+        await clear();
+        authenticatedDisId = null;
+      }
+      if (response.status < 200 || response.status >= 300
+          || Number(response.data?.code) !== 0) {
+        return failure(response.status, response.data, '双列图片订单识别失败');
+      }
+      return { ok: true, status: response.status, data: response.data };
+    } catch {
+      return failure(0, null, '无法连接双列图片订单识别服务');
+    }
+  }
+
   function todayCustomers(disId) {
     const id = positiveId(disId);
     if (!id) return Promise.resolve(failure(400, null, '配送商 ID 无效'));
@@ -295,7 +332,15 @@ function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl, rememberEna
       : { ok: true };
   }
 
-  return { pollLogin, testLogin, todayCustomers, phoneOrders, recognizeOrderQwen, logout };
+  return {
+    pollLogin,
+    testLogin,
+    todayCustomers,
+    phoneOrders,
+    recognizeOrderQwen,
+    recognizeOrderAsync,
+    logout,
+  };
 }
 
 module.exports = { createOrderSessionGateway, cloneAndValidateQwenPayload };

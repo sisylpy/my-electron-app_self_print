@@ -854,6 +854,11 @@ function setupIpcHandlers() {
     if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理识别订单' };
     return getOrderSessionGateway().recognizeOrderQwen(input);
   });
+  ipcMain.handle('order-session-recognize-async', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理识别订单' };
+    return getOrderSessionGateway().recognizeOrderAsync(input);
+  });
   ipcMain.handle('order-session-logout', async (event) => {
     assertTrustedRendererEvent(event);
     if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理退出登录' };

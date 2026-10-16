@@ -16,6 +16,7 @@ import api from '../services/orderApi';
     import OrderModeSelector from '../components/OrderModeSelector.vue';
     import WechatOrderSource from '../components/workbench/WechatOrderSource.vue';
     import {createPlaceOrderState} from '../stores/orderWorkspaceState';
+    import {writeAppLog} from '@/utils/appLog';
 
     export default {
         name: 'PlaceOrder',
@@ -4888,9 +4889,22 @@ import api from '../services/orderApi';
                         }
                     } else {
                         const errorMsg = res?.data?.msg || res?.data?.message || 'AI识别失败';
+                        writeAppLog('warn', 'order', 'recognizeOrderAsync:failed', {
+                            status: res?.status ?? null,
+                            code: res?.data?.code ?? null,
+                            message: errorMsg,
+                            depId: requestData.depId ?? null,
+                            depFatherId: requestData.depFatherId ?? null,
+                        });
                         await this.$refs.alertDialog.alert(errorMsg);
                     }
                 } catch (error) {
+                    writeAppLog('error', 'order', 'recognizeOrderAsync:error', {
+                        status: error?.response?.status ?? null,
+                        message: error?.message || String(error),
+                        depId: requestData.depId ?? null,
+                        depFatherId: requestData.depFatherId ?? null,
+                    });
                     await this.$refs.alertDialog.alert('AI识别失败：' + (error.message || '未知错误'));
                 } finally {
                     // 清除识别中状态
