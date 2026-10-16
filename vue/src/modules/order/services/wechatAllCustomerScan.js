@@ -2,6 +2,14 @@ function scanTitle(entry) {
   return String(entry?.title || '').trim();
 }
 
+export function customerParticipatesInAutoRead(distributerId, customerId, excludedCustomerKeys) {
+  const key = `${String(distributerId || '').trim()}:${String(customerId || '').trim()}`;
+  const excluded = excludedCustomerKeys instanceof Set
+    ? excludedCustomerKeys
+    : new Set(Array.isArray(excludedCustomerKeys) ? excludedCustomerKeys : []);
+  return !excluded.has(key);
+}
+
 /**
  * Read one bound conversation from the local WeChat database first.
  *

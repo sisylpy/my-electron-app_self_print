@@ -1,9 +1,16 @@
 import assert from 'node:assert/strict';
 import {
+  customerParticipatesInAutoRead,
   databaseResultCoversConversation,
   readWechatCustomerDatabaseFirst,
   scanAllBoundWechatCustomers,
 } from './wechatAllCustomerScan.js';
+
+const excludedCustomerKeys = new Set(['7:20']);
+assert.equal(customerParticipatesInAutoRead(7, 20, excludedCustomerKeys), false);
+assert.equal(customerParticipatesInAutoRead(7, 21, excludedCustomerKeys), true);
+excludedCustomerKeys.delete('7:20');
+assert.equal(customerParticipatesInAutoRead(7, 20, excludedCustomerKeys), true);
 
 const databaseOnlyCalls = [];
 const databaseOnly = await readWechatCustomerDatabaseFirst({

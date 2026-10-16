@@ -60,6 +60,7 @@ const { createOrderSessionGateway } = require('./order/order-session-gateway');
 const { createWechatReaderService, shutdownReader } = require('./wechat/reader-service');
 const { createWechatUiAutomationService } = require('./wechat/ui-automation-service');
 const { createWechatWorkspaceWindowService } = require('./wechat/workspace-window-service');
+const { createWechatAutoReadScheduler } = require('./wechat/auto-read-scheduler');
 const { createMacKeychainEducation } = require('./security/mac-keychain-education');
 const { PRODUCTION_API_BASE_URL } = require('./api-runtime');
 
@@ -95,6 +96,7 @@ let orderSessionGateway = null;
 let wechatReaderService = null;
 let wechatUiAutomationService = null;
 let wechatWorkspaceWindowService = null;
+let wechatAutoReadScheduler = null;
 let macKeychainEducation = null;
 let wechatWorkspaceNativeCloseInProgress = false;
 let windowsWechatSelectionObservationTimer = null;
@@ -617,6 +619,22 @@ function getRememberPrinterUserFlagPath() {
   return path.join(app.getPath('userData'), 'remember-printer-user.flag');
 }
 
+function getWechatAutoReadConfigPath() {
+  return path.join(app.getPath('userData'), 'wechat-auto-read.json');
+}
+
+async function deliverScheduledWechatAutoRead(trigger) {
+  let target = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+  if (!target) {
+    await createWindow();
+    // 页面加载完成后由下一次调度 tick 再投递，避免事件早于 preload/App 监听器。
+    return false;
+  }
+  if (target.webContents.isDestroyed() || target.webContents.isLoading()) return false;
+  target.webContents.send('wechat-auto-read-trigger', trigger);
+  return true;
+}
+
 function getLaunchAtLoginState() {
   const platformSupported = process.platform === 'darwin' || process.platform === 'win32';
   if (!platformSupported) {
@@ -684,6 +702,40 @@ function setupIpcHandlers() {
     if (!current.supported) return current;
     app.setLoginItemSettings({ openAtLogin: enabled === true });
     return getLaunchAtLoginState();
+  });
+
+  ipcMain.handle('wechat-auto-read-config-get', async (event) => {
+    assertTrustedRendererEvent(event);
+    return { ok: true, ...wechatAutoReadScheduler.getConfig() };
+  });
+  ipcMain.handle('wechat-auto-read-config-set', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    return { ok: true, ...wechatAutoReadScheduler.setConfig(input) };
+  });
+  ipcMain.handle('wechat-auto-read-customer-get', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    return {
+      ok: true,
+      participates: wechatAutoReadScheduler.getCustomerParticipation(
+        input?.distributerId,
+        input?.customerId
+      ),
+    };
+  });
+  ipcMain.handle('wechat-auto-read-customer-set', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    return {
+      ok: true,
+      participates: wechatAutoReadScheduler.setCustomerParticipation(
+        input?.distributerId,
+        input?.customerId,
+        input?.participates === true
+      ),
+    };
+  });
+  ipcMain.handle('wechat-auto-read-finish', async (event, runId) => {
+    assertTrustedRendererEvent(event);
+    return { ok: wechatAutoReadScheduler.finish(runId) };
   });
 
   // 正式包的 file:// 页面不直接持有跨站订单会话；只暴露扫码轮询和两条固定订单读取接口。
@@ -1589,6 +1641,7 @@ async function createWindow() {
     clearMcpPrintDeliveriesForWebContents(mainWindowWebContentsId);
     mainWindow = null;
     mainWindowRef = null;
+    wechatAutoReadScheduler?.cancelActiveRun();
   });
 
   console.log('Window created');
@@ -4301,10 +4354,16 @@ app.whenReady().then(async () => {
   appLogger.init(ipcMain, shell, assertTrustedRendererEvent);
   // 创建中文菜单
   createMenu();
+  wechatAutoReadScheduler = createWechatAutoReadScheduler({
+    filePath: getWechatAutoReadConfigPath(),
+    onTrigger: deliverScheduledWechatAutoRead,
+    logger: console,
+  });
   // IPC handlers 只注册一次，避免 createWindow 多次调用时重复注册报错
   setupIpcHandlers();
   
   createWindow();
+  wechatAutoReadScheduler.start();
   
   // ===== 3011 本地安全桥轮询（grain-print-mcp 连接器）=====
   // 同一任务靠 mcp-bridge-client 的持久化 markExecuted 去重，严守「同一条打印任务只走一条有效路径」。
@@ -4451,6 +4510,7 @@ app.on('will-quit', () => {
     clearInterval(bridgePollingInterval);
     console.log('[MCP-3011] 桥轮询已停止');
   }
+  wechatAutoReadScheduler?.stop();
 });
 
 app.on('window-all-closed', () => {

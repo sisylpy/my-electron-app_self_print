@@ -66,6 +66,56 @@
       <article class="settings-card">
         <header>
           <div>
+            <span>微信订单</span>
+            <h2>微信订单自动读取</h2>
+          </div>
+          <button
+            type="button"
+            class="preference-switch"
+            :class="{ 'is-on': autoRead.enabled }"
+            role="switch"
+            :aria-checked="autoRead.enabled"
+            :disabled="autoRead.loading || autoRead.saving || !autoRead.supported"
+            @click="toggleAutoRead"
+          >
+            <span></span>
+            {{ autoRead.loading ? '读取中…' : (autoRead.enabled ? '已开启' : '已关闭') }}
+          </button>
+        </header>
+        <div class="auto-read-settings">
+          <div v-if="autoRead.times.length" class="auto-read-times">
+            <div v-for="(time, index) in autoRead.times" :key="`${time}-${index}`">
+              <label :for="`auto-read-time-${index}`">执行时间 {{ index + 1 }}</label>
+              <input
+                :id="`auto-read-time-${index}`"
+                type="time"
+                :value="time"
+                :disabled="autoRead.saving"
+                @change="updateAutoReadTime(index, $event.target.value)"
+              />
+              <button type="button" :disabled="autoRead.saving" @click="removeAutoReadTime(index)">删除</button>
+            </div>
+          </div>
+          <p v-else class="auto-read-empty">尚未设置执行时间。</p>
+          <div class="auto-read-add">
+            <label for="auto-read-new-time">新增时间</label>
+            <input id="auto-read-new-time" v-model="newAutoReadTime" type="time" :disabled="autoRead.saving" />
+            <button type="button" :disabled="autoRead.saving || !newAutoReadTime" @click="addAutoReadTime">
+              增加
+            </button>
+          </div>
+        </div>
+        <p v-if="autoRead.message" class="settings-card__feedback" :class="{ 'is-error': autoRead.error }">
+          {{ autoRead.message }}
+        </p>
+        <p class="settings-card__note">
+          到点后直接运行现有“全部读”。任务由桌面主进程调度；程序完全退出后不会继续执行。
+        </p>
+      </article>
+
+      <article class="settings-card">
+        <header>
+          <div>
             <span>启动与登录</span>
             <h2>桌面客户端偏好</h2>
           </div>
@@ -236,6 +286,16 @@ const launchAtLogin = reactive({
   loading: true,
   message: '',
 });
+const autoRead = reactive({
+  enabled: false,
+  times: [],
+  loading: true,
+  saving: false,
+  supported: false,
+  message: '',
+  error: false,
+});
+const newAutoReadTime = ref('05:50');
 let clearRememberUserCleanup = null;
 
 function toggleAutoLogin() {
@@ -279,6 +339,85 @@ async function toggleLaunchAtLogin() {
   } finally {
     launchAtLogin.loading = false;
   }
+}
+
+function applyAutoReadConfig(result) {
+  autoRead.enabled = result?.enabled === true;
+  autoRead.times = Array.isArray(result?.times) ? result.times.slice() : [];
+}
+
+async function loadAutoReadConfig() {
+  const action = window.electronAPI?.wechatAutoRead?.getConfig;
+  autoRead.supported = typeof action === 'function';
+  if (!autoRead.supported) {
+    autoRead.loading = false;
+    autoRead.message = '请在桌面客户端中配置自动读取';
+    return;
+  }
+  autoRead.loading = true;
+  autoRead.error = false;
+  try {
+    const result = await action();
+    if (!result?.ok) throw new Error(result?.message || '自动读取设置加载失败');
+    applyAutoReadConfig(result);
+    autoRead.message = '';
+  } catch (error) {
+    autoRead.error = true;
+    autoRead.message = error?.message || '自动读取设置加载失败';
+  } finally {
+    autoRead.loading = false;
+  }
+}
+
+async function saveAutoReadConfig(enabled, times, successMessage) {
+  const action = window.electronAPI?.wechatAutoRead?.setConfig;
+  if (typeof action !== 'function' || autoRead.saving) return false;
+  autoRead.saving = true;
+  autoRead.error = false;
+  try {
+    const result = await action({ enabled, times });
+    if (!result?.ok) throw new Error(result?.message || '自动读取设置保存失败');
+    applyAutoReadConfig(result);
+    autoRead.message = successMessage;
+    return true;
+  } catch (error) {
+    autoRead.error = true;
+    autoRead.message = error?.message || '自动读取设置保存失败';
+    return false;
+  } finally {
+    autoRead.saving = false;
+  }
+}
+
+function toggleAutoRead() {
+  void saveAutoReadConfig(!autoRead.enabled, autoRead.times, !autoRead.enabled ? '自动读取已开启' : '自动读取已关闭');
+}
+
+async function addAutoReadTime() {
+  const value = String(newAutoReadTime.value || '').trim();
+  if (!value || autoRead.times.includes(value)) {
+    autoRead.error = true;
+    autoRead.message = value ? '该执行时间已经存在' : '请选择有效的执行时间';
+    return;
+  }
+  const saved = await saveAutoReadConfig(autoRead.enabled, [...autoRead.times, value], '执行时间已增加');
+  if (saved) newAutoReadTime.value = '';
+}
+
+function removeAutoReadTime(index) {
+  const times = autoRead.times.filter((_, itemIndex) => itemIndex !== index);
+  void saveAutoReadConfig(autoRead.enabled, times, '执行时间已删除');
+}
+
+function updateAutoReadTime(index, value) {
+  const nextValue = String(value || '').trim();
+  if (!nextValue || autoRead.times.some((time, itemIndex) => itemIndex !== index && time === nextValue)) {
+    autoRead.error = true;
+    autoRead.message = nextValue ? '该执行时间已经存在' : '请选择有效的执行时间';
+    return;
+  }
+  const times = autoRead.times.map((time, itemIndex) => (itemIndex === index ? nextValue : time));
+  void saveAutoReadConfig(autoRead.enabled, times, '执行时间已修改');
 }
 
 const runtimeAvailable = computed(() => Boolean(window.electronAPI));
@@ -510,6 +649,7 @@ onMounted(() => {
     autoLoginEnabled.value = false;
   }) || null;
   loadLaunchAtLogin();
+  loadAutoReadConfig();
   loadStatus();
   loadDispatchSession();
   loadCredentials();
@@ -776,6 +916,52 @@ onUnmounted(() => {
 
 .preference-switch.is-on span {
   background: var(--product-primary);
+}
+
+.auto-read-settings {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.auto-read-times {
+  display: grid;
+  gap: 8px;
+}
+
+.auto-read-times > div,
+.auto-read-add {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) 130px auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.auto-read-settings label {
+  color: var(--product-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.auto-read-settings input {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 6px 9px;
+  border: 1px solid var(--product-border-strong);
+  border-radius: var(--product-radius-sm);
+  color: var(--product-text);
+  background: #fff;
+}
+
+.auto-read-empty {
+  margin: 0;
+  color: var(--product-text-muted);
+  font-size: 13px;
+}
+
+.auto-read-add {
+  padding-top: 12px;
+  border-top: 1px solid #edf1f5;
 }
 
 @media (max-width: 1280px) {

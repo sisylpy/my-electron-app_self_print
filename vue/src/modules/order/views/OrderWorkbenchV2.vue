@@ -280,6 +280,7 @@ import {
   GROUP_MENTION_SELF_ONLY,
 } from '../services/wechatOrderMessagePolicy';
 import {
+  customerParticipatesInAutoRead,
   databaseResultCoversConversation,
   readWechatCustomerDatabaseFirst,
   scanAllBoundWechatCustomers,
@@ -1497,6 +1498,7 @@ onBeforeUnmount(() => {
   removeWechatWorkspaceCloseRequestedListener?.();
   window.removeEventListener('grain-mcp-wechat-scan', onMcpWechatScan);
   window.removeEventListener('grain-mcp-wechat-save-orders', onMcpWechatSaveOrders);
+  window.removeEventListener('grain-wechat-auto-read', onScheduledWechatAutoRead);
   void window.electronAPI?.wechatUi?.closeWorkspace?.();
 });
 
@@ -1517,20 +1519,40 @@ function onMcpWechatSaveOrders() {
   void batchSaveAllWechatOrders();
 }
 
+async function onScheduledWechatAutoRead() {
+  const trigger = window.__grainPendingWechatAutoRead;
+  if (!trigger?.runId) return;
+  window.__grainPendingWechatAutoRead = null;
+  try {
+    await scanAllBoundWechatOrders({
+      automatic: true,
+      excludedCustomerKeys: trigger.excludedCustomerKeys,
+    });
+  } finally {
+    await window.electronAPI?.wechatAutoRead?.finish?.(trigger.runId);
+  }
+}
+
 onMounted(() => {
   window.addEventListener('grain-mcp-wechat-scan', onMcpWechatScan);
   window.addEventListener('grain-mcp-wechat-save-orders', onMcpWechatSaveOrders);
+  window.addEventListener('grain-wechat-auto-read', onScheduledWechatAutoRead);
   // 进入视图前若已置位待执行标记（冷启动导航场景），立即消费并运行全面检查。
   onMcpWechatScan();
   onMcpWechatSaveOrders();
+  void onScheduledWechatAutoRead();
 });
 
-async function loadBoundWechatCustomers({ refreshCustomers = false } = {}) {
+async function loadBoundWechatCustomers({ refreshCustomers = false, customerFilter = null } = {}) {
   if (refreshCustomers || !customerContext.customers.value.length) await customerContext.reload();
   const customersById = new Map();
   customerContext.customers.value.forEach((customer) => {
     const id = customerId(customer);
-    if (id !== null && id !== undefined) customersById.set(String(id), customer);
+    if (
+      id !== null
+      && id !== undefined
+      && (typeof customerFilter !== 'function' || customerFilter(customer))
+    ) customersById.set(String(id), customer);
   });
 
   const rows = await Promise.all(Array.from(customersById.values()).map(async (customer) => {
@@ -2443,7 +2465,7 @@ async function batchSaveAllWechatOrders({ reportMode = 'own' } = {}) {
   return { saved, skipped };
 }
 
-async function scanAllBoundWechatOrders() {
+async function scanAllBoundWechatOrders(options = {}) {
   if (wechatScanBusy.value || wechatSelectedImportBusy.value) {
     reportMcpWechatScanResult('failed', { error: '工作台正在巡查中，本次指令未执行' });
     return;
@@ -2461,6 +2483,20 @@ async function scanAllBoundWechatOrders() {
   };
   let databaseOnlyCount = 0;
   let conversationVerificationCount = 0;
+  const automatic = options?.automatic === true;
+  const excludedCustomerKeys = new Set(
+    Array.isArray(options?.excludedCustomerKeys) ? options.excludedCustomerKeys : []
+  );
+  const currentDistributerId = String(
+    disUser.value?.nxDiuDistributerId || disUser.value?.nxDistributerId || ''
+  ).trim();
+  const customerFilter = automatic
+    ? customer => customerParticipatesInAutoRead(
+      currentDistributerId,
+      customerId(customer),
+      excludedCustomerKeys
+    )
+    : null;
   const preservedTaskCount = wechatImportBatch.value.length;
   wechatScanBusy.value = true;
   beginWechatScanReport();
@@ -2486,7 +2522,7 @@ async function scanAllBoundWechatOrders() {
     } = await timeWechatOrderPhase(
       timing,
       'scan-customer-directory-load',
-      () => loadBoundWechatCustomers({ refreshCustomers: true })
+      () => loadBoundWechatCustomers({ refreshCustomers: true, customerFilter })
     );
     const entries = Array.from(unique.entries()).map(([title, row]) => ({ title, row }));
     timing.phase('scan-customer-directory-ready', {
@@ -2495,9 +2531,13 @@ async function scanAllBoundWechatOrders() {
       ambiguousCount,
     });
     if (!entries.length) {
-      throw new Error(ambiguousCount
-        ? '客户中心的微信名称存在重复，无法安全匹配，请先改成唯一名称'
-        : '客户中心还没有关联微信好友或群聊');
+      throw new Error(
+        automatic
+          ? '没有已开启“参与自动读取”的微信绑定客户'
+          : (ambiguousCount
+            ? '客户中心的微信名称存在重复，无法安全匹配，请先改成唯一名称'
+            : '客户中心还没有关联微信好友或群聊')
+      );
     }
     if (!window.electronAPI?.wechatUi?.focusConversation) {
       throw new Error('当前安装包不支持逐个打开微信会话');

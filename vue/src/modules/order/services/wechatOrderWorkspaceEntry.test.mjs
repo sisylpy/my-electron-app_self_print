@@ -193,9 +193,12 @@ assert.match(refreshSelectedAction, /recordWechatServiceTiming\(timing, event\)/
 assert.match(refreshSelectedAction, /timing\.finish\(outcome/);
 
 const allCustomerAction = workbench.match(
-  /async function scanAllBoundWechatOrders\(\) \{([\s\S]*?)\n\}\n\nasync function handleTaskAdded/,
+  /async function scanAllBoundWechatOrders\(options = \{\}\) \{([\s\S]*?)\n\}\n\nasync function handleTaskAdded/,
 )?.[1] || '';
-assert.match(allCustomerAction, /loadBoundWechatCustomers\(\{ refreshCustomers: true \}\)/);
+assert.match(allCustomerAction, /const automatic = options\?\.automatic === true/);
+assert.match(allCustomerAction, /const customerFilter = automatic/);
+assert.match(allCustomerAction, /loadBoundWechatCustomers\(\{ refreshCustomers: true, customerFilter \}\)/);
+assert.match(workbench, /typeof customerFilter !== 'function' \|\| customerFilter\(customer\)/);
 assert.match(allCustomerAction, /scanAllBoundWechatCustomers/);
 assert.match(allCustomerAction, /beginWechatScanReport/);
 assert.match(allCustomerAction, /beginWechatScanStep/);

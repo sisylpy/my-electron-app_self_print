@@ -55,6 +55,16 @@
               <strong>尚未关联</strong><small>可先保存微信名称，之后在订单工作台完成微信关联</small>
             </div>
           </div>
+          <div class="auto-read-field">
+            <div>
+              <strong>参与自动读取</strong>
+              <small>仅控制定时“全部读”；关闭后仍保留客户资料、微信绑定和手动读取。</small>
+            </div>
+            <label class="auto-read-switch">
+              <input v-model="autoReadParticipation" type="checkbox" />
+              <span>{{ autoReadParticipation ? '已开启' : '已关闭' }}</span>
+            </label>
+          </div>
           <label>拣货名称<input v-model.trim="form.nxDepartmentPickName" /></label>
           <label>每日录音时长（分钟）<input v-model.number="form.nxDepartmentRecordMinutes" type="number" min="0" /></label>
           <label>配送单格式
@@ -193,6 +203,7 @@ export default {
     saving: Boolean,
     errorText: { type: String, default: '' },
     wechatBinding: { type: Object, default: null },
+    participatesInAutoRead: { type: Boolean, default: true },
   },
   emits: ['close', 'save', 'delete', 'manage-users', 'transfer'],
   data() {
@@ -219,6 +230,7 @@ export default {
       earliestTime: secondsToTime(form.nxDepartmentEarliestDeliveryTime),
       latestTime: secondsToTime(form.nxDepartmentLatestDeliveryTime),
       allowEarlyDelivery: form.nxDepartmentAllowEarlyDelivery !== 0,
+      autoReadParticipation: this.participatesInAutoRead,
       selectedLabelIds: this.initialLabelIds.slice(),
     };
   },
@@ -235,6 +247,7 @@ export default {
         customer: clone(this.form),
         labelIds: this.selectedLabelIds.slice(),
         wechatGroupMode: this.wechatGroupMode,
+        participatesInAutoRead: this.autoReadParticipation,
       });
     },
   },
@@ -247,6 +260,7 @@ export default {
 .drawer-header{padding:25px 28px 18px;display:flex;justify-content:space-between;border-bottom:1px solid #e7efeb}.drawer-header h3{margin:3px 0;font-size:25px}.drawer-header p{margin:0;color:#76847e}.drawer-eyebrow{font-size:12px;font-weight:800;letter-spacing:.12em;color:#139d61}.icon-button{border:0;background:#eff6f2;border-radius:12px;width:40px;height:40px;font-size:28px;color:#52615b}.drawer-tabs{padding:12px 20px;display:flex;gap:7px;border-bottom:1px solid #edf2ef}.drawer-tabs button{border:0;background:transparent;padding:9px 13px;border-radius:10px;color:#66736e;font-weight:700}.drawer-tabs button.active{background:#e7f6ee;color:#087a48}.drawer-body{flex:1;overflow:auto;padding:24px 28px}.form-section h4{font-size:16px;margin:0 0 15px}.form-section h4:not(:first-child){margin-top:28px}.form-section>label{display:flex;flex-direction:column;gap:7px;margin-bottom:15px;color:#53615b;font-size:14px;font-weight:700}.form-section input:not([type=radio]):not([type=checkbox]),.form-section select,.form-section textarea{width:100%;border:1px solid #cfddd5;border-radius:10px;padding:11px 12px;background:#fff;color:#17211d;outline:none}.form-section input:focus,.form-section select:focus,.form-section textarea:focus{border-color:#12a260;box-shadow:0 0 0 3px rgba(18,162,96,.1)}.two-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px}.two-columns label{display:flex;flex-direction:column;gap:7px;font-size:14px;font-weight:700;color:#53615b}.choice-row{display:grid;grid-template-columns:120px 1fr 1fr;align-items:center;padding:13px 0;border-bottom:1px solid #eef2f0}.choice-row>span{font-weight:700}.choice-row label,.switch-line{font-weight:500!important;margin:0!important;display:block!important}.section-tip{font-size:13px;color:#7c8984;margin-top:-7px}.label-grid{display:flex;flex-wrap:wrap;gap:10px}.label-option{border:1px solid #d7e3dd;border-radius:999px;padding:8px 13px;cursor:pointer}.label-option input{display:none}.label-option.selected{background:#e4f6ec;border-color:#19a564;color:#087b48}.department-list{display:grid;gap:9px}.department-list div{display:flex;justify-content:space-between;padding:13px;border:1px solid #e0e8e4;border-radius:10px}.department-list small{color:#8b9691}.empty-note{padding:24px;text-align:center;background:#f7faf8;color:#84908b;border-radius:12px}.danger-zone{margin-top:35px;padding:20px;border:1px solid #f1d6d6;border-radius:14px;background:#fff9f9}.danger-zone p{font-size:13px;color:#8e6868}.danger-button{border:1px solid #dc5962;background:#fff;color:#c63843;border-radius:10px;padding:9px 14px}.drawer-footer{padding:16px 24px;border-top:1px solid #e5ece8;display:flex;align-items:center;gap:10px}.save-error{color:#cf3e49;font-size:13px;margin-right:auto}.primary-button,.secondary-button{border-radius:10px;padding:10px 17px;font-weight:800}.primary-button{border:0;background:#119e5e;color:#fff}.primary-button:disabled{opacity:.55}.secondary-button{border:1px solid #d5dfda;background:#fff;color:#53615b}@keyframes slide-in{from{transform:translateX(40px);opacity:.4}to{transform:none;opacity:1}}@keyframes fade-in{from{opacity:0}to{opacity:1}}@media(max-width:700px){.two-columns{grid-template-columns:1fr}.choice-row{grid-template-columns:1fr;gap:8px}}
 .field-tip{font-size:12px;font-weight:500;color:#87938e;line-height:1.5}
 .wechat-mode-field{margin-bottom:18px;color:#53615b;font-size:14px;font-weight:700}.wechat-mode-field>span{display:block;margin-bottom:8px}.wechat-mode-options{display:grid;grid-template-columns:1fr 1fr;gap:10px}.wechat-mode-options label{position:relative;display:grid;gap:3px;padding:13px 14px;border:1px solid #d4e1da;border-radius:11px;background:#fff;cursor:pointer}.wechat-mode-options label.selected{border-color:#20a866;background:#edf8f2;box-shadow:0 0 0 2px rgba(18,158,94,.08)}.wechat-mode-options input{position:absolute;opacity:0;pointer-events:none}.wechat-mode-options strong,.wechat-mode-readonly strong{color:#26332d}.wechat-mode-options small,.wechat-mode-readonly small{font-size:11px;font-weight:500;line-height:1.45;color:#7d8a84}.wechat-mode-readonly{display:flex;flex-direction:column;gap:3px;padding:12px 14px;border:1px solid #d8e4de;border-radius:10px;background:#f7faf8}.wechat-mode-readonly.muted strong{color:#6f7d76}
+.auto-read-field{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 18px;padding:13px 14px;border:1px solid #d8e4de;border-radius:10px;background:#f7faf8}.auto-read-field>div{display:grid;gap:4px}.auto-read-field strong{color:#26332d;font-size:14px}.auto-read-field small{color:#7d8a84;font-size:11px;font-weight:500;line-height:1.45}.auto-read-switch{display:flex;flex:none;align-items:center;gap:7px;color:#52615b;font-size:12px;font-weight:800;cursor:pointer}.auto-read-switch input{width:17px;height:17px;accent-color:#15915a}
 .danger-zone{border-color:#e2e9e5;background:#fafcfb}.danger-zone p{color:#75827c}.rare-actions{display:grid;gap:8px;margin:14px 0 18px}.rare-actions>button{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;padding:11px;border:1px solid #dce6e1;border-radius:10px;background:#fff;text-align:left;color:#33413a}.rare-actions>button>span{width:34px;height:34px;border-radius:9px;background:#edf4f1;display:grid;place-items:center;color:#5f7168;font-weight:900}.rare-actions>button div{min-width:0}.rare-actions strong,.rare-actions small{display:block}.rare-actions small{margin-top:3px;color:#8b9691;font-size:10px}.rare-actions b{font-size:19px;color:#96a19c}.delete-tip{padding-top:15px;border-top:1px solid #eee1e1;color:#8e6868!important}
 @media(max-width:700px){.wechat-mode-options{grid-template-columns:1fr}}
 </style>

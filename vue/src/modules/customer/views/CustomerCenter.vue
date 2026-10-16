@@ -127,6 +127,7 @@
       :labels="labels"
       :initial-label-ids="selectedLabelIds"
       :wechat-binding="wechatBinding"
+      :participates-in-auto-read="participatesInAutoRead"
       :saving="savingCustomer"
       :error-text="saveError"
       @close="closeEditDrawer"
@@ -280,6 +281,7 @@ export default {
       selectedLabelIds: [],
       wechatBinding: normalizeCustomerWechatBinding(null),
       wechatBindingLoading: false,
+      participatesInAutoRead: true,
       activeTab: 'profile',
       tabs: [
         { key: 'profile', icon: '客', label: '客户资料', description: '基础与配送信息' },
@@ -388,6 +390,7 @@ export default {
       this.selectedLabelIds = [];
       this.wechatBinding = normalizeCustomerWechatBinding(null);
       this.wechatBindingLoading = true;
+      this.participatesInAutoRead = true;
       this.standardRelation = null;
       this.priceGoods = null;
       this.activeTab = 'profile';
@@ -395,13 +398,17 @@ export default {
       this.detailError = '';
       const requestId = ++this.detailRequestId;
       try {
-        const [detailResponse, labelResponse, bindingResponse] = await Promise.all([
+        const autoReadAction = window.electronAPI?.wechatAutoRead?.getCustomerParticipation;
+        const [detailResponse, labelResponse, bindingResponse, autoReadResponse] = await Promise.all([
           customerApi.getCustomer(id),
           customerApi.getLabels(this.distributerId, id),
           customerApi.loadWechatBinding(id).catch((error) => ({
             ok: false,
             message: error?.message || '微信资料加载失败',
           })),
+          typeof autoReadAction === 'function'
+            ? autoReadAction(this.distributerId, id).catch(() => ({ ok: false }))
+            : Promise.resolve({ ok: true, participates: true }),
         ]);
         const detail = ensureSuccess(detailResponse, '客户资料加载失败') || row;
         if (labelResponse?.data?.code !== 0) throw new Error(labelResponse?.data?.msg || '客户标签加载失败');
@@ -413,6 +420,9 @@ export default {
         this.wechatBinding = normalizeCustomerWechatBinding(
           bindingResponse?.ok ? bindingResponse.data : null,
         );
+        this.participatesInAutoRead = autoReadResponse?.ok
+          ? autoReadResponse.participates !== false
+          : true;
       } catch (error) {
         if (requestId !== this.detailRequestId) return;
         this.detailError = error?.message || '客户资料加载失败';
@@ -462,6 +472,16 @@ export default {
             throw new Error(bindingResponse?.message || '微信资料保存失败');
           }
           this.wechatBinding = normalizeCustomerWechatBinding(bindingResponse.data);
+        }
+        const autoReadAction = window.electronAPI?.wechatAutoRead?.setCustomerParticipation;
+        if (typeof autoReadAction === 'function') {
+          const autoReadResponse = await autoReadAction(
+            this.distributerId,
+            payload.customer.nxDepartmentId,
+            payload.participatesInAutoRead,
+          );
+          if (!autoReadResponse?.ok) throw new Error('自动读取设置保存失败');
+          this.participatesInAutoRead = autoReadResponse.participates !== false;
         }
         this.editDrawerOpen = false;
         this.showNotice('客户资料已保存');

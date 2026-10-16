@@ -157,6 +157,22 @@ const electronAPI = Object.freeze({
       ipcRenderer.invoke('app-launch-at-login-set', Boolean(enabled)),
   }),
 
+  // 微信订单定时读取：配置与客户排除项均由主进程持久化和调度。
+  wechatAutoRead: Object.freeze({
+    getConfig: () => ipcRenderer.invoke('wechat-auto-read-config-get'),
+    setConfig: (config) => ipcRenderer.invoke('wechat-auto-read-config-set', config),
+    getCustomerParticipation: (distributerId, customerId) =>
+      ipcRenderer.invoke('wechat-auto-read-customer-get', { distributerId, customerId }),
+    setCustomerParticipation: (distributerId, customerId, participates) =>
+      ipcRenderer.invoke('wechat-auto-read-customer-set', {
+        distributerId,
+        customerId,
+        participates: participates === true,
+      }),
+    onTrigger: (callback) => listen('wechat-auto-read-trigger', callback),
+    finish: (runId) => ipcRenderer.invoke('wechat-auto-read-finish', runId),
+  }),
+
   // 客户历史订单由主进程携带安全会话查询，令牌不进入页面。
   customerHistory: Object.freeze({
     loadMonths: (departmentId) =>

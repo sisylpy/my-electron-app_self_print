@@ -35,6 +35,7 @@ export default {
       _mcpLastTaskId: null,
       _mcpLastTaskAt: 0,
       _mcpPrintCleanup: null,
+      _wechatAutoReadCleanup: null,
       // 主进程推送的桥连接状态（GrainPrint 登录 / 微信打开/登录），用于顶部红条提示
       bridgeStatus: { grainPrintConnected: true, loginDisId: null, wechat: { open: null, loggedIn: null } },
       bridgeStatusCleanup: null,
@@ -216,6 +217,13 @@ export default {
         this.bridgeStatus.wechat = s.wechat || { open: null, loggedIn: null };
       });
     }
+
+    // 主进程按用户设置的时间直接触发，不经过 WorkBuddy/MCP。
+    if (window.electronAPI?.wechatAutoRead?.onTrigger) {
+      this._wechatAutoReadCleanup = window.electronAPI.wechatAutoRead.onTrigger((trigger) => {
+        this.triggerScheduledWechatAutoRead(trigger);
+      });
+    }
   },
   
   computed: {
@@ -232,6 +240,24 @@ export default {
   },
 
   methods: {
+    triggerScheduledWechatAutoRead(trigger) {
+      if (!trigger?.runId) return;
+      window.__grainPendingWechatAutoRead = trigger;
+      this.$router.push({ name: 'OrderWorkbenchV2' }).then(() => {
+        if (this.$route.name !== 'OrderWorkbenchV2' && window.__grainPendingWechatAutoRead?.runId === trigger.runId) {
+          window.electronAPI?.wechatAutoRead?.finish?.(trigger.runId);
+          window.__grainPendingWechatAutoRead = null;
+        }
+      }).catch((error) => {
+        if (error && error.name !== 'NavigationDuplicated') {
+          console.error('[微信自动读取] 进入订单工作台失败:', error);
+          window.electronAPI?.wechatAutoRead?.finish?.(trigger.runId);
+          window.__grainPendingWechatAutoRead = null;
+        }
+      });
+      window.dispatchEvent(new CustomEvent('grain-wechat-auto-read'));
+    },
+
     /** @param {'ipc'} source */
     handleMcpPrintTaskFromMain(task, source) {
       console.log(`🖨️ [MCP] 收到打印任务 (${source}):`, task);
@@ -429,6 +455,10 @@ export default {
     if (typeof this._mcpPrintCleanup === 'function') {
       this._mcpPrintCleanup();
       this._mcpPrintCleanup = null;
+    }
+    if (typeof this._wechatAutoReadCleanup === 'function') {
+      this._wechatAutoReadCleanup();
+      this._wechatAutoReadCleanup = null;
     }
     if (typeof this.bridgeStatusCleanup === 'function') {
       this.bridgeStatusCleanup();
