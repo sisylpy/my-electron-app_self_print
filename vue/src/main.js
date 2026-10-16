@@ -40,6 +40,8 @@ window.addEventListener(ORDER_SESSION_EXPIRED_EVENT, async (event) => {
   sessionExpiryRedirecting = true;
   writeAppLog('warn', 'renderer', 'order-session-expired', {
     source: event?.detail?.source || 'unknown',
+    method: event?.detail?.method || '',
+    url: event?.detail?.url || '',
     route: currentRoute.fullPath,
   });
   try {

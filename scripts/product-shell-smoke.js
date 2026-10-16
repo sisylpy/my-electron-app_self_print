@@ -135,7 +135,8 @@ check(
 check(
   main.includes('ORDER_SESSION_EXPIRED_EVENT')
     && main.includes("reason: 'session-expired'")
-    && axiosClient.includes("notifyOrderSessionExpired('axios')")
+    && axiosClient.includes("notifyOrderSessionExpired('axios', {")
+    && main.includes("url: event?.detail?.url || ''")
     && desktopOrderSession.includes('notifyOrderSessionExpired(`desktop-order-session:${method}`)'),
   '运行中的订单会话失效会统一清理并返回扫码登录'
 );
@@ -172,6 +173,13 @@ check(
   /if \(props\.batchSaveMode\) \{\s*appliedWechatImportToken\.value = null;\s*return;\s*\}/
     .test(aiOrderPanel),
   '无人值守批量保存成功后不触发人工订单刷新及重复会话校验'
+);
+check(
+  /async function handleOrderChanged\(change\) \{[\s\S]{0,500}?if \(wechatBatchSaving\.value\) return;/
+    .test(orderWorkbench)
+    && /async function handleTaskAdded\(change\) \{[\s\S]{0,500}?if \(wechatBatchSaving\.value\) return;/
+      .test(orderWorkbench),
+  '无人值守批量保存期间父工作台不会触发无会话的订单总览刷新'
 );
 
 check(

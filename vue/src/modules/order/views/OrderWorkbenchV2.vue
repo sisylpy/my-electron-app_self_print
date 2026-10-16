@@ -648,6 +648,10 @@ async function refreshAll() {
 }
 
 async function handleOrderChanged(change) {
+  // 无人值守批量保存由 batchSaveAllWechatOrders 负责移除任务和收尾。
+  // 图片识别组件在落库成功时仍可能发出兼容事件；批量期间如果刷新订单总览，
+  // 打包版会绕过主进程持有的会话 Cookie，产生一次无关的 401 并误退出登录。
+  if (wechatBatchSaving.value) return;
   await refreshOverview({ selectFirst: change?.preserveSelection !== true });
   if (activeView.value === 'overview' && todayInbox.selectedCustomer.value) {
     await todayInbox.refreshSelected({ preserveView: change?.preserveSelection === true });
@@ -2766,6 +2770,9 @@ async function scanAllBoundWechatOrders(options = {}) {
 }
 
 async function handleTaskAdded(change) {
+  // 自动批量保存必须只有 batchSaveAllWechatOrders 一个队列所有者。
+  // 这里既不刷新总览，也不提前切换任务；保存结果返回后由批量循环统一处理。
+  if (wechatBatchSaving.value) return;
   const current = activeWechatImport.value;
   if (current && change?.wechatImportToken === current.token) {
     const queueUpdate = removeWechatImportQueueItem(wechatImportQueue.value, current.token);

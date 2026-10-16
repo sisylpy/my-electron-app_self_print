@@ -19,7 +19,7 @@ const taskAdded = panel.match(
 )?.[1] || '';
 assert.match(taskAdded, /if \(props\.batchSaveMode\)/);
 assert.match(taskAdded, /appliedWechatImportToken\.value = null/);
-assert.match(taskAdded, /emit\('task-added', event\)/);
+assert.match(taskAdded, /emit\('task-added', token/);
 assert.ok(
   taskAdded.indexOf('if (props.batchSaveMode)') < taskAdded.indexOf('const token = appliedWechatImportToken.value'),
   'batch save must suppress the stale manual-preview token before it is forwarded',
@@ -51,6 +51,14 @@ assert.match(workbench, /async function batchSaveAllWechatOrders/);
 assert.match(workbench, /const outcome = await panel\.runWechatImportAndSave\(item\.payload\)/);
 assert.match(workbench, /await removeWechatImport\(item\.token\)/);
 assert.match(workbench, /const saveOutcome = await batchSaveAllWechatOrders\(\{ reportMode: 'merged' \}\)/);
+assert.match(
+  workbench,
+  /async function handleOrderChanged\(change\) \{[\s\S]{0,500}?if \(wechatBatchSaving\.value\) return;/,
+);
+assert.match(
+  workbench,
+  /async function handleTaskAdded\(change\) \{[\s\S]{0,500}?if \(wechatBatchSaving\.value\) return;/,
+);
 assert.doesNotMatch(workbench, /仍走腾讯 OCR/);
 
 console.log('wechatOrderBatchSave tests passed');

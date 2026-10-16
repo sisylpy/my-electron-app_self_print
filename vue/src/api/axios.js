@@ -121,7 +121,10 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     if (Number(error?.response?.status) === 401) {
-      notifyOrderSessionExpired('axios');
+      notifyOrderSessionExpired('axios', {
+        method: error?.config?.method,
+        url: error?.config?.url,
+      });
     }
     return Promise.reject(error);
   }
