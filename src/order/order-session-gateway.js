@@ -367,6 +367,35 @@ function createOrderSessionGateway({
     }
   }
 
+  /**
+   * 用当前已登录会话补签自动登录令牌：用户在登录后才打开「记住用户」开关时，
+   * 不必重新扫码也能拿到令牌。会话无效时返回 401，由调用方提示重新登录。
+   */
+  async function issueRememberToken() {
+    const cookie = await cookieHeader();
+    if (!cookie) return failure(401, null, '当前没有已登录的订单会话，请重新登录后再开启');
+    try {
+      const response = await http.post(
+        'desktop-order-session/v1/issue',
+        {},
+        { headers: { Cookie: cookie, 'Content-Type': 'application/json' } }
+      );
+      const body = response.data && typeof response.data === 'object' ? response.data : null;
+      const token = typeof body?.data === 'string' ? body.data : null;
+      if (response.status === 401 || response.status === 403) {
+        await rememberTokenStore.clear();
+        return failure(response.status, body, '当前订单会话已失效，请重新登录后再开启');
+      }
+      if (response.status < 200 || response.status >= 300 || Number(body?.code) !== 0 || !token) {
+        return failure(response.status, body, '自动登录令牌补签失败');
+      }
+      await rememberTokenStore.write(token);
+      return { ok: true, status: response.status, data: { token } };
+    } catch {
+      return failure(0, null, '无法连接自动登录服务');
+    }
+  }
+
   async function logout() {
     let remoteFailed = false;
     const rememberedToken = await rememberTokenStore.read();
@@ -412,6 +441,7 @@ function createOrderSessionGateway({
     recognizeOrderQwen,
     recognizeOrderAsync,
     refreshSession,
+    issueRememberToken,
     logout,
   };
 }

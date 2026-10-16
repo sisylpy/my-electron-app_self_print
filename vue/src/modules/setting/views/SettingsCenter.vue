@@ -181,6 +181,9 @@
             </button>
           </div>
         </div>
+        <p v-if="autoLoginStatus" class="settings-card__feedback">
+          {{ autoLoginStatus }}
+        </p>
         <p v-if="launchAtLogin.message" class="settings-card__feedback">
           {{ launchAtLogin.message }}
         </p>
@@ -325,8 +328,33 @@ const editingAutoReadTimeIndex = ref(null);
 const editingAutoReadTime = ref('');
 let clearRememberUserCleanup = null;
 
-function toggleAutoLogin() {
-  autoLoginEnabled.value = setRememberPrinterUserEnabled(!autoLoginEnabled.value);
+const autoLoginStatus = ref('');
+
+/**
+ * 打开「自动登录」时立刻用当前已登录会话补签本机令牌，
+ * 这样先登录、后开开关也不用重新扫码。
+ */
+async function toggleAutoLogin() {
+  const next = setRememberPrinterUserEnabled(!autoLoginEnabled.value);
+  autoLoginEnabled.value = next;
+  autoLoginStatus.value = '';
+  if (!next) {
+    return;
+  }
+  const issue = window.electronAPI?.orderSession?.issueRememberToken;
+  if (typeof issue !== 'function') {
+    autoLoginStatus.value = '已在浏览器中记录自动登录，安装后的桌面客户端会自动登记本机凭据。';
+    return;
+  }
+  autoLoginStatus.value = '已开启自动登录，正在登记本机自动登录凭据…';
+  try {
+    const result = await issue();
+    autoLoginStatus.value = result?.ok
+      ? '已开启自动登录，下次启动将直接进入工作台。'
+      : `已开启自动登录，但本机凭据登记失败：${result?.message || '未知原因'}，请重新登录后再开启一次。`;
+  } catch (error) {
+    autoLoginStatus.value = `已开启自动登录，但本机凭据登记失败：${error?.message || '未知原因'}`;
+  }
 }
 
 async function loadLaunchAtLogin() {

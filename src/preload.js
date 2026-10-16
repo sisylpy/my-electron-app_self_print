@@ -255,6 +255,7 @@ const electronAPI = Object.freeze({
     recognizeOrderQwen: (input) => ipcRenderer.invoke('order-session-recognize-qwen', input),
     recognizeOrderAsync: (input) => ipcRenderer.invoke('order-session-recognize-async', input),
     refreshSession: () => ipcRenderer.invoke('order-session-refresh'),
+    issueRememberToken: () => ipcRenderer.invoke('order-session-issue-token'),
     logout: () => ipcRenderer.invoke('order-session-logout'),
   }),
 
