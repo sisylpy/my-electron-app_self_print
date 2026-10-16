@@ -186,6 +186,13 @@ function createOrderSessionGateway({
         return failure(502, null, '测试服务器未建立有效订单会话');
       }
       await storeAuthenticatedCookie(value, disId);
+      // 测试 ID 登录与扫码登录使用同一套自动登录令牌：开启「记住用户」时保存，
+      // 关闭时清掉，保证重启自动登录行为一致。
+      if (rememberEnabled() && typeof body.rememberToken === 'string' && body.rememberToken) {
+        await rememberTokenStore.write(body.rememberToken);
+      } else {
+        await rememberTokenStore.clear();
+      }
       return { ok: true, status: response.status, data: user };
     } catch {
       return failure(0, null, '无法连接测试订单会话服务');
