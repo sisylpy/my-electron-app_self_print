@@ -51,8 +51,8 @@ function normalizeConfig(value) {
 
 function publicConfig(config) {
   return {
-    enabled: config.enabled,
-    times: config.times.slice(),
+    enabled: config?.enabled === true,
+    times: (Array.isArray(config?.times) ? config.times : []).map(time => String(time)),
   };
 }
 

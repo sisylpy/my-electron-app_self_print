@@ -160,7 +160,11 @@ const electronAPI = Object.freeze({
   // 微信订单定时读取：配置与客户排除项均由主进程持久化和调度。
   wechatAutoRead: Object.freeze({
     getConfig: () => ipcRenderer.invoke('wechat-auto-read-config-get'),
-    setConfig: (config) => ipcRenderer.invoke('wechat-auto-read-config-set', config),
+    setConfig: (config) => ipcRenderer.invoke('wechat-auto-read-config-set', {
+      enabled: config?.enabled === true,
+      times: (Array.isArray(config?.times) ? Array.from(config.times) : [])
+        .map(time => String(time)),
+    }),
     getCustomerParticipation: (distributerId, customerId) =>
       ipcRenderer.invoke('wechat-auto-read-customer-get', { distributerId, customerId }),
     setCustomerParticipation: (distributerId, customerId, participates) =>

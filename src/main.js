@@ -623,6 +623,13 @@ function getWechatAutoReadConfigPath() {
   return path.join(app.getPath('userData'), 'wechat-auto-read.json');
 }
 
+function serializeWechatAutoReadConfig(config) {
+  return {
+    enabled: config?.enabled === true,
+    times: (Array.isArray(config?.times) ? config.times : []).map(time => String(time)),
+  };
+}
+
 async function deliverScheduledWechatAutoRead(trigger) {
   let target = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
   if (!target) {
@@ -706,11 +713,12 @@ function setupIpcHandlers() {
 
   ipcMain.handle('wechat-auto-read-config-get', async (event) => {
     assertTrustedRendererEvent(event);
-    return { ok: true, ...wechatAutoReadScheduler.getConfig() };
+    return { ok: true, ...serializeWechatAutoReadConfig(wechatAutoReadScheduler.getConfig()) };
   });
   ipcMain.handle('wechat-auto-read-config-set', async (event, input) => {
     assertTrustedRendererEvent(event);
-    return { ok: true, ...wechatAutoReadScheduler.setConfig(input) };
+    const saved = wechatAutoReadScheduler.setConfig(serializeWechatAutoReadConfig(input));
+    return { ok: true, ...serializeWechatAutoReadConfig(saved) };
   });
   ipcMain.handle('wechat-auto-read-customer-get', async (event, input) => {
     assertTrustedRendererEvent(event);

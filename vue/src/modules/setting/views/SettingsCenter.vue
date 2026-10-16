@@ -84,26 +84,50 @@
         </header>
         <div class="auto-read-settings">
           <div v-if="autoRead.times.length" class="auto-read-times">
-            <div v-for="(time, index) in autoRead.times" :key="`${time}-${index}`">
-              <label :for="`auto-read-time-${index}`">执行时间 {{ index + 1 }}</label>
-              <input
-                :id="`auto-read-time-${index}`"
-                type="time"
-                :value="time"
-                :disabled="autoRead.saving"
-                @change="updateAutoReadTime(index, $event.target.value)"
-              />
-              <button type="button" :disabled="autoRead.saving" @click="removeAutoReadTime(index)">删除</button>
+            <div v-for="(time, index) in autoRead.times" :key="`${time}-${index}`" class="auto-read-time-row">
+              <template v-if="editingAutoReadTimeIndex === index">
+                <label :for="`auto-read-time-${index}`">修改执行时间 {{ index + 1 }}</label>
+                <input
+                  :id="`auto-read-time-${index}`"
+                  v-model="editingAutoReadTime"
+                  type="time"
+                  :disabled="autoRead.saving"
+                />
+                <span class="auto-read-row-actions">
+                  <button
+                    type="button"
+                    :disabled="autoRead.saving || !editingAutoReadTime"
+                    @click="confirmEditAutoReadTime(index)"
+                  >确定</button>
+                  <button type="button" :disabled="autoRead.saving" @click="cancelEditAutoReadTime">取消</button>
+                </span>
+              </template>
+              <template v-else>
+                <span class="auto-read-time-label">执行时间 {{ index + 1 }}</span>
+                <strong class="auto-read-time-value">{{ time }}</strong>
+                <span class="auto-read-row-actions">
+                  <button type="button" :disabled="autoRead.saving" @click="startEditAutoReadTime(index)">修改</button>
+                  <button type="button" :disabled="autoRead.saving" @click="removeAutoReadTime(index)">删除</button>
+                </span>
+              </template>
             </div>
           </div>
           <p v-else class="auto-read-empty">尚未设置执行时间。</p>
-          <div class="auto-read-add">
+          <div v-if="addingAutoReadTime" class="auto-read-add">
             <label for="auto-read-new-time">新增时间</label>
             <input id="auto-read-new-time" v-model="newAutoReadTime" type="time" :disabled="autoRead.saving" />
-            <button type="button" :disabled="autoRead.saving || !newAutoReadTime" @click="addAutoReadTime">
-              增加
-            </button>
+            <span class="auto-read-row-actions">
+              <button type="button" :disabled="autoRead.saving || !newAutoReadTime" @click="confirmAddAutoReadTime">确定</button>
+              <button type="button" :disabled="autoRead.saving" @click="cancelAddAutoReadTime">取消</button>
+            </span>
           </div>
+          <button
+            v-else
+            type="button"
+            class="auto-read-add-button"
+            :disabled="autoRead.saving"
+            @click="startAddAutoReadTime"
+          >添加执行时间</button>
         </div>
         <p v-if="autoRead.message" class="settings-card__feedback" :class="{ 'is-error': autoRead.error }">
           {{ autoRead.message }}
@@ -295,7 +319,10 @@ const autoRead = reactive({
   message: '',
   error: false,
 });
-const newAutoReadTime = ref('05:50');
+const addingAutoReadTime = ref(false);
+const newAutoReadTime = ref('');
+const editingAutoReadTimeIndex = ref(null);
+const editingAutoReadTime = ref('');
 let clearRememberUserCleanup = null;
 
 function toggleAutoLogin() {
@@ -343,7 +370,14 @@ async function toggleLaunchAtLogin() {
 
 function applyAutoReadConfig(result) {
   autoRead.enabled = result?.enabled === true;
-  autoRead.times = Array.isArray(result?.times) ? result.times.slice() : [];
+  autoRead.times = Array.isArray(result?.times) ? result.times.map(time => String(time)) : [];
+}
+
+function serializeAutoReadConfig(enabled, times) {
+  return {
+    enabled: enabled === true,
+    times: (Array.isArray(times) ? Array.from(times) : []).map(time => String(time)),
+  };
 }
 
 async function loadAutoReadConfig() {
@@ -375,7 +409,7 @@ async function saveAutoReadConfig(enabled, times, successMessage) {
   autoRead.saving = true;
   autoRead.error = false;
   try {
-    const result = await action({ enabled, times });
+    const result = await action(serializeAutoReadConfig(enabled, times));
     if (!result?.ok) throw new Error(result?.message || '自动读取设置保存失败');
     applyAutoReadConfig(result);
     autoRead.message = successMessage;
@@ -390,10 +424,27 @@ async function saveAutoReadConfig(enabled, times, successMessage) {
 }
 
 function toggleAutoRead() {
-  void saveAutoReadConfig(!autoRead.enabled, autoRead.times, !autoRead.enabled ? '自动读取已开启' : '自动读取已关闭');
+  void saveAutoReadConfig(
+    !autoRead.enabled,
+    Array.from(autoRead.times),
+    !autoRead.enabled ? '自动读取已开启' : '自动读取已关闭'
+  );
 }
 
-async function addAutoReadTime() {
+function startAddAutoReadTime() {
+  addingAutoReadTime.value = true;
+  newAutoReadTime.value = '';
+  cancelEditAutoReadTime();
+  autoRead.error = false;
+  autoRead.message = '';
+}
+
+function cancelAddAutoReadTime() {
+  addingAutoReadTime.value = false;
+  newAutoReadTime.value = '';
+}
+
+async function confirmAddAutoReadTime() {
   const value = String(newAutoReadTime.value || '').trim();
   if (!value || autoRead.times.includes(value)) {
     autoRead.error = true;
@@ -401,23 +452,38 @@ async function addAutoReadTime() {
     return;
   }
   const saved = await saveAutoReadConfig(autoRead.enabled, [...autoRead.times, value], '执行时间已增加');
-  if (saved) newAutoReadTime.value = '';
+  if (saved) cancelAddAutoReadTime();
 }
 
-function removeAutoReadTime(index) {
+async function removeAutoReadTime(index) {
   const times = autoRead.times.filter((_, itemIndex) => itemIndex !== index);
-  void saveAutoReadConfig(autoRead.enabled, times, '执行时间已删除');
+  const saved = await saveAutoReadConfig(autoRead.enabled, times, '执行时间已删除');
+  if (saved) cancelEditAutoReadTime();
 }
 
-function updateAutoReadTime(index, value) {
-  const nextValue = String(value || '').trim();
+function startEditAutoReadTime(index) {
+  editingAutoReadTimeIndex.value = index;
+  editingAutoReadTime.value = String(autoRead.times[index] || '');
+  cancelAddAutoReadTime();
+  autoRead.error = false;
+  autoRead.message = '';
+}
+
+function cancelEditAutoReadTime() {
+  editingAutoReadTimeIndex.value = null;
+  editingAutoReadTime.value = '';
+}
+
+async function confirmEditAutoReadTime(index) {
+  const nextValue = String(editingAutoReadTime.value || '').trim();
   if (!nextValue || autoRead.times.some((time, itemIndex) => itemIndex !== index && time === nextValue)) {
     autoRead.error = true;
     autoRead.message = nextValue ? '该执行时间已经存在' : '请选择有效的执行时间';
     return;
   }
   const times = autoRead.times.map((time, itemIndex) => (itemIndex === index ? nextValue : time));
-  void saveAutoReadConfig(autoRead.enabled, times, '执行时间已修改');
+  const saved = await saveAutoReadConfig(autoRead.enabled, times, '执行时间已修改');
+  if (saved) cancelEditAutoReadTime();
 }
 
 const runtimeAvailable = computed(() => Boolean(window.electronAPI));
@@ -929,18 +995,29 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.auto-read-times > div,
+.auto-read-time-row,
 .auto-read-add {
   display: grid;
-  grid-template-columns: minmax(100px, 1fr) 130px auto;
+  grid-template-columns: minmax(100px, 1fr) 130px minmax(120px, auto);
   align-items: center;
   gap: 10px;
 }
 
-.auto-read-settings label {
+.auto-read-settings label,
+.auto-read-time-label {
   color: var(--product-text-secondary);
   font-size: 13px;
   font-weight: 700;
+}
+
+.auto-read-time-value {
+  font-size: 15px;
+}
+
+.auto-read-row-actions {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .auto-read-settings input {
@@ -962,6 +1039,10 @@ onUnmounted(() => {
 .auto-read-add {
   padding-top: 12px;
   border-top: 1px solid #edf1f5;
+}
+
+.auto-read-add-button {
+  justify-self: start;
 }
 
 @media (max-width: 1280px) {
