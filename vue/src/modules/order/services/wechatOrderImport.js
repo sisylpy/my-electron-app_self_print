@@ -7,6 +7,14 @@ import {
 } from './wechatOrderMessagePolicy.js';
 
 export const WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED = 'WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED';
+export const WECHAT_IMAGE_DOWNLOAD_RETRY_DELAYS_MS = Object.freeze([
+  500,
+  1000,
+  2000,
+  4000,
+  8000,
+  15000,
+]);
 
 function timingNow() {
   return globalThis.performance?.now?.() ?? Date.now();
@@ -303,6 +311,7 @@ export async function prepareWechatOrderImport({
   binding,
   now = null,
   retryDelaysMs = [400, 800, 1600],
+  attachmentRetryDelaysMs = [],
   knownMessageFingerprints = null,
   deferPrepareUntilStable = false,
   sleep = (delayMs) => new Promise(resolve => setTimeout(resolve, delayMs)),
@@ -345,6 +354,11 @@ export async function prepareWechatOrderImport({
   const hasFixedNow = Number.isFinite(fixedNow) && fixedNow > 0;
   const retryDelays = Array.isArray(retryDelaysMs)
     ? retryDelaysMs.filter(delayMs => Number.isFinite(Number(delayMs)) && Number(delayMs) >= 0)
+    : [];
+  const attachmentRetryDelays = Array.isArray(attachmentRetryDelaysMs)
+    ? attachmentRetryDelaysMs
+      .map(delayMs => Number(delayMs))
+      .filter(delayMs => Number.isFinite(delayMs) && delayMs >= 0)
     : [];
   const hasKnownSnapshot = knownMessageFingerprints !== null
     && knownMessageFingerprints !== undefined;
@@ -521,26 +535,39 @@ export async function prepareWechatOrderImport({
       () => Promise.all(pendingImages.map(async (message) => {
         const attachmentId = message?.attachmentRef?.id;
         if (!attachmentId) throw new Error('微信图片缺少附件标识，请重新读取消息');
-        try {
-          const attachment = unwrapWechatReader(await reader.getAttachment(attachmentId));
-          return {
-            image: {
-              messageFingerprint: message.id,
-              messageTimeMs: message.messageTimeMs,
-              mimeType: attachment.mimeType,
-              size: attachment.size,
-              dataUrl: attachment.dataUrl,
-            },
-          };
-        } catch (error) {
-          if (error?.code !== WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED) throw error;
-          return {
-            deferred: {
-              messageFingerprint: message.id,
-              messageTimeMs: message.messageTimeMs,
-            },
-          };
+        for (let attempt = 0; attempt <= attachmentRetryDelays.length; attempt += 1) {
+          if (attempt > 0) {
+            const delayMs = attachmentRetryDelays[attempt - 1];
+            await timed(
+              onTiming,
+              'reader-attachment-download-wait',
+              () => sleep(delayMs),
+              { attempt: attempt + 1, delayMs }
+            );
+          }
+          try {
+            const attachment = unwrapWechatReader(await reader.getAttachment(attachmentId));
+            return {
+              image: {
+                messageFingerprint: message.id,
+                messageTimeMs: message.messageTimeMs,
+                mimeType: attachment.mimeType,
+                size: attachment.size,
+                dataUrl: attachment.dataUrl,
+              },
+            };
+          } catch (error) {
+            if (error?.code !== WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED) throw error;
+            if (attempt < attachmentRetryDelays.length) continue;
+            return {
+              deferred: {
+                messageFingerprint: message.id,
+                messageTimeMs: message.messageTimeMs,
+              },
+            };
+          }
         }
+        throw new Error('微信图片自动下载重试状态异常');
       })),
       { imageCount: pendingImages.length }
     );
@@ -553,7 +580,7 @@ export async function prepareWechatOrderImport({
   ));
   const deferredImageCount = deferredImages.length;
   const deferredMessage = deferredImageCount
-    ? `${deferredImageCount} 张图片只有聊天缩略图，请在微信中打开原图加载清晰后重新读取`
+    ? `${deferredImageCount} 张图片原图仍在下载，将在后续自动读取时继续重试`
     : '';
   if (!processablePending.length && deferredImageCount) {
     return {

@@ -262,6 +262,7 @@ import {
   mergeWechatOrderPayload,
   normalizeWechatAvatarSource,
   prepareWechatOrderImport,
+  WECHAT_IMAGE_DOWNLOAD_RETRY_DELAYS_MS,
   removeWechatImportQueueItem,
 } from '../services/wechatOrderImport';
 import {
@@ -2610,6 +2611,12 @@ async function scanAllBoundWechatOrders(options = {}) {
               // conversation is opened, one short verification read is enough
               // because the focus flow already waits for the exact chat header.
               retryDelaysMs: mode === 'database' ? [250, 500] : [250],
+              // Opening the exact conversation makes WeChat fetch the full
+              // image asynchronously. Retry the same attachment while it is
+              // being written instead of requiring an operator to open it.
+              attachmentRetryDelaysMs: mode === 'conversation'
+                ? WECHAT_IMAGE_DOWNLOAD_RETRY_DELAYS_MS
+                : [],
               onTiming,
             }),
             { ...customerMeta, readMode: mode }

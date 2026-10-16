@@ -8,6 +8,7 @@ import {
   normalizeWechatAvatarSource,
   prepareWechatOrderImport,
   removeWechatImportQueueItem,
+  WECHAT_IMAGE_DOWNLOAD_RETRY_DELAYS_MS,
   WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED,
 } from './wechatOrderImport.js';
 
@@ -298,6 +299,76 @@ assert.deepEqual(imagePrepared.payload.images, [{
 }]);
 assert.equal(imagePrepared.payload.entries[0].type, 'image');
 
+let attachmentAttempts = 0;
+const attachmentRetryWaits = [];
+const imageDownloadedAfterFocus = await prepareWechatOrderImport({
+  customerId: 7,
+  binding: loaded,
+  now: Date.parse('2026-10-01T00:30:00.000Z'),
+  retryDelaysMs: [],
+  attachmentRetryDelaysMs: [500, 1000],
+  sleep: async delayMs => attachmentRetryWaits.push(delayMs),
+  electronAPI: {
+    customerWechatOrders: {
+      prepareMessages: async (_customerId, messages) => ({
+        ok: true,
+        data: {
+          binding,
+          pendingMessageFingerprints: messages.map(message => message.messageFingerprint),
+        },
+      }),
+    },
+    wechatReader: {
+      getParticipants: electronAPI.wechatReader.getParticipants,
+      getMessages: async () => ({
+        ok: true,
+        result: {
+          items: [{
+            id: 'msg:image-downloading',
+            senderId: 'friend',
+            type: 'image',
+            text: '',
+            timestamp: '2026-10-01T00:29:00.000Z',
+            attachmentRef: { id: 'attachment:image-downloading', kind: 'image' },
+          }],
+        },
+      }),
+      getAttachment: async (attachmentId) => {
+        attachmentAttempts += 1;
+        if (attachmentAttempts < 3) {
+          return {
+            ok: false,
+            error: {
+              code: WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED,
+              message: '只有聊天缩略图',
+              retryable: true,
+            },
+          };
+        }
+        return {
+          ok: true,
+          result: {
+            attachmentId,
+            mimeType: 'image/jpeg',
+            size: 136192,
+            dataUrl: 'data:image/jpeg;base64,/9j/2Q==',
+          },
+        };
+      },
+    },
+  },
+});
+assert.equal(imageDownloadedAfterFocus.status, 'ready');
+assert.equal(imageDownloadedAfterFocus.deferredImageCount, 0);
+assert.equal(imageDownloadedAfterFocus.payload.images[0].size, 136192);
+assert.equal(attachmentAttempts, 3);
+assert.deepEqual(attachmentRetryWaits, [500, 1000]);
+assert.equal(
+  WECHAT_IMAGE_DOWNLOAD_RETRY_DELAYS_MS.reduce((total, delayMs) => total + delayMs, 0),
+  30500,
+  '自动巡查应给微信完整原图留出约 30 秒下载窗口'
+);
+
 const mixedDeferredImage = await prepareWechatOrderImport({
   customerId: 7,
   binding: loaded,
@@ -355,7 +426,7 @@ assert.deepEqual(
   ['msg:text-with-image']
 );
 assert.equal(mixedDeferredImage.deferredImageCount, 1);
-assert.match(mixedDeferredImage.warning, /打开原图/);
+assert.match(mixedDeferredImage.warning, /后续自动读取/);
 assert.equal(
   mixedDeferredImage.binding.cursorTimeMs,
   loaded.cursorTimeMs,
@@ -406,7 +477,7 @@ const imageDeferred = await prepareWechatOrderImport({
 assert.equal(imageDeferred.status, 'deferred');
 assert.equal(imageDeferred.payload, undefined);
 assert.equal(imageDeferred.deferredImageCount, 1);
-assert.match(imageDeferred.message, /打开原图/);
+assert.match(imageDeferred.message, /后续自动读取/);
 
 let lightweightSelfCalls = 0;
 let fullParticipantCalls = 0;
