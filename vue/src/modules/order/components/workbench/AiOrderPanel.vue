@@ -160,11 +160,11 @@ watch(
 
 function handleTaskAdded(event) {
   // 批量保存必须由 runWechatImportAndSave 收到服务端成功结果后，再由父组件
-  // 统一移出当前任务。此前这里会带着人工预览阶段残留的 token 提前移走任务，
-  // 使正在等待千问响应的录入区被卸载，并诱发同一张图片被再次提交。
+  // 统一移出当前任务。这里不能再 emit 人工保存事件：父页面收到后会刷新订单
+  // 总览，而打包版的该刷新仍是普通 Axios 请求，既无必要又会因缺少主进程
+  // 会话 Cookie 把已经保存成功的无人值守流程误判为登录失效。
   if (props.batchSaveMode) {
     appliedWechatImportToken.value = null;
-    emit('task-added', event);
     return;
   }
   const token = appliedWechatImportToken.value;

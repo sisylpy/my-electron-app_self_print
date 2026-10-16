@@ -168,6 +168,11 @@ check(
     && imageCropper.includes('icm-source-banner'),
   '图片裁剪框顶部突出显示真实微信好友或群名，并在需要时显示对应客户'
 );
+check(
+  /if \(props\.batchSaveMode\) \{\s*appliedWechatImportToken\.value = null;\s*return;\s*\}/
+    .test(aiOrderPanel),
+  '无人值守批量保存成功后不触发人工订单刷新及重复会话校验'
+);
 
 check(
   bills.includes('async applyProductRoute')
