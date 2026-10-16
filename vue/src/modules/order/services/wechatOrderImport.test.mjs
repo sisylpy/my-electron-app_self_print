@@ -8,6 +8,7 @@ import {
   normalizeWechatAvatarSource,
   prepareWechatOrderImport,
   removeWechatImportQueueItem,
+  WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED,
 } from './wechatOrderImport.js';
 
 assert.deepEqual(
@@ -296,6 +297,116 @@ assert.deepEqual(imagePrepared.payload.images, [{
   dataUrl: 'data:image/jpeg;base64,/9j/2Q==',
 }]);
 assert.equal(imagePrepared.payload.entries[0].type, 'image');
+
+const mixedDeferredImage = await prepareWechatOrderImport({
+  customerId: 7,
+  binding: loaded,
+  now: Date.parse('2026-10-01T00:30:00.000Z'),
+  retryDelaysMs: [],
+  electronAPI: {
+    customerWechatOrders: {
+      prepareMessages: async (_customerId, messages) => ({
+        ok: true,
+        data: {
+          binding: { ...binding, cursorTimeMs: Date.parse('2026-10-01T00:29:00.000Z') },
+          pendingMessageFingerprints: messages.map(message => message.messageFingerprint),
+        },
+      }),
+    },
+    wechatReader: {
+      getParticipants: electronAPI.wechatReader.getParticipants,
+      getMessages: async () => ({
+        ok: true,
+        result: {
+          items: [
+            {
+              id: 'msg:text-with-image',
+              senderId: 'friend',
+              type: 'text',
+              text: '土豆6斤',
+              timestamp: '2026-10-01T00:28:00.000Z',
+            },
+            {
+              id: 'msg:image-deferred',
+              senderId: 'friend',
+              type: 'image',
+              text: '',
+              timestamp: '2026-10-01T00:29:00.000Z',
+              attachmentRef: { id: 'attachment:image-deferred', kind: 'image' },
+            },
+          ],
+        },
+      }),
+      getAttachment: async () => ({
+        ok: false,
+        error: {
+          code: WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED,
+          message: '只有聊天缩略图',
+          retryable: true,
+        },
+      }),
+    },
+  },
+});
+assert.equal(mixedDeferredImage.status, 'ready');
+assert.equal(mixedDeferredImage.payload.text, '土豆6斤');
+assert.deepEqual(
+  mixedDeferredImage.payload.source.messages.map(message => message.messageFingerprint),
+  ['msg:text-with-image']
+);
+assert.equal(mixedDeferredImage.deferredImageCount, 1);
+assert.match(mixedDeferredImage.warning, /打开原图/);
+assert.equal(
+  mixedDeferredImage.binding.cursorTimeMs,
+  loaded.cursorTimeMs,
+  '有待下载图片时不得向前推进游标'
+);
+
+const imageDeferred = await prepareWechatOrderImport({
+  customerId: 7,
+  binding: loaded,
+  now: Date.parse('2026-10-01T00:30:00.000Z'),
+  retryDelaysMs: [],
+  electronAPI: {
+    customerWechatOrders: {
+      prepareMessages: async (_customerId, messages) => ({
+        ok: true,
+        data: {
+          binding,
+          pendingMessageFingerprints: messages.map(message => message.messageFingerprint),
+        },
+      }),
+    },
+    wechatReader: {
+      getParticipants: electronAPI.wechatReader.getParticipants,
+      getMessages: async () => ({
+        ok: true,
+        result: {
+          items: [{
+            id: 'msg:image-only-deferred',
+            senderId: 'friend',
+            type: 'image',
+            text: '',
+            timestamp: '2026-10-01T00:29:00.000Z',
+            attachmentRef: { id: 'attachment:image-only-deferred', kind: 'image' },
+          }],
+        },
+      }),
+      getAttachment: async () => ({
+        ok: false,
+        error: {
+          code: WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED,
+          message: '只有聊天缩略图',
+          retryable: true,
+        },
+      }),
+    },
+  },
+});
+assert.equal(imageDeferred.status, 'deferred');
+assert.equal(imageDeferred.payload, undefined);
+assert.equal(imageDeferred.deferredImageCount, 1);
+assert.match(imageDeferred.message, /打开原图/);
 
 let lightweightSelfCalls = 0;
 let fullParticipantCalls = 0;

@@ -4,6 +4,7 @@ const path = require('node:path');
 const {
   bundledWindowsFfmpegPath,
   decodeWechatImageEnvelope,
+  WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED,
   findWxgfHevcPartition,
   resolveFfmpegPath,
 } = require('../src/wechat/image-container-decoder');
@@ -94,6 +95,15 @@ assert.throws(
   }),
   /完整打开原图/,
 );
+try {
+  decodeWechatImageEnvelope({
+    encryptedVariants: [{ kind: 'thumbnail', encryptedBase64: thumbnailV2.toString('base64') }],
+    v2Candidates: [{ aesKey: v2Key, xorKey: 31 }],
+  });
+  assert.fail('thumbnail-only attachments must remain deferred');
+} catch (error) {
+  assert.equal(error.code, WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED);
+}
 
 // WXGF stores one or more Annex-B HEVC partitions. Each start code is
 // preceded by a four-byte big-endian partition length; the still image is the

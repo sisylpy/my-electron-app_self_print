@@ -951,6 +951,7 @@ function scanResultLabel(item) {
   if (item?.status === 'empty') return '没有新订单';
   if (item?.status === 'not-found') return '微信未找到';
   if (item?.status === 'error') return '读取失败';
+  if (item?.status === 'warning') return '等待原图';
   return '正在检查';
 }
 
@@ -959,6 +960,7 @@ function scanResultSymbol(item) {
   if (item?.status === 'empty') return '—';
   if (item?.status === 'not-found') return '?';
   if (item?.status === 'error') return '!';
+  if (item?.status === 'warning') return '!';
   return '';
 }
 
@@ -1667,6 +1669,7 @@ function hideBrokenAvatar(event) {
 }
 .wechat-import-modal__automation-results li.is-checking { border-color: #e6c98c; background: #fffaf0; box-shadow: 0 5px 16px rgba(152, 100, 13, .08); transform: translateY(-1px); }
 .wechat-import-modal__automation-results li.is-found { border-color: #9ed0b6; background: #f5fcf8; }
+.wechat-import-modal__automation-results li.is-warning { border-color: #e6c98c; background: #fffaf0; }
 .wechat-import-modal__automation-results li.is-not-found,
 .wechat-import-modal__automation-results li.is-error { border-color: #e9b9bc; background: #fff7f7; }
 .wechat-import-modal__result-icon { position: relative; display: grid; width: 34px; height: 34px; overflow: hidden; place-items: center; border-radius: 11px; color: #5d776a; background: #eaf2ee; font-size: 14px; font-weight: 900; }
@@ -1674,6 +1677,7 @@ function hideBrokenAvatar(event) {
 .wechat-import-modal__result-icon img[hidden] { display: none; }
 .is-checking .wechat-import-modal__result-icon { color: #a06b13; background: #fff0d2; }
 .is-found .wechat-import-modal__result-icon { color: #fff; background: #15935a; }
+.is-warning .wechat-import-modal__result-icon { color: #fff; background: #d58a18; }
 .is-not-found .wechat-import-modal__result-icon,
 .is-error .wechat-import-modal__result-icon { color: #fff; background: #c55359; }
 .wechat-import-modal__result-name,
@@ -1683,6 +1687,7 @@ function hideBrokenAvatar(event) {
 .wechat-import-modal__result-status { justify-items: end; text-align: right; }
 .wechat-import-modal__result-status strong { color: #557064; font-size: 10px; }
 .is-found .wechat-import-modal__result-status strong { color: #137049; }
+.is-warning .wechat-import-modal__result-status strong { color: #9b6816; }
 .is-not-found .wechat-import-modal__result-status strong,
 .is-error .wechat-import-modal__result-status strong { color: #ad4148; }
 .wechat-import-modal__result-status small { max-width: 220px; overflow: hidden; color: #85928c; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }

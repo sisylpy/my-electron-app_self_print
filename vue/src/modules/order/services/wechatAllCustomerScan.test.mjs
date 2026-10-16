@@ -155,6 +155,24 @@ assert.equal(result.imports.length, 2);
 assert.deepEqual(result.failures, [
   { title: '失效客户', message: '微信搜索不到该客户' },
 ]);
+assert.deepEqual(result.warnings, []);
+
+const warningOutcomes = [];
+const warningResult = await scanAllBoundWechatCustomers({
+  entries: [{ title: '李沛谊' }],
+  scanEntry: async () => ({
+    items: [],
+    warning: '1 张图片只有聊天缩略图，请打开原图后重试',
+  }),
+  onResult: item => warningOutcomes.push(item),
+});
+assert.equal(warningResult.failures.length, 0);
+assert.deepEqual(warningResult.warnings, [{
+  title: '李沛谊',
+  message: '1 张图片只有聊天缩略图，请打开原图后重试',
+}]);
+assert.equal(warningOutcomes[0].status, 'warning');
+assert.equal(warningResult.emptyCount, 0);
 
 await assert.rejects(
   () => scanAllBoundWechatCustomers({ entries: [] }),

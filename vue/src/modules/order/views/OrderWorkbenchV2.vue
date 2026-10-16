@@ -2176,11 +2176,13 @@ async function readUnreadWechatOrders() {
           retryDelaysMs: candidate.opened ? undefined : [],
         });
         if (!result.payload) {
+          const deferred = result.status === 'deferred';
+          if (deferred) prepareFailedCount += 1;
           completeWechatScanStep({
             title,
             customerName,
-            status: 'empty',
-            message: '没有未处理的新订单',
+            status: deferred ? 'warning' : 'empty',
+            message: deferred ? result.message : '没有未处理的新订单',
           });
           continue;
         }
@@ -2191,12 +2193,13 @@ async function readUnreadWechatOrders() {
         );
         const items = createWechatImportItems(row, title, result);
         imports.push(...items);
+        if (result.warning) prepareFailedCount += 1;
         completeWechatScanStep({
           title,
           customerName,
           status: 'found',
           itemCount: items.length,
-          message: `发现 ${items.length} 个订单任务`,
+          message: `发现 ${items.length} 个订单任务${result.warning ? `；${result.warning}` : ''}`,
         });
       } catch (error) {
         prepareFailedCount += 1;
@@ -2241,7 +2244,7 @@ function scanReportCell(value) {
   return String(value == null ? '' : value).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ').trim();
 }
 
-// 与「微信订单工作台」巡查卡片同构的状态文案（发现订单 / 没有新订单 / 未找到 / 失败）。
+// 与「微信订单工作台」巡查卡片同构的状态文案。
 function scanReportResultMark(item) {
   const status = item && item.status;
   const label = status === 'found'
@@ -2252,7 +2255,9 @@ function scanReportResultMark(item) {
         ? '🟠 未找到会话'
         : status === 'error'
           ? '🔴 检查失败'
-          : '⚪ 未完成';
+          : status === 'warning'
+            ? '🟡 等待原图'
+            : '⚪ 未完成';
   const detail = scanReportCell(item && item.message);
   return detail ? `${label} · ${detail}` : label;
 }
@@ -2295,7 +2300,7 @@ function buildWechatScanReportMarkdown(summary) {
 
   if (warningCount) {
     lines.push('');
-    lines.push(`> 另有 ${warningCount} 项需人工检查（会话未找到或读取失败），详见工作台。`);
+    lines.push(`> 另有 ${warningCount} 项需人工检查（会话未找到、读取失败或图片等待原图），详见工作台。`);
   }
   lines.push('');
   if (summary.saveOutcome) {
@@ -2651,11 +2656,14 @@ async function scanAllBoundWechatOrders(options = {}) {
           timing.phase('scan-customer-complete', {
             ...customerMeta,
             durationMs: Math.max(0, timingNow() - customerStartedAt),
-            status: items.length ? 'found' : 'empty',
+            status: items.length ? 'found' : prepared.status === 'deferred' ? 'warning' : 'empty',
             taskCount: items.length,
             readMode: databaseFirst.mode,
           });
-          return items;
+          return {
+            items,
+            warning: prepared.warning || (prepared.status === 'deferred' ? prepared.message : ''),
+          };
         } catch (error) {
           timing.phase('scan-customer-complete', {
             ...customerMeta,
@@ -2669,7 +2677,8 @@ async function scanAllBoundWechatOrders(options = {}) {
       },
     });
 
-    const warningCount = failedCount + ambiguousCount + result.failures.length;
+    const warningCount = failedCount + ambiguousCount
+      + result.failures.length + result.warnings.length;
     const totalMessages = result.imports.reduce((sum, item) => sum + item.messageCount, 0);
     const customerCount = new Set(result.imports.map(item => String(item.customerId))).size;
     timingOutcome = warningCount ? 'warning' : 'success';
@@ -2710,7 +2719,10 @@ async function scanAllBoundWechatOrders(options = {}) {
     );
     timing.phase('scan-results-ready', timingSummary);
     if (warningCount) {
-      const failedTitles = result.failures.slice(0, 3).map(item => `“${item.title}”`).join('、');
+      const failedTitles = [...result.failures, ...result.warnings]
+        .slice(0, 3)
+        .map(item => `“${item.title}”`)
+        .join('、');
       wechatWorkspaceWarning.value = [
         wechatWorkspaceWarning.value,
         `巡查已继续完成，但有 ${warningCount} 项需要检查${failedTitles ? `：${failedTitles}` : ''}`,

@@ -1,6 +1,9 @@
 const { ReaderBridge } = require('./reader-bridge');
 const { ReaderError, transportError, TRANSPORT_ERROR } = require('./reader-errors');
-const { decodeWechatImageEnvelopeAsync } = require('./image-container-decoder');
+const {
+  decodeWechatImageEnvelopeAsync,
+  WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED,
+} = require('./image-container-decoder');
 
 let bridge = null;
 let shutdownPromise = null;
@@ -84,7 +87,9 @@ function createWechatReaderService(appLogger) {
         };
       } catch (error) {
         throw transportError(
-          TRANSPORT_ERROR.PROTOCOL_ERROR,
+          error?.code === WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED
+            ? WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED
+            : TRANSPORT_ERROR.PROTOCOL_ERROR,
           error?.message || '微信图片解码失败，请在微信中打开原图后重试',
           true
         );

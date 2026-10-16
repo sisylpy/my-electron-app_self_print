@@ -6,6 +6,8 @@ import {
   selectWechatOrderMessages,
 } from './wechatOrderMessagePolicy.js';
 
+export const WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED = 'WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED';
+
 function timingNow() {
   return globalThis.performance?.now?.() ?? Date.now();
 }
@@ -37,7 +39,10 @@ async function timed(onTiming, stage, task, meta = {}) {
 
 export function unwrapWechatReader(response) {
   if (response?.ok) return response.result;
-  throw new Error(response?.error?.message || '读取本地微信数据失败');
+  const error = new Error(response?.error?.message || '读取本地微信数据失败');
+  error.code = String(response?.error?.code || 'WECHAT_READER_FAILED');
+  error.retryable = response?.error?.retryable === true;
+  throw error;
 }
 
 export function unwrapWechatServer(response) {
@@ -507,31 +512,68 @@ export async function prepareWechatOrderImport({
   const skippedCount = relevantIncoming.length - pending.length;
   const pendingImages = pending.filter(message => message.type === 'image');
   let images = [];
+  let deferredImages = [];
   if (pendingImages.length) {
     if (!reader.getAttachment) throw new Error('当前安装包不支持读取微信图片，请升级后重试');
-    images = await timed(
+    const attachmentResults = await timed(
       onTiming,
       'reader-attachments',
       () => Promise.all(pendingImages.map(async (message) => {
         const attachmentId = message?.attachmentRef?.id;
         if (!attachmentId) throw new Error('微信图片缺少附件标识，请重新读取消息');
-        const attachment = unwrapWechatReader(await reader.getAttachment(attachmentId));
-        return {
-          messageFingerprint: message.id,
-          messageTimeMs: message.messageTimeMs,
-          mimeType: attachment.mimeType,
-          size: attachment.size,
-          dataUrl: attachment.dataUrl,
-        };
+        try {
+          const attachment = unwrapWechatReader(await reader.getAttachment(attachmentId));
+          return {
+            image: {
+              messageFingerprint: message.id,
+              messageTimeMs: message.messageTimeMs,
+              mimeType: attachment.mimeType,
+              size: attachment.size,
+              dataUrl: attachment.dataUrl,
+            },
+          };
+        } catch (error) {
+          if (error?.code !== WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED) throw error;
+          return {
+            deferred: {
+              messageFingerprint: message.id,
+              messageTimeMs: message.messageTimeMs,
+            },
+          };
+        }
       })),
       { imageCount: pendingImages.length }
     );
+    images = attachmentResults.map(result => result.image).filter(Boolean);
+    deferredImages = attachmentResults.map(result => result.deferred).filter(Boolean);
+  }
+  const availableImageIds = new Set(images.map(image => String(image.messageFingerprint)));
+  const processablePending = pending.filter(message => (
+    message.type !== 'image' || availableImageIds.has(String(message.id))
+  ));
+  const deferredImageCount = deferredImages.length;
+  const deferredMessage = deferredImageCount
+    ? `${deferredImageCount} 张图片只有聊天缩略图，请在微信中打开原图加载清晰后重新读取`
+    : '';
+  if (!processablePending.length && deferredImageCount) {
+    return {
+      status: 'deferred',
+      message: deferredMessage,
+      // Do not advance the saved cursor past an image that still needs retrying.
+      binding: normalizedBinding,
+      pendingCount: pending.length,
+      skippedCount,
+      deferredImageCount,
+      queryStartTimeMs,
+      queryEndTimeMs,
+      latestObservedMessageTimeMs,
+    };
   }
   const payloadStartedAt = timingNow();
   const payload = {
-    text: pending.map((message) => message.orderText).filter(Boolean).join('\n'),
+    text: processablePending.map((message) => message.orderText).filter(Boolean).join('\n'),
     images,
-    entries: pending.map((message) => ({
+    entries: processablePending.map((message) => ({
       messageFingerprint: message.id,
       messageTimeMs: message.messageTimeMs,
       type: message.type,
@@ -543,7 +585,7 @@ export async function prepareWechatOrderImport({
       conversationFingerprint: nextBinding.conversationFingerprint,
       conversationKind: nextBinding.conversationKind,
       groupMode: nextBinding.groupMode,
-      messages: pending.map((message) => ({
+      messages: processablePending.map((message) => ({
         messageFingerprint: message.id,
         messageTimeMs: message.messageTimeMs,
       })),
@@ -555,10 +597,15 @@ export async function prepareWechatOrderImport({
   });
   return {
     status: 'ready',
-    message: `已载入 ${pending.length} 条新消息${skippedCount ? `，跳过 ${skippedCount} 条已处理消息` : ''}`,
-    binding: nextBinding,
-    pendingCount: pending.length,
+    message: `已载入 ${processablePending.length} 条新消息${skippedCount ? `，跳过 ${skippedCount} 条已处理消息` : ''}${deferredMessage ? `；${deferredMessage}` : ''}`,
+    // Keep the old cursor while any image is deferred, so a later scan still
+    // includes it. Server-side fingerprints prevent completed text from being
+    // imported twice during that retry.
+    binding: deferredImageCount ? normalizedBinding : nextBinding,
+    pendingCount: processablePending.length,
     skippedCount,
+    deferredImageCount,
+    warning: deferredMessage,
     payload,
   };
 }

@@ -11,6 +11,13 @@ const WXGF_MAGIC = Buffer.from('wxgf', 'ascii');
 // the decoded payload below 7 MiB so the 4/3 base64 expansion remains safe.
 const MAX_DECODED_BYTES = 7 * 1024 * 1024;
 const WXGF_CONVERT_TIMEOUT_MS = 30_000;
+const WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED = 'WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED';
+
+function originalImageNotDownloaded(message) {
+  const error = new Error(message);
+  error.code = WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED;
+  return error;
+}
 
 const IMAGE_SIGNATURES = [
   { mimeType: 'image/jpeg', bytes: Buffer.from([0xff, 0xd8, 0xff]) },
@@ -262,7 +269,7 @@ async function decodeWechatImageEnvelopeAsync(envelope, options = {}) {
     return { mimeType: 'image/jpeg', base64: jpeg.toString('base64'), size: jpeg.length };
   }
   if (!sawPayload && sawThumbnail) {
-    throw new Error('微信尚未下载这张图片的高清原图，目前只有聊天缩略图。请在微信中完整打开原图，待加载完成后重试');
+    throw originalImageNotDownloaded('微信尚未下载这张图片的高清原图，目前只有聊天缩略图。请在微信中完整打开原图，待加载完成后重试');
   }
   if (!sawPayload) throw new Error('微信图片数据为空');
   throw new Error('微信图片解码失败，请先在微信中打开原图后重试');
@@ -302,16 +309,17 @@ function decodeWechatImageEnvelope(envelope) {
     }
   }
   if (!sawPayload && sawThumbnail) {
-    throw new Error('微信尚未下载这张图片的高清原图，目前只有聊天缩略图。请在微信中完整打开原图，待加载完成后重试');
+    throw originalImageNotDownloaded('微信尚未下载这张图片的高清原图，目前只有聊天缩略图。请在微信中完整打开原图，待加载完成后重试');
   }
   if (!sawPayload) throw new Error('微信图片数据为空');
   if (sawWxgf) {
-    throw new Error('微信尚未下载可读取的高清原图，目前只有 WXGF 容器和聊天缩略图。请在微信中完整打开原图，待加载完成后重试');
+    throw originalImageNotDownloaded('微信尚未下载可读取的高清原图，目前只有 WXGF 容器和聊天缩略图。请在微信中完整打开原图，待加载完成后重试');
   }
   throw new Error('微信图片解码失败，请先在微信中打开原图后重试');
 }
 
 module.exports = {
+  WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED,
   decodeWechatImageEnvelope,
   decodeWechatImageEnvelopeAsync,
   bundledWindowsFfmpegPath,

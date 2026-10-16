@@ -98,6 +98,7 @@ export async function scanAllBoundWechatCustomers({
     .filter(entry => scanTitle(entry));
   const imports = [];
   const failures = [];
+  const warnings = [];
   let emptyCount = 0;
 
   for (let index = 0; index < queue.length; index += 1) {
@@ -111,14 +112,25 @@ export async function scanAllBoundWechatCustomers({
     onProgress(progress);
     try {
       const result = await scanEntry(entry, progress);
-      const items = Array.isArray(result) ? result : [];
+      const items = Array.isArray(result)
+        ? result
+        : Array.isArray(result?.items) ? result.items : [];
+      const warning = Array.isArray(result) ? '' : String(result?.warning || '').trim();
+      if (warning) warnings.push({ title, message: warning });
       if (items.length) {
         imports.push(...items);
         onResult({
           ...progress,
           status: 'found',
           itemCount: items.length,
-          message: `发现 ${items.length} 个订单任务`,
+          message: `发现 ${items.length} 个订单任务${warning ? `；${warning}` : ''}`,
+        });
+      } else if (warning) {
+        onResult({
+          ...progress,
+          status: 'warning',
+          itemCount: 0,
+          message: warning,
         });
       } else {
         emptyCount += 1;
@@ -150,5 +162,6 @@ export async function scanAllBoundWechatCustomers({
     emptyCount,
     imports,
     failures,
+    warnings,
   };
 }
