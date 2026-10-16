@@ -121,14 +121,15 @@ async function ensureRememberedSession(disId) {
  * 「记住用户」开关和本地 disUser 一起删掉，导致用户重新登录后令牌永远不会被保存，
  * 下一次启动又要求重新登录，形成死循环。开关与用户资料是偏好，只能由用户自己关闭。
  */
+/**
+ * 只记录一次会话失效，不做任何清理。
+ *
+ * 不能调 orderSession.logout()：没有 Cookie 时网关会返回与真实 401 相同的失败，
+ * 而 logout 会撤销「记住用户」令牌——一次网络抖动就会把还能用的令牌废掉。
+ * 服务端 HttpSession 本来 30 分钟就过期，本机不需要替它提前注销。
+ */
 async function clearExpiredRememberedSession() {
-  try {
-    await window.electronAPI?.orderSession?.logout?.();
-  } catch (error) {
-    writeAppLog('warn', 'router', 'remember-auto-login:clear-session-failed', {
-      message: error?.message || String(error),
-    });
-  }
+  writeAppLog('info', 'router', 'remember-auto-login:needs-login', {});
 }
 
 function loginRoute(reason, returnTo = '') {

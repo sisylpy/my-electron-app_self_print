@@ -298,6 +298,7 @@ import {
   isRememberPrinterUserEnabled,
   setRememberPrinterUserEnabled,
 } from '@/utils/rememberPrinterUser';
+import { writeAppLog } from '@/utils/appLog';
 
 const loading = ref(false);
 const printerName = ref('');
@@ -352,8 +353,16 @@ async function toggleAutoLogin() {
     autoLoginStatus.value = result?.ok
       ? '已开启自动登录，下次启动将直接进入工作台。'
       : `已开启自动登录，但本机凭据登记失败：${result?.message || '未知原因'}，请重新登录后再开启一次。`;
+    writeAppLog(result?.ok ? 'info' : 'warn', 'settings', 'auto-login:issue-token', {
+      ok: result?.ok === true,
+      status: result?.status ?? null,
+      message: result?.message || '',
+    });
   } catch (error) {
     autoLoginStatus.value = `已开启自动登录，但本机凭据登记失败：${error?.message || '未知原因'}`;
+    writeAppLog('warn', 'settings', 'auto-login:issue-token-error', {
+      message: error?.message || String(error),
+    });
   }
 }
 
