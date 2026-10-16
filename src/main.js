@@ -22,6 +22,8 @@ const {
 } = require('./api-runtime');
 
 const isDev = !app.isPackaged;
+// 打包版必须保持 .app 内容只读；Python 默认生成的 __pycache__ 会破坏代码签名封印。
+if (!isDev) process.env.PYTHONDONTWRITEBYTECODE = '1';
 
 function resolveRuntimeMode() {
   const requestedMode = String(process.env.GRAIN_RUNTIME_MODE || '').trim();

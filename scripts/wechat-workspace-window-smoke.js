@@ -19,6 +19,11 @@ assert.match(
   fs.readFileSync(path.join(__dirname, 'after-pack.js'), 'utf8'),
   /GRAIN_MAC_SIGNING_IDENTITY[\s\S]*?codesign[\s\S]*?'--deep'[\s\S]*?'--sign'[\s\S]*?identity/,
 );
+assert.match(
+  fs.readFileSync(path.join(__dirname, '../src/main.js'), 'utf8'),
+  /if \(!isDev\) process\.env\.PYTHONDONTWRITEBYTECODE = '1'/,
+  '打包版不得生成会破坏应用签名的 Python 字节码缓存',
+);
 
 const layout = computeWorkspaceLayout({ x: 0, y: 25, width: 1920, height: 1055 });
 assert.strictEqual(layout.mode, 'docked');
