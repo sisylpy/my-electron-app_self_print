@@ -114,10 +114,16 @@ async function ensureRememberedSession(disId) {
   return refreshRememberedSession(disId);
 }
 
+/**
+ * 会话过期只清订单会话本身。
+ *
+ * 注意：不能走 userSession.logout / CLEAR_USER_SESSION_CACHE——那两个会把
+ * 「记住用户」开关和本地 disUser 一起删掉，导致用户重新登录后令牌永远不会被保存，
+ * 下一次启动又要求重新登录，形成死循环。开关与用户资料是偏好，只能由用户自己关闭。
+ */
 async function clearExpiredRememberedSession() {
-  store.commit('CLEAR_USER_SESSION_CACHE');
   try {
-    await window.electronAPI?.userSession?.logout?.();
+    await window.electronAPI?.orderSession?.logout?.();
   } catch (error) {
     writeAppLog('warn', 'router', 'remember-auto-login:clear-session-failed', {
       message: error?.message || String(error),
