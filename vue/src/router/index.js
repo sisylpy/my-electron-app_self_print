@@ -79,6 +79,41 @@ async function rememberedOrderSessionIsValid(disId) {
   }
 }
 
+/** 用「记住用户」签发的长会话令牌静默换回订单会话（开机自启也走这里）。 */
+async function refreshRememberedSession(disId) {
+  const action = window.electronAPI?.orderSession?.refreshSession;
+  if (typeof action !== 'function') return false;
+  try {
+    const result = await action();
+    if (!result?.ok) {
+      writeAppLog('info', 'router', 'remember-auto-login:refresh-failed', {
+        disId,
+        status: result?.status ?? null,
+        message: result?.message || '',
+      });
+      return false;
+    }
+    const refreshedUser = result?.data?.user;
+    if (refreshedUser && resolveBillsQueryFromDisUser(refreshedUser)) {
+      store.commit('SET_DISUSER', refreshedUser);
+    }
+    writeAppLog('info', 'router', 'remember-auto-login:refresh-ok', { disId });
+    return true;
+  } catch (error) {
+    writeAppLog('warn', 'router', 'remember-auto-login:refresh-error', {
+      disId,
+      message: error?.message || String(error),
+    });
+    return false;
+  }
+}
+
+/** 会话过期不再直接判定要扫码：先尝试用自动登录令牌续期。 */
+async function ensureRememberedSession(disId) {
+  if (await rememberedOrderSessionIsValid(disId)) return true;
+  return refreshRememberedSession(disId);
+}
+
 async function clearExpiredRememberedSession() {
   store.commit('CLEAR_USER_SESSION_CACHE');
   try {
@@ -119,7 +154,7 @@ router.beforeEach(async (to, from, next) => {
       return;
     }
     if (from.matched.length === 0
-        && !await rememberedOrderSessionIsValid(currentQuery.disId)) {
+        && !await ensureRememberedSession(currentQuery.disId)) {
       await clearExpiredRememberedSession();
       next(loginRoute('session-expired', String(to.name || '')));
       return;
@@ -163,7 +198,7 @@ router.beforeEach(async (to, from, next) => {
     next(loginRoute('login-required'));
     return;
   }
-  if (!await rememberedOrderSessionIsValid(query.disId)) {
+  if (!await ensureRememberedSession(query.disId)) {
     writeAppLog('info', 'router', 'remember-auto-login:session-expired', {
       disId: query.disId,
       to: to.fullPath,

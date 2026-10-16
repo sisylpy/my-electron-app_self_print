@@ -117,7 +117,9 @@ check(
   router.includes("reason: 'remember-flag-off'")
     && /if \(to\.name === 'Home'[\s\S]*?next\(\);[\s\S]*?return;[\s\S]*?\}/.test(router)
     && /if \(!remember\) \{[\s\S]*?next\(loginRoute\('login-required'\)\);[\s\S]*?return;[\s\S]*?\}/.test(router)
-    && router.includes('rememberedOrderSessionIsValid(query.disId)')
+    // 会话过期不再直接判定要扫码：ensureRememberedSession 先用自动登录令牌续期，
+    // 续期失败才回到扫码登录页。
+    && router.includes('ensureRememberedSession(query.disId)')
     && router.includes("next(loginRoute('session-expired'"),
   '未开启自动登录或会话过期时直接进入动画扫码登录页'
 );

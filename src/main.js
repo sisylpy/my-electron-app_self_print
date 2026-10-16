@@ -365,6 +365,7 @@ function getOrderSessionGateway() {
       axios,
       apiBaseUrl: runtimeApiBaseUrl,
       cookieStore: electronSession.defaultSession.cookies,
+      rememberTokenStore: getRememberTokenStore(),
       rememberEnabled: () => {
         try {
           return fs.readFileSync(getRememberPrinterUserFlagPath(), 'utf8').trim() === '1';
@@ -699,6 +700,45 @@ function getRememberPrinterUserFlagPath() {
   return path.join(app.getPath('userData'), 'remember-printer-user.flag');
 }
 
+function getRememberTokenPath() {
+  return path.join(app.getPath('userData'), 'desktop-remember-token.json');
+}
+
+let rememberTokenStore = null;
+
+/** 自动登录令牌只存主进程 userData，文件权限 600，渲染进程永远读不到。 */
+function getRememberTokenStore() {
+  if (rememberTokenStore) return rememberTokenStore;
+  const file = getRememberTokenPath();
+  rememberTokenStore = {
+    async read() {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+        return typeof parsed?.token === 'string' && parsed.token ? parsed.token : null;
+      } catch {
+        return null;
+      }
+    },
+    async write(token) {
+      try {
+        fs.writeFileSync(file, JSON.stringify({ token, savedAt: new Date().toISOString() }),
+          { mode: 0o600 });
+        try { fs.chmodSync(file, 0o600); } catch { /* 已存在的文件沿用受限权限 */ }
+      } catch (e) {
+        console.error('[自动登录令牌] 写入失败', e);
+      }
+    },
+    async clear() {
+      try {
+        if (fs.existsSync(file)) fs.unlinkSync(file);
+      } catch (e) {
+        console.error('[自动登录令牌] 清除失败', e);
+      }
+    },
+  };
+  return rememberTokenStore;
+}
+
 function getWechatAutoReadConfigPath() {
   return path.join(app.getPath('userData'), 'wechat-auto-read.json');
 }
@@ -755,6 +795,8 @@ async function clearAutoLoginFromMenu() {
     if (fs.existsSync(p)) {
       fs.unlinkSync(p);
     }
+    // 菜单取消自动登录同样清掉本机长会话令牌。
+    await getRememberTokenStore().clear();
   } catch (e) {
     console.error('[取消自动登录] 删除标志文件失败', e);
   }
@@ -853,6 +895,11 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理识别订单' };
     return getOrderSessionGateway().recognizeOrderQwen(input);
+  });
+  ipcMain.handle('order-session-refresh', async (event) => {
+    assertTrustedRendererEvent(event);
+    if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理登录' };
+    return getOrderSessionGateway().refreshSession();
   });
   ipcMain.handle('order-session-recognize-async', async (event, input) => {
     assertTrustedRendererEvent(event);
@@ -1395,14 +1442,16 @@ function setupIpcHandlers() {
       event.returnValue = '0';
     }
   });
-  ipcMain.on('remember-printer-user-set-sync', (event, enabled) => {
+  ipcMain.on('remember-printer-user-set-sync', async (event, enabled) => {
     try {
       assertTrustedRendererEvent(event);
       const p = getRememberPrinterUserFlagPath();
       if (enabled) {
         fs.writeFileSync(p, '1', 'utf8');
-      } else if (fs.existsSync(p)) {
-        fs.unlinkSync(p);
+      } else {
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+        // 关闭自动登录必须同时清掉本机长会话令牌，否则下次启动仍能静默换回会话。
+        await getRememberTokenStore().clear();
       }
     } catch (e) {
       console.error('[remember-printer-user-set-sync]', e);
@@ -1410,14 +1459,16 @@ function setupIpcHandlers() {
   });
 
   /** 异步写入 userData 标志，不阻塞渲染进程（勾选「记住用户」须用此通道，勿用 sendSync） */
-  ipcMain.on('remember-printer-user-set-async', (event, enabled) => {
+  ipcMain.on('remember-printer-user-set-async', async (event, enabled) => {
     try {
       assertTrustedRendererEvent(event);
       const p = getRememberPrinterUserFlagPath();
       if (enabled) {
         fs.writeFileSync(p, '1', 'utf8');
-      } else if (fs.existsSync(p)) {
-        fs.unlinkSync(p);
+      } else {
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+        // 关闭自动登录必须同时清掉本机长会话令牌，否则下次启动仍能静默换回会话。
+        await getRememberTokenStore().clear();
       }
     } catch (e) {
       console.error('[remember-printer-user-set-async]', e);

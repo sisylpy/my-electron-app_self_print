@@ -66,7 +66,19 @@ function cloneAndValidateQwenPayload(input) {
   return JSON.parse(serialized);
 }
 
-function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl, rememberEnabled = () => false }) {
+const NOOP_REMEMBER_TOKEN_STORE = {
+  read: async () => null,
+  write: async () => {},
+  clear: async () => {},
+};
+
+function createOrderSessionGateway({
+  axios,
+  cookieStore,
+  apiBaseUrl,
+  rememberEnabled = () => false,
+  rememberTokenStore = NOOP_REMEMBER_TOKEN_STORE,
+}) {
   const baseURL = normalizeNongxinleApiBaseUrl(
     apiBaseUrl || PRODUCTION_API_BASE_URL,
     '桌面订单 API'
@@ -136,6 +148,14 @@ function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl, rememberEna
         // 主进程保存 HttpOnly 会话；file:// 页面不能直接依赖跨站 Cookie。
         // Strict 阻止渲染进程跨站请求自动携带它，只在下方白名单接口显式使用。
         await storeAuthenticatedCookie(value, Number(body.user.nxDiuDistributerId));
+        // 只有在「记住用户 / 自动登录」开启时才保存长会话令牌；否则清掉旧令牌，
+        // 保证关闭自动登录后本机不留可静默换回会话的凭据。
+        if (rememberEnabled() && typeof body.rememberToken === 'string'
+            && body.rememberToken) {
+          await rememberTokenStore.write(body.rememberToken);
+        } else {
+          await rememberTokenStore.clear();
+        }
       }
       return { ok: true, status: response.status, data: body };
     } catch {
@@ -308,8 +328,53 @@ function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl, rememberEna
     return requestOrder('POST', 'nxdepartmentorders/phoneGetToFillDepOrders', form);
   }
 
+  /**
+   * 自动登录续期：服务端 HttpSession 过期后，凭「记住用户」签发的长会话令牌
+   * 重新换取订单会话。令牌不存在或已失效时返回 401，由调用方回到扫码登录。
+   */
+  async function refreshSession() {
+    const token = await rememberTokenStore.read();
+    if (!token) return failure(401, null, '本机没有可自动登录的凭据，请扫码登录');
+    try {
+      const response = await http.post(
+        'desktop-order-session/v1/refresh',
+        { token },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      const body = response.data && typeof response.data === 'object' ? response.data : null;
+      const value = sessionCookieFromHeaders(response.headers);
+      const disId = positiveId(body?.data?.user?.nxDiuDistributerId);
+      const userId = positiveId(body?.data?.user?.nxDistributerUserId);
+      if (response.status === 401 || response.status === 400) {
+        await rememberTokenStore.clear();
+        return failure(401, body, '自动登录已失效，请重新扫码登录');
+      }
+      if (response.status < 200 || response.status >= 300 || Number(body?.code) !== 0
+          || !value || !disId || !userId) {
+        return failure(response.status, body, '自动登录续期失败，请重新扫码登录');
+      }
+      await storeAuthenticatedCookie(value, disId);
+      return { ok: true, status: response.status, data: body.data };
+    } catch {
+      return failure(0, null, '无法连接自动登录服务');
+    }
+  }
+
   async function logout() {
     let remoteFailed = false;
+    const rememberedToken = await rememberTokenStore.read();
+    if (rememberedToken) {
+      try {
+        await http.post(
+          'desktop-order-session/v1/revoke',
+          { token: rememberedToken },
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+      } catch {
+        // 服务端不可达时本机仍必须清除令牌。
+      }
+      await rememberTokenStore.clear();
+    }
     try {
       const cookie = await cookieHeader();
       if (cookie) {
@@ -339,6 +404,7 @@ function createOrderSessionGateway({ axios, cookieStore, apiBaseUrl, rememberEna
     phoneOrders,
     recognizeOrderQwen,
     recognizeOrderAsync,
+    refreshSession,
     logout,
   };
 }
