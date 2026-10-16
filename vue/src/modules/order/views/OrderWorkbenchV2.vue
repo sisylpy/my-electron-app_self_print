@@ -2733,9 +2733,10 @@ async function scanAllBoundWechatOrders(options = {}) {
     );
     await focusWechatWorkspaceApp();
     timing.finish(timingOutcome, timingSummary);
-    // 用户明确说了「并保存」（MCP 任务带 save=true）→ 检查完自动逐条保存解析完整的订单，
-    // 结果并进同一份巡查报告，不额外再要用户说一句「保存」。
-    if (timingOutcome === 'success' && window.__grainAutoSaveWechatOrders) {
+    // 定时自动读取是无人值守流程；与 WorkBuddy「打开并保存」复用同一批量保存入口。
+    // 人工点击“全部读”不带 automatic，仍只保留任务供人工检查，不会自动保存。
+    const shouldAutoSave = automatic || window.__grainAutoSaveWechatOrders;
+    if (timingOutcome === 'success' && shouldAutoSave) {
       const saveOutcome = await batchSaveAllWechatOrders({ reportMode: 'merged' });
       if (saveOutcome) timingSummary = { ...timingSummary, saveOutcome };
     }

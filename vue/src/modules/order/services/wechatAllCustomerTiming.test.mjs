@@ -7,7 +7,7 @@ const workbench = fs.readFileSync(
 );
 
 const allCustomerAction = workbench.match(
-  /async function scanAllBoundWechatOrders\(\) \{([\s\S]*?)\n\}\n\nasync function handleTaskAdded/,
+  /async function scanAllBoundWechatOrders\(options = \{\}\) \{([\s\S]*?)\n\}\n\nasync function handleTaskAdded/,
 )?.[1] || '';
 
 assert.match(allCustomerAction, /createWechatOrderTiming\('scan-all-bound-wechat'\)/);
@@ -30,6 +30,9 @@ assert.match(allCustomerAction, /scan-results-ready/);
 assert.doesNotMatch(allCustomerAction, /scan-first-import-open|openActiveWechatImport/);
 assert.match(allCustomerAction, /scan-report-visible/);
 assert.match(allCustomerAction, /timing\.finish\(timingOutcome, timingSummary\)/);
+assert.match(allCustomerAction, /const automatic = options\?\.automatic === true/);
+assert.match(allCustomerAction, /const shouldAutoSave = automatic \|\| window\.__grainAutoSaveWechatOrders/);
+assert.match(allCustomerAction, /batchSaveAllWechatOrders\(\{ reportMode: 'merged' \}\)/);
 
 const dismissReportAction = workbench.match(
   /async function dismissWechatScanReport\(\) \{([\s\S]*?)\n\}\n\nfunction messageFingerprints/,
