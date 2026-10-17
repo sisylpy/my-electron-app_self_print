@@ -199,29 +199,85 @@ function createOrderSessionGateway({
     }
   }
 
-  async function requestOrder(method, path, form) {
-    const cookie = await cookieHeader();
-    if (!cookie) return failure(401, null, '订单登录会话已失效，请重新扫码登录');
+  // 并发的 401 请求共用一次续期：服务端 refresh 会 changeSessionId，旧 JSESSIONID
+  // 立刻失效，重复刷新反而让其它并发请求拿到已作废的 Cookie。
+  let refreshInFlight = null;
+
+  async function tryRefreshOnce() {
+    if (refreshInFlight) return refreshInFlight;
+    const task = (async () => {
+      try {
+        return (await refreshSession()).ok;
+      } catch {
+        return false;
+      }
+    })();
+    refreshInFlight = task;
     try {
-      const config = { headers: { Cookie: cookie } };
-      const response = method === 'GET'
-        ? await http.get(path, config)
-        : await http.post(path, form.toString(), {
-          ...config,
-          headers: { ...config.headers, 'Content-Type': 'application/x-www-form-urlencoded' },
-        });
-      if (response.status === 401) {
-        await clear();
-        authenticatedDisId = null;
-      }
-      if (response.status < 200 || response.status >= 300
-          || Number(response.data?.code) !== 0) {
-        return failure(response.status, response.data, '订单读取失败');
-      }
-      return { ok: true, status: response.status, data: response.data };
-    } catch {
-      return failure(0, null, '无法连接订单服务');
+      return await task;
+    } finally {
+      if (refreshInFlight === task) refreshInFlight = null;
     }
+  }
+
+  /**
+   * 订单业务请求统一入口。
+   *
+   * HttpSession 过期（401）或本机会话 Cookie 缺失时，先用「记住用户」令牌静默
+   * 续期，再用新会话重试一次原请求，业务侧无感知。
+   *
+   * 只有令牌不存在、被服务端判定失效，或续期后仍为 401 才清除本机会话；
+   * 网络不可达（status 0）不动任何凭据，断网或服务端重启后恢复即可继续使用。
+   */
+  async function withSessionRetry(perform) {
+    async function attempt() {
+      if (!await cookieHeader()) {
+        if (!await tryRefreshOnce()) {
+          return failure(401, null, '订单登录会话已失效，请重新扫码登录');
+        }
+      }
+      return perform();
+    }
+
+    let result = await attempt();
+    if (Number(result?.status) !== 401) return result;
+
+    if (!await tryRefreshOnce()) {
+      await clear();
+      authenticatedDisId = null;
+      return failure(401, result?.data || null,
+        result?.message || '自动登录已失效，请重新扫码登录');
+    }
+
+    result = await attempt();
+    if (Number(result?.status) === 401) {
+      await clear();
+      authenticatedDisId = null;
+    }
+    return result;
+  }
+
+  async function requestOrder(method, path, form) {
+    return withSessionRetry(async () => {
+      const cookie = await cookieHeader();
+      if (!cookie) return failure(401, null, '订单登录会话已失效，请重新扫码登录');
+      try {
+        const config = { headers: { Cookie: cookie } };
+        const response = method === 'GET'
+          ? await http.get(path, config)
+          : await http.post(path, form.toString(), {
+            ...config,
+            headers: { ...config.headers, 'Content-Type': 'application/x-www-form-urlencoded' },
+          });
+        if (response.status < 200 || response.status >= 300
+            || Number(response.data?.code) !== 0) {
+          return failure(response.status, response.data, '订单读取失败');
+        }
+        return { ok: true, status: response.status, data: response.data };
+      } catch {
+        return failure(0, null, '无法连接订单服务');
+      }
+    });
   }
 
   async function recognizeOrderQwen(input) {
@@ -234,28 +290,26 @@ function createOrderSessionGateway({
     if (authenticatedDisId && payload.disId !== authenticatedDisId) {
       return failure(403, null, '登录身份与配送商不一致');
     }
-    const cookie = await cookieHeader();
-    if (!cookie) return failure(401, null, '订单登录会话已失效，请重新扫码登录');
-    try {
-      const response = await http.post('ocr/recognizeOrderQwen', payload, {
-        headers: {
-          Cookie: cookie,
-          'Content-Type': 'application/json',
-        },
-        timeout: 300_000,
-      });
-      if (response.status === 401) {
-        await clear();
-        authenticatedDisId = null;
+    return withSessionRetry(async () => {
+      const cookie = await cookieHeader();
+      if (!cookie) return failure(401, null, '订单登录会话已失效，请重新扫码登录');
+      try {
+        const response = await http.post('ocr/recognizeOrderQwen', payload, {
+          headers: {
+            Cookie: cookie,
+            'Content-Type': 'application/json',
+          },
+          timeout: 300_000,
+        });
+        if (response.status < 200 || response.status >= 300
+            || Number(response.data?.code) !== 0) {
+          return failure(response.status, response.data, '图片订单识别保存失败');
+        }
+        return { ok: true, status: response.status, data: response.data };
+      } catch {
+        return failure(0, null, '无法连接图片订单识别服务');
       }
-      if (response.status < 200 || response.status >= 300
-          || Number(response.data?.code) !== 0) {
-        return failure(response.status, response.data, '图片订单识别保存失败');
-      }
-      return { ok: true, status: response.status, data: response.data };
-    } catch {
-      return failure(0, null, '无法连接图片订单识别服务');
-    }
+    });
   }
 
   // 双列/复杂图片订单：前端 recognizeOrderOCRWithAi 走的就是 ocr/recognizeOrderAsync，
@@ -271,28 +325,26 @@ function createOrderSessionGateway({
     if (authenticatedDisId && payload.disId !== authenticatedDisId) {
       return failure(403, null, '登录身份与配送商不一致');
     }
-    const cookie = await cookieHeader();
-    if (!cookie) return failure(401, null, '订单登录会话已失效，请重新扫码登录');
-    try {
-      const response = await http.post('ocr/recognizeOrderAsync', payload, {
-        headers: {
-          Cookie: cookie,
-          'Content-Type': 'application/json',
-        },
-        timeout: 300_000,
-      });
-      if (response.status === 401) {
-        await clear();
-        authenticatedDisId = null;
+    return withSessionRetry(async () => {
+      const cookie = await cookieHeader();
+      if (!cookie) return failure(401, null, '订单登录会话已失效，请重新扫码登录');
+      try {
+        const response = await http.post('ocr/recognizeOrderAsync', payload, {
+          headers: {
+            Cookie: cookie,
+            'Content-Type': 'application/json',
+          },
+          timeout: 300_000,
+        });
+        if (response.status < 200 || response.status >= 300
+            || Number(response.data?.code) !== 0) {
+          return failure(response.status, response.data, '双列图片订单识别失败');
+        }
+        return { ok: true, status: response.status, data: response.data };
+      } catch {
+        return failure(0, null, '无法连接双列图片订单识别服务');
       }
-      if (response.status < 200 || response.status >= 300
-          || Number(response.data?.code) !== 0) {
-        return failure(response.status, response.data, '双列图片订单识别失败');
-      }
-      return { ok: true, status: response.status, data: response.data };
-    } catch {
-      return failure(0, null, '无法连接双列图片订单识别服务');
-    }
+    });
   }
 
   function todayCustomers(disId) {

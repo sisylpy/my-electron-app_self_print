@@ -24,9 +24,6 @@ export default {
   },
   data() {
     return {
-      inactivityTimer: null, // 无操作计时器
-      inactivityTimeout: 0.5 * 60 * 1000, // 30秒超时（毫秒）
-      lastActivityTime: Date.now(), // 最后活动时间
       /** MCP 重试投递可能重复到达，按 taskId 短时间去重。 */
       _mcpLastTaskId: null,
       _mcpLastTaskAt: 0,
@@ -45,31 +42,7 @@ export default {
     // 自动清理设备配置缓存
     localStorage.removeItem('deviceAdminConfig');
     console.log('🗑️ 应用启动时自动清理设备配置缓存');
-    
-    // 检查是否有设备配置（自助打印状态）
-    const deviceConfig = localStorage.getItem('deviceAdminConfig');
-    let hasDeviceConfig = false;
-    
-    if (deviceConfig) {
-      try {
-        const config = JSON.parse(deviceConfig);
-        hasDeviceConfig = config && config.deviceAdminInfo && config.deviceAdminInfo.marketId;
-      } catch (error) {
-        console.error('❌ 解析设备配置失败:', error);
-        hasDeviceConfig = false;
-      }
-    }
-    
-    if (hasDeviceConfig) {
-      // 自助打印状态：启用全局超时检测
-      console.log('🖨️ 自助打印模式，启用全局超时检测');
-      this.startInactivityTimer();
-      this.addActivityListeners();
-    } else {
-      // 办公室打印状态：不启用全局超时检测
-      console.log('🏢 办公室打印模式，不启用全局超时检测');
-    }
-    
+
     // 监听主进程的设备配置请求
     if (window.electronAPI && window.electronAPI.onGetDeviceConfig) {
       window.electronAPI.onGetDeviceConfig((printParams) => {
@@ -274,75 +247,6 @@ export default {
       }
     },
 
-    // 启动无操作超时检测
-    startInactivityTimer() {
-      this.inactivityTimer = setInterval(() => {
-        const now = Date.now();
-        const timeSinceLastActivity = now - this.lastActivityTime;
-        
-        if (timeSinceLastActivity >= this.inactivityTimeout) {
-          console.log('⏰ 检测到无操作超时，返回初始页面');
-          this.handleInactivityTimeout();
-        }
-      }, 10000); // 每10秒检查一次
-    },
-    
-    // 添加用户操作监听器
-    addActivityListeners() {
-      const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
-      
-      events.forEach(event => {
-        document.addEventListener(event, this.resetInactivityTimer, true);
-      });
-    },
-    
-    // 重置无操作计时器
-    resetInactivityTimer() {
-      this.lastActivityTime = Date.now();
-      console.log('🔄 检测到用户操作，重置超时计时器');
-    },
-    
-    // 处理无操作超时
-    handleInactivityTimeout() {
-      // 清除计时器
-      if (this.inactivityTimer) {
-        clearInterval(this.inactivityTimer);
-        this.inactivityTimer = null;
-      }
-      
-      // 清除用户信息
-      this.$store.commit('SET_DISUSER', null);
-      localStorage.removeItem('disUser');
-      
-      console.log('⏰ 无操作超时，已清除用户信息');
-      
-      // 返回初始页面（Screen页面）
-      // 使用 nextTick 确保路由跳转在下一个事件循环中执行
-      this.$nextTick(() => {
-        if (this.$route.name !== 'Screen') {
-          console.log('🏠 返回初始页面');
-          this.$router.push({ name: 'Screen' }).catch(err => {
-            // 忽略路由重复导航的错误
-            if (err.name !== 'NavigationDuplicated') {
-              console.error('路由跳转失败:', err);
-            }
-          });
-        }
-      });
-      
-      // 重新启动超时检测
-      this.startInactivityTimer();
-    },
-    
-    // 移除事件监听器
-    removeActivityListeners() {
-      const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
-      
-      events.forEach(event => {
-        document.removeEventListener(event, this.resetInactivityTimer, true);
-      });
-    },
-    
     // 触发配送单打印（由 MCP 任务触发）
     triggerPrintDeliveryOrder(task) {
       const summary = `[MCP] App triggerPrintDeliveryOrder taskId=${task.taskId} dep=${task.departmentId} mode=${task.printMode || 'all'}`;
@@ -447,11 +351,6 @@ export default {
       this.bridgeStatusCleanup();
       this.bridgeStatusCleanup = null;
     }
-    // 清理计时器和事件监听器
-    if (this.inactivityTimer) {
-      clearInterval(this.inactivityTimer);
-    }
-    this.removeActivityListeners();
   }
 };
 </script>
