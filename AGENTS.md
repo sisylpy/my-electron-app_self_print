@@ -5,6 +5,7 @@
 
 适用于本项目正式仓库；继承适用的上级 AGENTS.md 中的业务边界、Git 交付与密钥安全要求，不套用其他项目专属的构建和发布流程。
 
+- **Mac 打包与签名**：处理前必须先读 `docs/MAC_SIGNING.md`。签名身份固定为本机自签证书 `GrainPrint Local Code Signing`，正式打包用 `GRAIN_MAC_SIGNING_IDENTITY="GrainPrint Local Code Signing" npm run dist:mac`；禁止重建或替换证书、改动 Bundle ID（`club.grainservice.www` / `club.grainservice.www.dev`）、把 ad-hoc 产物当交付包，或绕过 `scripts/after-pack.js` 的签名校验。校验签名身份时不要对 `security find-identity` 输出做关键字过滤（本机身份不含 Apple 官方字样）。
 - 先做必要的简短定位。用户已明确任务时直接执行，验证按风险确定；只有“快速修复”与“完整回归”会实质改变范围或成本、且无法安全判断时，说明推荐方案并等待确认。同一问题的后续修复沿用已确认范围，明显扩大范围时再确认。
 - 默认在本文件指定的正式目录、正式主线直接修改和提交；任务规模大也不自动改变这一默认方式。只有用户明确要求为大型工程另开分支时，才按其要求创建分支；未经用户明确要求，不新建 worktree、克隆或隔离源码副本。
 - 同一仓库同时只允许一个 Agent 写入；发现并发修改先协调，不覆盖成果，也不另开分支绕行。
