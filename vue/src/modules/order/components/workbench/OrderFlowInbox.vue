@@ -33,7 +33,33 @@
             <button type="button" title="关闭搜索" aria-label="关闭搜索" @click="closeSearch">×</button>
           </label>
         </div>
-        <button type="button" class="order-flow__refresh" :disabled="listLoading" title="刷新订单" aria-label="刷新订单" @click="$emit('refresh-list')">⟳</button>
+        <div class="order-flow__refresh-group">
+          <button
+            type="button"
+            :class="['order-flow__refresh', { 'is-processing': asyncTaskProgress.remaining > 0, 'is-loading': listLoading }]"
+            :disabled="listLoading"
+            :title="asyncTaskProgress.remaining > 0 ? '图片订单处理中，点击刷新订单' : '刷新订单'"
+            aria-label="刷新订单"
+            @click="$emit('refresh-list')"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 11a8 8 0 1 0-2.2 6.5" />
+              <path d="M20 4v7h-7" />
+            </svg>
+          </button>
+          <div
+            v-if="asyncTaskProgress.visible"
+            :class="['order-flow__async-progress', { 'has-expired': asyncTaskProgress.expired > 0 }]"
+            role="status"
+            aria-live="polite"
+          >
+            <span class="order-flow__async-copy">
+              <strong>{{ asyncTaskProgress.remaining > 0 ? '图片订单处理中' : asyncTaskProgress.expired > 0 ? '图片任务需检查' : '图片订单已处理完' }}</strong>
+              <small>已完成 {{ asyncTaskProgress.completed }}/{{ asyncTaskProgress.total }} · 剩余 {{ asyncTaskProgress.remaining }}<template v-if="asyncTaskProgress.expired"> · 超时 {{ asyncTaskProgress.expired }}</template></small>
+            </span>
+            <span class="order-flow__async-track" aria-hidden="true"><i :style="{ width: `${asyncTaskProgress.total ? asyncTaskProgress.completed / asyncTaskProgress.total * 100 : 0}%` }"></i></span>
+          </div>
+        </div>
         <button
           type="button"
           class="order-flow__wechat-scan"
@@ -261,6 +287,7 @@ const props = defineProps({
   wechatScanBusy: { type: Boolean, default: false },
   wechatScanLabel: { type: String, default: '读取微信订单' },
   wechatImportCount: { type: Number, default: 0 },
+  asyncTaskProgress: { type: Object, default: () => ({ total: 0, completed: 0, expired: 0, remaining: 0 }) },
 });
 
 const emit = defineEmits([
@@ -450,19 +477,54 @@ function handleTaskChanged(change) {
   background: #f5fbf8;
 }
 .order-flow__search-trigger svg { width: 16px; height: 16px; }
+.order-flow__refresh-group { display: flex; flex: none; align-items: center; gap: 8px; }
 .order-flow__refresh {
+  position: relative;
+  display: grid;
   width: 34px;
   height: 34px;
   flex: none;
-  border: 1px solid var(--product-border);
-  border-radius: 6px;
-  color: var(--product-text-secondary);
-  background: #fff;
-  font-size: 20px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #a9d9c3;
+  border-radius: 9px;
+  color: #16815b;
+  background: linear-gradient(145deg, #fff, #eefaf3);
   cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
-.order-flow__refresh:hover { color: var(--product-primary-strong); background: #f5fbf8; }
+.order-flow__refresh svg { width: 18px; height: 18px; }
+.order-flow__refresh:hover { transform: translateY(-1px); border-color: #4cb88a; box-shadow: 0 4px 12px rgba(16, 139, 91, .18); }
+.order-flow__refresh.is-processing { box-shadow: 0 0 0 3px rgba(32, 189, 115, .11), 0 0 13px rgba(32, 189, 115, .2); animation: order-flow-refresh-glow 2.8s ease-in-out infinite; }
+.order-flow__refresh.is-processing svg,
+.order-flow__refresh.is-loading svg { animation: order-flow-refresh-spin 2.5s linear infinite; }
 .order-flow__refresh:disabled { opacity: .5; cursor: wait; }
+.order-flow__async-progress {
+  position: relative;
+  display: grid;
+  min-width: 156px;
+  gap: 3px;
+  overflow: hidden;
+  padding: 5px 10px 7px;
+  border: 1px solid #b4dfc9;
+  border-radius: 9px;
+  color: #156443;
+  background: linear-gradient(115deg, #f3fff8, #eaf9f3);
+  box-shadow: 0 3px 12px rgba(15, 139, 88, .1);
+}
+.order-flow__async-progress.has-expired { border-color: #ebc79e; color: #8b591e; background: #fff9ef; }
+.order-flow__async-copy { display: grid; gap: 1px; white-space: nowrap; }
+.order-flow__async-copy strong { font-size: 11px; line-height: 1.2; }
+.order-flow__async-copy small { font-size: 11px; line-height: 1.2; }
+.order-flow__async-track { height: 3px; overflow: hidden; border-radius: 4px; background: rgba(22, 129, 91, .16); }
+.order-flow__async-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #21bb74, #19a4aa); transition: width .3s ease; }
+@keyframes order-flow-refresh-spin { to { transform: rotate(360deg); } }
+@keyframes order-flow-refresh-glow { 50% { box-shadow: 0 0 0 5px rgba(32, 189, 115, .07), 0 0 18px rgba(32, 189, 115, .38); } }
+@media (prefers-reduced-motion: reduce) {
+  .order-flow__refresh.is-processing,
+  .order-flow__refresh.is-processing svg,
+  .order-flow__refresh.is-loading svg { animation: none; }
+}
 .order-flow__header-tools .order-flow__new-order {
   display: grid;
   width: 34px;

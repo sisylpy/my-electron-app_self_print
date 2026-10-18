@@ -71,6 +71,7 @@
       :wechat-scan-busy="wechatScanBusy"
       :wechat-scan-label="wechatScanLabel"
       :wechat-import-count="wechatImportQueue.length"
+      :async-task-progress="asyncImageTaskProgress"
       @select-customer="todayInbox.selectCustomer"
       @refresh-list="refreshAll"
       @refresh-detail="todayInbox.refreshSelected"
@@ -195,7 +196,7 @@
     <Teleport to="body">
       <Transition name="wechat-status-pop">
         <div
-          v-if="wechatScanMessage && !wechatImportModalOpen"
+          v-if="wechatScanMessage && wechatScanStatus !== 'success' && !wechatImportModalOpen"
           :class="['order-workbench__wechat-status-mask', { 'is-blocking': wechatScanBusy }]"
           @click.stop
         >
@@ -318,7 +319,9 @@ const wechatScanResults = ref([]);
 const wechatImportQueue = ref([]);
 const wechatImportBatch = ref([]);
 const pendingAsyncImageTaskIds = new Map();
+const asyncImageTaskProgress = ref({ total: 0, completed: 0, expired: 0, remaining: 0, visible: false });
 let asyncImageTaskPollTimer = null;
+let asyncImageTaskProgressTimer = null;
 let asyncImageTaskPolling = false;
 // MCP「保存微信订单」批量流程状态：置位后 AiOrderPanel 进入批量模式（解析完即静默保存）。
 const wechatBatchSaving = ref(false);
@@ -653,7 +656,13 @@ async function refreshAll() {
 
 function watchAsyncImageTask(taskId) {
   const id = Number(taskId);
-  if (Number.isSafeInteger(id) && id > 0) {
+  if (Number.isSafeInteger(id) && id > 0 && !pendingAsyncImageTaskIds.has(id)) {
+    if (asyncImageTaskProgressTimer !== null) window.clearTimeout(asyncImageTaskProgressTimer);
+    asyncImageTaskProgressTimer = null;
+    const previous = asyncImageTaskProgress.value;
+    asyncImageTaskProgress.value = previous.remaining
+      ? { ...previous, total: previous.total + 1, remaining: previous.remaining + 1, visible: true }
+      : { total: 1, completed: 0, expired: 0, remaining: 1, visible: true };
     pendingAsyncImageTaskIds.set(id, Date.now() + 10 * 60 * 1000);
   }
 }
@@ -667,11 +676,13 @@ async function pollAsyncImageTasks() {
   if (asyncImageTaskPolling || !pendingAsyncImageTaskIds.size) return;
   asyncImageTaskPolling = true;
   let completed = false;
+  let expired = 0;
+  let finished = 0;
   try {
     for (const [taskId, expiresAt] of pendingAsyncImageTaskIds) {
       if (Date.now() >= expiresAt) {
         pendingAsyncImageTaskIds.delete(taskId);
-        completed = true;
+        expired += 1;
         continue;
       }
       try {
@@ -679,14 +690,32 @@ async function pollAsyncImageTasks() {
         const status = Number(response?.data?.task?.nxOcrTaskStatus);
         if (response?.data?.code === 0 && status !== 0 && Number.isFinite(status)) {
           pendingAsyncImageTaskIds.delete(taskId);
+          finished += 1;
           completed = true;
         }
       } catch {
         // A temporary read failure keeps the task under observation until the deadline.
       }
     }
+    if (finished || expired) {
+      const previous = asyncImageTaskProgress.value;
+      asyncImageTaskProgress.value = {
+        ...previous,
+        completed: previous.completed + finished,
+        expired: previous.expired + expired,
+        remaining: pendingAsyncImageTaskIds.size,
+      };
+    }
     if (completed) await refreshAll();
-    if (!pendingAsyncImageTaskIds.size) stopAsyncImageTaskPoller();
+    if (!pendingAsyncImageTaskIds.size) {
+      stopAsyncImageTaskPoller();
+      if (!asyncImageTaskProgress.value.expired) {
+        asyncImageTaskProgressTimer = window.setTimeout(() => {
+          asyncImageTaskProgress.value = { ...asyncImageTaskProgress.value, visible: false };
+          asyncImageTaskProgressTimer = null;
+        }, 8000);
+      }
+    }
   } finally {
     asyncImageTaskPolling = false;
   }
@@ -694,6 +723,7 @@ async function pollAsyncImageTasks() {
 
 function startAsyncImageTaskPoller() {
   if (!pendingAsyncImageTaskIds.size || asyncImageTaskPollTimer !== null) return;
+  void pollAsyncImageTasks();
   asyncImageTaskPollTimer = window.setInterval(() => { void pollAsyncImageTasks(); }, 15000);
 }
 
@@ -1551,6 +1581,7 @@ async function closeWechatImportModal() {
 
 onBeforeUnmount(() => {
   stopAsyncImageTaskPoller();
+  if (asyncImageTaskProgressTimer !== null) window.clearTimeout(asyncImageTaskProgressTimer);
   cancelWechatGroupMode();
   if (wechatConversationObservationPoller !== null) {
     window.clearInterval(wechatConversationObservationPoller);
@@ -2878,7 +2909,6 @@ async function handleTaskAdded(change) {
   } else {
     activeWechatImportToken.value = null;
     await closeWechatImportModal();
-    setWechatScanStatus('本轮微信订单已全部确认保存', 'success');
   }
 }
 
