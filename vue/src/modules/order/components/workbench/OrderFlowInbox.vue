@@ -49,13 +49,13 @@
           </button>
           <div
             v-if="asyncTaskProgress.visible"
-            :class="['order-flow__async-progress', { 'has-expired': asyncTaskProgress.expired > 0 }]"
+            :class="['order-flow__async-progress', { 'has-expired': asyncTaskProgress.delayed > 0 || asyncTaskProgress.syncError || asyncTaskProgress.failed > 0 }]"
             role="status"
             aria-live="polite"
           >
             <span class="order-flow__async-copy">
-              <strong>{{ asyncTaskProgress.remaining > 0 ? '图片订单处理中' : asyncTaskProgress.expired > 0 ? '图片任务需检查' : '图片订单已处理完' }}</strong>
-              <small>已完成 {{ asyncTaskProgress.completed }}/{{ asyncTaskProgress.total }} · 剩余 {{ asyncTaskProgress.remaining }}<template v-if="asyncTaskProgress.expired"> · 超时 {{ asyncTaskProgress.expired }}</template></small>
+              <strong>{{ asyncTaskProgress.syncError ? '状态查询异常，正在重试' : asyncTaskProgress.remaining > 0 ? '图片订单处理中' : asyncTaskProgress.failed > 0 ? '图片任务需检查' : '图片订单已处理完' }}</strong>
+              <small>已完成 {{ asyncTaskProgress.completed }}/{{ asyncTaskProgress.total }} · 剩余 {{ asyncTaskProgress.remaining }}<template v-if="asyncTaskProgress.failed"> · 失败 {{ asyncTaskProgress.failed }}</template><template v-if="asyncTaskProgress.delayed"> · {{ asyncTaskProgress.delayed }} 项较久</template></small>
             </span>
             <span class="order-flow__async-track" aria-hidden="true"><i :style="{ width: `${asyncTaskProgress.total ? asyncTaskProgress.completed / asyncTaskProgress.total * 100 : 0}%` }"></i></span>
           </div>
@@ -287,7 +287,7 @@ const props = defineProps({
   wechatScanBusy: { type: Boolean, default: false },
   wechatScanLabel: { type: String, default: '读取微信订单' },
   wechatImportCount: { type: Number, default: 0 },
-  asyncTaskProgress: { type: Object, default: () => ({ total: 0, completed: 0, expired: 0, remaining: 0 }) },
+  asyncTaskProgress: { type: Object, default: () => ({ total: 0, completed: 0, failed: 0, delayed: 0, remaining: 0, syncError: '', visible: false }) },
 });
 
 const emit = defineEmits([

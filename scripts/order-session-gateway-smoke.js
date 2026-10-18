@@ -88,6 +88,30 @@ async function run() {
   });
   assert.equal((await reopenedGateway.todayCustomers(160)).ok, true,
     '程序重启后应使用持久 Cookie 读取订单，而不是要求再次扫码');
+  assert.equal((await reopenedGateway.ocrTaskStatus(99)).status, 401,
+    '重启后没有身份凭据时不能绕过任务归属校验');
+  const restoredCookies = cookies.map((cookie) => ({ ...cookie }));
+  const restoredGateway = createOrderSessionGateway({
+    axios: { create: () => ({
+      get: async () => ({ status: 200, data: { code: 0, task: {
+        nxOcrTaskDistributerId: 160, nxOcrTaskStatus: 2,
+      } } }),
+      post: async () => ({
+        status: 200,
+        data: { code: 0, data: { user: { nxDistributerUserId: 312, nxDiuDistributerId: 160 } } },
+        headers: { 'set-cookie': ['JSESSIONID=restored-session; Path=/nongxinle; HttpOnly'] },
+      }),
+    }) },
+    cookieStore: {
+      get: async () => restoredCookies.slice(),
+      set: async (cookie) => { restoredCookies.splice(0, restoredCookies.length, cookie); },
+      remove: async () => { restoredCookies.splice(0); },
+    },
+    rememberEnabled: () => true,
+    rememberTokenStore: { read: async () => 'saved-token', write: async () => {}, clear: async () => {} },
+  });
+  assert.equal((await restoredGateway.ocrTaskStatus(99)).data.task.nxOcrTaskStatus, 2,
+    '重启后应恢复配送商身份再读取自己的图片任务进度');
 
   assert.equal((await gateway.phoneOrders({ disId: 161, depFatherId: 12 })).status, 403);
   nextResponse = { status: 200, data: { code: 0, data: { totalCount: 2 } } };

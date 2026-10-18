@@ -319,10 +319,11 @@ const wechatScanResults = ref([]);
 const wechatImportQueue = ref([]);
 const wechatImportBatch = ref([]);
 const pendingAsyncImageTaskIds = new Map();
-const asyncImageTaskProgress = ref({ total: 0, completed: 0, expired: 0, remaining: 0, visible: false });
+const asyncImageTaskProgress = ref({ total: 0, completed: 0, failed: 0, delayed: 0, remaining: 0, syncError: '', visible: false });
 let asyncImageTaskPollTimer = null;
 let asyncImageTaskProgressTimer = null;
 let asyncImageTaskPolling = false;
+let asyncImagePollCount = 0;
 // MCP「保存微信订单」批量流程状态：置位后 AiOrderPanel 进入批量模式（解析完即静默保存）。
 const wechatBatchSaving = ref(false);
 const wechatBatchSaveProgress = ref({ done: 0, total: 0 });
@@ -660,9 +661,10 @@ function watchAsyncImageTask(taskId) {
     if (asyncImageTaskProgressTimer !== null) window.clearTimeout(asyncImageTaskProgressTimer);
     asyncImageTaskProgressTimer = null;
     const previous = asyncImageTaskProgress.value;
+    if (!previous.remaining) asyncImagePollCount = 0;
     asyncImageTaskProgress.value = previous.remaining
       ? { ...previous, total: previous.total + 1, remaining: previous.remaining + 1, visible: true }
-      : { total: 1, completed: 0, expired: 0, remaining: 1, visible: true };
+      : { total: 1, completed: 0, failed: 0, delayed: 0, remaining: 1, syncError: '', visible: true };
     pendingAsyncImageTaskIds.set(id, Date.now() + 10 * 60 * 1000);
   }
 }
@@ -676,40 +678,51 @@ async function pollAsyncImageTasks() {
   if (asyncImageTaskPolling || !pendingAsyncImageTaskIds.size) return;
   asyncImageTaskPolling = true;
   let completed = false;
-  let expired = 0;
   let finished = 0;
+  let failed = 0;
+  let delayed = 0;
+  let pollError = '';
   try {
     for (const [taskId, expiresAt] of pendingAsyncImageTaskIds) {
-      if (Date.now() >= expiresAt) {
-        pendingAsyncImageTaskIds.delete(taskId);
-        expired += 1;
-        continue;
-      }
       try {
         const response = await orderApi.getOcrTaskStatus(taskId);
-        const status = Number(response?.data?.task?.nxOcrTaskStatus);
-        if (response?.data?.code === 0 && status !== 0 && Number.isFinite(status)) {
+        if (response?.data?.code !== 0) throw new Error(response?.data?.msg || '任务状态响应异常');
+        const rawStatus = response?.data?.task?.nxOcrTaskStatus;
+        const status = Number(rawStatus);
+        if (rawStatus == null || !Number.isFinite(status)) throw new Error('任务状态缺失');
+        if (status !== 0) {
           pendingAsyncImageTaskIds.delete(taskId);
-          finished += 1;
+          if (status === 1 || status === 2) finished += 1;
+          else failed += 1;
           completed = true;
         }
-      } catch {
-        // A temporary read failure keeps the task under observation until the deadline.
+      } catch (error) {
+        pollError ||= error?.message || '任务状态读取失败';
+        if (!asyncImageTaskProgress.value.syncError) {
+          writeAppLog('warn', 'order', 'async-image-status:poll-failed', { taskId, message: pollError });
+        }
       }
+      if (pendingAsyncImageTaskIds.has(taskId) && Date.now() >= expiresAt) delayed += 1;
     }
-    if (finished || expired) {
-      const previous = asyncImageTaskProgress.value;
+    const previous = asyncImageTaskProgress.value;
+    if (finished || failed || delayed !== previous.delayed || pollError !== previous.syncError) {
+      if (previous.syncError && !pollError) {
+        writeAppLog('info', 'order', 'async-image-status:poll-recovered', {});
+      }
       asyncImageTaskProgress.value = {
         ...previous,
         completed: previous.completed + finished,
-        expired: previous.expired + expired,
+        failed: previous.failed + failed,
+        delayed,
         remaining: pendingAsyncImageTaskIds.size,
+        syncError: pollError,
       };
     }
-    if (completed) await refreshAll();
+    // 状态查询暂时不可用时，订单列表也要定期重新读取，让已落库订单及时出现。
+    if (completed || ++asyncImagePollCount % 2 === 0) await refreshAll();
     if (!pendingAsyncImageTaskIds.size) {
       stopAsyncImageTaskPoller();
-      if (!asyncImageTaskProgress.value.expired) {
+      if (!asyncImageTaskProgress.value.failed) {
         asyncImageTaskProgressTimer = window.setTimeout(() => {
           asyncImageTaskProgress.value = { ...asyncImageTaskProgress.value, visible: false };
           asyncImageTaskProgressTimer = null;

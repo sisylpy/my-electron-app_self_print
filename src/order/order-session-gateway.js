@@ -367,6 +367,12 @@ function createOrderSessionGateway({
   async function ocrTaskStatus(taskId) {
     const id = positiveId(taskId);
     if (!id) return failure(400, null, '订单任务 ID 无效');
+    // 持久 Cookie 可在重启后继续使用，但配送商身份只保存在当前主进程内存中。
+    // 查询任务归属前通过记住用户令牌恢复身份，不能把身份缺失误判为任务不属于本商户。
+    if (!authenticatedDisId) {
+      const restored = await refreshSession();
+      if (!restored.ok) return restored;
+    }
     const response = await requestOrder('GET', `ocr/getTaskOrders/${id}?page=1&limit=1&processStatus=false`);
     if (!response.ok) return response;
     const task = response.data?.task;
