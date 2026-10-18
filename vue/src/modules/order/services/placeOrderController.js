@@ -4237,6 +4237,7 @@ import api from '../services/orderApi';
                     return;
                 }
 
+                this.wechatOrderSource = null;
                 // 保存原始文件（用于裁剪）
                 this.originalImageFile = file;
 
@@ -4325,7 +4326,8 @@ import api from '../services/orderApi';
                     depId: targetDepId,
                     depFatherId: this.selectedAllCustomer,
                     disId: this.disUser.nxDiuDistributerId,
-                    userId: this.disUser.nxDistributerUserId || this.disUser.nxDiuDistributerId
+                    userId: this.disUser.nxDistributerUserId || this.disUser.nxDiuDistributerId,
+                    ...(this.wechatOrderSource ? { wechatOrderSource: this.wechatOrderSource } : {})
                 };
                 try {
                     const res = await api.recognizeOrderOCR(ocrData);
@@ -4871,7 +4873,8 @@ import api from '../services/orderApi';
                         depId: targetDepId,
                         depFatherId: this.selectedAllCustomer,
                         disId: this.disUser?.nxDiuDistributerId,
-                        userId: this.disUser?.nxDistributerUserId || this.disUser?.nxDiuDistributerId
+                        userId: this.disUser?.nxDistributerUserId || this.disUser?.nxDiuDistributerId,
+                        ...(this.wechatOrderSource ? { wechatOrderSource: this.wechatOrderSource } : {})
                     };
 
                     const res = await api.recognizeOrderOCRWithAi(requestData, {showLoading: false});
