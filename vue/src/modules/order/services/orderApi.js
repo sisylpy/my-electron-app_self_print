@@ -19,6 +19,7 @@ const ALLOWED_METHODS = [
   'downDisGoods',
   'finishTask',
   'getImageServerURL',
+  'getOcrTaskStatus',
   'getPromptByKey',
   'getTaskOrders',
   'manualOrderBefore',

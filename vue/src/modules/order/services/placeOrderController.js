@@ -4888,7 +4888,7 @@ import api from '../services/orderApi';
                                     this.$refs.imageUploadRef.loadTaskList(taskId, { type: 1 });
                                 });
                             }
-                            this.$emit('task-added');
+                            this.$emit('task-added', { taskId, asyncImage: true });
                         }
                     } else {
                         const errorMsg = res?.data?.msg || res?.data?.message || 'AI识别失败';

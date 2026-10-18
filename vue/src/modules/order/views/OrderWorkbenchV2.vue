@@ -252,6 +252,7 @@ import WechatOrderImportModal from '../components/workbench/WechatOrderImportMod
 import TodayOrders from '@/components/TodayOrders.vue';
 import { useOrderCustomerContext } from '../composables/useOrderCustomerContext';
 import { useTodayOrderInbox } from '../composables/useTodayOrderInbox';
+import orderApi from '../services/orderApi';
 import { customerVisibleInStage } from '../services/orderWorkbenchStage';
 import { blockingCustomerDirectoryError } from '../services/smartReplenishmentComparison';
 import {
@@ -316,6 +317,9 @@ const wechatScanProgress = ref({ current: 0, total: 0, title: '', customerName: 
 const wechatScanResults = ref([]);
 const wechatImportQueue = ref([]);
 const wechatImportBatch = ref([]);
+const pendingAsyncImageTaskIds = new Map();
+let asyncImageTaskPollTimer = null;
+let asyncImageTaskPolling = false;
 // MCP「保存微信订单」批量流程状态：置位后 AiOrderPanel 进入批量模式（解析完即静默保存）。
 const wechatBatchSaving = ref(false);
 const wechatBatchSaveProgress = ref({ done: 0, total: 0 });
@@ -645,6 +649,52 @@ async function refreshAll() {
     smartModeActive.value ? refreshSmartCustomers() : Promise.resolve(),
   ]);
   if (todayInbox.selectedCustomer.value) await todayInbox.refreshSelected();
+}
+
+function watchAsyncImageTask(taskId) {
+  const id = Number(taskId);
+  if (Number.isSafeInteger(id) && id > 0) {
+    pendingAsyncImageTaskIds.set(id, Date.now() + 10 * 60 * 1000);
+  }
+}
+
+function stopAsyncImageTaskPoller() {
+  if (asyncImageTaskPollTimer !== null) window.clearInterval(asyncImageTaskPollTimer);
+  asyncImageTaskPollTimer = null;
+}
+
+async function pollAsyncImageTasks() {
+  if (asyncImageTaskPolling || !pendingAsyncImageTaskIds.size) return;
+  asyncImageTaskPolling = true;
+  let completed = false;
+  try {
+    for (const [taskId, expiresAt] of pendingAsyncImageTaskIds) {
+      if (Date.now() >= expiresAt) {
+        pendingAsyncImageTaskIds.delete(taskId);
+        completed = true;
+        continue;
+      }
+      try {
+        const response = await orderApi.getOcrTaskStatus(taskId);
+        const status = Number(response?.data?.task?.nxOcrTaskStatus);
+        if (response?.data?.code === 0 && status !== 0 && Number.isFinite(status)) {
+          pendingAsyncImageTaskIds.delete(taskId);
+          completed = true;
+        }
+      } catch {
+        // A temporary read failure keeps the task under observation until the deadline.
+      }
+    }
+    if (completed) await refreshAll();
+    if (!pendingAsyncImageTaskIds.size) stopAsyncImageTaskPoller();
+  } finally {
+    asyncImageTaskPolling = false;
+  }
+}
+
+function startAsyncImageTaskPoller() {
+  if (!pendingAsyncImageTaskIds.size || asyncImageTaskPollTimer !== null) return;
+  asyncImageTaskPollTimer = window.setInterval(() => { void pollAsyncImageTasks(); }, 15000);
 }
 
 async function handleOrderChanged(change) {
@@ -1481,20 +1531,26 @@ const removeWechatWorkspaceCloseRequestedListener = window.electronAPI?.wechatUi
     // same recovery a second time.
     discardWechatImportSession();
     resetWechatImportModalState();
+    void refreshAll();
+    startAsyncImageTaskPoller();
   });
 
 async function closeWechatImportModal() {
   const shouldCloseWechatWorkspace = wechatWorkspaceReady.value;
   resetWechatImportModalState();
-  if (!shouldCloseWechatWorkspace) return;
-  try {
-    await window.electronAPI?.wechatUi?.closeWorkspace?.();
-  } catch {
-    // 窗口恢复失败不影响订单数据；主进程退出时仍会再做一次兜底恢复。
+  if (shouldCloseWechatWorkspace) {
+    try {
+      await window.electronAPI?.wechatUi?.closeWorkspace?.();
+    } catch {
+      // 窗口恢复失败不影响订单数据；主进程退出时仍会再做一次兜底恢复。
+    }
   }
+  await refreshAll();
+  startAsyncImageTaskPoller();
 }
 
 onBeforeUnmount(() => {
+  stopAsyncImageTaskPoller();
   cancelWechatGroupMode();
   if (wechatConversationObservationPoller !== null) {
     window.clearInterval(wechatConversationObservationPoller);
@@ -1584,7 +1640,11 @@ async function loadBoundWechatCustomers({ refreshCustomers = false, customerFilt
       ambiguousCount += 1;
     }
   });
-  return { unique, failedCount, ambiguousCount, associationDirectory };
+  return {
+    unique, failedCount, ambiguousCount, associationDirectory,
+    directoryCustomerCount: customerContext.customers.value.length,
+    participatingCustomerCount: customersById.size,
+  };
 }
 
 function wechatImportTaskKey(item) {
@@ -2484,6 +2544,7 @@ async function scanAllBoundWechatOrders(options = {}) {
   const timing = createWechatOrderTiming('scan-all-bound-wechat');
   let timingOutcome = 'failed';
   let timingSummary = {
+    automatic: options?.automatic === true,
     checkedCount: 0,
     orderCustomerCount: 0,
     taskCount: 0,
@@ -2530,6 +2591,8 @@ async function scanAllBoundWechatOrders(options = {}) {
       failedCount,
       ambiguousCount,
       associationDirectory,
+      directoryCustomerCount,
+      participatingCustomerCount,
     } = await timeWechatOrderPhase(
       timing,
       'scan-customer-directory-load',
@@ -2538,6 +2601,8 @@ async function scanAllBoundWechatOrders(options = {}) {
     const entries = Array.from(unique.entries()).map(([title, row]) => ({ title, row }));
     timing.phase('scan-customer-directory-ready', {
       customerCount: entries.length,
+      directoryCustomerCount,
+      participatingCustomerCount,
       failedCount,
       ambiguousCount,
     });
@@ -2695,6 +2760,10 @@ async function scanAllBoundWechatOrders(options = {}) {
     const customerCount = new Set(result.imports.map(item => String(item.customerId))).size;
     timingOutcome = warningCount ? 'warning' : 'success';
     timingSummary = {
+      automatic,
+      eligibleCustomerCount: entries.length,
+      directoryCustomerCount,
+      participatingCustomerCount,
       checkedCount: result.checkedCount,
       orderCustomerCount: customerCount,
       taskCount: result.imports.length,
@@ -2756,21 +2825,38 @@ async function scanAllBoundWechatOrders(options = {}) {
       timingSummary
     );
     await focusWechatWorkspaceApp();
-    timing.finish(timingOutcome, timingSummary);
     // 定时自动读取是无人值守流程；与 WorkBuddy「打开并保存」复用同一批量保存入口。
     // 人工点击“全部读”不带 automatic，仍只保留任务供人工检查，不会自动保存。
     const shouldAutoSave = automatic || window.__grainAutoSaveWechatOrders;
-    if (timingOutcome === 'success' && shouldAutoSave) {
-      const saveOutcome = await batchSaveAllWechatOrders({ reportMode: 'merged' });
-      if (saveOutcome) timingSummary = { ...timingSummary, saveOutcome };
+    if (timingOutcome !== 'failed' && shouldAutoSave && wechatImportBatch.value.length) {
+      try {
+        const saveOutcome = await batchSaveAllWechatOrders({ reportMode: 'merged' });
+        if (saveOutcome) {
+          timingSummary = { ...timingSummary, saveOutcome };
+          if (saveOutcome.error || saveOutcome.skipped?.length) timingOutcome = 'warning';
+        }
+      } catch (error) {
+        timingOutcome = 'warning';
+        timingSummary = {
+          ...timingSummary,
+          saveOutcome: { saved: [], skipped: [], error: error?.message || String(error) },
+        };
+      }
+    } else if (shouldAutoSave) {
+      timingSummary = {
+        ...timingSummary,
+        saveOutcome: { saved: [], skipped: [], reason: timingOutcome === 'failed' ? 'scan-failed' : 'no-tasks' },
+      };
     }
     window.__grainAutoSaveWechatOrders = false;
+    timing.finish(timingOutcome, timingSummary);
     // 由 MCP 指令触发时，把最终结果回报给桥，完成「受理 → 执行 → 结果」闭环。
     reportMcpWechatScanResult(timingOutcome, timingSummary);
   }
 }
 
 async function handleTaskAdded(change) {
+  if (change?.asyncImage) watchAsyncImageTask(change.taskId);
   // 自动批量保存必须只有 batchSaveAllWechatOrders 一个队列所有者。
   // 这里既不刷新总览，也不提前切换任务；保存结果返回后由批量循环统一处理。
   if (wechatBatchSaving.value) return;
@@ -2825,6 +2911,7 @@ async function returnToOverview() {
   activeView.value = 'overview';
   const createdForId = customerContext.selectedCustomerId.value;
   await refreshOverview({ selectFirst: true });
+  startAsyncImageTaskPoller();
   if (!createdForId) return;
   const matchingCustomer = overview.customers.find(
     item => String(customerId(item)) === String(createdForId)

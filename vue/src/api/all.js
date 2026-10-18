@@ -27,7 +27,19 @@ const apiMethods = {
 
   // 订单工作台：获取所有进行中客户、状态统计及识别任务。
   disGetTodayOrderCustomer(disId) {
+    if (isPackagedDesktop()) {
+      return desktopOrderSessionRequest('orderWorkbenchOverview', disId);
+    }
     return axiosInstance.get(`nxdepartmentorders/disGetTodayOrderCustomer/${disId}`, {
+      showLoading: false,
+    });
+  },
+
+  getOcrTaskStatus(taskId) {
+    if (isPackagedDesktop()) {
+      return desktopOrderSessionRequest('ocrTaskStatus', taskId);
+    }
+    return axiosInstance.get(`ocr/getTaskOrders/${taskId}?page=1&limit=1&processStatus=false`, {
       showLoading: false,
     });
   },

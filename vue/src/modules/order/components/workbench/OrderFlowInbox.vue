@@ -33,6 +33,7 @@
             <button type="button" title="关闭搜索" aria-label="关闭搜索" @click="closeSearch">×</button>
           </label>
         </div>
+        <button type="button" class="order-flow__refresh" :disabled="listLoading" title="刷新订单" aria-label="刷新订单" @click="$emit('refresh-list')">⟳</button>
         <button
           type="button"
           class="order-flow__wechat-scan"
@@ -449,6 +450,19 @@ function handleTaskChanged(change) {
   background: #f5fbf8;
 }
 .order-flow__search-trigger svg { width: 16px; height: 16px; }
+.order-flow__refresh {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border: 1px solid var(--product-border);
+  border-radius: 6px;
+  color: var(--product-text-secondary);
+  background: #fff;
+  font-size: 20px;
+  cursor: pointer;
+}
+.order-flow__refresh:hover { color: var(--product-primary-strong); background: #f5fbf8; }
+.order-flow__refresh:disabled { opacity: .5; cursor: wait; }
 .order-flow__header-tools .order-flow__new-order {
   display: grid;
   width: 34px;

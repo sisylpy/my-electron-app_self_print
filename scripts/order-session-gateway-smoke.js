@@ -74,6 +74,15 @@ async function run() {
   assert.equal(customers.data.data.nxArr.length, 1);
   assert.equal(calls.at(-1).url, 'nxdepartmentorders/webNxDisGetTodayOrderCustomer/160');
   assert.equal(calls.at(-1).config.headers.Cookie, 'JSESSIONID=opaque-session-value');
+  assert.equal((await gateway.orderWorkbenchOverview(161)).status, 403);
+  nextResponse = { status: 200, data: { code: 0, data: { nxArr: [] } } };
+  assert.equal((await gateway.orderWorkbenchOverview(160)).ok, true);
+  assert.equal(calls.at(-1).url, 'nxdepartmentorders/disGetTodayOrderCustomer/160');
+  nextResponse = { status: 200, data: { code: 0, task: { nxOcrTaskDistributerId: 161, nxOcrTaskStatus: 2 } } };
+  assert.equal((await gateway.ocrTaskStatus(99)).status, 403);
+  nextResponse = { status: 200, data: { code: 0, task: { nxOcrTaskDistributerId: 160, nxOcrTaskStatus: 2 } } };
+  assert.equal((await gateway.ocrTaskStatus(99)).data.task.nxOcrTaskStatus, 2);
+  assert.equal(calls.at(-1).url, 'ocr/getTaskOrders/99?page=1&limit=1&processStatus=false');
   const reopenedGateway = createOrderSessionGateway({
     axios: { create: () => http }, cookieStore,
   });

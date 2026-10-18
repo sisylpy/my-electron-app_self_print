@@ -890,6 +890,16 @@ function setupIpcHandlers() {
     if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理读取订单' };
     return getOrderSessionGateway().todayCustomers(disId);
   });
+  ipcMain.handle('order-session-workbench-overview', async (event, disId) => {
+    assertTrustedRendererEvent(event);
+    if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理读取订单' };
+    return getOrderSessionGateway().orderWorkbenchOverview(disId);
+  });
+  ipcMain.handle('order-session-ocr-task-status', async (event, taskId) => {
+    assertTrustedRendererEvent(event);
+    if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理读取订单' };
+    return getOrderSessionGateway().ocrTaskStatus(taskId);
+  });
   ipcMain.handle('order-session-phone-orders', async (event, input) => {
     assertTrustedRendererEvent(event);
     if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理读取订单' };

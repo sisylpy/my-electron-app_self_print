@@ -356,6 +356,28 @@ function createOrderSessionGateway({
     return requestOrder('GET', `nxdepartmentorders/webNxDisGetTodayOrderCustomer/${id}`);
   }
 
+  function orderWorkbenchOverview(disId) {
+    const id = positiveId(disId);
+    if (!id || (authenticatedDisId && id !== authenticatedDisId)) {
+      return Promise.resolve(failure(403, null, '配送商身份不一致'));
+    }
+    return requestOrder('GET', `nxdepartmentorders/disGetTodayOrderCustomer/${id}`);
+  }
+
+  async function ocrTaskStatus(taskId) {
+    const id = positiveId(taskId);
+    if (!id) return failure(400, null, '订单任务 ID 无效');
+    const response = await requestOrder('GET', `ocr/getTaskOrders/${id}?page=1&limit=1&processStatus=false`);
+    if (!response.ok) return response;
+    const task = response.data?.task;
+    if (!authenticatedDisId || Number(task?.nxOcrTaskDistributerId) !== authenticatedDisId) {
+      return failure(403, null, '订单任务不属于当前配送商');
+    }
+    return { ok: true, status: response.status, data: { code: 0, task: {
+      nxOcrTaskStatus: task.nxOcrTaskStatus,
+    } } };
+  }
+
   function phoneOrders(input) {
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
       return Promise.resolve(failure(400, null, '订单查询参数无效'));
@@ -497,6 +519,8 @@ function createOrderSessionGateway({
     pollLogin,
     testLogin,
     todayCustomers,
+    orderWorkbenchOverview,
+    ocrTaskStatus,
     phoneOrders,
     recognizeOrderQwen,
     recognizeOrderAsync,
