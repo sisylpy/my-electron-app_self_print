@@ -6,6 +6,18 @@ import {
   scanAllBoundWechatCustomers,
 } from './wechatAllCustomerScan.js';
 
+await assert.rejects(
+  () => scanAllBoundWechatCustomers({
+    entries: [{ title: '客户微信' }],
+    scanEntry: async () => {
+      const error = new Error('服务端认证失败');
+      error.code = 'SERVER_AUTH_FAILED';
+      throw error;
+    },
+  }),
+  { code: 'SERVER_AUTH_FAILED' },
+);
+
 const excludedCustomerKeys = new Set(['7:20']);
 assert.equal(customerParticipatesInAutoRead(7, 20, excludedCustomerKeys), false);
 assert.equal(customerParticipatesInAutoRead(7, 21, excludedCustomerKeys), true);

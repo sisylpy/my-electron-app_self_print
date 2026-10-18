@@ -47,7 +47,7 @@ function normalizeBaseUrl(value) {
   return normalizeNongxinleApiBaseUrl(value, '调度 API');
 }
 
-function createDispatchGateway({ app, safeStorage, axios }) {
+function createDispatchGateway({ app, safeStorage, axios, renewDispatchSession = null }) {
   const credentialStore = createCredentialStore({ app, safeStorage });
   const configuredBase = process.env.NXL_DISPATCH_API_BASE_URL;
   const apiBaseUrl = normalizeBaseUrl(configuredBase || DEFAULT_API_BASE_URL);
@@ -58,6 +58,26 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     withCredentials: false,
   });
   let session = credentialStore.loadSession();
+  let renewalInFlight = null;
+
+  async function renewOnce() {
+    if (typeof renewDispatchSession !== 'function') return false;
+    if (renewalInFlight) return renewalInFlight;
+    const task = (async () => {
+      try {
+        const auth = await renewDispatchSession();
+        return auth?.accessToken ? acceptAuthSession(auth, true).ok : false;
+      } catch {
+        return false;
+      }
+    })();
+    renewalInFlight = task;
+    try {
+      return await task;
+    } finally {
+      if (renewalInFlight === task) renewalInFlight = null;
+    }
+  }
 
   function clearSession() {
     session = null;
@@ -91,26 +111,33 @@ function createDispatchGateway({ app, safeStorage, axios }) {
     };
     if (options.auth !== false) {
       if (!session?.accessToken) {
-        return normalizeError({ status: 401, data: {
+        if (!await renewOnce()) return normalizeError({ status: 401, data: {
           errorCode: 'UNAUTHENTICATED',
           msg: '桌面登录已失效，请重新登录',
         } });
       }
-      headers.Authorization = `Bearer ${session.accessToken}`;
     }
     if (options.command) {
       headers['Idempotency-Key'] = options.idempotencyKey;
       headers['X-Client-Version'] = app.getVersion();
     }
-    try {
-      const response = await http.request({
+    const send = () => http.request({
         method,
         url: `${options.apiPrefix || API_PREFIX}${relativePath}`,
         data: options.data,
         params: options.params,
-        headers,
+        headers: options.auth === false ? headers : {
+          ...headers, Authorization: `Bearer ${session.accessToken}`,
+        },
         timeout: options.timeout || undefined,
       });
+    try {
+      const sentToken = session?.accessToken;
+      let response = await send();
+      if (options.auth !== false && response.status === 401
+          && (session?.accessToken !== sentToken || await renewOnce())) {
+        response = await send();
+      }
       const body = response.data && typeof response.data === 'object' ? response.data : {};
       if (response.status >= 200 && response.status < 300 && Number(body.code) === 0) {
         return {

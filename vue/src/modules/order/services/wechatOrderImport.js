@@ -55,7 +55,14 @@ export function unwrapWechatReader(response) {
 
 export function unwrapWechatServer(response) {
   if (response?.ok) return response.data;
-  throw new Error(response?.message || '服务器请求失败');
+  const status = Number(response?.status);
+  const authFailure = status === 401 || status === 403;
+  const error = new Error(authFailure
+    ? `服务端认证失败：${response?.message || '登录状态已失效'}`
+    : (response?.message || '服务器请求失败'));
+  error.code = authFailure ? 'SERVER_AUTH_FAILED' : (response?.errorCode || 'SERVER_REQUEST_FAILED');
+  error.status = status;
+  throw error;
 }
 
 export function normalizeWechatBinding(data) {

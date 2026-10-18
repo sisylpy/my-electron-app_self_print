@@ -1565,6 +1565,7 @@ async function loadBoundWechatCustomers({ refreshCustomers = false, customerFilt
       const binding = await loadCustomerWechatBinding(customerId(customer));
       return { customer, binding };
     } catch (error) {
+      if (error?.code === 'SERVER_AUTH_FAILED') throw error;
       return { customer, error };
     }
   }));
@@ -2679,7 +2680,7 @@ async function scanAllBoundWechatOrders(options = {}) {
           timing.phase('scan-customer-complete', {
             ...customerMeta,
             durationMs: Math.max(0, timingNow() - customerStartedAt),
-            status: 'error',
+            status: error?.code === 'SERVER_AUTH_FAILED' ? 'auth-error' : 'error',
             failed: true,
             error: error?.message || String(error),
           });

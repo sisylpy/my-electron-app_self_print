@@ -142,6 +142,7 @@ export async function scanAllBoundWechatCustomers({
         });
       }
     } catch (error) {
+      if (error?.code === 'SERVER_AUTH_FAILED') throw error;
       const failure = {
         title,
         message: error?.message || '巡查该微信会话失败',

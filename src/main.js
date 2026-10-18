@@ -321,6 +321,10 @@ function getDispatchGateway() {
       safeStorage,
       axios,
       isDev,
+      renewDispatchSession: async () => {
+        const result = await getOrderSessionGateway().refreshSession();
+        return result.ok ? result.data?.dispatchAuth : null;
+      },
     });
   }
   return dispatchGateway;

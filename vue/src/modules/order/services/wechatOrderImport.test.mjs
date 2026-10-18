@@ -83,6 +83,14 @@ const electronAPI = {
 
 const loaded = await loadCustomerWechatBinding(7, electronAPI);
 assert.equal(loaded.bound, true);
+await assert.rejects(
+  () => loadCustomerWechatBinding(7, {
+    customerWechatOrders: {
+      loadBinding: async () => ({ ok: false, status: 401, message: '登录已失效' }),
+    },
+  }),
+  { code: 'SERVER_AUTH_FAILED', message: '服务端认证失败：登录已失效' },
+);
 assert.equal(
   normalizeWechatAvatarSource('http://wx.qlogo.cn/mmhead/example/0'),
   'https://wx.qlogo.cn/mmhead/example/0'
