@@ -171,7 +171,7 @@ router.beforeEach(async (to, from, next) => {
   // 按套餐开放的模块（如配送调度）需要先拿到当前生效套餐；侧栏入口同样依赖该状态。
   if (currentUser) await store.dispatch('loadCommercialPlan');
   if (currentUser && to.meta?.module
-      && !canAccessModule(to.meta.module, currentUser, store.state.commercialPlan)) {
+      && !canAccessModule(to.meta.module, currentUser, store.getters.commercialPlanState)) {
     next({ name: defaultRouteNameForUser(currentUser), replace: true });
     return;
   }

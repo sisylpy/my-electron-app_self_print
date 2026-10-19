@@ -15,18 +15,23 @@ export function getDisUserRole(user) {
 
 /**
  * 配送调度只对平台型开放：基础出货版与经营版隐藏入口。
- * 套餐读取不到（历史未迁移客户、桌面安全会话不可用）时不做判断，
- * 交给角色规则处理，避免把老客户当成基础出货版。
+ * 返回值：true 放行 / false 拒绝 / null 交给原有角色规则。
+ *
+ * @param {string|null} plan 当前生效套餐
+ * @param {boolean} loaded 套餐是否已查询成功（区分"确认为历史未迁移客户"与"查询失败/未完成"）
  */
-export function canUseDispatch(plan) {
-  if (!plan) return null;
-  return plan === 'PLATFORM_PARTNER';
+export function canUseDispatch(plan, loaded) {
+  if (!loaded) return false;
+  // 平台型保留原有角色权限校验；确认为历史未迁移客户（查询成功但无套餐记录）
+  // 也保留旧角色兼容，不按基础出货版降级。
+  if (!plan || plan === 'PLATFORM_PARTNER') return null;
+  return false;
 }
 
-export function canAccessModule(moduleName, user, plan) {
+export function canAccessModule(moduleName, user, planState) {
   if (!moduleName || moduleName === 'core') return true;
   if (moduleName === 'dispatch') {
-    const byPlan = canUseDispatch(plan);
+    const byPlan = canUseDispatch(planState?.currentPlan, Boolean(planState?.loaded));
     if (byPlan !== null) return byPlan;
   }
   const role = getDisUserRole(user);

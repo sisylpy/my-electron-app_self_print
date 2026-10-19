@@ -72,7 +72,12 @@ const store = createStore({  // 使用 createStore 替代 Vuex.Store
     dispatch,
   },
   state,
-  getters: {},
+  getters: {
+    commercialPlanState: (state) => ({
+      currentPlan: state.commercialPlan,
+      loaded: state.commercialPlanLoaded,
+    }),
+  },
   mutations: {
     SET_LOADING(state, payload) {
       state.loading = payload;
@@ -144,12 +149,11 @@ const store = createStore({  // 使用 createStore 替代 Vuex.Store
       if (state.commercialPlanLoaded) return state.commercialPlan;
       const bridge = typeof window !== 'undefined' ? window.electronAPI?.commercialEntitlement : null;
       if (!bridge || typeof bridge.load !== 'function') return null;
-      try {
-        const result = await bridge.load();
-        commit('SET_COMMERCIAL_PLAN', result?.ok ? result.data?.currentPlan : null);
-      } catch {
-        commit('SET_COMMERCIAL_PLAN', null);
-      }
+      const result = await bridge.load().catch(() => null);
+      // 只有查询成功才置为已加载：确认为历史未迁移客户（无套餐记录）时套餐为 null，
+      // 查询失败/超时/尚未完成时不置位，按套餐开放的模块一律不通过旧角色规则放行。
+      if (!result?.ok) return null;
+      commit('SET_COMMERCIAL_PLAN', result.data?.currentPlan || null);
       return state.commercialPlan;
     },
     async logoutUserSession({ commit, dispatch }) {
