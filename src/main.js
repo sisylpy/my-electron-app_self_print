@@ -323,7 +323,9 @@ function getDispatchGateway() {
       isDev,
       renewDispatchSession: async () => {
         const result = await getOrderSessionGateway().refreshSession();
-        return result.ok ? result.data?.dispatchAuth : null;
+        // 续期失败时把失败结果带回网关：网络不可达（status 0）不能等同于登录失效，
+        // 只有令牌确实失效才提示重新登录。
+        return result.ok ? result.data?.dispatchAuth || null : result;
       },
     });
   }
@@ -1321,6 +1323,10 @@ function setupIpcHandlers() {
   ipcMain.handle('customer-history-load-months', async (event, command) => {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().loadCustomerHistory(command);
+  });
+  ipcMain.handle('commercial-entitlement-load', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadCommercialEntitlement();
   });
   ipcMain.handle('customer-ocr-training-list', async (event, command) => {
     assertTrustedRendererEvent(event);

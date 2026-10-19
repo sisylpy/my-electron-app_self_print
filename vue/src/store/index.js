@@ -25,6 +25,9 @@ const state = {
   loading: false, // 全局加载状态
   /** MCP 配送单打印任务 FIFO 队列（多店/多任务排队，避免覆盖丢失） */
   mcpPrintQueue: [],
+  /** 当前生效商业套餐（BASIC / SHELF / PLATFORM_PARTNER）；读不到时为 null */
+  commercialPlan: null,
+  commercialPlanLoaded: false,
 };
 
 function clearBrowserCookies() {
@@ -109,7 +112,13 @@ const store = createStore({  // 使用 createStore 替代 Vuex.Store
       state.user = '';
       state.pasteArr = '';
       state.mcpPrintQueue = [];
+      state.commercialPlan = null;
+      state.commercialPlanLoaded = false;
       removeUserCache();
+    },
+    SET_COMMERCIAL_PLAN(state, value) {
+      state.commercialPlan = typeof value === 'string' && value ? value : null;
+      state.commercialPlanLoaded = true;
     },
   },
   actions: {
@@ -126,6 +135,22 @@ const store = createStore({  // 使用 createStore 替代 Vuex.Store
       } finally {
         commit('SET_LOADING', false); // 隐藏加载遮盖层
       }
+    },
+    /**
+     * 读取当前生效商业套餐。桌面端通过主进程安全会话查询，浏览器预览拿不到时
+     * 保持 null，由角色规则兜底，历史未迁移客户不会被当成基础出货版。
+     */
+    async loadCommercialPlan({ state, commit }) {
+      if (state.commercialPlanLoaded) return state.commercialPlan;
+      const bridge = typeof window !== 'undefined' ? window.electronAPI?.commercialEntitlement : null;
+      if (!bridge || typeof bridge.load !== 'function') return null;
+      try {
+        const result = await bridge.load();
+        commit('SET_COMMERCIAL_PLAN', result?.ok ? result.data?.currentPlan : null);
+      } catch {
+        commit('SET_COMMERCIAL_PLAN', null);
+      }
+      return state.commercialPlan;
     },
     async logoutUserSession({ commit, dispatch }) {
       let desktopResult = { ok: true };

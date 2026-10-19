@@ -77,7 +77,9 @@ const loggingOut = ref(false);
 const logoutError = ref('');
 const navigation = computed(() => PRODUCT_NAVIGATION.map((group) => ({
   ...group,
-  items: group.items.filter((item) => canAccessModule(item.module, store.state.disUser)),
+  items: group.items.filter(
+    (item) => canAccessModule(item.module, store.state.disUser, store.state.commercialPlan),
+  ),
 })).filter((group) => group.items.length > 0));
 const roleLabel = computed(() => roleLabelForUser(store.state.disUser));
 const distributerName = computed(() => (

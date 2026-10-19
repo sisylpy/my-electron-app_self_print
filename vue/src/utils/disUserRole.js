@@ -13,8 +13,22 @@ export function getDisUserRole(user) {
   return Number.isFinite(role) ? role : null;
 }
 
-export function canAccessModule(moduleName, user) {
+/**
+ * 配送调度只对平台型开放：基础出货版与经营版隐藏入口。
+ * 套餐读取不到（历史未迁移客户、桌面安全会话不可用）时不做判断，
+ * 交给角色规则处理，避免把老客户当成基础出货版。
+ */
+export function canUseDispatch(plan) {
+  if (!plan) return null;
+  return plan === 'PLATFORM_PARTNER';
+}
+
+export function canAccessModule(moduleName, user, plan) {
   if (!moduleName || moduleName === 'core') return true;
+  if (moduleName === 'dispatch') {
+    const byPlan = canUseDispatch(plan);
+    if (byPlan !== null) return byPlan;
+  }
   const role = getDisUserRole(user);
   if (role === DIS_USER_ROLE_ADMIN) return true;
   if (role === DIS_USER_ROLE_CLERK) return CLERK_MODULES.has(moduleName);

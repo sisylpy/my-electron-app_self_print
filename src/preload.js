@@ -183,6 +183,11 @@ const electronAPI = Object.freeze({
       ipcRenderer.invoke('customer-history-load-months', { departmentId }),
   }),
 
+  // 商业套餐只取当前生效套餐编码，用于按套餐开放桌面端功能入口。
+  commercialEntitlement: Object.freeze({
+    load: () => ipcRenderer.invoke('commercial-entitlement-load'),
+  }),
+
   // 客户OCR预训练通过主进程安全会话访问；页面不能提交配送商或操作人身份。
   customerOcrTraining: Object.freeze({
     list: (customerId) => ipcRenderer.invoke('customer-ocr-training-list', { customerId }),

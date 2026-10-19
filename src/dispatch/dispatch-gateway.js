@@ -59,15 +59,27 @@ function createDispatchGateway({ app, safeStorage, axios, renewDispatchSession =
   });
   let session = credentialStore.loadSession();
   let renewalInFlight = null;
+  /** 最近一次续期失败的结果；null 表示没有失败或失败原因未知。 */
+  let lastRenewalFailure = null;
 
   async function renewOnce() {
-    if (typeof renewDispatchSession !== 'function') return false;
+    if (typeof renewDispatchSession !== 'function') {
+      lastRenewalFailure = null;
+      return false;
+    }
     if (renewalInFlight) return renewalInFlight;
     const task = (async () => {
       try {
         const auth = await renewDispatchSession();
-        return auth?.accessToken ? acceptAuthSession(auth, true).ok : false;
+        const failed = auth && auth.ok === false ? auth : null;
+        if (!auth || typeof auth.accessToken !== 'string' || !auth.accessToken) {
+          lastRenewalFailure = failed;
+          return false;
+        }
+        lastRenewalFailure = null;
+        return acceptAuthSession(auth, true).ok;
       } catch {
+        lastRenewalFailure = { ok: false, status: 0, message: '无法连接自动登录服务' };
         return false;
       }
     })();
@@ -110,9 +122,23 @@ function createDispatchGateway({ app, safeStorage, axios, renewDispatchSession =
       'X-Request-Id': createId(),
     };
     if (options.auth !== false) {
+      // 本地没有令牌或令牌已过期时先用长期登录令牌续期，避免拿过期令牌白跑一趟 401。
+      if (!session?.accessToken || isExpired(session.expiresAt)) await renewOnce();
       if (!session?.accessToken) {
-        if (!await renewOnce()) return normalizeError({ status: 401, data: {
-          errorCode: 'UNAUTHENTICATED',
+        if (lastRenewalFailure && Number(lastRenewalFailure.status) === 0) {
+          // 续期请求本身连不上，不是登录失效：不能提示重新登录，也不能清掉本机凭证。
+          return {
+            ok: false,
+            status: 0,
+            errorCode: 'NETWORK_ERROR',
+            message: lastRenewalFailure.message || '无法连接调度服务，请检查网络后重试',
+            requestId: null,
+            reauthRequired: false,
+            refreshRequired: false,
+          };
+        }
+        return normalizeError({ status: 401, data: {
+          errorCode: lastRenewalFailure?.data?.errorCode || 'UNAUTHENTICATED',
           msg: '桌面登录已失效，请重新登录',
         } });
       }
@@ -134,7 +160,11 @@ function createDispatchGateway({ app, safeStorage, axios, renewDispatchSession =
     try {
       const sentToken = session?.accessToken;
       let response = await send();
-      if (options.auth !== false && response.status === 401
+      // 服务端 401（HTTP 401 或业务码 401）都先按现有 remember token 续期再重试一次。
+      const unauthorized = response.status === 401
+          || (response.status >= 200 && response.status < 300
+              && Number(response.data?.code) === 401);
+      if (options.auth !== false && unauthorized
           && (session?.accessToken !== sentToken || await renewOnce())) {
         response = await send();
       }
@@ -224,6 +254,18 @@ function createDispatchGateway({ app, safeStorage, axios, renewDispatchSession =
       ok: true,
       data: publicSession(session, credentialStore.encryptionAvailable()),
     };
+  }
+
+  /**
+   * 读取当前配送商的商业套餐快照，供桌面端按套餐开放功能入口。
+   * 未迁移或读取不到套餐时返回 null，调用方按现有兼容机制处理，不按基础版降级。
+   */
+  async function loadCommercialEntitlement() {
+    const result = await request('GET', 'commercial-entitlements');
+    if (!result.ok) return result;
+    const snapshot = result.data && typeof result.data === 'object' ? result.data : {};
+    const plan = typeof snapshot.currentPlan === 'string' ? snapshot.currentPlan : '';
+    return { ok: true, status: result.status, data: { currentPlan: plan || null } };
   }
 
   async function testLogin(userId) {
@@ -1158,6 +1200,7 @@ function createDispatchGateway({ app, safeStorage, axios, renewDispatchSession =
     previewRouteReassignment,
     confirmRouteReassignment,
     loadCustomerHistory,
+    loadCommercialEntitlement,
     listCustomerOcrTasks,
     loadCustomerOcrTask,
     createCustomerOcrTraining,
