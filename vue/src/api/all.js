@@ -9,6 +9,18 @@ if (!api) {
   console.error('VITE_API_URL is not defined in the environment variables.');
 }
 
+// 拣货单接口的参数都是后端普通方法入参，统一序列化为表单，
+// 让 axios 拦截器按 URLSearchParams 处理并写入正确的 Content-Type。
+function toPickListForm(data) {
+  const params = new URLSearchParams();
+  Object.keys(data || {}).forEach((key) => {
+    const value = data[key];
+    if (value === undefined || value === null) return;
+    params.append(key, String(value));
+  });
+  return params;
+}
+
 const apiMethods = {
   // 根据 prompt_key 获取 prompt
   getPromptByKey(promptKey) {
@@ -77,6 +89,68 @@ const apiMethods = {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       }
+    });
+  },
+
+  // ==================== 拣货单（A4 打印）====================
+  // 按商品：待出货商品大类列表
+  pickListCategories(data) {
+    if (isPackagedDesktop()) {
+      return desktopOrderSessionRequest('pickListCategories', data);
+    }
+    return axiosInstance.post(
+      'nxdepartmentorders/stockerGetCategoryListWithDepIds',
+      toPickListForm(data),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+  },
+
+  // 按商品：单个大类下的待出货商品
+  pickListCategoryGoods(data) {
+    if (isPackagedDesktop()) {
+      return desktopOrderSessionRequest('pickListCategoryGoods', data);
+    }
+    return axiosInstance.post(
+      'nxdepartmentorders/stockerGetCategoryGoodsDetail',
+      toPickListForm(data),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+  },
+
+  // 按货架：待出货货架列表
+  pickListShelves(data) {
+    if (isPackagedDesktop()) {
+      return desktopOrderSessionRequest('pickListShelves', data);
+    }
+    return axiosInstance.post(
+      'nxdepartmentorders/stockerGetShelfListWithDepIds',
+      toPickListForm(data),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+  },
+
+  // 按货架：单个货架下的待出货商品（含层位）
+  pickListShelfGoods(data) {
+    if (isPackagedDesktop()) {
+      return desktopOrderSessionRequest('pickListShelfGoods', data);
+    }
+    return axiosInstance.post(
+      'nxdepartmentorders/stockerGetShelfGoodsDetail',
+      toPickListForm(data),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+  },
+
+  // 拣货单打印成功后，固定规格订单默认完成出库
+  pickListFinishOrder(data) {
+    if (isPackagedDesktop()) {
+      return desktopOrderSessionRequest('pickListFinishOrder', data);
+    }
+    const path = data && data.shelfId
+      ? 'nxdepartmentorders/pickerGiveOrderWeightUpdateShelfStock'
+      : 'nxdepartmentorders/pickerGiveOrderWeight';
+    return axiosInstance.post(path, toPickListForm(data), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
   },
 

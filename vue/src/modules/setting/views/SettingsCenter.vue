@@ -1,31 +1,5 @@
 <template>
   <main class="settings-center" aria-label="设备与设置">
-    <section class="settings-center__summary">
-      <article>
-        <span class="summary-icon is-printer">印</span>
-        <div>
-          <small>默认打印机</small>
-          <strong>{{ printerName || '未选择' }}</strong>
-          <p>{{ printerDetail }}</p>
-        </div>
-      </article>
-      <article>
-        <span class="summary-icon is-mcp">M</span>
-        <div>
-          <small>本机打印服务</small>
-          <strong>{{ mcpStatus.running ? '运行中' : '未运行' }}</strong>
-          <p>{{ mcpDetail }}</p>
-        </div>
-      </article>
-      <article>
-        <span class="summary-icon is-runtime">端</span>
-        <div>
-          <small>运行环境</small>
-          <strong>{{ runtimeLabel }}</strong>
-          <p>{{ platformLabel }}</p>
-        </div>
-      </article>
-    </section>
 
     <section class="settings-center__grid">
       <article class="settings-card">
@@ -52,6 +26,10 @@
             <dd>{{ paperLabel }}</dd>
           </div>
           <div>
+            <dt>运行环境</dt>
+            <dd>{{ runtimeLabel }} · {{ platformLabel }}</dd>
+          </div>
+          <div>
             <dt>配置状态</dt>
             <dd :class="{ warning: printerError }">
               {{ printerError || '已读取桌面打印配置' }}
@@ -60,6 +38,41 @@
         </dl>
         <p class="settings-card__note">
           本页只展示运行状态，不会改变 Epson 纸型、DPI、边距或现有打印模板。
+        </p>
+      </article>
+
+      <article class="settings-card">
+        <header>
+          <div>
+            <span>拣货单打印</span>
+            <h2>A4 拣货打印机</h2>
+          </div>
+          <button type="button" :disabled="a4.loading" @click="loadA4Printer">
+            {{ a4.loading ? '读取中…' : '重新读取' }}
+          </button>
+        </header>
+        <div class="a4-printer-row">
+          <label for="a4-printer-select">A4 打印机</label>
+          <select
+            id="a4-printer-select"
+            v-model="a4.selected"
+            :disabled="a4.saving || a4.printers.length === 0"
+          >
+            <option value="">未配置（使用系统默认打印机）</option>
+            <option v-for="printer in a4.printers" :key="printer.name" :value="printer.name">
+              {{ printer.displayName || printer.name }}
+            </option>
+          </select>
+          <button type="button" :disabled="a4.saving" @click="saveA4Printer">
+            {{ a4.saving ? '保存中…' : '保存' }}
+          </button>
+        </div>
+        <p class="settings-card__note">
+          拣货单走独立的 A4 打印机，与配送单的针式打印机互不影响；两者配置存放在同一个
+          printer-config.json，这里只改写 A4 打印机字段。
+        </p>
+        <p v-if="a4.message" class="settings-card__note" :class="{ warning: a4.error }">
+          {{ a4.message }}
         </p>
       </article>
 
@@ -299,13 +312,22 @@ import {
   setRememberPrinterUserEnabled,
 } from '@/utils/rememberPrinterUser';
 import { writeAppLog } from '@/utils/appLog';
+import {
+  getPickListPrintConfig,
+  savePickListPrintConfig,
+} from '@/modules/print/services/pickListPrint';
 
 const loading = ref(false);
 const printerName = ref('');
 const printerConfig = ref(null);
 const printerError = ref('');
-const mcpStatus = reactive({
-  running: false,
+const a4 = reactive({
+  printers: [],
+  selected: '',
+  loading: false,
+  saving: false,
+  message: '',
+  error: false,
 });
 const autoLoginEnabled = ref(isRememberPrinterUserEnabled());
 const launchAtLogin = reactive({
@@ -536,16 +558,46 @@ const paperLabel = computed(() => {
   const height = printerConfig.value?.heightMm;
   return width && height ? `${width} × ${height} mm` : '由打印驱动决定';
 });
-const printerDetail = computed(() => (
-  printerConfig.value
-    ? `${dpiLabel.value} · ${paperLabel.value}`
-    : (runtimeAvailable.value ? '等待读取系统配置' : '启动桌面客户端后显示')
-));
-const mcpDetail = computed(() => (
-  runtimeAvailable.value
-    ? (mcpStatus.running ? '已启用本机鉴权保护' : '打印主流程不受影响')
-    : '启动桌面客户端后显示'
-));
+async function loadA4PrinterOptions() {
+  const api = window.electronAPI;
+  if (!api?.getSystemPrinters) return;
+  const result = await api.getSystemPrinters();
+  if (result?.success) {
+    a4.printers = result.printers || [];
+  }
+}
+
+async function loadA4Printer() {
+  a4.loading = true;
+  a4.message = '';
+  a4.error = false;
+  try {
+    await loadA4PrinterOptions();
+    const config = await getPickListPrintConfig();
+    a4.selected = config.a4Printer || '';
+  } catch (error) {
+    a4.error = true;
+    a4.message = error?.message || '读取 A4 打印机配置失败';
+  } finally {
+    a4.loading = false;
+  }
+}
+
+async function saveA4Printer() {
+  a4.saving = true;
+  a4.message = '';
+  a4.error = false;
+  try {
+    await savePickListPrintConfig({ a4Printer: a4.selected });
+    a4.message = 'A4 拣货打印机已保存';
+  } catch (error) {
+    a4.error = true;
+    a4.message = error?.message || '保存失败';
+  } finally {
+    a4.saving = false;
+  }
+}
+
 async function loadStatus() {
   const api = window.electronAPI;
   if (!api) {
@@ -557,7 +609,6 @@ async function loadStatus() {
   const requests = await Promise.allSettled([
     api.getDefaultPrinter?.(),
     api.getPrinterSystemConfig?.(),
-    api.getMcpStatus?.(),
   ]);
 
   const defaultPrinter = requests[0];
@@ -575,11 +626,6 @@ async function loadStatus() {
     printerError.value = systemConfig.status === 'rejected'
       ? systemConfig.reason?.message || '系统配置读取失败'
       : systemConfig.value?.error || '未读取到系统配置';
-  }
-
-  const mcp = requests[2];
-  if (mcp.status === 'fulfilled' && mcp.value) {
-    mcpStatus.running = Boolean(mcp.value.running);
   }
 
   loading.value = false;
@@ -753,6 +799,7 @@ onMounted(() => {
   }) || null;
   loadLaunchAtLogin();
   loadAutoReadConfig();
+  loadA4Printer();
   loadStatus();
   loadDispatchSession();
   loadCredentials();
@@ -778,82 +825,10 @@ onUnmounted(() => {
   color: var(--product-text);
 }
 
-.settings-center__summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.settings-center__summary article {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
-  padding: 15px;
-  border: 1px solid var(--product-border);
-  border-radius: var(--product-radius-md);
-  background: rgba(255, 255, 255, .96);
-  box-shadow: var(--product-shadow);
-}
-
-.summary-icon {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  flex: none;
-  place-items: center;
-  border-radius: 12px;
-  color: var(--product-primary);
-  background: var(--product-primary-soft);
-  font-size: 16px;
-  font-weight: 900;
-}
-
-.summary-icon.is-mcp {
-  color: #69519f;
-  background: #f0ebfb;
-}
-
-.summary-icon.is-runtime {
-  color: var(--product-blue);
-  background: var(--product-blue-soft);
-}
-
-.settings-center__summary article div {
-  min-width: 0;
-}
-
-.settings-center__summary small,
-.settings-center__summary strong,
-.settings-center__summary p {
-  display: block;
-  overflow: hidden;
-  margin: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.settings-center__summary small {
-  color: var(--product-text-muted);
-  font-size: 12px;
-}
-
-.settings-center__summary strong {
-  margin-top: 4px;
-  font-size: 16px;
-}
-
-.settings-center__summary p {
-  margin-top: 4px;
-  color: var(--product-text-secondary);
-  font-size: 12px;
-}
-
 .settings-center__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
-  margin-top: 14px;
 }
 
 .settings-card {
@@ -945,6 +920,36 @@ onUnmounted(() => {
 
 .settings-card dd.warning {
   color: var(--product-warning);
+}
+
+.a4-printer-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px 4px;
+}
+.a4-printer-row label {
+  font-size: 13px;
+  color: var(--product-text-secondary);
+  flex: none;
+}
+.a4-printer-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--product-border);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+}
+.a4-printer-row button {
+  flex: none;
+  padding: 6px 14px;
+  border: 1px solid var(--product-border);
+  border-radius: 6px;
+  background: var(--product-surface-soft);
+  font-size: 13px;
+  cursor: pointer;
 }
 
 .settings-card__note,

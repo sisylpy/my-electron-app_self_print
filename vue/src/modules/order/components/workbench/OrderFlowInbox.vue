@@ -2,37 +2,6 @@
   <section class="order-flow" aria-label="进行中订单工作台">
     <Teleport defer to="#product-header-context">
       <div class="order-flow__header-tools" aria-label="客户操作">
-        <div :class="['order-flow__search-control', { 'is-open': searchOpen }]">
-          <button
-            v-if="!searchOpen"
-            type="button"
-            class="order-flow__search-trigger"
-            title="搜索客户"
-            aria-label="搜索客户"
-            @click="openSearch"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-              <circle cx="10.8" cy="10.8" r="6.8" />
-              <path d="m16 16 4 4" />
-            </svg>
-          </button>
-          <label v-else class="order-flow__search">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-              <circle cx="10.8" cy="10.8" r="6.8" />
-              <path d="m16 16 4 4" />
-            </svg>
-            <input
-              ref="searchInput"
-              v-model="query"
-              type="search"
-              placeholder="搜索客户"
-              aria-label="搜索客户"
-              @keydown.enter.prevent="submitSearch"
-              @keydown.esc.prevent="closeSearch"
-            >
-            <button type="button" title="关闭搜索" aria-label="关闭搜索" @click="closeSearch">×</button>
-          </label>
-        </div>
         <div class="order-flow__refresh-group">
           <button
             type="button"
@@ -77,6 +46,21 @@
       </div>
     </Teleport>
     <aside class="order-flow__queue">
+      <label class="order-flow__queue-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="10.8" cy="10.8" r="6.8" />
+          <path d="m16 16 4 4" />
+        </svg>
+        <input
+          v-model="query"
+          type="search"
+          placeholder="搜索客户"
+          aria-label="搜索客户"
+          @keydown.enter.prevent="submitSearch"
+          @keydown.esc.prevent="closeSearch"
+        >
+        <button v-if="query" type="button" title="清空搜索" aria-label="清空搜索" @click="closeSearch">×</button>
+      </label>
       <div v-if="activeListError" class="order-flow__notice is-error">
         <span>{{ activeListError }}</span>
         <button type="button" @click="$emit('refresh-list')">重新读取</button>
@@ -102,6 +86,7 @@
               ({{ stats(customer).needsReview }}个待处理)
             </span>
           </span>
+          <span class="order-flow__queue-wechat">{{ customerWechatName(customer) }}</span>
           <span v-if="!smartMode" class="order-flow__queue-metrics">
             <span>商品: {{ stats(customer).total }}个</span>
             <span>金额: {{ stats(customer).subtotalText }}元</span>
@@ -167,6 +152,31 @@
               </svg>
               {{ smartMode ? '返回订单' : '订单提醒' }}
             </button>
+            <span id="order-flow-print-actions" aria-label="批量打印操作"></span>
+            <div class="order-flow__pick-print">
+              <div class="pick-list-mode is-inline" role="group" aria-label="拣货单打印模式">
+                <button
+                  type="button"
+                  :class="{ 'is-active': pickMode === 'goods' }"
+                  :aria-pressed="pickMode === 'goods'"
+                  @click="setPickMode('goods')"
+                >按商品</button>
+                <button
+                  type="button"
+                  :class="{ 'is-active': pickMode === 'shelf' }"
+                  :aria-pressed="pickMode === 'shelf'"
+                  @click="setPickMode('shelf')"
+                >按货架</button>
+              </div>
+              <button
+                type="button"
+                class="is-primary"
+                :disabled="pickPrinting"
+                @click="handlePrintPickList"
+              >
+                {{ pickPrinting ? '打印中…' : '打印拣货单' }}
+              </button>
+            </div>
           </div>
         </header>
 
@@ -257,7 +267,8 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useStore } from 'vuex';
 import TodayOrders from '@/components/TodayOrders.vue';
 import TaskOrderWorkspace from '../TaskOrderWorkspace.vue';
 import SmartReplenishmentComparison from './SmartReplenishmentComparison.vue';
@@ -269,6 +280,68 @@ import {
 } from '../../services/orderWorkbenchStage';
 import iconRefresh from '@/assets/order-actions/refresh.png';
 import iconAddOrder from '@/assets/order-actions/add_order.png';
+import {
+  getPickListPrintConfig,
+  printCustomerPickList,
+  savePickListPrintConfig,
+} from '@/modules/print/services/pickListPrint';
+
+const store = useStore();
+const disUser = computed(() => store.state.disUser);
+const pickMode = ref('goods');
+const pickPrinting = ref(false);
+
+async function setPickMode(mode) {
+  pickMode.value = mode;
+  try {
+    await savePickListPrintConfig({ pickListMode: mode });
+  } catch (error) {
+    // 记住模式失败不影响本次打印
+    console.warn('[拣货单] 保存打印模式失败:', error);
+  }
+}
+
+async function handlePrintPickList() {
+  if (pickPrinting.value) return;
+  const customer = props.selectedCustomer;
+  const depId = customerId(customer);
+  const disId = props.distributerId || disUser.value?.nxDiuDistributerId;
+  if (!depId || !disId) {
+    window.alert('未获取到客户或配送商信息，请重新进入客户');
+    return;
+  }
+  pickPrinting.value = true;
+  try {
+    const result = await printCustomerPickList({
+      nxDepIds: String(depId),
+      gbDepIds: '0',
+      nxDisId: disId,
+      supplierId: '',
+      customerName: customerName(customer),
+      mode: pickMode.value,
+      pickerUserId: disUser.value?.nxDistributerUserId,
+    });
+    const finish = result?.finish;
+    window.alert(
+      `拣货单已发送到：${result?.printerName || 'A4 打印机'}\n`
+      + (finish?.total ? `固定规格自动出库 ${finish.total - (finish.failed || 0)}/${finish.total} 项` : '无可自动出库的固定规格商品')
+    );
+    emit('refresh-detail');
+  } catch (error) {
+    window.alert(error?.message || '打印失败');
+  } finally {
+    pickPrinting.value = false;
+  }
+}
+
+onMounted(async () => {
+  try {
+    const config = await getPickListPrintConfig();
+    pickMode.value = config.pickListMode || 'goods';
+  } catch (error) {
+    console.warn('[拣货单] 读取打印模式失败:', error);
+  }
+});
 
 const props = defineProps({
   customers: { type: Array, default: () => [] },
@@ -302,14 +375,11 @@ const emit = defineEmits([
 ]);
 
 const query = ref('');
-const searchOpen = ref(false);
-const searchInput = ref(null);
 const reminderSummary = ref(null);
 
 watch(() => props.smartMode, () => {
   reminderSummary.value = null;
   query.value = '';
-  searchOpen.value = false;
 });
 
 function stats(customer) {
@@ -325,6 +395,12 @@ function stats(customer) {
     subtotalText: '0.0',
     allDone: false,
   };
+}
+
+// 与客户中心 customerWechatName 口径一致：显示本客户绑定的微信名称，未绑定时给出明确状态。
+function customerWechatName(customer) {
+  const name = String(customer?.nxDepartmentWechatDisplayName || '').trim();
+  return name ? `微信：${name}` : '微信：未绑定';
 }
 
 // 普通模式展示未完成订单客户；订单提醒覆盖有实际订单或有 A 级提醒基线的客户。
@@ -381,20 +457,13 @@ function isSelected(customer) {
   return String(customerId(customer)) === String(customerId(props.selectedCustomer));
 }
 
-async function openSearch() {
-  searchOpen.value = true;
-  await nextTick();
-  searchInput.value?.focus();
-}
-
 function closeSearch() {
   query.value = '';
-  searchOpen.value = false;
 }
 
 function selectCustomer(customer) {
   emit('select-customer', customer);
-  if (searchOpen.value) closeSearch();
+  closeSearch();
 }
 
 function submitSearch() {
@@ -429,11 +498,53 @@ function handleTaskChanged(change) {
 .order-flow__queue {
   display: grid;
   min-height: 0;
-  grid-template-rows: minmax(0, 1fr);
-  padding: 4px 11px 11px;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 4px 0 11px;
   border-right: 1px solid var(--product-border);
   background: #fff;
 }
+.order-flow__queue-search {
+  display: flex;
+  box-sizing: border-box;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  margin: 0 10px 8px;
+  padding: 0 6px 0 9px;
+  border: 1px solid var(--product-border);
+  border-radius: 6px;
+  background: #fff;
+}
+.order-flow__queue-search:focus-within {
+  border-color: #9fc9b4;
+  box-shadow: 0 0 0 3px rgba(24, 132, 84, .08);
+}
+.order-flow__queue-search > svg { width: 14px; height: 14px; flex: none; color: var(--product-primary-strong); }
+.order-flow__queue-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 11px;
+}
+.order-flow__queue-search input::-webkit-search-cancel-button { display: none; }
+.order-flow__queue-search button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--product-text-muted);
+  background: transparent;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.order-flow__queue-search button:hover { color: var(--product-text); background: #edf4f0; }
 
 .order-flow__detail-header {
   display: flex;
@@ -450,48 +561,10 @@ function handleTaskChanged(change) {
   gap: 8px;
   order: -1;
 }
-.order-flow__search-control {
-  width: 34px;
-  height: 35px;
-  flex: none;
-  overflow: hidden;
-  transition: width .22s cubic-bezier(.2, .8, .2, 1);
-}
-.order-flow__search-control.is-open { width: 176px; }
-.order-flow__search-trigger {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--product-border);
-  border-radius: 6px;
-  color: var(--product-text-secondary);
-  background: #fff;
-  cursor: pointer;
-  transition: border-color .16s ease, color .16s ease, background .16s ease;
-}
-.order-flow__search-trigger:hover {
-  border-color: #a9c9b9;
-  color: var(--product-primary-strong);
-  background: #f5fbf8;
-}
-.order-flow__search-trigger svg { width: 16px; height: 16px; }
 .order-flow__refresh-group { display: flex; flex: none; align-items: center; gap: 8px; }
 .order-flow__refresh {
-  position: relative;
-  display: grid;
-  width: 34px;
-  height: 34px;
-  flex: none;
-  place-items: center;
-  padding: 0;
-  border: 1px solid #a9d9c3;
-  border-radius: 9px;
-  color: #16815b;
-  background: linear-gradient(145deg, #fff, #eefaf3);
-  cursor: pointer;
-  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  /* 刷新按钮按要求隐藏（保留 DOM 以免影响异步进度逻辑） */
+  display: none;
 }
 .order-flow__refresh svg { width: 18px; height: 18px; }
 .order-flow__refresh:hover { transform: translateY(-1px); border-color: #4cb88a; box-shadow: 0 4px 12px rgba(16, 139, 91, .18); }
@@ -540,53 +613,6 @@ function handleTaskChanged(change) {
   font-weight: 900;
   cursor: pointer;
 }
-.order-flow__search {
-  display: flex;
-  box-sizing: border-box;
-  width: 176px;
-  height: 35px;
-  align-items: center;
-  gap: 6px;
-  padding: 0 6px 0 9px;
-  border: 1px solid #9fc9b4;
-  border-radius: 6px;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(24, 132, 84, .08);
-  animation: order-flow-search-enter .18s ease both;
-}
-
-.order-flow__search > svg {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  color: var(--product-primary-strong);
-}
-
-.order-flow__search input {
-  min-width: 0;
-  flex: 1;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  font-size: 11px;
-}
-.order-flow__search input::-webkit-search-cancel-button { display: none; }
-.order-flow__search button {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  flex: none;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  color: var(--product-text-muted);
-  background: transparent;
-  font-size: 17px;
-  line-height: 1;
-  cursor: pointer;
-}
-.order-flow__search button:hover { color: var(--product-text); background: #edf4f0; }
 
 .order-flow__wechat-scan {
   display: inline-flex;
@@ -595,15 +621,14 @@ function handleTaskChanged(change) {
   align-items: center;
   gap: 6px;
   padding: 0 11px;
-  border: 1px solid #b9dacb;
+  border: 1px solid var(--product-primary);
   border-radius: 999px;
-  color: #116a45;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(14, 34, 26, .06);
+  color: #fff;
+  background: var(--product-primary);
   cursor: pointer;
   transition: border-color .16s ease, background .16s ease, transform .16s ease;
 }
-.order-flow__wechat-scan:hover { border-color: #178454; background: #f3fbf7; transform: translateY(-1px); }
+.order-flow__wechat-scan:hover { border-color: var(--product-primary-strong); background: var(--product-primary-strong); transform: translateY(-1px); }
 .order-flow__wechat-scan:disabled { cursor: wait; opacity: .65; transform: none; }
 .order-flow__wechat-scan svg { width: 15px; height: 15px; flex: none; }
 .order-flow__wechat-scan strong { font-size: 11px; white-space: nowrap; }
@@ -614,16 +639,11 @@ function handleTaskChanged(change) {
   place-items: center;
   padding: 0 4px;
   border-radius: 999px;
-  color: #fff;
-  background: var(--product-primary);
+  color: var(--product-primary);
+  background: #fff;
   font-size: 9px;
   font-style: normal;
   font-weight: 900;
-}
-
-@keyframes order-flow-search-enter {
-  from { opacity: 0; transform: translateX(-5px); }
-  to { opacity: 1; transform: translateX(0); }
 }
 
 .order-flow__list { min-height: 0; overflow: auto; }
@@ -634,7 +654,7 @@ function handleTaskChanged(change) {
   align-items: stretch;
   gap: 6px;
   margin-bottom: 5px;
-  padding: 11px 9px;
+  padding: 11px 10px 11px 14px;
   border: 1px solid transparent;
   border-radius: 6px;
   text-align: left;
@@ -645,6 +665,15 @@ function handleTaskChanged(change) {
 .order-flow__list > button.is-active { border-color: #b9dfca; background: #eaf7f0; }
 .order-flow__queue-head { display: flex; min-width: 0; align-items: center; gap: 4px; }
 .order-flow__queue-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.order-flow__queue-wechat {
+  overflow: hidden;
+  margin-top: -3px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--product-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
 .order-flow__pending { flex: none; color: #cb3b3b; font-size: 10px; }
 .order-flow__queue-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; color: var(--product-text-secondary); font-size: 11px; }
 .order-flow__queue-metrics > span { white-space: nowrap; }
@@ -719,6 +748,23 @@ function handleTaskChanged(change) {
 .order-flow__detail-actions .is-primary,
 .order-flow__detail-state button,
 .order-flow__stage-heading button { border-color: var(--product-primary); color: #fff; background: var(--product-primary); }
+
+/* 单客户打印拣货单：模式切换 + 打印按钮 */
+.order-flow__pick-print { display: flex; flex: none; align-items: center; gap: 6px; }
+.pick-list-mode.is-inline button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #cfdad5;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pick-list-mode.is-inline button.is-active {
+  border-color: var(--product-primary);
+  background: #eaf6f0;
+  color: var(--product-primary-strong);
+}
 
 .order-flow__stage-page {
   min-height: 0;

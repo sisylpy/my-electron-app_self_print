@@ -25,6 +25,12 @@ const ALLOWED_METHODS = [
   'manualOrderBefore',
   'pasteSearchGoods',
   'phoneGetToFillDepOrders',
+  // 拣货单（A4 打印）：按商品 / 按货架两类数据接口 + 打印后固定规格出库
+  'pickListCategories',
+  'pickListCategoryGoods',
+  'pickListShelves',
+  'pickListShelfGoods',
+  'pickListFinishOrder',
   'queryDisGoodsByQuickSearchWithDepId',
   'recognizeOrderFromExcel',
   'recognizeOrderOCR',

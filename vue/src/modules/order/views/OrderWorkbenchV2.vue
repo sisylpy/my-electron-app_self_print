@@ -1,6 +1,14 @@
 <template>
   <main class="order-workbench">
     <Teleport v-if="activeView === 'overview'" defer to="#product-header-context">
+      <button
+        type="button"
+        class="order-workbench__pick-print"
+        :disabled="pickList.busy"
+        @click="openBatchPickList"
+      >
+        {{ pickList.busy ? '打印中…' : '批量打印拣货单' }}
+      </button>
       <nav class="order-workbench__header-stages" aria-label="订单阶段">
         <button
           v-for="stage in stageOptions"
@@ -241,6 +249,88 @@
         </div>
       </Transition>
     </Teleport>
+
+    <!-- 批量打印拣货单：选择客户 + 打印模式 -->
+    <div
+      v-if="pickList.showDialog"
+      class="pick-list-dialog-mask"
+      @click.self="pickList.showDialog = false"
+    >
+      <div class="pick-list-dialog" role="dialog" aria-modal="true" aria-label="批量打印拣货单">
+        <header class="pick-list-dialog__header">
+          <h3>批量打印拣货单</h3>
+          <button
+            type="button"
+            class="pick-list-dialog__close"
+            aria-label="关闭"
+            @click="pickList.showDialog = false"
+          >×</button>
+        </header>
+
+        <div class="pick-list-dialog__body">
+          <div class="pick-list-field">
+            <span class="pick-list-field__label">打印模式</span>
+            <div class="pick-list-mode">
+              <button
+                type="button"
+                :class="{ 'is-active': pickList.mode === 'goods' }"
+                @click="pickList.mode = 'goods'"
+              >按商品</button>
+              <button
+                type="button"
+                :class="{ 'is-active': pickList.mode === 'shelf' }"
+                @click="pickList.mode = 'shelf'"
+              >按货架</button>
+            </div>
+          </div>
+
+          <div class="pick-list-field">
+            <span class="pick-list-field__label">选择客户</span>
+            <div class="pick-list-customers__toolbar">
+              <label>
+                <input
+                  type="checkbox"
+                  :checked="allPickCustomersSelected"
+                  @change="toggleAllPickCustomers($event.target.checked)"
+                />
+                全选
+              </label>
+              <span class="pick-list-customers__count">已选 {{ pickList.selectedIds.length }} 个</span>
+            </div>
+            <ul class="pick-list-customers__list">
+              <li v-for="customer in pickList.customers" :key="pickCustomerKey(customer)">
+                <label>
+                  <input
+                    type="checkbox"
+                    :value="String(pickCustomerId(customer))"
+                    v-model="pickList.selectedIds"
+                  />
+                  <span>{{ pickCustomerName(customer) }}</span>
+                </label>
+              </li>
+            </ul>
+            <p v-if="pickList.customers.length === 0" class="pick-list-empty">暂无可选客户</p>
+          </div>
+        </div>
+
+        <footer class="pick-list-dialog__footer">
+          <button type="button" class="is-secondary" @click="pickList.showDialog = false">取消</button>
+          <button
+            type="button"
+            class="is-primary"
+            :disabled="pickList.busy || pickList.selectedIds.length === 0"
+            @click="confirmBatchPickList"
+          >
+            {{ pickList.busy ? '打印中…' : '打印' }}
+          </button>
+        </footer>
+        <p
+          v-if="pickList.message"
+          class="pick-list-dialog__message"
+          :class="{ 'is-error': pickList.error }"
+        >{{ pickList.message }}</p>
+      </div>
+    </div>
   </main>
 </template>
 
@@ -254,6 +344,11 @@ import TodayOrders from '@/components/TodayOrders.vue';
 import { useOrderCustomerContext } from '../composables/useOrderCustomerContext';
 import { useTodayOrderInbox } from '../composables/useTodayOrderInbox';
 import orderApi from '../services/orderApi';
+import {
+  getPickListPrintConfig,
+  printBatchPickList,
+  savePickListPrintConfig,
+} from '@/modules/print/services/pickListPrint';
 import { customerVisibleInStage } from '../services/orderWorkbenchStage';
 import { blockingCustomerDirectoryError } from '../services/smartReplenishmentComparison';
 import {
@@ -559,6 +654,98 @@ const stageOptions = computed(() => [
     count: overview.totals.readyToPrint,
   },
 ]);
+
+/* ==================== 批量打印拣货单（A4） ==================== */
+const pickList = reactive({
+  showDialog: false,
+  busy: false,
+  mode: 'goods',
+  customers: [],
+  selectedIds: [],
+  message: '',
+  error: false,
+});
+
+function pickCustomerId(customer) {
+  return customer?.nxDepartmentId ?? customer?.departmentId ?? null;
+}
+
+function pickCustomerName(customer) {
+  return customer?.nxDepartmentAttrName
+    || customer?.nxDepartmentName
+    || customer?.depName
+    || '未命名客户';
+}
+
+function pickCustomerKey(customer) {
+  return String(pickCustomerId(customer) ?? pickCustomerName(customer));
+}
+
+const allPickCustomersSelected = computed(() => (
+  pickList.customers.length > 0
+  && pickList.selectedIds.length === pickList.customers.length
+));
+
+function toggleAllPickCustomers(checked) {
+  pickList.selectedIds = checked
+    ? pickList.customers.map((c) => String(pickCustomerId(c))).filter((id) => id && id !== 'null')
+    : [];
+}
+
+async function openBatchPickList() {
+  pickList.message = '';
+  pickList.error = false;
+  const config = await getPickListPrintConfig();
+  pickList.mode = config.pickListMode || 'goods';
+  pickList.customers = overview.customers || customerContext.customers.value || [];
+  pickList.selectedIds = [];
+  pickList.showDialog = true;
+}
+
+async function confirmBatchPickList() {
+  if (pickList.busy) return;
+  const disId = disUser.value?.nxDiuDistributerId;
+  const userId = disUser.value?.nxDistributerUserId;
+  if (!disId) {
+    pickList.error = true;
+    pickList.message = '未获取到配送商身份，请重新登录';
+    return;
+  }
+  const customers = pickList.customers
+    .filter((c) => pickList.selectedIds.includes(String(pickCustomerId(c))))
+    .map((c) => ({ nxDepId: pickCustomerId(c), gbDepId: 0, name: pickCustomerName(c) }));
+  if (customers.length === 0) {
+    pickList.error = true;
+    pickList.message = '请至少选择一个客户';
+    return;
+  }
+  pickList.busy = true;
+  pickList.message = '正在生成拣货单…';
+  pickList.error = false;
+  try {
+    // 记住本次模式，单客户打印入口复用同一个偏好
+    await savePickListPrintConfig({ pickListMode: pickList.mode });
+    const result = await printBatchPickList({
+      customers,
+      nxDisId: disId,
+      mode: pickList.mode,
+      pickerUserId: userId,
+    });
+    pickList.showDialog = false;
+    const finish = result?.finish;
+    window.alert(
+      `拣货单已发送到：${result?.printerName || 'A4 打印机'}\n`
+      + `打印模式：${pickList.mode === 'shelf' ? '按货架' : '按商品'}\n`
+      + (finish?.total ? `固定规格自动出库 ${finish.total - (finish.failed || 0)}/${finish.total} 项` : '无可自动出库的固定规格商品')
+    );
+    await refreshOverview({ selectFirst: false });
+  } catch (error) {
+    pickList.error = true;
+    pickList.message = error?.message || '打印失败';
+  } finally {
+    pickList.busy = false;
+  }
+}
 
 watch(
   () => disUser.value?.nxDiuDistributerId,
@@ -3036,6 +3223,138 @@ async function returnToOverview() {
 }
 .order-workbench__header-stages::-webkit-scrollbar { display: none; }
 .order-workbench__header-stages > button:first-child { margin-left: auto; }
+
+.order-workbench__pick-print {
+  flex: none;
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--product-primary);
+  border-radius: 9px;
+  background: var(--product-primary);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+.order-workbench__pick-print:disabled { opacity: .65; cursor: wait; }
+
+/* 批量打印拣货单弹窗 */
+.pick-list-dialog-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .35);
+}
+.pick-list-dialog {
+  display: flex;
+  width: 420px;
+  max-width: 92vw;
+  max-height: 82vh;
+  flex-direction: column;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, .2);
+}
+.pick-list-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e6ece9;
+}
+.pick-list-dialog__header h3 { margin: 0; font-size: 16px; }
+.pick-list-dialog__close {
+  border: none;
+  background: none;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  color: #8a9691;
+}
+.pick-list-dialog__body { padding: 14px 18px; overflow-y: auto; }
+.pick-list-field { margin-bottom: 14px; }
+.pick-list-field__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #5b6b65;
+}
+.pick-list-mode { display: flex; gap: 8px; }
+.pick-list-mode button {
+  min-height: 30px;
+  padding: 0 14px;
+  border: 1px solid #cfdad5;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pick-list-mode button.is-active {
+  border-color: var(--product-primary);
+  background: #eaf6f0;
+  color: var(--product-primary-strong);
+}
+.pick-list-customers__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.pick-list-customers__count { color: #6b7a74; }
+.pick-list-customers__list {
+  max-height: 260px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 1px solid #e6ece9;
+  border-radius: 8px;
+  list-style: none;
+}
+.pick-list-customers__list li { border-bottom: 1px solid #f1f5f3; }
+.pick-list-customers__list li:last-child { border-bottom: none; }
+.pick-list-customers__list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pick-list-empty { margin: 8px 0 0; font-size: 13px; color: #8a9691; }
+.pick-list-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid #e6ece9;
+}
+.pick-list-dialog__footer button {
+  min-height: 32px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pick-list-dialog__footer .is-secondary {
+  border: 1px solid #cfdad5;
+  background: #fff;
+}
+.pick-list-dialog__footer .is-primary {
+  border: 1px solid var(--product-primary);
+  background: var(--product-primary);
+  color: #fff;
+}
+.pick-list-dialog__footer .is-primary:disabled { opacity: .6; cursor: not-allowed; }
+.pick-list-dialog__message {
+  margin: 0;
+  padding: 0 18px 14px;
+  font-size: 12px;
+  color: #5b6b65;
+}
+.pick-list-dialog__message.is-error { color: #b3353d; }
 
 .order-workbench__header-stages > button {
   display: flex;

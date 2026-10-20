@@ -903,6 +903,31 @@ function setupIpcHandlers() {
     if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理读取订单' };
     return getOrderSessionGateway().orderWorkbenchOverview(disId);
   });
+  ipcMain.handle('order-session-pick-list-categories', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理读取订单' };
+    return getOrderSessionGateway().pickListCategories(input);
+  });
+  ipcMain.handle('order-session-pick-list-category-goods', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理读取订单' };
+    return getOrderSessionGateway().pickListCategoryGoods(input);
+  });
+  ipcMain.handle('order-session-pick-list-shelves', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理读取订单' };
+    return getOrderSessionGateway().pickListShelves(input);
+  });
+  ipcMain.handle('order-session-pick-list-shelf-goods', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理读取订单' };
+    return getOrderSessionGateway().pickListShelfGoods(input);
+  });
+  ipcMain.handle('order-session-pick-list-finish-order', async (event, input) => {
+    assertTrustedRendererEvent(event);
+    if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理写入订单' };
+    return getOrderSessionGateway().pickListFinishOrder(input);
+  });
   ipcMain.handle('order-session-ocr-task-status', async (event, taskId) => {
     assertTrustedRendererEvent(event);
     if (isDev) return { ok: false, status: 403, message: '开发态请使用同源代理读取订单' };
@@ -1725,6 +1750,46 @@ function setupIpcHandlers() {
       };
     }
   });
+
+  // A4 拣货单打印：使用独立配置的 A4 打印机 + 固定 A4 纸型，与配送单链路互不影响
+  ipcMain.handle('print-pick-list-a4', async (event, htmlContent) => {
+    assertTrustedRendererEvent(event);
+    assertPrintHtml(htmlContent);
+    const { a4Printer } = getPickListPrintConfig();
+    const pageSize = { width: 210000, height: 297000 }; // A4 纵向，单位微米
+    appLogger.append('info', 'pick-list-print', 'submit-document', {
+      printerName: a4Printer || '',
+      pageSize,
+    });
+    try {
+      const result = await runTrackedPrintJob(
+        '拣货单打印',
+        () => printContentToWindowWithCallback(
+          htmlContent,
+          -1,
+          -1,
+          'pick-list-a4',
+          0,
+          1,
+          false,
+          true,
+          [],
+          { deviceName: a4Printer, pageSize }
+        )
+      );
+      return {
+        ...result,
+        printerName: result?.printerName || a4Printer || '',
+        error: '',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        printerName: a4Printer || '',
+        error: serializePrintError(error || '打印失败')
+      };
+    }
+  });
 }
 
 async function createWindow() {
@@ -2100,6 +2165,67 @@ ipcMain.handle('get-default-printer', async (event) => {
   } catch (error) {
     console.error('[打印机] 读取默认打印机配置失败:', error);
     return { success: false, error: error.message, printerName: null };
+  }
+});
+
+/**
+ * 拣货单打印配置：与配送单打印机共用同一个 printer-config.json，
+ * 只读写 a4Printer / pickListMode 两个字段，不触碰 defaultPrinter。
+ */
+function readPrinterConfigFile() {
+  try {
+    const configPath = path.join(app.getPath('userData'), 'printer-config.json');
+    if (!fs.existsSync(configPath)) return {};
+    const parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (error) {
+    console.error('[打印] 读取打印机配置文件失败:', error);
+    return {};
+  }
+}
+
+function getPickListPrintConfig() {
+  const config = readPrinterConfigFile();
+  return {
+    a4Printer: typeof config.a4Printer === 'string' ? config.a4Printer : '',
+    pickListMode: config.pickListMode === 'shelf' ? 'shelf' : 'goods',
+  };
+}
+
+ipcMain.handle('get-pick-list-print-config', async (event) => {
+  try {
+    assertTrustedRendererEvent(event);
+    return { success: true, config: getPickListPrintConfig() };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('save-pick-list-print-config', async (event, next) => {
+  try {
+    assertTrustedRendererEvent(event);
+    if (!next || typeof next !== 'object' || Array.isArray(next)) {
+      throw new Error('拣货单打印配置无效');
+    }
+    const configPath = path.join(app.getPath('userData'), 'printer-config.json');
+    let config = {};
+    if (fs.existsSync(configPath)) {
+      const parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      config = parsed && typeof parsed === 'object' ? parsed : {};
+    }
+    if (typeof next.a4Printer === 'string') {
+      config.a4Printer = next.a4Printer.slice(0, 256);
+    }
+    if (next.pickListMode === 'shelf' || next.pickListMode === 'goods') {
+      config.pickListMode = next.pickListMode;
+    }
+    config.updatedAt = new Date().toISOString();
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+    console.log('[打印] 保存拣货单打印配置:', { a4Printer: config.a4Printer, mode: config.pickListMode });
+    return { success: true, config: getPickListPrintConfig() };
+  } catch (error) {
+    console.error('[打印] 保存拣货单打印配置失败:', error);
+    return { success: false, error: error.message };
   }
 });
 

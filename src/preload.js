@@ -90,6 +90,11 @@ const electronAPI = Object.freeze({
   getPrinterSystemConfig: () => ipcRenderer.invoke('get-printer-system-config'),
   setPrinterResolution: (hDpi, vDpi) =>
     ipcRenderer.invoke('set-printer-resolution', hDpi, vDpi),
+  // 拣货单（A4）打印：独立打印机配置 + A4 打印通道
+  getPickListPrintConfig: () => ipcRenderer.invoke('get-pick-list-print-config'),
+  savePickListPrintConfig: (config) =>
+    ipcRenderer.invoke('save-pick-list-print-config', config),
+  printPickListA4: (htmlContent) => ipcRenderer.invoke('print-pick-list-a4', htmlContent),
   onPrintJobStatus: (callback) => listen('print-job-status', callback),
 
   // 文件能力仍按现有业务用例逐项登记；主进程负责来源、参数和路径校验。
@@ -259,6 +264,13 @@ const electronAPI = Object.freeze({
     orderWorkbenchOverview: (disId) => ipcRenderer.invoke('order-session-workbench-overview', disId),
     ocrTaskStatus: (taskId) => ipcRenderer.invoke('order-session-ocr-task-status', taskId),
     phoneOrders: (input) => ipcRenderer.invoke('order-session-phone-orders', input),
+    pickListCategories: (input) => ipcRenderer.invoke('order-session-pick-list-categories', input),
+    pickListCategoryGoods: (input) =>
+      ipcRenderer.invoke('order-session-pick-list-category-goods', input),
+    pickListShelves: (input) => ipcRenderer.invoke('order-session-pick-list-shelves', input),
+    pickListShelfGoods: (input) => ipcRenderer.invoke('order-session-pick-list-shelf-goods', input),
+    pickListFinishOrder: (input) =>
+      ipcRenderer.invoke('order-session-pick-list-finish-order', input),
     recognizeOrderQwen: (input) => ipcRenderer.invoke('order-session-recognize-qwen', input),
     recognizeOrderAsync: (input) => ipcRenderer.invoke('order-session-recognize-async', input),
     refreshSession: () => ipcRenderer.invoke('order-session-refresh'),

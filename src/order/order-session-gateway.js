@@ -418,6 +418,103 @@ function createOrderSessionGateway({
     return requestOrder('POST', 'nxdepartmentorders/phoneGetToFillDepOrders', form);
   }
 
+  const PICKLIST_ID_LIST = /^-?\d+(,-?\d+)*$/;
+
+  /**
+   * 拣货单公共校验：配送商身份必须一致，客户 ID 列表只接受逗号分隔的数字。
+   * 返回 { error } 或 { form } 供各拣货接口复用。
+   */
+  function pickListScope(input) {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      return { error: failure(400, null, '拣货单查询参数无效') };
+    }
+    const nxDisId = positiveId(input.nxDisId);
+    if (!nxDisId) return { error: failure(400, null, '配送商 ID 无效') };
+    if (authenticatedDisId && nxDisId !== authenticatedDisId) {
+      return { error: failure(403, null, '登录身份与配送商不一致') };
+    }
+    const nxDepIds = typeof input.nxDepIds === 'string' && input.nxDepIds ? input.nxDepIds : '0';
+    const gbDepIds = typeof input.gbDepIds === 'string' && input.gbDepIds ? input.gbDepIds : '0';
+    if (!PICKLIST_ID_LIST.test(nxDepIds) || !PICKLIST_ID_LIST.test(gbDepIds)) {
+      return { error: failure(400, null, '客户 ID 列表无效') };
+    }
+    const form = new URLSearchParams({
+      nxDepIds,
+      gbDepIds,
+      nxDisId: String(nxDisId),
+    });
+    return { form };
+  }
+
+  // 按商品：商品大类列表
+  function pickListCategories(input) {
+    const scope = pickListScope(input);
+    if (scope.error) return Promise.resolve(scope.error);
+    const supplierId = Number(input.supplierId);
+    if (Number.isSafeInteger(supplierId) && supplierId > 0) {
+      scope.form.set('supplierId', String(supplierId));
+    }
+    return requestOrder('POST', 'nxdepartmentorders/stockerGetCategoryListWithDepIds', scope.form);
+  }
+
+  // 按商品：单个大类下的待出货商品
+  function pickListCategoryGoods(input) {
+    const scope = pickListScope(input);
+    if (scope.error) return Promise.resolve(scope.error);
+    const categoryId = positiveId(input.categoryId);
+    if (!categoryId) return Promise.resolve(failure(400, null, '商品分类 ID 无效'));
+    scope.form.set('categoryId', String(categoryId));
+    const supplierId = Number(input.supplierId);
+    if (Number.isSafeInteger(supplierId) && supplierId > 0) {
+      scope.form.set('supplierId', String(supplierId));
+    }
+    return requestOrder('POST', 'nxdepartmentorders/stockerGetCategoryGoodsDetail', scope.form);
+  }
+
+  // 按货架：货架列表
+  function pickListShelves(input) {
+    const scope = pickListScope(input);
+    if (scope.error) return Promise.resolve(scope.error);
+    return requestOrder('POST', 'nxdepartmentorders/stockerGetShelfListWithDepIds', scope.form);
+  }
+
+  // 按货架：单个货架下的待出货商品（含层位）
+  function pickListShelfGoods(input) {
+    const scope = pickListScope(input);
+    if (scope.error) return Promise.resolve(scope.error);
+    const shelfId = positiveId(input.shelfId);
+    if (!shelfId) return Promise.resolve(failure(400, null, '货架 ID 无效'));
+    scope.form.set('shelfId', String(shelfId));
+    return requestOrder('POST', 'nxdepartmentorders/stockerGetShelfGoodsDetail', scope.form);
+  }
+
+  /**
+   * 拣货单打印后对固定规格商品默认出库。
+   * 带 shelfId 时走货架库存出库接口，否则走普通出库接口。
+   */
+  function pickListFinishOrder(input) {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      return Promise.resolve(failure(400, null, '出库参数无效'));
+    }
+    const orderId = positiveId(input.orderId);
+    const pickerUserId = positiveId(input.pickerUserId);
+    const orderWeight = typeof input.orderWeight === 'string' ? input.orderWeight.trim() : '';
+    if (!orderId || !pickerUserId || !/^\d+(\.\d+)?$/.test(orderWeight)) {
+      return Promise.resolve(failure(400, null, '出库参数无效'));
+    }
+    const form = new URLSearchParams({
+      orderId: String(orderId),
+      orderWeight,
+      pickerUserId: String(pickerUserId),
+    });
+    const shelfId = positiveId(input.shelfId);
+    if (shelfId) {
+      form.set('shelfId', String(shelfId));
+      return requestOrder('POST', 'nxdepartmentorders/pickerGiveOrderWeightUpdateShelfStock', form);
+    }
+    return requestOrder('POST', 'nxdepartmentorders/pickerGiveOrderWeight', form);
+  }
+
   /**
    * 自动登录续期：服务端 HttpSession 过期后，凭「记住用户」签发的长会话令牌
    * 重新换取订单会话。令牌不存在或已失效时返回 401，由调用方回到扫码登录。
@@ -531,6 +628,11 @@ function createOrderSessionGateway({
     orderWorkbenchOverview,
     ocrTaskStatus,
     phoneOrders,
+    pickListCategories,
+    pickListCategoryGoods,
+    pickListShelves,
+    pickListShelfGoods,
+    pickListFinishOrder,
     recognizeOrderQwen,
     recognizeOrderAsync,
     refreshSession,

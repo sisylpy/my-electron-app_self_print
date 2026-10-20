@@ -59,6 +59,12 @@ function createSilentPrintOptions(deviceName, options = {}) {
   if (options.includeLegacyMargins) {
     printOptions.margins = { marginType: 'none' };
   }
+
+  // 拣货单走独立的 A4 打印机，需要显式覆写 deviceName；
+  // 配送单等历史入口不会传该字段，行为保持不变。
+  if (typeof options.deviceName === 'string' && options.deviceName) {
+    printOptions.deviceName = options.deviceName;
+  }
   return printOptions;
 }
 
