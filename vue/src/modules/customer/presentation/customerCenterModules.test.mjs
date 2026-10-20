@@ -8,6 +8,8 @@ const customerRoot = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(customerRoot, relativePath), 'utf8');
 
 const customerCenter = read('views/CustomerCenter.vue');
+const customerProfilePanel = read('components/CustomerProfilePanel.vue');
+const customerEditDrawer = read('components/CustomerEditDrawer.vue');
 const customerApi = read('api/customerApi.js');
 const dispatchGateway = fs.readFileSync(
   path.resolve(customerRoot, '../../../../src/dispatch/dispatch-gateway.js'),
@@ -27,6 +29,12 @@ assert.match(customerCenter, /customerWechatName\(row\)/, '客户列表应显示
 assert.match(customerCenter, /微信：未绑定/, '未绑定微信时应给出明确状态');
 assert.match(customerCenter, /grid-template-columns:270px minmax\(0,1fr\)/,
   '客户中心应使用无间隔高密度双栏布局');
+assert.match(customerCenter, /canAccessModule\('dispatch', this\.disUser, this\.\$store\.getters\.commercialPlanState\)/,
+  '客户配送设置必须复用左侧配送调度的模块开放条件');
+assert.match(customerProfilePanel, /v-if="showDeliverySettings" class="info-card"/,
+  '非平台配送商不应看到客户资料中的配送设置');
+assert.match(customerEditDrawer, /this\.showDeliverySettings \? \[\{ key: 'delivery'/,
+  '非平台配送商不应看到编辑抽屉中的配送设置标签');
 
 assert.doesNotMatch(customerCenter, /CustomerAiRecommendationPanel/);
 assert.doesNotMatch(customerCenter, /activeTab === 'ai'/);

@@ -80,6 +80,7 @@
             v-if="activeTab === 'profile'"
             :customer="customer"
             :selected-labels="selectedLabels"
+            :show-delivery-settings="canUseDispatchModule"
             :wechat-binding="wechatBinding"
             :wechat-binding-loading="wechatBindingLoading"
             @edit="editDrawerOpen = true"
@@ -125,6 +126,7 @@
       :customer="customer"
       :labels="labels"
       :initial-label-ids="selectedLabelIds"
+      :show-delivery-settings="canUseDispatchModule"
       :wechat-binding="wechatBinding"
       :participates-in-auto-read="participatesInAutoRead"
       :saving="savingCustomer"
@@ -235,6 +237,7 @@ import {
   buildCustomerWechatBindingPayload,
   normalizeCustomerWechatBinding,
 } from '../presentation/customerWechatBinding';
+import { canAccessModule } from '@/utils/disUserRole';
 
 const historyPrintComponentLoaders = {
   ApplyPanel: () => import('@/components/Applys/ApplyPanel.vue'),
@@ -311,6 +314,10 @@ export default {
   },
   computed: {
     disUser() { return this.$store.state.disUser || {}; },
+    // 与左侧“配送调度”入口复用同一条件，避免非平台配送商看到无效的地址与坐标设置。
+    canUseDispatchModule() {
+      return canAccessModule('dispatch', this.disUser, this.$store.getters.commercialPlanState);
+    },
     distributerId() { return this.disUser.nxDiuDistributerId || this.disUser.nxDistributerId || ''; },
     operatorUserId() { return this.disUser.nxDistributerUserId || this.disUser.nxDepartmentUserId || this.disUser.nxDiuUserId || ''; },
     customerCount() { return this.groups.reduce((total, group) => total + group.customers.length, 0); },

@@ -21,7 +21,7 @@
       </div>
     </section>
 
-    <section class="info-card">
+    <section v-if="showDeliverySettings" class="info-card">
       <div class="section-head"><span class="section-mark delivery">配</span><h3>配送设置</h3></div>
       <div class="stacked-details">
         <div><span>地址</span><strong>{{ customer.nxDepartmentAddress || '尚未设置' }}</strong></div>
@@ -31,7 +31,7 @@
       </div>
     </section>
 
-    <section class="info-card">
+    <section :class="['info-card', { 'full-width': !showDeliverySettings }]">
       <div class="section-head"><span class="section-mark labels">标</span><h3>标签与部门</h3></div>
       <div class="tag-list">
         <span v-for="label in selectedLabels" :key="label.nxDistributerLabelId">{{ label.nxDlName }}</span>
@@ -71,6 +71,7 @@ export default {
     selectedLabels: { type: Array, default: () => [] },
     wechatBinding: { type: Object, default: null },
     wechatBindingLoading: Boolean,
+    showDeliverySettings: { type: Boolean, default: false },
   },
   emits: ['edit'],
   computed: {
@@ -109,7 +110,9 @@ export default {
   grid-column:1/-1;
   border-bottom:1px solid #e4ebe7;
 }
+.info-card.full-width{grid-column:1/-1}
 .info-card:not(.wide)+.info-card{border-left:1px solid #e4ebe7}
+.info-card.full-width{border-left:0!important}
 .section-head{
   display:flex;
   align-items:center;

@@ -91,7 +91,7 @@
           </div>
         </section>
 
-        <section v-else-if="activeTab === 'delivery'" class="form-section">
+        <section v-else-if="activeTab === 'delivery' && showDeliverySettings" class="form-section">
           <h4>配送位置与时间</h4>
           <label>详细地址<textarea v-model.trim="form.nxDepartmentAddress" rows="3" /></label>
           <div class="two-columns">
@@ -204,6 +204,7 @@ export default {
     errorText: { type: String, default: '' },
     wechatBinding: { type: Object, default: null },
     participatesInAutoRead: { type: Boolean, default: true },
+    showDeliverySettings: { type: Boolean, default: false },
   },
   emits: ['close', 'save', 'delete', 'manage-users', 'transfer'],
   data() {
@@ -215,10 +216,6 @@ export default {
     if (!form.nxDepartmentDispatchPriorityWeight) form.nxDepartmentDispatchPriorityWeight = 3;
     return {
       activeTab: 'base',
-      tabs: [
-        { key: 'base', label: '基本资料' }, { key: 'delivery', label: '配送设置' },
-        { key: 'labels', label: '客户标签' }, { key: 'more', label: '更多' },
-      ],
       printOptions: PRINT_OPTIONS.map(([value, label]) => ({ value, label })),
       WECHAT_CONVERSATION_GROUP,
       WECHAT_GROUP_ALL_MEMBERS,
@@ -235,6 +232,15 @@ export default {
     };
   },
   computed: {
+    // 配送设置只跟随桌面端“配送调度”模块开放，不能单独产生另一套平台判断。
+    tabs() {
+      return [
+        { key: 'base', label: '基本资料' },
+        ...(this.showDeliverySettings ? [{ key: 'delivery', label: '配送设置' }] : []),
+        { key: 'labels', label: '客户标签' },
+        { key: 'more', label: '更多' },
+      ];
+    },
     subDepartments() { return this.form.nxDepartmentEntities || []; },
   },
   methods: {
