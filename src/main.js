@@ -44,6 +44,12 @@ function resolveRuntimeMode() {
 }
 
 const runtimeMode = resolveRuntimeMode();
+// 运行环境是安全边界，不是页面展示选项：
+// - 本地 Electron 源码只允许 development + 测试服务器 + 粒子-dev；
+// - GrainPrint-Test 安装包只允许 test + 测试服务器 + 粒子-test；
+// - 正式安装包只允许 production + 正式服务器 + 粒子。
+// 测试用户 ID 登录只在前两种模式开放。不要按页面 URL、NODE_ENV 或已有登录状态
+// 动态推断环境，否则会再次造成开发版误连正式服务器或隐藏测试登录入口。
 const runtimeProfile = Object.freeze({
   development: {
     appName: '粒子-dev',

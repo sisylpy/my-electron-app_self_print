@@ -11,6 +11,9 @@ const PRODUCTION_API_BASE_URL = 'https://grainservice.club:8443/nongxinle/api/';
 const TEST_API_BASE_URL = 'https://test-api.grainservice.club/nongxinle/api/';
 
 export default defineConfig(({ mode }) => {
+  // 与 Electron 主进程保持同一条不可变规则：`npm start` 使用 development，
+  // 必须编译为测试服务器地址并保留用户 ID 测试登录；production 才能连接正式服务器。
+  // 不要退回读取通用 .env 或浏览器运行状态来猜测后端环境。
   const expectedRuntime = mode === 'development'
     ? { runtimeMode: 'development', apiUrl: TEST_API_BASE_URL }
     : mode === 'test'

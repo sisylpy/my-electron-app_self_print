@@ -293,7 +293,12 @@ function createDispatchGateway({ app, safeStorage, axios, renewDispatchSession =
         },
       });
     } catch (error) {
-      return normalizeError(error?.response, '无法连接测试登录服务');
+      const result = normalizeError(error?.response, '无法连接测试登录服务');
+      if (result.status === 403) {
+        result.errorCode = 'TEST_LOGIN_NETWORK_NOT_ALLOWED';
+        result.message = '测试服务器拒绝了当前网络，请更新测试登录白名单';
+      }
+      return result;
     }
 
     const body = response.data && typeof response.data === 'object' ? response.data : {};

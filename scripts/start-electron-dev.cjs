@@ -4,6 +4,9 @@ const electronPath = require('electron');
 const waitOn = require('wait-on');
 
 const repoDir = path.resolve(__dirname, '..');
+// IMPORTANT: 本地源码启动永远属于 development，必须连接测试服务器。
+// 不要改成继承 shell 中的 API 地址，也不要为了联调临时指向正式服务器；
+// src/main.js 和 vue/vite.config.js 会再次校验同一约束，避免后续改动误连生产。
 const testApiBaseUrl = 'https://test-api.grainservice.club/nongxinle/api/';
 
 async function start() {

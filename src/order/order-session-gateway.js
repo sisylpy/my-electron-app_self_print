@@ -180,6 +180,9 @@ function createOrderSessionGateway({
       const value = sessionCookieFromHeaders(response.headers);
       const disId = positiveId(user?.nxDiuDistributerId);
       if (response.status < 200 || response.status >= 300 || Number(body.code) !== 0) {
+        if (response.status === 403) {
+          return failure(403, null, '测试服务器拒绝了当前网络，请更新测试登录白名单');
+        }
         return failure(response.status, body, '测试订单会话建立失败');
       }
       if (!value || !positiveId(user?.nxDistributerUserId) || !disId) {

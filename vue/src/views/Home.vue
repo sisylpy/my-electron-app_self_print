@@ -50,7 +50,7 @@
 
         <p v-if="loginNotice" class="login-notice" role="status">{{ loginNotice }}</p>
         <p v-if="loginError" class="test-login__error login-error" role="alert">{{ loginError }}</p>
-        <div v-if="showTestLogin" class="test-login-divider"><span>测试服务器临时入口</span></div>
+        <div v-if="showTestLogin" class="test-login-divider"><span>测试服务器用户 ID 登录</span></div>
         <form v-if="showTestLogin" class="test-login" @submit.prevent="loginWithTestUserId">
           <label for="test-distributer-user-id">配送商用户 ID</label>
           <div class="test-login__controls">
@@ -213,8 +213,13 @@ mounted() {
           }
           desktopSessionStored = true;
         }
-        // 测试开关只由服务器决定。打包版 file:// 页面不能可靠接收跨站
-        // HttpOnly Cookie，因此由现有主进程白名单会话网关建立订单会话。
+        // IMPORTANT: 测试 ID 登录必须同时建立两种既有会话：
+        // 1) /session 给微信读取/调度主进程签发 accessToken；
+        // 2) /browser-session 给订单/OCR 接口建立 HttpOnly JSESSIONID。
+        // 不要删除其中任意一步，也不要改成前端伪造登录状态。服务端仍会检查
+        // NXL_DESKTOP_TEST_LOGIN_ENABLED，并按真实用户 ID 查询和签发权限。
+        // 打包版 file:// 页面不能可靠接收跨站 HttpOnly Cookie，因此由现有主进程
+        // 白名单会话网关建立订单会话。
         let user;
         if (isPackagedDesktop()) {
           const response = await desktopOrderSessionRequest('testLogin', userId);
@@ -236,8 +241,11 @@ mounted() {
       } catch (error) {
         await this.clearOrderSession();
         await window.electronAPI?.userSession?.logout?.();
-        this.testLoginError = error?.response?.data?.msg || error?.message
-          || '测试登录失败，请检查测试服务器及测试登录开关';
+        const status = Number(error?.response?.status || error?.status || 0);
+        this.testLoginError = status === 403
+          ? '测试服务器拒绝了当前网络，请更新测试登录白名单'
+          : error?.response?.data?.msg || error?.message
+            || '测试登录失败，请检查测试服务器及测试登录开关';
       } finally {
         this.testLoggingIn = false;
       }
