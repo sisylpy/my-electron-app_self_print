@@ -343,4 +343,22 @@ export default {
 @media (prefers-reduced-motion: reduce) {
   .login-story *, .login-story *::before, .login-story *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }
+
+/* 焦糖咖啡品牌色：与登录表单及业务工作台保持一致。 */
+.brand-mark,.order-title>b,.order-check,.clean-row em,.delivery-done,
+.message-row>b,.raw-note>i,.flow-track i,.route-line i,.truck-box{background:#a66f3f}
+.truck-cab{background:#c18a58}
+.printer-body,.wheel{border-color:#4f3526;background:#4f3526}
+.ambient-orb{background:rgba(166,111,63,.1)}
+.message-row>span,.order-row,.clean-row{background:#f4e8dc}
+.message-row i,.raw-note>i,.clean-row i,.order-row i{background:#c18a58}
+.route-line::after{border-color:#a66f3f}
+.story-kicker{color:#74472b}
+.story-kicker::before{background:#a66f3f}
+.story-copy h1{color:#2d241e}
+.story-copy p{color:#75675d}
+.story-tabs button{border-radius:0;color:#806f62;border-color:#dccdc0}
+.story-tabs button span{color:#806f62;background:#f0e6dc}
+.story-tabs button.active{border-color:#c9a98b;color:#74472b;box-shadow:none}
+.story-tabs button.active span{background:#a66f3f}
 </style>

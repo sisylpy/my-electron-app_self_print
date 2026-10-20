@@ -11,7 +11,7 @@
 
       <label class="customer-search">
         <span>⌕</span>
-        <input v-model.trim="keyword" placeholder="搜索客户名称、代号" />
+        <input v-model.trim="keyword" placeholder="搜索客户或微信名称" />
       </label>
 
       <div v-if="listLoading" class="list-state">正在加载客户…</div>
@@ -32,10 +32,9 @@
             :class="['customer-row', { active: String(selectedCustomerId) === String(row.nxDepartmentId) }]"
             @click="selectCustomer(row)"
           >
-            <span class="customer-avatar">{{ customerInitial(row) }}</span>
             <span class="customer-copy">
               <strong>{{ displayName(row) }}</strong>
-              <small>{{ customerSecondary(row) }}</small>
+              <small>{{ customerWechatName(row) }}</small>
             </span>
             <i>›</i>
           </button>
@@ -320,7 +319,12 @@ export default {
       const key = this.keyword.toLowerCase();
       return this.groups.map((group) => ({
         ...group,
-        customers: key ? group.customers.filter((row) => [row.nxDepartmentName, row.nxDepartmentAttrName, row.nxDepartmentOrderCode]
+        customers: key ? group.customers.filter((row) => [
+          row.nxDepartmentName,
+          row.nxDepartmentAttrName,
+          row.nxDepartmentOrderCode,
+          row.nxDepartmentWechatDisplayName,
+        ]
           .some((value) => String(value || '').toLowerCase().includes(key))) : group.customers,
       })).filter((group) => group.customers.length);
     },
@@ -345,12 +349,9 @@ export default {
   },
   methods: {
     displayName(row) { return row?.nxDepartmentAttrName || row?.nxDepartmentName || '未命名客户'; },
-    customerInitial(row) { return this.displayName(row).trim().charAt(0) || '客'; },
-    customerSecondary(row) {
-      if (row?.nxDepartmentOrderCode) return `代号 ${row.nxDepartmentOrderCode}`;
-      if (row?.nxDepartmentName && row.nxDepartmentName !== row.nxDepartmentAttrName) return row.nxDepartmentName;
-      const count = row?.nxDepartmentEntities?.length || row?.nxDepartmentSubAmount || 0;
-      return count ? `${count} 个内部部门` : '整店客户';
+    customerWechatName(row) {
+      const name = String(row?.nxDepartmentWechatDisplayName || '').trim();
+      return name ? `微信：${name}` : '微信：未绑定';
     },
     async loadCustomers(preferredCustomerId = this.selectedCustomerId) {
       if (!this.distributerId) {
@@ -716,7 +717,62 @@ export default {
   font-size:13px;
   line-height:1.2;
 }
+
+/* 高密度桌面布局：列表要承载上百位客户，外层面板直接相接，不使用卡片留白。 */
+.customer-center{
+  grid-template-columns:270px minmax(0,1fr);
+  gap:0;
+  padding:0;
+  background:#fff;
+}
+.customer-list-pane,.customer-workspace{
+  border-radius:0;
+  box-shadow:none;
+}
+.customer-list-pane{
+  border-width:0 1px 0 0;
+}
+.customer-workspace{
+  border:0;
+}
+.list-heading{padding:12px 13px 8px}
+.list-heading h2{font-size:18px}
+.list-heading>b{height:24px;min-width:28px;border-radius:0}
+.customer-search{
+  height:34px;
+  margin:0 10px 6px;
+  padding:0 9px;
+  border-radius:0;
+}
+.customer-groups{padding:0 0 8px}
+.customer-groups section+section{margin-top:5px}
+.customer-groups section>header{padding:5px 11px}
+.customer-row{
+  min-height:52px;
+  grid-template-columns:minmax(0,1fr) 12px;
+  gap:6px;
+  padding:7px 10px 7px 14px;
+  border-width:0 0 1px;
+  border-color:#edf1ef;
+  border-radius:0;
+}
+.customer-row.active{border-color:var(--product-border-strong);box-shadow:inset 3px 0 0 var(--product-primary)}
+.customer-copy strong{font-size:15px;font-weight:750;color:var(--product-text)}
+.customer-copy small{margin-top:3px;font-size:13px;font-weight:600;color:var(--product-text-secondary)}
+.customer-commandbar{padding:0 18px}
+.customer-workspace .module-content{padding:12px 15px 16px}
+.list-heading span,.customer-search,.customer-commandbar .module-tabs button.active{color:var(--product-primary-strong)}
+.list-heading>b{color:var(--product-primary-strong);background:var(--product-primary-soft)}
+.customer-row.active{background:var(--product-primary-soft);box-shadow:inset 3px 0 0 var(--product-primary)}
+.customer-commandbar .module-tabs button.active::after{background:var(--product-primary)}
+.edit-button,.module-tabs button.active>span,.summary-avatar{background:var(--product-primary)!important}
+.module-tabs button.active{border-color:var(--product-border-strong);color:var(--product-primary-strong);background:var(--product-primary-soft)}
+.history-module :deep(.nav-link.active),.history-module :deep(.btn-outline-primary){color:var(--product-primary-strong)!important}
+.history-module :deep(.nav-link.active){border-bottom-color:var(--product-primary)!important}
+.history-module :deep(.btn-outline-primary){border-color:var(--product-border-strong)}
+.history-module :deep(.btn-outline-primary:hover){border-color:var(--product-primary);background:var(--product-primary)}
 @media(max-width:1050px){
+  .customer-center{grid-template-columns:240px minmax(0,1fr)}
   .order-detail-drawer{width:96vw}
   .history-print-preview{padding:8px}
   .history-reprint-header>div{display:block}

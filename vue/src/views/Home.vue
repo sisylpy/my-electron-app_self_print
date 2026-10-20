@@ -851,6 +851,33 @@ mounted() {
 @media (prefers-reduced-motion: reduce) {
   .scan-line, .qr-loading i { animation: none; }
 }
+
+/* 登录页与业务页共用焦糖咖啡主题，并保持直角、低悬浮的桌面视觉。 */
+.login-container{
+  color:#2d241e;
+  background:
+    radial-gradient(circle at 9% 10%,rgba(232,205,177,.62),transparent 28%),
+    radial-gradient(circle at 78% 8%,rgba(224,207,190,.48),transparent 30%),
+    linear-gradient(135deg,#fbf8f4 0%,#f7f3ef 52%,#f2ebe4 100%);
+}
+.login-panel{border-color:rgba(116,71,43,.12);background:rgba(250,247,244,.76)}
+.login-box,.qr-code-container,.test-login,.login-notice,.login-error,
+.test-login input,.test-login button,.retry-btn{border-radius:0!important;box-shadow:none!important}
+.login-heading__icon{border-radius:0;background:#a66f3f;box-shadow:none}
+.login-heading strong,.login-box-body h2{color:#2d241e}
+.login-heading small,.login-box-msg,.login-status,.login-help{color:#97897e}
+.qr-corner{border-color:#a66f3f}
+.scan-line{background:linear-gradient(90deg,transparent,#c18a58 18%,#c18a58 82%,transparent);box-shadow:0 0 9px rgba(166,111,63,.32)}
+.qr-loading i{border-color:#e1d7ce;border-top-color:#a66f3f}
+.login-status span i{background:#a66f3f;box-shadow:0 0 0 4px rgba(166,111,63,.1)}
+.login-status button,.login-help button,.login-status button:hover,.login-help button:hover{color:#74472b}
+.login-notice{border-color:#ddc7b3;color:#74472b;background:#f7eee5}
+.test-login{border-color:#e1d7ce;background:#fbf8f5}
+.test-login label{color:#6f4b34}
+.test-login input{border-color:#cfc0b3}
+.test-login input:focus{border-color:#a66f3f;box-shadow:0 0 0 2px rgba(166,111,63,.12)!important}
+.test-login button{border-color:#a66f3f;background:#a66f3f}
+.test-login button:disabled{border-color:#cbb6a4;background:#cbb6a4}
 </style>
 
 

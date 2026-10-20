@@ -114,15 +114,15 @@
 
 .product-shell .bills-container .customer-list li.active,
 .product-shell .bills-container .customer-type-section li.active {
-  border-color: #cde7d8;
-  color: #086d42;
+  border-color: var(--product-border-strong);
+  color: var(--product-primary-strong);
   background: var(--product-primary-soft);
   box-shadow: inset 3px 0 0 var(--product-primary);
 }
 
 .product-shell .bills-container .customer-list li.active > a,
 .product-shell .bills-container .customer-type-section li.active > a {
-  color: #086d42 !important;
+  color: var(--product-primary-strong) !important;
   background: transparent !important;
 }
 
@@ -134,8 +134,8 @@
 }
 
 .product-shell .bills-container .btn-outline-primary {
-  border-color: #b9cbc0 !important;
-  color: #317054 !important;
+  border-color: var(--product-border-strong) !important;
+  color: var(--product-primary-strong) !important;
   background: #fff !important;
 }
 
@@ -246,7 +246,7 @@
 .product-shell .upload-section .form-control:focus,
 .product-shell .upload-section .form-select:focus {
   border-color: var(--product-primary);
-  box-shadow: 0 0 0 2px rgba(17, 155, 93, .1);
+  box-shadow: 0 0 0 2px rgba(166, 111, 63, .1);
 }
 
 .product-shell .save-order-tab .table,
@@ -275,10 +275,10 @@
 }
 
 .product-shell .bills-container .alert-info {
-  border-color: #cfe7da;
+  border-color: var(--product-border-strong);
   border-radius: 4px;
-  color: #426356;
-  background: #f0f8f4;
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
 }
 
 /* 调度工作台 */
@@ -311,7 +311,7 @@
 
 .product-shell .dispatch-workbench__status i {
   background: var(--product-primary);
-  box-shadow: 0 0 0 3px rgba(17, 155, 93, .09);
+  box-shadow: 0 0 0 3px rgba(166, 111, 63, .09);
 }
 
 .product-shell .dispatch-workbench__header-actions button,
@@ -329,9 +329,9 @@
 }
 
 .product-shell .dispatch-workbench__header-actions .session-button {
-  border-color: #c9e2d4;
-  color: #176f49;
-  background: #f0f8f4;
+  border-color: var(--product-border-strong);
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
 }
 
 .product-shell .dispatch-workbench__guardrail,
@@ -402,9 +402,9 @@
 .product-shell .dispatch-workbench .order-card.selected,
 .product-shell .dispatch-workbench .driver-card.selected,
 .product-shell .dispatch-workbench .route-card.selected {
-  border-color: #99cbb1;
+  border-color: var(--product-border-strong);
   color: var(--product-primary-strong);
-  background: #f0f8f4;
+  background: var(--product-primary-soft);
   box-shadow: inset 3px 0 0 var(--product-primary);
 }
 
@@ -424,8 +424,8 @@
 .product-shell .dispatch-workbench .customer-detail__header > span,
 .product-shell .dispatch-workbench .customer-detail__hero em {
   border-radius: 3px;
-  color: #317054;
-  background: #edf6f1;
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
 }
 
 .product-shell .dispatch-workbench .workspace__summary,
@@ -461,7 +461,7 @@
 
 .product-shell .dispatch-workbench .route-card__timeline li > button:hover,
 .product-shell .dispatch-workbench .route-card__timeline li.active > button {
-  background: #f1f7f4;
+  background: var(--product-primary-soft);
 }
 
 .product-shell .dispatch-workbench .route-card__connector,
@@ -471,13 +471,13 @@
 
 .product-shell .dispatch-workbench .customer-detail__timeline > div > span {
   background: var(--product-primary);
-  box-shadow: 0 0 0 1px #9fceb5;
+  box-shadow: 0 0 0 1px var(--product-border-strong);
 }
 
 .product-shell .dispatch-workbench .route-map__badge {
   border-radius: 3px;
-  color: #317054;
-  background: #edf6f1;
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
 }
 
 .product-shell .dispatch-workbench .route-map__canvas,
@@ -550,8 +550,8 @@
 }
 
 .product-shell .driver-dialog__list > button.selected {
-  border-color: #99cbb1;
-  background: #f0f8f4;
+  border-color: var(--product-border-strong);
+  background: var(--product-primary-soft);
   box-shadow: inset 3px 0 0 var(--product-primary);
 }
 
@@ -569,4 +569,69 @@
     grid-template-columns: 220px minmax(0, 1fr);
     padding: 12px;
   }
+}
+
+/*
+ * 全产品高密度规则：业务页使用连续工作面，不再用外边距、大圆角和悬浮卡片分区。
+ * Apply* 打印模板必须保持原始纸张尺寸和样式，因此明确排除其根节点及后代。
+ */
+.product-shell {
+  --bs-primary: var(--product-primary);
+  --bs-primary-rgb: 166, 111, 63;
+  --bs-success: var(--product-primary);
+  --bs-success-rgb: 166, 111, 63;
+  accent-color: var(--product-primary);
+}
+
+.product-shell :where(div, main, section, article, aside, header, footer, nav, form, label, ul, li, button, input, select, textarea):not(.applyBodyPage):not(.applyBodyPage *) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.product-shell .bills-container .bill-body,
+.product-shell .customer-center,
+.product-shell .dispatch-workbench,
+.product-shell .procurement-page,
+.product-shell .return-workbench,
+.product-shell .settings-center {
+  padding: 0 !important;
+}
+
+.product-shell .bills-container .bill-body,
+.product-shell .customer-center,
+.product-shell .dispatch-workbench__layout,
+.product-shell .procurement-page .workspace-top,
+.product-shell .procurement-page .overview-panel,
+.product-shell .return-workbench .return-list,
+.product-shell .settings-center__summary,
+.product-shell .settings-center__grid,
+.product-shell .sales-analysis .summary-grid,
+.product-shell .sales-analysis .overview-grid,
+.product-shell .sales-analysis .drill-grid {
+  gap: 0 !important;
+}
+
+.product-shell .settings-center__grid,
+.product-shell .sales-analysis .overview-grid,
+.product-shell .sales-analysis .drill-grid,
+.product-shell .return-workbench .return-summary {
+  margin-top: 0 !important;
+}
+
+.product-shell .sales-analysis .analysis-body {
+  padding: 0 !important;
+}
+
+.product-shell .btn-primary,
+.product-shell .btn-success,
+.product-shell button.primary,
+.product-shell button.is-primary {
+  border-color: var(--product-primary) !important;
+  background: var(--product-primary) !important;
+}
+
+.product-shell a,
+.product-shell .text-primary,
+.product-shell .text-success {
+  color: var(--product-primary-strong) !important;
 }

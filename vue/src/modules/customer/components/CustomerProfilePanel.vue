@@ -99,7 +99,7 @@ export default {
 }
 .info-card{
   min-width:0;
-  padding:25px 28px;
+  padding:20px 24px;
   background:#fff;
   border:0;
   border-radius:0;
@@ -113,35 +113,35 @@ export default {
 .section-head{
   display:flex;
   align-items:center;
-  gap:10px;
-  margin-bottom:15px;
+  gap:7px;
+  margin-bottom:9px;
 }
 .section-head h3{
   margin:0;
-  font-size:18px;
-  font-weight:800;
-  color:#26312d;
+  font-size:14px;
+  font-weight:600;
+  color:var(--product-text-secondary);
 }
 .section-head button{
   margin-left:auto;
   padding:4px 0 3px;
   border:0;
-  border-bottom:1px solid #96cdb1;
+  border-bottom:1px solid var(--product-border-strong);
   border-radius:0;
   background:transparent;
-  color:#087b48;
+  color:var(--product-primary-strong);
   font-size:13px;
   font-weight:800;
 }
-.section-head button:hover{border-bottom-color:#087b48}
+.section-head button:hover{border-bottom-color:var(--product-primary)}
 .section-mark{
   width:auto;
   height:auto;
   padding-left:9px;
-  border-left:3px solid #119d5d;
+  border-left:3px solid var(--product-primary);
   border-radius:0;
   background:transparent;
-  color:#087b48;
+  color:var(--product-primary-strong);
   display:block;
   font-size:11px;
   line-height:18px;
@@ -178,7 +178,7 @@ export default {
   color:#26312d;
   overflow-wrap:anywhere;
 }
-.detail-grid strong.wechat-mode{color:#087b48}
+.detail-grid strong.wechat-mode{color:var(--product-primary-strong)}
 .stacked-details{display:grid;gap:0}
 .tag-list{
   display:flex;
@@ -191,7 +191,7 @@ export default {
   padding:0 0 0 11px;
   border-radius:0;
   background:transparent;
-  color:#087c49;
+  color:var(--product-primary-strong);
   font-size:13px;
   font-weight:750;
 }
@@ -203,10 +203,10 @@ export default {
   width:5px;
   height:5px;
   border-radius:50%;
-  background:#119d5d;
+  background:var(--product-primary);
   transform:translateY(-50%);
 }
-.tag-list em{font-style:normal;color:#8c9893}
+.tag-list em{font-style:normal;color:var(--product-text-muted);font-size:12px;font-weight:400}
 .department-summary{display:grid;gap:0}
 .department-summary div{
   display:flex;

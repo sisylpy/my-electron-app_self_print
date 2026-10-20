@@ -22,6 +22,12 @@ for (const tab of ['profile', 'goods', 'afterSales', 'ocr', 'history']) {
   assert.match(customerCenter, new RegExp(`key: '${tab}'`), `客户中心应保留 ${tab} 标签`);
 }
 
+assert.doesNotMatch(customerCenter, /class="customer-avatar"/, '客户列表不应再占用简拼头像空间');
+assert.match(customerCenter, /customerWechatName\(row\)/, '客户列表应显示绑定微信名称');
+assert.match(customerCenter, /微信：未绑定/, '未绑定微信时应给出明确状态');
+assert.match(customerCenter, /grid-template-columns:270px minmax\(0,1fr\)/,
+  '客户中心应使用无间隔高密度双栏布局');
+
 assert.doesNotMatch(customerCenter, /CustomerAiRecommendationPanel/);
 assert.doesNotMatch(customerCenter, /activeTab === 'ai'/);
 assert.doesNotMatch(customerCenter, /key: 'ai'/);
