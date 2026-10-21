@@ -339,16 +339,16 @@ async function handleWechatQuickAction() {
   align-items: center;
   gap: 7px;
   padding: 0 14px;
-  border: 1px solid #176b48;
+  border: 1px solid var(--product-primary-strong);
   border-radius: 6px;
   color: #fff;
-  background: #176b48;
+  background: var(--product-primary-strong);
   font-size: 11px;
   font-weight: 900;
-  box-shadow: 0 4px 10px rgba(23, 107, 72, .16);
+  box-shadow: 0 4px 10px rgba(var(--product-primary-strong-rgb), 0.16);
 }
 
-.ai-order-panel__back:hover { background: #115a3c; }
+.ai-order-panel__back:hover { background: var(--product-text); }
 .ai-order-panel__back span { font-size: 16px; line-height: 1; }
 
 .ai-order-panel__customer {
@@ -397,9 +397,9 @@ async function handleWechatQuickAction() {
 
 .ai-order-panel__wechat-mode:hover,
 .ai-order-panel__wechat-mode.is-active {
-  border-color: #178454;
+  border-color: var(--product-primary-strong);
   color: #fff;
-  background: #178454;
+  background: var(--product-primary-strong);
 }
 
 @media (max-width: 1180px) {
@@ -416,7 +416,7 @@ async function handleWechatQuickAction() {
   border-radius: var(--product-radius-lg);
   color: var(--product-text-secondary);
   background:
-    radial-gradient(circle at 50% 30%, rgba(17, 155, 93, .07), transparent 34%),
+    radial-gradient(circle at 50% 30%, rgba(var(--product-primary-strong-rgb), 0.07), transparent 34%),
     var(--product-surface);
 }
 
@@ -431,7 +431,7 @@ async function handleWechatQuickAction() {
   background: linear-gradient(135deg, var(--product-primary), var(--product-primary-strong));
   font-size: 15px;
   font-weight: 900;
-  box-shadow: 0 12px 24px rgba(17, 155, 93, .18);
+  box-shadow: 0 12px 24px rgba(var(--product-primary-strong-rgb), 0.18);
 }
 
 .ai-order-panel__empty strong {

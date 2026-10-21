@@ -71,27 +71,27 @@ onBeforeUnmount(() => {
     gap: 12px;
     align-items: start;
     padding: 16px;
-    color: #17232d;
-    background: #fff;
-    border: 1px solid #dbe3e8;
+    color: var(--product-text);
+    background: var(--product-surface);
+    border: 1px solid var(--product-info-soft);
     border-radius: 4px;
-    box-shadow: 0 14px 36px rgba(28, 46, 58, 0.16);
+    box-shadow: 0 14px 36px rgba(var(--product-text-rgb), 0.16);
 }
 
 .print-job-status__indicator {
     width: 8px;
     height: 8px;
     margin-top: 6px;
-    background: #2f7d65;
+    background: var(--product-primary-strong);
     border-radius: 50%;
 }
 
 .print-job-status--failed .print-job-status__indicator {
-    background: #c44d3e;
+    background: var(--product-danger);
 }
 
 .print-job-status--printing .print-job-status__indicator {
-    background: #b77a27;
+    background: var(--product-warning);
 }
 
 .print-job-status__content {
@@ -105,14 +105,14 @@ onBeforeUnmount(() => {
 
 .print-job-status__content span,
 .print-job-status__content small {
-    color: #5e6f79;
+    color: var(--product-info);
     font-size: 12px;
     line-height: 1.5;
 }
 
 .print-job-status button {
     padding: 0;
-    color: #71808a;
+    color: var(--product-text-muted);
     font-size: 20px;
     line-height: 20px;
     background: transparent;

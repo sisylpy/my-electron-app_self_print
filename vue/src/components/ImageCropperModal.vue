@@ -794,7 +794,7 @@
     .icm-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,.55);
+        background: rgba(var(--product-text-rgb), 0.55);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -804,10 +804,10 @@
     .icm-modal {
         width: min(980px, 96vw);
         height: min(720px, 92vh);
-        background: #fff;
+        background: var(--product-surface);
         border-radius: 12px;
         overflow: hidden;
-        box-shadow: 0 18px 60px rgba(0,0,0,.35);
+        box-shadow: 0 18px 60px rgba(var(--product-text-rgb), 0.35);
         display: flex;
         flex-direction: column;
     }
@@ -818,16 +818,16 @@
         align-items: center;
         gap: 18px;
         padding: 14px 44px 12px 16px;
-        border-bottom: 1px solid #eee;
-        background: #fafafa;
+        border-bottom: 1px solid var(--product-tint);
+        background: var(--product-tint);
     }
 
     .icm-header.has-source {
         min-height: 66px;
         padding-top: 10px;
         padding-bottom: 10px;
-        border-bottom-color: #cde7d9;
-        background: linear-gradient(90deg, #eefaf4 0%, #f8fbf9 58%, #fafafa 100%);
+        border-bottom-color: var(--product-primary-soft);
+        background: linear-gradient(90deg, var(--product-primary-soft) 0%, var(--product-primary-soft) 58%, var(--product-tint) 100%);
     }
 
     .icm-source-banner {
@@ -845,8 +845,8 @@
         flex: 0 0 auto;
         border-radius: 13px;
         color: #fff;
-        background: linear-gradient(145deg, #1aab68, #087a49);
-        box-shadow: 0 8px 18px rgba(12, 126, 75, .2);
+        background: linear-gradient(145deg, var(--product-primary-strong), var(--product-primary-strong));
+        box-shadow: 0 8px 18px rgba(var(--product-primary-strong-rgb), 0.2);
         place-items: center;
     }
 
@@ -868,9 +868,9 @@
     .icm-source-copy small,
     .icm-source-copy strong,
     .icm-source-copy em { display: block; }
-    .icm-source-copy small { margin-bottom: 2px; color: #31805c; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
-    .icm-source-copy strong { overflow: hidden; color: #173e2c; font-size: 22px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
-    .icm-source-copy em { margin-top: 3px; color: #6f8278; font-size: 11px; font-style: normal; }
+    .icm-source-copy small { margin-bottom: 2px; color: var(--product-primary-strong); font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+    .icm-source-copy strong { overflow: hidden; color: var(--product-text); font-size: 22px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+    .icm-source-copy em { margin-top: 3px; color: var(--product-text-muted); font-size: 11px; font-style: normal; }
 
     .icm-heading-copy {
         min-width: 0;
@@ -886,7 +886,7 @@
     .icm-subtitle {
         margin-top: 6px;
         font-size: 12px;
-        color: #666;
+        color: var(--product-text-muted);
     }
 
     .icm-close {
@@ -920,8 +920,8 @@
         justify-content: space-between;
         gap: 10px;
         padding: 10px 12px;
-        border-bottom: 1px solid #eee;
-        background: #fff;
+        border-bottom: 1px solid var(--product-tint);
+        background: var(--product-surface);
     }
 
     .icm-toolbar-left, .icm-toolbar-right {
@@ -932,30 +932,30 @@
     }
 
     .icm-btn {
-        border: 1px solid #ddd;
-        background: #fff;
+        border: 1px solid var(--product-border);
+        background: var(--product-surface);
         padding: 7px 10px;
         border-radius: 8px;
         cursor: pointer;
         font-size: 13px;
     }
-    .icm-btn:hover { background: #f7f7f7; }
+    .icm-btn:hover { background: var(--product-tint); }
 
     .icm-btn.primary {
-        border-color: #2c7;
-        background: #2c7;
+        border-color: var(--product-primary);
+        background: var(--product-primary);
         color: #fff;
     }
     .icm-btn.primary:hover { filter: brightness(0.97); }
 
     .icm-btn.ghost {
-        background: #fff;
+        background: var(--product-surface);
     }
 
     .icm-btn.crop-box-btn {
-        background: #e8f4fc;
-        border-color: #0d6efd;
-        color: #0d6efd;
+        background: var(--product-info-soft);
+        border-color: var(--product-info);
+        color: var(--product-info);
     }
 
     .icm-btn:disabled {
@@ -972,14 +972,14 @@
         align-items: center;
         gap: 6px;
         font-size: 12px;
-        color: #444;
+        color: var(--product-text-secondary);
     }
 
     .icm-viewport {
         position: relative;
         flex: 1;
         min-height: 0;
-        background: #111;
+        background: var(--product-text);
         overflow: hidden;
         user-select: none;
         touch-action: none; /* 关键：支持指针拖拽，不被浏览器手势抢走 */
@@ -1004,9 +1004,9 @@
     /* crop box */
     .icm-crop {
         position: absolute;
-        border: 2px solid rgba(255,255,255,.9);
+        border: 2px solid rgba(var(--product-tint-rgb), 0.9);
         border-radius: 8px;
-        box-shadow: 0 0 0 9999px rgba(0,0,0,.35);
+        box-shadow: 0 0 0 9999px rgba(var(--product-text-rgb), 0.35);
         pointer-events: auto;
         cursor: move;
     }
@@ -1015,7 +1015,7 @@
         position: absolute;
         inset: 0;
         border-radius: 6px;
-        background: rgba(0,0,0,.00);
+        background: rgba(var(--product-text-rgb), 0.01);
     }
 
     /* handles */
@@ -1023,9 +1023,9 @@
         position: absolute;
         width: 14px;
         height: 14px;
-        background: #fff;
+        background: var(--product-surface);
         border-radius: 4px;
-        border: 1px solid rgba(0,0,0,.25);
+        border: 1px solid rgba(var(--product-text-rgb), 0.25);
     }
 
     .icm-handle.nw { left: -7px; top: -7px; cursor: nwse-resize; }
@@ -1038,8 +1038,8 @@
         left: 10px;
         bottom: 10px;
         font-size: 12px;
-        color: rgba(255,255,255,.85);
-        background: rgba(0,0,0,.35);
+        color: rgba(var(--product-tint-rgb), 0.85);
+        background: rgba(var(--product-text-rgb), 0.35);
         padding: 8px 10px;
         border-radius: 10px;
         backdrop-filter: blur(4px);
@@ -1047,8 +1047,8 @@
 
     .icm-footer {
         padding: 12px;
-        border-top: 1px solid #eee;
-        background: #fff;
+        border-top: 1px solid var(--product-tint);
+        background: var(--product-surface);
         display: flex;
         align-items: center;
         justify-content: flex-end;
@@ -1063,17 +1063,17 @@
     }
     .icm-ocr-mode-label {
         font-size: 13px;
-        color: #555;
+        color: var(--product-text-secondary);
     }
     .icm-mode-item {
         display: inline-flex;
         align-items: center;
         padding: 6px 12px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--product-border);
         border-radius: 8px;
         font-size: 13px;
         cursor: pointer;
-        background: #fff;
+        background: var(--product-surface);
     }
     .icm-mode-item input {
         position: absolute;
@@ -1082,12 +1082,12 @@
         height: 0;
     }
     .icm-mode-item:hover {
-        background: #f7f7f7;
+        background: var(--product-tint);
     }
     .icm-mode-item.active {
-        border-color: #2c7;
-        background: #e8f8f0;
-        color: #1a5c34;
+        border-color: var(--product-primary);
+        background: var(--product-primary-soft);
+        color: var(--product-primary-strong);
     }
     .icm-recognize-btn {
         margin-left: 4px;

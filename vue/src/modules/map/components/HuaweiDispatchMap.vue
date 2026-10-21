@@ -497,9 +497,9 @@ onBeforeUnmount(() => {
   min-height: 470px;
   flex: 1;
   overflow: hidden;
-  border: 1px solid #d9e4df;
+  border: 1px solid var(--product-primary-soft);
   border-radius: 12px;
-  background: #eef4f1;
+  background: var(--product-primary-soft);
 }
 
 .dispatch-real-map__state {
@@ -509,18 +509,18 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   align-content: center;
-  border: 1px solid #dce7e2;
+  border: 1px solid var(--product-tint);
   border-radius: 12px;
-  color: #536a61;
-  background: #f4f8f6;
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
 }
 
 .dispatch-real-map__state span {
   width: 27px;
   height: 27px;
   margin-bottom: 10px;
-  border: 3px solid #d5e7df;
-  border-top-color: #109869;
+  border: 3px solid var(--product-primary-soft);
+  border-top-color: var(--product-primary-strong);
   border-radius: 50%;
   animation: map-spin .8s linear infinite;
 }
@@ -538,14 +538,14 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 6px 7px 6px 10px;
-  border: 1px solid rgba(204, 218, 212, .9);
+  border: 1px solid rgba(var(--product-primary-soft-rgb), 0.9);
   border-radius: 9px;
-  background: rgba(255, 255, 255, .94);
-  box-shadow: 0 5px 18px rgba(21, 47, 37, .12);
+  background: rgba(var(--product-tint-rgb), 0.94);
+  box-shadow: 0 5px 18px rgba(var(--product-text-rgb), 0.12);
 }
 
 .dispatch-real-map__hint span {
-  color: #6c7f77;
+  color: var(--product-text-muted);
   font-size: 8px;
 }
 
@@ -554,7 +554,7 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 6px;
   color: #fff;
-  background: #128a61;
+  background: var(--product-primary-strong);
   font-size: 8px;
   font-weight: 800;
   cursor: pointer;
@@ -569,11 +569,11 @@ onBeforeUnmount(() => {
   outline: 0;
   flex-direction: column;
   align-items: center;
-  color: #18342b;
+  color: var(--product-text);
   background: transparent;
   font-family: inherit;
   cursor: pointer;
-  filter: drop-shadow(0 4px 7px rgba(14, 37, 29, .2));
+  filter: drop-shadow(0 4px 7px rgba(var(--product-text-rgb), 0.2));
 }
 
 .dispatch-real-map__canvas :deep(.nxl-map-marker__title) {
@@ -581,10 +581,10 @@ onBeforeUnmount(() => {
   margin-bottom: 2px;
   padding: 3px 7px;
   overflow: hidden;
-  border: 1px solid rgba(198, 215, 208, .96);
+  border: 1px solid rgba(var(--product-primary-soft-rgb), 0.96);
   border-radius: 6px;
-  background: rgba(255, 255, 255, .96);
-  box-shadow: 0 2px 7px rgba(20, 47, 37, .1);
+  background: rgba(var(--product-tint-rgb), 0.96);
+  box-shadow: 0 2px 7px rgba(var(--product-text-rgb), 0.1);
   font-size: 11px;
   font-weight: 800;
   line-height: 1.2;
@@ -608,13 +608,13 @@ onBeforeUnmount(() => {
 
 .dispatch-real-map__canvas :deep(.nxl-map-marker.is-selected .nxl-map-marker__title),
 .dispatch-real-map__canvas :deep(.nxl-map-marker.is-depot .nxl-map-marker__title) {
-  border-color: #18342b;
+  border-color: var(--product-text);
   color: #fff;
-  background: #18342b;
+  background: var(--product-text);
 }
 
 .dispatch-real-map__canvas :deep(.maplibregl-ctrl-attrib) {
-  color: #4e625a;
+  color: var(--product-text-secondary);
   font-size: 10px;
 }
 

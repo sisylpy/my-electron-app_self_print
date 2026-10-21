@@ -58,28 +58,28 @@ const employmentTypes = [
 </script>
 
 <style scoped>
-.duty-backdrop { position: fixed; z-index: 1250; display: grid; inset: 0; place-items: center; padding: 24px; background: rgba(12, 28, 22, .6); backdrop-filter: blur(4px); }
-.duty-dialog { display: flex; width: min(840px, 92vw); max-height: min(760px, 90vh); flex-direction: column; overflow: hidden; border-radius: 16px; background: #f6f9f7; box-shadow: 0 28px 90px rgba(6, 25, 18, .32); }
-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px 15px; border-bottom: 1px solid #dfe8e3; background: #fff; }
+.duty-backdrop { position: fixed; z-index: 1250; display: grid; inset: 0; place-items: center; padding: 24px; background: rgba(var(--product-text-rgb), 0.6); backdrop-filter: blur(4px); }
+.duty-dialog { display: flex; width: min(840px, 92vw); max-height: min(760px, 90vh); flex-direction: column; overflow: hidden; border-radius: 16px; background: var(--product-tint); box-shadow: 0 28px 90px rgba(var(--product-text-rgb), 0.32); }
+header { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px 15px; border-bottom: 1px solid var(--product-tint); background: var(--product-surface); }
 header span, header h2, header p { margin: 0; }
-header span { color: #14845d; font-size: 10px; font-weight: 800; }
-header h2 { margin-top: 3px; color: #183128; font-size: 21px; }
-header p { margin-top: 4px; color: #7c8b85; font-size: 10px; }
-header > button { width: 34px; height: 34px; border: 1px solid #d5dfda; border-radius: 9px; color: #687972; background: #fff; font-size: 22px; cursor: pointer; }
+header span { color: var(--product-primary-strong); font-size: 10px; font-weight: 800; }
+header h2 { margin-top: 3px; color: var(--product-text); font-size: 21px; }
+header p { margin-top: 4px; color: var(--product-text-muted); font-size: 10px; }
+header > button { width: 34px; height: 34px; border: 1px solid var(--product-primary-soft); border-radius: 9px; color: var(--product-text-muted); background: var(--product-surface); font-size: 22px; cursor: pointer; }
 .duty-list { overflow-y: auto; padding: 12px; }
-article { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; margin-bottom: 8px; padding: 12px; border: 1px solid #dfe8e3; border-radius: 11px; background: #fff; }
-.duty-avatar { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 50%; color: #fff; background: #15956a; font-size: 13px; font-weight: 800; }
+article { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; margin-bottom: 8px; padding: 12px; border: 1px solid var(--product-tint); border-radius: 11px; background: var(--product-surface); }
+.duty-avatar { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 50%; color: #fff; background: var(--product-primary-strong); font-size: 13px; font-weight: 800; }
 .duty-copy { display: flex; min-width: 0; flex-direction: column; }
-.duty-copy strong { color: #20372f; font-size: 13px; }
-.duty-copy span, .duty-copy small { margin-top: 3px; color: #7b8984; font-size: 9px; }
-.duty-copy small { color: #a36d25; }
+.duty-copy strong { color: var(--product-text); font-size: 13px; }
+.duty-copy span, .duty-copy small { margin-top: 3px; color: var(--product-text-muted); font-size: 9px; }
+.duty-copy small { color: var(--product-warning); }
 .duty-type { display: flex; gap: 4px; }
-.duty-type button, .duty-toggle { padding: 7px 10px; border: 1px solid #c9d7d1; border-radius: 7px; color: #4d665d; background: #fff; font-size: 9px; cursor: pointer; }
-.duty-type button.active { border-color: #65b597; color: #117652; background: #eaf7f1; }
+.duty-type button, .duty-toggle { padding: 7px 10px; border: 1px solid var(--product-primary-soft); border-radius: 7px; color: var(--product-primary-strong); background: var(--product-surface); font-size: 9px; cursor: pointer; }
+.duty-type button.active { border-color: var(--product-primary); color: var(--product-primary-strong); background: var(--product-primary-soft); }
 .duty-toggle { min-width: 78px; font-weight: 800; }
-.duty-toggle.on { border-color: #dfa4a0; color: #a54a43; }
+.duty-toggle.on { border-color: var(--product-danger); color: var(--product-danger); }
 button:disabled { cursor: not-allowed; opacity: .45; }
-.duty-empty { margin: 28px; color: #82908b; text-align: center; }
+.duty-empty { margin: 28px; color: var(--product-text-muted); text-align: center; }
 header span { font-size: 12px; }
 header h2 { font-size: 25px; }
 header p { font-size: 12px; }

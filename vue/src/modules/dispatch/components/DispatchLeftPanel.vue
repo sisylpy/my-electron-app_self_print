@@ -161,10 +161,10 @@ function sameId(left, right) {
   min-height: 0;
   flex-direction: column;
   padding: 14px;
-  border: 1px solid #dde5ee;
+  border: 1px solid var(--product-info-soft);
   border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 8px 30px rgba(33, 54, 85, .05);
+  background: var(--product-surface);
+  box-shadow: 0 8px 30px rgba(var(--product-text-rgb), 0.05);
 }
 
 .left-panel__switch {
@@ -172,23 +172,23 @@ function sameId(left, right) {
   grid-template-columns: 1fr 1fr;
   padding: 4px;
   border-radius: 11px;
-  background: #edf2f7;
+  background: var(--product-info-soft);
 }
 
 .left-panel__switch button {
   padding: 9px 12px;
   border: 0;
   border-radius: 8px;
-  color: #66758b;
+  color: var(--product-info);
   background: transparent;
   font-weight: 700;
   cursor: pointer;
 }
 
 .left-panel__switch button.active {
-  color: #1f4fa3;
-  background: #fff;
-  box-shadow: 0 2px 9px rgba(35, 62, 98, .1);
+  color: var(--product-info);
+  background: var(--product-surface);
+  box-shadow: 0 2px 9px rgba(var(--product-info-rgb), 0.1);
 }
 
 .left-panel__filters {
@@ -203,17 +203,17 @@ function sameId(left, right) {
   align-items: center;
   justify-content: space-between;
   padding: 8px 9px;
-  border: 1px solid #e1e8ef;
+  border: 1px solid var(--product-info-soft);
   border-radius: 9px;
-  color: #66758b;
-  background: #fff;
+  color: var(--product-info);
+  background: var(--product-surface);
   cursor: pointer;
 }
 
 .left-panel__filters button.active {
-  border-color: #93b8f0;
-  color: #1d57ad;
-  background: #eff6ff;
+  border-color: var(--product-info);
+  color: var(--product-info);
+  background: var(--product-info-soft);
 }
 
 .left-panel__filters span {
@@ -229,7 +229,7 @@ function sameId(left, right) {
   align-items: end;
   justify-content: space-between;
   padding: 4px 2px 11px;
-  border-bottom: 1px solid #edf1f5;
+  border-bottom: 1px solid var(--product-info-soft);
 }
 
 .left-panel__section-title--driver {
@@ -242,18 +242,18 @@ function sameId(left, right) {
 }
 
 .left-panel__section-title h2 {
-  color: #1d2b40;
+  color: var(--product-text);
   font-size: 16px;
 }
 
 .left-panel__section-title p {
   margin-bottom: 3px;
-  color: #8290a3;
+  color: var(--product-info);
   font-size: 10px;
 }
 
 .left-panel__section-title > span {
-  color: #697a91;
+  color: var(--product-info);
   font-size: 11px;
 }
 
@@ -270,24 +270,24 @@ function sameId(left, right) {
 .order-card,
 .driver-card {
   width: 100%;
-  border: 1px solid #e1e7ee;
+  border: 1px solid var(--product-info-soft);
   border-radius: 11px;
   color: inherit;
-  background: #fff;
+  background: var(--product-surface);
   text-align: left;
   cursor: pointer;
 }
 
 .order-card:hover,
 .driver-card:hover {
-  border-color: #a9c2e8;
+  border-color: var(--product-info);
 }
 
 .order-card.selected,
 .driver-card.selected {
-  border-color: #4c83d7;
-  background: #f3f7ff;
-  box-shadow: 0 0 0 2px rgba(76, 131, 215, .1);
+  border-color: var(--product-info);
+  background: var(--product-info-soft);
+  box-shadow: 0 0 0 2px rgba(var(--product-info-rgb), 0.1);
 }
 
 .order-card {
@@ -304,8 +304,8 @@ function sameId(left, right) {
   height: 25px;
   place-items: center;
   border-radius: 7px;
-  color: #2d66b8;
-  background: #eaf2ff;
+  color: var(--product-info);
+  background: var(--product-info-soft);
   font-size: 11px;
   font-weight: 800;
 }
@@ -319,7 +319,7 @@ function sameId(left, right) {
 
 .order-card__main strong {
   overflow: hidden;
-  color: #213047;
+  color: var(--product-text);
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -328,7 +328,7 @@ function sameId(left, right) {
 .order-card__main small {
   overflow: hidden;
   margin-top: 4px;
-  color: #68788f;
+  color: var(--product-info);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -336,7 +336,7 @@ function sameId(left, right) {
 
 .order-card__main em {
   margin-top: 6px;
-  color: #8795a8;
+  color: var(--product-info);
   font-size: 10px;
   font-style: normal;
 }
@@ -345,8 +345,8 @@ function sameId(left, right) {
   max-width: 72px;
   padding: 4px 6px;
   border-radius: 99px;
-  color: #42617c;
-  background: #edf3f7;
+  color: var(--product-info);
+  background: var(--product-info-soft);
   font-size: 9px;
   font-weight: 700;
   text-align: center;
@@ -366,7 +366,7 @@ function sameId(left, right) {
   place-items: center;
   border-radius: 12px;
   color: #fff;
-  background: linear-gradient(135deg, #3877d3, #1e4e98);
+  background: linear-gradient(135deg, var(--product-info), var(--product-info));
   font-size: 14px;
   font-weight: 800;
 }
@@ -379,7 +379,7 @@ function sameId(left, right) {
 }
 
 .driver-card__name-line strong {
-  color: #213047;
+  color: var(--product-text);
   font-size: 13px;
 }
 
@@ -387,7 +387,7 @@ function sameId(left, right) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #8b98a9;
+  color: var(--product-info);
   font-size: 10px;
   font-style: normal;
 }
@@ -396,22 +396,22 @@ function sameId(left, right) {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #a5b0bd;
+  background: var(--product-info);
 }
 
 .driver-card__name-line em.online {
-  color: #18815c;
+  color: var(--product-primary-strong);
 }
 
 .driver-card__name-line em.online i {
-  background: #20a875;
-  box-shadow: 0 0 0 3px rgba(32, 168, 117, .12);
+  background: var(--product-primary-strong);
+  box-shadow: 0 0 0 3px rgba(var(--product-primary-strong-rgb), 0.12);
 }
 
 .driver-card__main small {
   overflow: hidden;
   margin-top: 5px;
-  color: #6d7d92;
+  color: var(--product-info);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -419,7 +419,7 @@ function sameId(left, right) {
 
 .driver-card__stage {
   margin-top: 5px;
-  color: #3568b2;
+  color: var(--product-info);
   font-size: 10px;
   font-weight: 700;
 }
@@ -429,12 +429,12 @@ function sameId(left, right) {
   min-height: 180px;
   place-items: center;
   align-content: center;
-  color: #8693a5;
+  color: var(--product-info);
   text-align: center;
 }
 
 .left-panel__empty strong {
-  color: #5e6c7e;
+  color: var(--product-info);
   font-size: 13px;
 }
 
@@ -449,8 +449,8 @@ function sameId(left, right) {
   margin-top: 3px;
   padding: 2px 6px;
   border-radius: 9px;
-  color: #a04c25;
-  background: #fff0e7;
+  color: var(--product-warning);
+  background: var(--product-warning-soft);
   font-size: 9px;
   font-weight: 800;
 }

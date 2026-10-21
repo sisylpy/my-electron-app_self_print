@@ -82,7 +82,7 @@ const options = computed(() => (['cards', 'toolbar'].includes(props.variant) ? c
   align-items: center;
   gap: 7px;
   margin: 0;
-  color: var(--product-text-secondary, #5f6f67);
+  color: var(--product-text-secondary, var(--product-text-muted));
   font-size: 13px;
   font-weight: 650;
   cursor: pointer;
@@ -100,7 +100,7 @@ const options = computed(() => (['cards', 'toolbar'].includes(props.variant) ? c
 
 .order-mode-selector input {
   margin: 0;
-  accent-color: var(--product-primary, #119b5d);
+  accent-color: var(--product-primary, var(--product-primary-strong));
 }
 
 .order-mode-selector--cards {
@@ -122,19 +122,19 @@ const options = computed(() => (['cards', 'toolbar'].includes(props.variant) ? c
   border: 1px solid var(--product-border);
   border-radius: var(--product-radius-md);
   color: var(--product-text-secondary);
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .order-mode-selector--cards label:hover {
-  border-color: #bdd6c8;
-  background: #fbfdfc;
+  border-color: var(--product-primary-soft);
+  background: var(--product-primary-soft);
 }
 
 .order-mode-selector--cards label.is-active {
   border-color: var(--product-primary);
   color: var(--product-primary-strong);
   background: var(--product-primary-soft);
-  box-shadow: inset 0 0 0 1px rgba(17, 155, 93, .08);
+  box-shadow: inset 0 0 0 1px rgba(var(--product-primary-strong-rgb), 0.08);
 }
 
 .order-mode-selector--cards input {
@@ -151,7 +151,7 @@ const options = computed(() => (['cards', 'toolbar'].includes(props.variant) ? c
   place-items: center;
   border-radius: 4px;
   color: var(--product-primary-strong);
-  background: #eef5f1;
+  background: var(--product-primary-soft);
   font-size: 12px;
   font-weight: 900;
 }
@@ -223,25 +223,25 @@ const options = computed(() => (['cards', 'toolbar'].includes(props.variant) ? c
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  border: 1px solid #ccd9d2;
+  border: 1px solid var(--product-primary-soft);
   border-radius: 6px;
-  color: #42584d;
-  background: #fff;
+  color: var(--product-primary-strong);
+  background: var(--product-surface);
   font-size: 10px;
   font-weight: 850;
   white-space: nowrap;
 }
 
 .order-mode-selector--toolbar label:hover {
-  border-color: #8fc5aa;
-  background: #f4faf7;
+  border-color: var(--product-primary);
+  background: var(--product-primary-soft);
 }
 
 .order-mode-selector--toolbar label.is-active {
   border-color: var(--product-primary);
   color: #fff;
   background: var(--product-primary);
-  box-shadow: 0 4px 10px rgba(17, 155, 93, .18);
+  box-shadow: 0 4px 10px rgba(var(--product-primary-strong-rgb), 0.18);
 }
 
 .order-mode-selector--toolbar input {
@@ -258,14 +258,14 @@ const options = computed(() => (['cards', 'toolbar'].includes(props.variant) ? c
   place-items: center;
   border-radius: 4px;
   color: var(--product-primary-strong);
-  background: #eaf5ef;
+  background: var(--product-primary-soft);
   font-size: 10px;
   font-weight: 900;
 }
 
 .order-mode-selector--toolbar label.is-active .order-mode-selector__icon {
   color: var(--product-primary-strong);
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .order-mode-selector--toolbar .order-mode-selector__copy,

@@ -50,7 +50,7 @@
 <style scoped >
 
 .content-header{
-    background: linear-gradient(to right, #6a11cb, #2575fc);
+    background: linear-gradient(to right, var(--product-primary), var(--product-info));
     color: #fff;
     text-align: center;
 

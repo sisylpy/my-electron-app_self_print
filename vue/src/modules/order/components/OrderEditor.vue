@@ -1,6 +1,6 @@
 ﻿<template>
     <div ref="scrollContainer" class="order-list-container flex-grow-1"
-         style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0;"
+         style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--product-info-soft); border-radius: 0.375rem; padding: 0;"
          @keydown="handleGoodsListKeydown">
         <div v-if="orderItems.length === 0" class="text-center text-muted p-4">
             <div class="mb-2">📋 暂无订单</div>
@@ -41,7 +41,7 @@
                     <!-- 之前添加新订单的商品选择面板 -->
                     <div v-if="addingOrderBeforeIndex === orderIndex"
                          class="p-1 border rounded mb-1"
-                         style="background-color: #fff; position: relative; z-index: 11;">
+                         style="background-color: var(--product-surface); position: relative; z-index: 11;">
                         <!-- 第一行：商品名称、数量、规格、关闭按钮 -->
                         <div class="d-flex align-items-center gap-2 mb-1" style="min-height: 32px;">
                             <!-- 商品名称 -->
@@ -55,7 +55,7 @@
                                         @keydown.tab="onBeforeOrderTab($event, 'goods-name', orderIndex)"
                                         data-input-type="before-order-goods-name"
                                         placeholder="商品名称"
-                                        style="background-color: #fff; font-size: 16px;"
+                                        style="background-color: var(--product-surface); font-size: 16px;"
                                 />
                                 <ProductPanel
                                         v-if="beforeOrderForm.showSearchResults && (beforeOrderForm.disArr?.length > 0 || beforeOrderForm.nxArr?.length > 0)"
@@ -78,7 +78,7 @@
                                         @keydown.tab="onBeforeOrderTab($event, 'quantity', orderIndex)"
                                         data-input-type="before-order-quantity"
                                         placeholder="数量"
-                                        style="background-color: #fff; font-size: 16px;"
+                                        style="background-color: var(--product-surface); font-size: 16px;"
                                 />
                             </div>
                             <!-- 规格 -->
@@ -92,7 +92,7 @@
                                         @keydown.tab="onBeforeOrderTab($event, 'standard', orderIndex)"
                                         data-input-type="before-order-standard"
                                         placeholder="规格"
-                                        style="background-color: #fff; font-size: 16px;"
+                                        style="background-color: var(--product-surface); font-size: 16px;"
                                 />
                             </div>
                             <!-- 操作按钮 -->
@@ -101,11 +101,11 @@
                                 <button v-if="String(beforeOrderForm.goodsName || '').length > 0"
                                         class="btn btn-sm"
                                         :disabled="!canAddBeforeOrder(beforeOrderForm)"
-                                        :style="!canAddBeforeOrder(beforeOrderForm) ? 'font-size: 14px; padding: 4px 8px; background-color: transparent !important; border: none; color: #adb5bd; cursor: not-allowed;' : 'font-size: 14px; padding: 4px 8px; background-color: transparent !important; border: none; color: #6c757d; transition: all 0.2s;'"
+                                        :style="!canAddBeforeOrder(beforeOrderForm) ? 'font-size: 14px; padding: 4px 8px; background-color: transparent !important; border: none; color: var(--product-border-strong); cursor: not-allowed;' : 'font-size: 14px; padding: 4px 8px; background-color: transparent !important; border: none; color: var(--product-text-muted); transition: all 0.2s;'"
                                         @click="beforeOrderForm.selectedGoods ? $emit('save-before-order', { item, orderIndex }) : $emit('save-new-goods-from-before-order', { item, orderIndex })"
                                         :title="beforeOrderForm.selectedGoods ? '保存订单' : '保存新商品'"
-                                        @mouseenter="canAddBeforeOrder(beforeOrderForm) ? $event.target.style.color='#495057' : null"
-                                        @mouseleave="canAddBeforeOrder(beforeOrderForm) ? $event.target.style.color='#6c757d' : null">
+                                        @mouseenter="canAddBeforeOrder(beforeOrderForm) ? $event.target.style.color='var(--product-text-secondary)' : null"
+                                        @mouseleave="canAddBeforeOrder(beforeOrderForm) ? $event.target.style.color='var(--product-text-muted)' : null">
                                     💾
                                 </button>
                                 <!-- 关闭按钮 -->
@@ -171,7 +171,7 @@
                                     class="btn btn-link btn-sm p-1"
                                     @click.stop="handleToggleMatchedGoods(orderIndex)"
                                     :title="showMatchedGoods[orderIndex] ? '收起匹配商品' : '展开匹配商品'"
-                                    style="flex-shrink: 0; text-decoration: none; color: #0dcaf0; background-color: lightgoldenrodyellow; border-radius: 4px;"
+                                    style="flex-shrink: 0; text-decoration: none; color: var(--product-info); background-color: lightgoldenrodyellow; border-radius: 4px;"
                             >
                                 <span v-if="showMatchedGoods[orderIndex]">▼</span>
                                 <span v-else>▶</span>
@@ -213,19 +213,19 @@
                             <template v-if="item.nxDoStatus === 0">
                                 <button
                                         class="btn btn-sm"
-                                        style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
+                                        style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: var(--product-text-muted); transition: all 0.2s;"
                                         @click="handleOrderAction(() => $emit('update-order', { item, orderIndex }), orderIndex)"
                                         title="修改"
-                                        @mouseenter="$event.target.style.color='#495057'"
-                                        @mouseleave="$event.target.style.color='#6c757d'">
+                                        @mouseenter="$event.target.style.color='var(--product-text-secondary)'"
+                                        @mouseleave="$event.target.style.color='var(--product-text-muted)'">
                                     ✏️
                                 </button>
                                 <button class="btn btn-sm"
-                                        style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
+                                        style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: var(--product-text-muted); transition: all 0.2s;"
                                         @click="readOrderListFromIndex(orderIndex)"
                                         title="从这里开始朗读"
-                                        @mouseenter="$event.target.style.color='#dc3545'"
-                                        @mouseleave="$event.target.style.color='#6c757d'">
+                                        @mouseenter="$event.target.style.color='var(--product-danger)'"
+                                        @mouseleave="$event.target.style.color='var(--product-text-muted)'">
                                     🔊
                                 </button>
 
@@ -234,29 +234,29 @@
                             <template v-else-if="item.nxDoStatus === -2">
                                 <button class="btn btn-sm"
                                         :disabled="!isValidOrderQuantityAndStandard(item)"
-                                        :style="!isValidOrderQuantityAndStandard(item) ? 'font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #adb5bd; cursor: not-allowed;' : 'font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;'"
+                                        :style="!isValidOrderQuantityAndStandard(item) ? 'font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: var(--product-border-strong); cursor: not-allowed;' : 'font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: var(--product-text-muted); transition: all 0.2s;'"
                                         @click="handleOrderAction(() => $emit('save-new-goods', { item, orderIndex, goodsName: getGoodsNameValue(item, orderIndex) }), orderIndex)"
                                         :title="!isValidOrderQuantityAndStandard(item) ? '请填写订单数量和规格' : '保存新商品'"
-                                        @mouseenter="!isValidOrderQuantityAndStandard(item) ? null : $event.target.style.color='#495057'"
-                                        @mouseleave="!isValidOrderQuantityAndStandard(item) ? null : $event.target.style.color='#6c757d'">
+                                        @mouseenter="!isValidOrderQuantityAndStandard(item) ? null : $event.target.style.color='var(--product-text-secondary)'"
+                                        @mouseleave="!isValidOrderQuantityAndStandard(item) ? null : $event.target.style.color='var(--product-text-muted)'">
                                     {{ !isValidOrderQuantityAndStandard(item) ? '⚠️' : '💾' }}
                                 </button>
                                 <button class="btn btn-sm"
-                                        style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
+                                        style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: var(--product-text-muted); transition: all 0.2s;"
                                         @click.stop="handleOrderAction(() => $emit('delete-order', { item, orderIndex }), orderIndex)"
                                         title="删除"
-                                        @mouseenter="$event.target.style.color='#dc3545'"
-                                        @mouseleave="$event.target.style.color='#6c757d'">
+                                        @mouseenter="$event.target.style.color='var(--product-danger)'"
+                                        @mouseleave="$event.target.style.color='var(--product-text-muted)'">
                                     🗑️
                                 </button>
                             </template>
 
                             <button class="btn btn-sm"
-                                    style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: #6c757d; transition: all 0.2s;"
+                                    style="font-size: 14px; padding: 4px 8px; background: transparent; border: none; color: var(--product-text-muted); transition: all 0.2s;"
                                     @click="handleOrderAction(() => $emit('add-new-order-before', { item, orderIndex }), orderIndex)"
                                     title="之前添加订单"
-                                    @mouseenter="$event.target.style.color='#495057'"
-                                    @mouseleave="$event.target.style.color='#6c757d'">
+                                    @mouseenter="$event.target.style.color='var(--product-text-secondary)'"
+                                    @mouseleave="$event.target.style.color='var(--product-text-muted)'">
                                 ⬆️
                             </button>
 
@@ -338,7 +338,7 @@
                              :data-order-index="orderIndex"
                              style="margin-left: -0.5rem; margin-right: -0.5rem; width: calc(100% + 1rem); ">
                             <div class="matched-goods-container border rounded p-2"
-                                 style="background-color: #e7f3ff; border-color: #0dcaf0 !important; box-shadow: 0 2px 8px rgba(13, 202, 240, 0.2);">
+                                 style="background-color: var(--product-info-soft); border-color: var(--product-info) !important; box-shadow: 0 2px 8px rgba(var(--product-info-rgb), 0.2);">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <small class="text-muted fw-bold">推荐商品 ({{
                                         item.nxDistributerGoodsEntityList.length }})</small>
@@ -359,12 +359,12 @@
                                             class="matched-goods-item p-2 mb-1 rounded hover-bg d-flex"
                                             :class="{ 'goods-item-selected': selectedMatchedGoodsIndex[orderIndex] === goodsIndex && (orderArrIndex !== orderIndex || selectedNxGoodsIndex < 0) }"
                                             :data-goods-index="goodsIndex"
-                                            style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
+                                            style="cursor: pointer; background-color: var(--product-surface); border-bottom: 1px solid var(--product-tint); padding: 12px 16px;">
                                         <!-- 左侧内容区域 -->
                                         <div class="flex-grow-1" style="min-width: 0; margin-right: 40px;">
                                             <!-- 商品信息 -->
                                             <div>
-                                                <span class="text-muted fw-bold me-2" style="color: #666;">{{ goodsIndex + 1 }}.</span>
+                                                <span class="text-muted fw-bold me-2" style="color: var(--product-text-muted);">{{ goodsIndex + 1 }}.</span>
                                                 <span v-if="disId != null && matchedGoods.nxDgDistributerId != null && matchedGoods.nxDgDistributerId !== disId && matchedGoods.nxDgDistributerName"
                                                       class="font-xs text-primary me-1">[{{ matchedGoods.nxDgDistributerName }}]</span>
                                                 <span v-if="matchedGoods.nxDgGoodsBrand && matchedGoods.nxDgGoodsBrand !== 'null'"
@@ -372,20 +372,20 @@
                                             {{ matchedGoods.nxDgGoodsBrand }}
                                         </span>
                                                 <span class="text-dark"
-                                                      style="color: #333; font-weight: 500;">{{ matchedGoods.nxDgGoodsName }}</span>
+                                                      style="color: var(--product-text); font-weight: 500;">{{ matchedGoods.nxDgGoodsName }}</span>
 
                                                 <span class="text-muted small ms-1"
                                                       v-if="matchedGoods.nxDgItemsPerCarton && matchedGoods.nxDgItemsPerCarton !== 'null'">
                                             ({{matchedGoods.nxDgGoodsStandardWeight + '/'+ matchedGoods.nxDgGoodsStandardname + '*' + matchedGoods.nxDgItemsPerCarton +'/'+matchedGoods.nxDgCartonUnit }})
                                         </span>
                                                 <span v-else>
-                                             <span class="text-muted small ms-1" style="color: #666;"
+                                             <span class="text-muted small ms-1" style="color: var(--product-text-muted);"
                                                    v-if="matchedGoods.nxDgGoodsStandardWeight && matchedGoods.nxDgGoodsStandardWeight !== 'null'">
                                             ({{ matchedGoods.nxDgGoodsStandardWeight && matchedGoods.nxDgGoodsStandardWeight !== 'null'
                                               ? matchedGoods.nxDgGoodsStandardWeight + '/' + matchedGoods.nxDgGoodsStandardname
                                               : matchedGoods.nxDgGoodsStandardname }})
                                         </span>
-                                        <span class="text-muted small ms-1" style="color: #666;" v-else>
+                                        <span class="text-muted small ms-1" style="color: var(--product-text-muted);" v-else>
                                             ({{matchedGoods.nxDgGoodsStandardname }})
                                         </span>
 
@@ -419,7 +419,7 @@
                                         <button
                                                 class="btn btn-secondary btn-sm align-self-center"
                                                 @click.stop="$emit('select-matched-goods', { item, orderIndex, goodsIndex })"
-                                                style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; background-color: #6c757d; border-color: #6c757d; color: #fff;">
+                                                style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; background-color: var(--product-text-muted); border-color: var(--product-text-muted); color: #fff;">
                                             选择
                                         </button>
                                     </div>
@@ -428,7 +428,7 @@
 
                             <div v-if="item.nxGoodsEntities && item.nxGoodsEntities.length > 0 && orderArrIndex === orderIndex && strArr.length === 0 && nxArr.length === 0"
                                  class="border rounded p-2 mb-2 nx-goods-entities-container"
-                                 style="background-color: #fff3cd; border-color: #ffc107 !important; margin-top: 4px;"
+                                 style="background-color: var(--product-warning-soft); border-color: var(--product-warning) !important; margin-top: 4px;"
                                  :data-order-index="orderIndex">
                                 <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
                                     <span class="text-muted small fw-bold">推荐系统商品 ({{ item.nxGoodsEntities.length }})</span>
@@ -443,9 +443,9 @@
                                      :class="{ 'goods-item-selected': selectedNxGoodsIndex === nxIndex }"
                                      :data-goods-index="nxIndex"
                                      @click.stop="$emit('download-goods-nx', { goods, orderIndex })"
-                                     style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
+                                     style="cursor: pointer; background-color: var(--product-surface); border-bottom: 1px solid var(--product-tint); padding: 12px 16px;">
                                     <div class="flex-grow-1" style="min-width: 0;">
-                                        <span class="text-muted fw-bold me-2" style="color: #666;">{{ nxIndex + 1 }}.</span>
+                                        <span class="text-muted fw-bold me-2" style="color: var(--product-text-muted);">{{ nxIndex + 1 }}.</span>
                                         <span v-if="goods.nxGoodsBrand && goods.nxGoodsBrand !== 'null'"
                                               class="badge bg-warning text-dark me-1">{{ goods.nxGoodsBrand }}</span>
                                         <span class="text-dark">{{ goods.nxGoodsName }}</span>
@@ -489,7 +489,7 @@
                                 v-if="orderArrIndex === orderIndex && item.nxDoStatus !== 0 && (strArr.length > 0 || nxArr.length > 0)"
                                 class="goods-search-dropdown position-absolute border rounded shadow-lg p-2 search-results-container"
                                 :data-order-index="orderIndex"
-                                style="top: 100%; left: -0.5rem; right: -0.5rem; width: calc(100% + 1rem); z-index: 1000; max-height: 400px; overflow-y: auto; margin-top: 4px; background-color: #fff3cd; border-color: #ffc107 !important; box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);"
+                                style="top: 100%; left: -0.5rem; right: -0.5rem; width: calc(100% + 1rem); z-index: 1000; max-height: 400px; overflow-y: auto; margin-top: 4px; background-color: var(--product-warning-soft); border-color: var(--product-warning) !important; box-shadow: 0 2px 8px rgba(var(--product-warning-rgb), 0.3);"
                         >
                             <!-- 搜索标题 -->
                             <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
@@ -512,12 +512,12 @@
                                         :class="{ 'goods-item-selected': selectedSearchResultIndex === goodsIndex }"
                                         :data-goods-index="goodsIndex"
                                         @click.stop="$emit('select-search-result', { goods, orderIndex })"
-                                        style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
+                                        style="cursor: pointer; background-color: var(--product-surface); border-bottom: 1px solid var(--product-tint); padding: 12px 16px;">
                                     <!-- 左侧内容区域 -->
                                     <div class="flex-grow-1" style="min-width: 0; margin-right: 40px;">
                                         <!-- 商品信息 -->
                                         <div>
-                                            <span class="text-muted fw-bold me-2" style="color: #666;">{{ goodsIndex + 1 }}.</span>
+                                            <span class="text-muted fw-bold me-2" style="color: var(--product-text-muted);">{{ goodsIndex + 1 }}.</span>
                                             <span v-if="disId != null && goods.nxDgDistributerId != null && goods.nxDgDistributerId !== disId && goods.goodsNxDistributerName"
                                                   class="font-xs text-primary me-1">[{{ goods.goodsNxDistributerName }}]</span>
                                             <span v-if="goods.nxDgGoodsBrand && goods.nxDgGoodsBrand !== 'null'"
@@ -568,7 +568,7 @@
                                             class="btn btn-secondary btn-sm align-self-center"
                                             @click.stop="$emit('select-search-result', { goods, orderIndex })"
                                             :class="{ 'btn-warning': !goods.nxDgNxGoodsId }"
-                                            style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; background-color: #6c757d; border-color: #6c757d; color: #fff;">
+                                            style="flex-shrink: 0; min-width: 53px; padding: 4px 8px; font-size: 12px; background-color: var(--product-text-muted); border-color: var(--product-text-muted); color: #fff;">
                                         {{ goods.nxDgNxGoodsId ? '选择' : '临时' }}
                                     </button>
                                 </div>
@@ -585,10 +585,10 @@
                                         :class="{ 'goods-item-selected': selectedSearchResultIndex === strArr.length + goodsIndex }"
                                         :data-goods-index="strArr.length + goodsIndex"
                                         @click.stop="$emit('download-goods-nx', { goods, orderIndex })"
-                                        style="cursor: pointer; background-color: #ffffff; border-bottom: 1px solid #f0f0f0; padding: 12px 16px;">
+                                        style="cursor: pointer; background-color: var(--product-surface); border-bottom: 1px solid var(--product-tint); padding: 12px 16px;">
                                     <!-- 商品信息 -->
                                     <div class="flex-grow-1" style="min-width: 0;">
-                                        <span class="text-muted fw-bold me-2" style="color: #666;">{{ strArr.length + goodsIndex + 1 }}.</span>
+                                        <span class="text-muted fw-bold me-2" style="color: var(--product-text-muted);">{{ strArr.length + goodsIndex + 1 }}.</span>
                                         <span v-if="goods.nxGoodsBrand && goods.nxGoodsBrand !== 'null'"
                                               class="badge bg-warning text-dark me-1">
                                     {{ goods.nxGoodsBrand }}
@@ -625,7 +625,7 @@
                     </transition>
                 </div>
 
-                <div style="padding: 6rem 0;font-size:12px; color:#373b3e; text-align:center; margin-bottom:3rem;"
+                <div style="padding: 6rem 0;font-size:12px; color:var(--product-text-secondary); text-align:center; margin-bottom:3rem;"
                      v-if="orderItems.length > 0">没有订单了！
                 </div>
             </div>
@@ -652,7 +652,7 @@ export default controller;
 <style scoped>
     /* 表头单元格样式 */
     .table-cell {
-        border-right: 1px solid #dee2e6;
+        border-right: 1px solid var(--product-info-soft);
         padding: 0 8px;
     }
 
@@ -685,9 +685,9 @@ export default controller;
 
     /* 商品列表选中项高亮（键盘上下键选择） */
     .goods-item-selected {
-        background-color: rgba(13, 202, 240, 0.2) !important;
-        border: 1px solid #0dcaf0 !important;
-        box-shadow: 0 0 0 1px #0dcaf0;
+        background-color: rgba(var(--product-info-rgb), 0.2) !important;
+        border: 1px solid var(--product-info) !important;
+        box-shadow: 0 0 0 1px var(--product-info);
     }
 
     /* 匹配商品容器样式增强 */
@@ -697,10 +697,10 @@ export default controller;
 
     @keyframes pulse-border {
         0%, 100% {
-            box-shadow: 0 2px 8px rgba(13, 202, 240, 0.2);
+            box-shadow: 0 2px 8px rgba(var(--product-info-rgb), 0.2);
         }
         50% {
-            box-shadow: 0 2px 12px rgba(13, 202, 240, 0.35);
+            box-shadow: 0 2px 12px rgba(var(--product-info-rgb), 0.35);
         }
     }
 
@@ -748,7 +748,7 @@ export default controller;
         left: 0;
         right: 0;
         bottom: 0;
-        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        background: linear-gradient(135deg, rgba(var(--product-info-rgb), 0.1) 0%, rgba(var(--product-primary-rgb), 0.1) 100%);
         pointer-events: none;
     }
 
@@ -759,7 +759,7 @@ export default controller;
     }
 
     .tts-player-content:hover {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        box-shadow: 0 4px 12px rgba(var(--product-text-rgb), 0.15);
     }
 
     /* 搜索结果容器样式增强 */
@@ -769,10 +769,10 @@ export default controller;
 
     @keyframes pulse-border-yellow {
         0%, 100% {
-            box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
+            box-shadow: 0 2px 8px rgba(var(--product-warning-rgb), 0.3);
         }
         50% {
-            box-shadow: 0 2px 14px rgba(255, 193, 7, 0.45);
+            box-shadow: 0 2px 14px rgba(var(--product-warning-rgb), 0.45);
         }
     }
 </style>

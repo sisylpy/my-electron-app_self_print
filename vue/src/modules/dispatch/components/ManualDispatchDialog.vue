@@ -46,25 +46,25 @@ const drivers = computed(() => (Array.isArray(props.pageData?.drivers) ? props.p
 </script>
 
 <style scoped>
-.manual-backdrop { position: fixed; z-index: 1260; display: grid; inset: 0; place-items: center; padding: 24px; background: rgba(12, 28, 22, .6); backdrop-filter: blur(4px); }
-.manual-dialog { display: flex; width: min(820px, 92vw); max-height: min(760px, 90vh); flex-direction: column; overflow: hidden; border-radius: 16px; background: #f6f9f7; box-shadow: 0 28px 90px rgba(6, 25, 18, .32); }
-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px 15px; border-bottom: 1px solid #dfe8e3; background: #fff; }
+.manual-backdrop { position: fixed; z-index: 1260; display: grid; inset: 0; place-items: center; padding: 24px; background: rgba(var(--product-text-rgb), 0.6); backdrop-filter: blur(4px); }
+.manual-dialog { display: flex; width: min(820px, 92vw); max-height: min(760px, 90vh); flex-direction: column; overflow: hidden; border-radius: 16px; background: var(--product-tint); box-shadow: 0 28px 90px rgba(var(--product-text-rgb), 0.32); }
+header { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px 15px; border-bottom: 1px solid var(--product-tint); background: var(--product-surface); }
 header span, header h2, header p { margin: 0; }
-header span { color: #14845d; font-size: 10px; font-weight: 800; }
-header h2 { margin-top: 3px; color: #183128; font-size: 21px; }
-header p { margin-top: 4px; color: #7c8b85; font-size: 10px; }
-header > button { width: 34px; height: 34px; border: 1px solid #d5dfda; border-radius: 9px; color: #687972; background: #fff; font-size: 22px; }
+header span { color: var(--product-primary-strong); font-size: 10px; font-weight: 800; }
+header h2 { margin-top: 3px; color: var(--product-text); font-size: 21px; }
+header p { margin-top: 4px; color: var(--product-text-muted); font-size: 10px; }
+header > button { width: 34px; height: 34px; border: 1px solid var(--product-primary-soft); border-radius: 9px; color: var(--product-text-muted); background: var(--product-surface); font-size: 22px; }
 .manual-list { overflow-y: auto; padding: 12px; }
-article { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 12px; align-items: center; margin-bottom: 8px; padding: 12px; border: 1px solid #dfe8e3; border-radius: 11px; background: #fff; }
-.manual-avatar { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 50%; color: #fff; background: #15956a; font-size: 13px; font-weight: 800; }
+article { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 12px; align-items: center; margin-bottom: 8px; padding: 12px; border: 1px solid var(--product-tint); border-radius: 11px; background: var(--product-surface); }
+.manual-avatar { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 50%; color: #fff; background: var(--product-primary-strong); font-size: 13px; font-weight: 800; }
 .manual-copy { display: flex; min-width: 0; flex-direction: column; }
-.manual-copy strong { color: #20372f; font-size: 13px; }
-.manual-copy span, .manual-copy small { margin-top: 3px; color: #7b8984; font-size: 9px; }
-.manual-copy small { color: #a36d25; }
-article > button { padding: 8px 12px; border: 1px solid #159467; border-radius: 8px; color: #fff; background: #159467; font-size: 9px; font-weight: 800; }
+.manual-copy strong { color: var(--product-text); font-size: 13px; }
+.manual-copy span, .manual-copy small { margin-top: 3px; color: var(--product-text-muted); font-size: 9px; }
+.manual-copy small { color: var(--product-warning); }
+article > button { padding: 8px 12px; border: 1px solid var(--product-primary-strong); border-radius: 8px; color: #fff; background: var(--product-primary-strong); font-size: 9px; font-weight: 800; }
 button:disabled { cursor: not-allowed; opacity: .45; }
-.manual-state { padding: 40px 20px; color: #7b8984; text-align: center; }
-.manual-state.error { color: #b95049; }
+.manual-state { padding: 40px 20px; color: var(--product-text-muted); text-align: center; }
+.manual-state.error { color: var(--product-danger); }
 header span { font-size: 12px; }
 header h2 { font-size: 25px; }
 header p { font-size: 12px; }

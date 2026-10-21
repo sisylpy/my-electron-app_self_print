@@ -1223,9 +1223,9 @@ export default {
         font-size: 18px;
         font-weight: bold;
         line-height: 1;
-        color: #495057;
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
+        color: var(--product-text-secondary);
+        background: var(--product-info-soft);
+        border: 1px solid var(--product-info-soft);
         border-radius: 4px;
         cursor: pointer;
         transition: background 0.2s, color 0.2s;
@@ -1235,8 +1235,8 @@ export default {
         z-index: 5;
     }
     .excel-paste-scroll-btn:hover:not(:disabled) {
-        background: #e9ecef;
-        color: #0d6efd;
+        background: var(--product-info-soft);
+        color: var(--product-info);
     }
     .excel-paste-scroll-btn:disabled {
         opacity: 0.4;
@@ -1254,7 +1254,7 @@ export default {
     .excel-paste-table-wrap ::v-deep(.vxe-table--content-wrapper),
     .excel-paste-table-wrap ::v-deep(.vxe-table--main-wrapper) {
         scrollbar-width: auto;
-        scrollbar-color: #495057 #dee2e6;
+        scrollbar-color: var(--product-text-secondary) var(--product-info-soft);
     }
     .excel-paste-table-wrap ::v-deep(.vxe-table--body-wrapper)::-webkit-scrollbar,
     .excel-paste-table-wrap ::v-deep(.vxe-table--content-wrapper)::-webkit-scrollbar,
@@ -1264,20 +1264,20 @@ export default {
     .excel-paste-table-wrap ::v-deep(.vxe-table--body-wrapper)::-webkit-scrollbar-track,
     .excel-paste-table-wrap ::v-deep(.vxe-table--content-wrapper)::-webkit-scrollbar-track,
     .excel-paste-table-wrap ::v-deep(.vxe-table--main-wrapper)::-webkit-scrollbar-track {
-        background: #dee2e6;
+        background: var(--product-info-soft);
         border-radius: 8px;
     }
     .excel-paste-table-wrap ::v-deep(.vxe-table--body-wrapper)::-webkit-scrollbar-thumb,
     .excel-paste-table-wrap ::v-deep(.vxe-table--content-wrapper)::-webkit-scrollbar-thumb,
     .excel-paste-table-wrap ::v-deep(.vxe-table--main-wrapper)::-webkit-scrollbar-thumb {
-        background: #495057;
+        background: var(--product-text-secondary);
         border-radius: 8px;
-        border: 2px solid #dee2e6;
+        border: 2px solid var(--product-info-soft);
     }
     .excel-paste-table-wrap ::v-deep(.vxe-table--body-wrapper)::-webkit-scrollbar-thumb:hover,
     .excel-paste-table-wrap ::v-deep(.vxe-table--content-wrapper)::-webkit-scrollbar-thumb:hover,
     .excel-paste-table-wrap ::v-deep(.vxe-table--main-wrapper)::-webkit-scrollbar-thumb:hover {
-        background: #212529;
+        background: var(--product-text);
     }
 
     /* 表格禁用状态样式 - 允许滚动但禁止编辑 */
@@ -1312,7 +1312,7 @@ export default {
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: rgba(0, 0, 0, 0.6);
+        background-color: rgba(var(--product-text-rgb), 0.6);
         display: flex;
         justify-content: center;
         align-items: center;
@@ -1345,54 +1345,54 @@ export default {
         font-size: 16px;
         line-height: 1;
         font-weight: 400;
-        border: 1px solid #dee2e6;
+        border: 1px solid var(--product-info-soft);
         border-radius: 4px;
-        background: #fff;
-        color: #495057;
+        background: var(--product-surface);
+        color: var(--product-text-secondary);
         cursor: pointer;
         transition: border-color 0.15s, background 0.15s;
     }
 
     .excel-paste-btn:hover {
-        border-color: #0a58ca;
-        background: #f0f7ff;
-        color: #0a58ca;
+        border-color: var(--product-info);
+        background: var(--product-info-soft);
+        color: var(--product-info);
     }
 
     .excel-paste-btn-del:hover {
-        border-color: #c82333;
-        background: #fff5f5;
-        color: #c82333;
+        border-color: var(--product-danger);
+        background: var(--product-danger-soft);
+        color: var(--product-danger);
     }
 
     /* 行插入/删除动画（vxe-table 行类名会加在 tr 上），边框淡蓝色 */
     ::v-deep(.excel-paste-row-inserting) {
-        box-shadow: inset 0 0 0 2px rgba(13, 110, 253, 0.35);
+        box-shadow: inset 0 0 0 2px rgba(var(--product-info-rgb), 0.35);
         animation: excel-paste-row-insert 0.3s ease-out;
     }
 
     ::v-deep(.excel-paste-row-deleting) {
         overflow: hidden;
-        box-shadow: inset 0 0 0 2px rgba(13, 110, 253, 0.25);
+        box-shadow: inset 0 0 0 2px rgba(var(--product-info-rgb), 0.25);
         animation: excel-paste-row-delete 0.28s ease-out forwards;
     }
 
     /* 校验失败行高亮（转订单时不符合规则的那一行） */
     ::v-deep(.excel-paste-row-validation-failed) {
-        background-color: #fff5f5 !important;
-        box-shadow: inset 0 0 0 2px rgba(220, 53, 69, 0.4);
+        background-color: var(--product-danger-soft) !important;
+        box-shadow: inset 0 0 0 2px rgba(var(--product-danger-rgb), 0.4);
     }
 
     @keyframes excel-paste-row-insert {
         from {
             opacity: 0;
             transform: translateY(-8px);
-            box-shadow: inset 0 0 0 2px rgba(13, 110, 253, 0.5);
+            box-shadow: inset 0 0 0 2px rgba(var(--product-info-rgb), 0.5);
         }
         to {
             opacity: 1;
             transform: translateY(0);
-            box-shadow: inset 0 0 0 2px rgba(13, 110, 253, 0.2);
+            box-shadow: inset 0 0 0 2px rgba(var(--product-info-rgb), 0.2);
         }
     }
 
@@ -1400,7 +1400,7 @@ export default {
         from {
             opacity: 1;
             max-height: 56px;
-            box-shadow: inset 0 0 0 2px rgba(13, 110, 253, 0.35);
+            box-shadow: inset 0 0 0 2px rgba(var(--product-info-rgb), 0.35);
         }
         to {
             opacity: 0;
@@ -1409,7 +1409,7 @@ export default {
             padding-bottom: 0;
             border-top-width: 0;
             border-bottom-width: 0;
-            box-shadow: inset 0 0 0 2px rgba(13, 110, 253, 0.1);
+            box-shadow: inset 0 0 0 2px rgba(var(--product-info-rgb), 0.1);
         }
     }
 </style>

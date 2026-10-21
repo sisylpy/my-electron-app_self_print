@@ -1,27 +1,128 @@
 :root {
+  /* ===== 日间 · 暖梅配色 ===== */
   --product-bg: #f7f3ef;
   --product-surface: #ffffff;
-  --product-surface-soft: #fbf8f5;
-  --product-border: #e1d7ce;
-  --product-border-strong: #cfc0b3;
-  --product-text: #2d241e;
-  --product-text-secondary: #6f6055;
-  --product-text-muted: #97897e;
-  --product-primary: #a66f3f;
-  --product-primary-strong: #74472b;
-  --product-primary-soft: #f4e8dc;
-  --product-blue: #a66f3f;
-  --product-blue-soft: #f4e8dc;
-  --product-warning: #9a6a18;
-  --product-warning-soft: #fff8e9;
+  --product-surface-soft: #fbf6f1;
+
+  --product-border: #e5ddda;
+  --product-border-strong: #d6c8c0;
+
+  --product-text: #292327;
+  --product-text-secondary: #6b5e63;
+  --product-text-muted: #978a90;
+
+  --product-primary: #784658;
+  --product-primary-strong: #9f6577;
+  --product-primary-soft: #e9d4da;
+  --product-primary-hover: #8c5470;
+  --product-primary-ring: rgba(120, 70, 88, .12);
+
+  --product-blue: #784658;
+  --product-blue-soft: #e9d4da;
+
+  --product-warning: #b07c2e;
+  --product-warning-soft: #f6ecdd;
   --product-danger: #b14949;
-  --product-danger-soft: #fff3f2;
+  --product-danger-soft: #fbeff0;
+  --product-success: #4e8b6e;
+  --product-success-soft: #eaf3ee;
+  --product-info: #7d9ed6;
+  --product-info-soft: #eaf0f7;
+
+  --product-disabled: #b9a89c;
+  --product-disabled-soft: #f1e9e5;
+
+  /* 低饱和中性填充（原灰绿，现暖灰） */
+  --product-tint: #f7f4f1;
+  --product-tint-hover: #f1ece9;
+  --product-tint-strong: #f1ecea;
+  --product-tint-border: #e8ded9;
+  --product-tint-line: #e0d6d2;
+  --product-tint-accent: #5b6b62;
+  --product-on-tint: #3c4b43;
+
+  /* 半透明衍生色用 rgba(var(--x-rgb), a) 引用；Electron 19 (Chromium 102) 不支持 color-mix */
+  --product-text-rgb: 41, 35, 39;
+  --product-primary-rgb: 120, 70, 88;
+  --product-primary-strong-rgb: 159, 101, 119;
+  --product-primary-soft-rgb: 233, 212, 218;
+  --product-surface-rgb: 255, 255, 255;
+  --product-tint-rgb: 247, 244, 241;
+  --product-info-rgb: 125, 158, 214;
+  --product-info-soft-rgb: 234, 240, 247;
+  --product-warning-rgb: 176, 124, 46;
+  --product-warning-soft-rgb: 246, 236, 221;
+  --product-danger-rgb: 177, 73, 73;
+  --product-danger-soft-rgb: 251, 239, 240;
+
+  --bs-primary-rgb: 120, 70, 88;
+  --bs-success-rgb: 78, 139, 110;
+
   --product-radius-sm: 0;
   --product-radius-md: 0;
   --product-radius-lg: 0;
   --product-shadow: none;
   --product-sidebar-width: 86px;
   --product-header-height: 76px;
+}
+
+[data-theme='night'] {
+  /* ===== 夜间 · 深暖灰夜间工作台 ===== */
+  --product-bg: #241e22;
+  --product-surface: #2e262b;
+  --product-surface-soft: #34292f;
+
+  --product-border: #4a3c44;
+  --product-border-strong: #5a4a52;
+
+  --product-text: #f3e8ec;
+  --product-text-secondary: #c8b8be;
+  --product-text-muted: #8e7c84;
+
+  --product-primary: #b78496;
+  --product-primary-strong: #e3b7c4;
+  --product-primary-soft: #5a444e;
+  --product-primary-hover: #d7a6b6;
+  --product-primary-ring: rgba(183, 132, 150, .18);
+
+  --product-blue: #b78496;
+  --product-blue-soft: #5a444e;
+
+  --product-warning: #d3a35c;
+  --product-warning-soft: #3a2e22;
+  --product-danger: #e06a79;
+  --product-danger-soft: #3a252a;
+  --product-success: #58a889;
+  --product-success-soft: #1f312b;
+  --product-info: #7d9ed6;
+  --product-info-soft: #232b36;
+
+  --product-disabled: #6c5660;
+  --product-disabled-soft: #34292f;
+
+  --product-tint: #2e262b;
+  --product-tint-hover: #3a3036;
+  --product-tint-strong: #34292f;
+  --product-tint-border: #4a3c44;
+  --product-tint-line: #4a3c44;
+  --product-tint-accent: #c8b8be;
+  --product-on-tint: #f3e8ec;
+
+  --product-text-rgb: 243, 232, 236;
+  --product-primary-rgb: 183, 132, 150;
+  --product-primary-strong-rgb: 227, 183, 196;
+  --product-primary-soft-rgb: 90, 68, 78;
+  --product-surface-rgb: 46, 38, 43;
+  --product-tint-rgb: 46, 38, 43;
+  --product-info-rgb: 125, 158, 214;
+  --product-info-soft-rgb: 35, 43, 54;
+  --product-warning-rgb: 211, 163, 92;
+  --product-warning-soft-rgb: 58, 46, 34;
+  --product-danger-rgb: 224, 106, 121;
+  --product-danger-soft-rgb: 58, 37, 42;
+
+  --bs-primary-rgb: 183, 132, 150;
+  --bs-success-rgb: 88, 168, 137;
 }
 
 html,

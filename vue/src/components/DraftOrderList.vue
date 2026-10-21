@@ -1,6 +1,6 @@
 ﻿<template>
     <div class="order-list-container flex-grow-1 d-flex flex-column"
-         style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0;">
+         style="flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--product-info-soft); border-radius: 0.375rem; padding: 0;">
         <div v-if="orderItems.length === 0"
              class="text-center text-muted p-4 d-flex flex-column align-items-center justify-content-center"
              style="flex: 1; min-height: 0;">
@@ -10,7 +10,7 @@
         <!-- 表头 -->
         <div v-if="orderItems.length > 0"
              class="table-header-fixed bg-light border-bottom p-1 d-flex align-items-center fw-bold small"
-             style="position: sticky; top: 0; z-index: 10; background-color: #eeeeee;">
+             style="position: sticky; top: 0; z-index: 10; background-color: var(--product-tint);">
             <div style="width: 40px; flex-shrink: 0; margin-left: 15px;"
                  class="text-center table-cell">序号
             </div>
@@ -386,7 +386,7 @@ export default {
 <style scoped>
     /* 表头单元格样式 */
     .table-cell {
-        border-right: 1px solid #dee2e6;
+        border-right: 1px solid var(--product-info-soft);
         padding: 0 8px;
     }
 
@@ -415,11 +415,11 @@ export default {
 
     /* 订单选中状态 */
     .order-item-card.order-item-selected {
-        background-color: #e7f1ff !important;
-        border-color: #0056b3 !important;
+        background-color: var(--product-info-soft) !important;
+        border-color: var(--product-info) !important;
         border-width: 1px 1px 1px 3px;
-        border-left: 3px solid #0056b3;
-        box-shadow: 0 0 0 1px rgba(0, 86, 179, 0.2);
+        border-left: 3px solid var(--product-info);
+        box-shadow: 0 0 0 1px rgba(var(--product-info-rgb), 0.2);
     }
 
     /* 草稿行操作菜单：常态只占一个紧凑按钮的宽度 */
@@ -443,9 +443,9 @@ export default {
         gap: 5px;
         min-width: 66px;
         padding: 5px 10px;
-        color: #40564b;
-        background: #fff;
-        border: 1px solid #bfd2c8;
+        color: var(--product-primary-strong);
+        background: var(--product-surface);
+        border: 1px solid var(--product-primary-soft);
         border-radius: 7px;
         font-size: 12px;
         font-weight: 700;
@@ -456,10 +456,10 @@ export default {
 
     .draft-actions-trigger:hover,
     .draft-actions-trigger[aria-expanded="true"] {
-        color: #087443;
-        background: #f2fbf6;
-        border-color: #55ae7d;
-        box-shadow: 0 2px 8px rgba(20, 118, 72, .12);
+        color: var(--product-primary-strong);
+        background: var(--product-primary-soft);
+        border-color: var(--product-primary);
+        box-shadow: 0 2px 8px rgba(var(--product-primary-strong-rgb), 0.12);
     }
 
     .draft-actions-chevron {
@@ -480,10 +480,10 @@ export default {
         display: grid;
         width: 132px;
         padding: 5px;
-        background: #fff;
-        border: 1px solid #d7e2dc;
+        background: var(--product-surface);
+        border: 1px solid var(--product-primary-soft);
         border-radius: 9px;
-        box-shadow: 0 9px 24px rgba(30, 61, 46, .18);
+        box-shadow: 0 9px 24px rgba(var(--product-text-rgb), 0.18);
     }
 
     .draft-action-item {
@@ -492,7 +492,7 @@ export default {
         gap: 7px;
         width: 100%;
         padding: 7px 9px;
-        color: #44554d;
+        color: var(--product-text-secondary);
         background: transparent;
         border: 0;
         border-radius: 6px;
@@ -504,8 +504,8 @@ export default {
 
     .draft-action-item:hover,
     .draft-action-item:focus-visible {
-        color: #0a6f43;
-        background: #eef8f3;
+        color: var(--product-primary-strong);
+        background: var(--product-primary-soft);
         outline: none;
     }
 
@@ -516,28 +516,28 @@ export default {
     }
 
     .draft-action-item--delete {
-        color: #c82333;
+        color: var(--product-danger);
     }
 
     .draft-action-item--delete:hover,
     .draft-action-item--delete:focus-visible {
-        color: #a91624;
-        background: #fff5f5;
+        color: var(--product-danger);
+        background: var(--product-danger-soft);
     }
 
     .draft-action-item--add {
-        color: #0a58ca;
+        color: var(--product-info);
     }
 
     .draft-action-item--add:hover,
     .draft-action-item--add:focus-visible {
-        color: #084298;
-        background: #f0f7ff;
+        color: var(--product-info);
+        background: var(--product-info-soft);
     }
 
     .draft-action-item--remark.is-active {
-        color: #0a58ca;
-        background: #f0f7ff;
+        color: var(--product-info);
+        background: var(--product-info-soft);
     }
 </style>
 

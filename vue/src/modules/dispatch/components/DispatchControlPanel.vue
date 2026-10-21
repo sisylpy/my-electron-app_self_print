@@ -364,11 +364,11 @@ function statusTone(tone) {
 .stop-list li.is-driver-locked,
 .unassigned-list button.is-driver-locked {
   overflow: hidden;
-  border: 1px solid #e08a00;
-  border-left: 5px solid #f0a020;
+  border: 1px solid var(--product-warning);
+  border-left: 5px solid var(--product-warning);
   border-radius: 9px;
-  background: #fffaf0;
-  box-shadow: 0 4px 14px rgba(211, 126, 0, .14);
+  background: var(--product-warning-soft);
+  box-shadow: 0 4px 14px rgba(var(--product-warning-rgb), 0.14);
 }
 
 .driver-lock-badge {
@@ -379,10 +379,10 @@ function statusTone(tone) {
   margin-top: 4px;
   padding: 3px 8px;
   overflow: hidden;
-  border: 1px solid #e08a00;
+  border: 1px solid var(--product-warning);
   border-radius: 999px;
-  color: #9d5100;
-  background: #fff0c7;
+  color: var(--product-warning);
+  background: var(--product-warning-soft);
   font-size: 10px;
   font-weight: 900;
   line-height: 1.3;
@@ -397,9 +397,9 @@ function statusTone(tone) {
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #dce6e1;
+  border: 1px solid var(--product-tint);
   border-radius: 14px;
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .control-panel__header {
@@ -408,7 +408,7 @@ function statusTone(tone) {
   justify-content: space-between;
   gap: 16px;
   padding: 17px 18px 14px;
-  border-bottom: 1px solid #e8eeeb;
+  border-bottom: 1px solid var(--product-tint);
 }
 
 .control-panel__header span,
@@ -418,20 +418,20 @@ function statusTone(tone) {
 }
 
 .control-panel__header span {
-  color: #16855e;
+  color: var(--product-primary-strong);
   font-size: 10px;
   font-weight: 800;
 }
 
 .control-panel__header h2 {
   margin-top: 3px;
-  color: #183129;
+  color: var(--product-text);
   font-size: 20px;
 }
 
 .control-panel__header p {
   margin-top: 4px;
-  color: #7b8984;
+  color: var(--product-text-muted);
   font-size: 10px;
 }
 
@@ -439,8 +439,8 @@ function statusTone(tone) {
   flex: none;
   padding: 5px 9px;
   border-radius: 99px;
-  color: #40665a;
-  background: #eef6f2;
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
   font-size: 10px;
 }
 
@@ -449,7 +449,7 @@ function statusTone(tone) {
   gap: 7px;
   overflow-x: auto;
   padding: 10px 12px;
-  border-bottom: 1px solid #edf1ef;
+  border-bottom: 1px solid var(--product-tint);
 }
 
 .route-switcher button {
@@ -459,18 +459,18 @@ function statusTone(tone) {
   gap: 9px;
   align-items: center;
   padding: 9px 10px;
-  border: 1px solid #dfe7e3;
+  border: 1px solid var(--product-tint);
   border-radius: 9px;
   color: inherit;
-  background: #fff;
+  background: var(--product-surface);
   text-align: left;
   cursor: pointer;
 }
 
 .route-switcher button.active {
-  border-color: #62b99a;
-  background: #eef9f5;
-  box-shadow: 0 0 0 2px rgba(15, 159, 110, .08);
+  border-color: var(--product-primary);
+  background: var(--product-primary-soft);
+  box-shadow: 0 0 0 2px rgba(var(--product-primary-strong-rgb), 0.08);
 }
 
 .route-switcher i {
@@ -487,7 +487,7 @@ function statusTone(tone) {
 
 .route-switcher strong {
   overflow: hidden;
-  color: #20362f;
+  color: var(--product-text);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -496,14 +496,14 @@ function statusTone(tone) {
 .route-switcher small {
   overflow: hidden;
   margin-top: 3px;
-  color: #7a8883;
+  color: var(--product-text-muted);
   font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .route-switcher em {
-  color: #96a39f;
+  color: var(--product-border-strong);
   font-size: 18px;
   font-style: normal;
 }
@@ -518,7 +518,7 @@ function statusTone(tone) {
 
 .route-detail__summary {
   padding: 13px 16px 11px;
-  background: #fbfcfc;
+  background: var(--product-tint);
 }
 
 .route-detail__summary > div {
@@ -528,12 +528,12 @@ function statusTone(tone) {
 }
 
 .route-detail__summary > div span {
-  color: #87938f;
+  color: var(--product-text-muted);
   font-size: 9px;
 }
 
 .route-detail__summary > div strong {
-  color: #1c332b;
+  color: var(--product-text);
   font-size: 13px;
 }
 
@@ -546,18 +546,18 @@ function statusTone(tone) {
 
 .route-detail__summary dl div {
   padding-left: 9px;
-  border-left: 2px solid #dce8e3;
+  border-left: 2px solid var(--product-primary-soft);
 }
 
 .route-detail__summary dt {
-  color: #8a9692;
+  color: var(--product-text-muted);
   font-size: 8px;
 }
 
 .route-detail__summary dd {
   overflow: hidden;
   margin: 3px 0 0;
-  color: #344a43;
+  color: var(--product-primary-strong);
   font-size: 10px;
   font-weight: 800;
   text-overflow: ellipsis;
@@ -569,17 +569,17 @@ function statusTone(tone) {
   grid-template-columns: .9fr .9fr 1.3fr;
   gap: 8px;
   padding: 10px 14px;
-  border-top: 1px solid #e8eeeb;
-  border-bottom: 1px solid #e8eeeb;
+  border-top: 1px solid var(--product-tint);
+  border-bottom: 1px solid var(--product-tint);
 }
 
 .route-detail__actions button,
 .unassigned-list__assign {
   padding: 9px 11px;
-  border: 1px solid #b9ccc4;
+  border: 1px solid var(--product-primary-soft);
   border-radius: 8px;
-  color: #416058;
-  background: #fff;
+  color: var(--product-primary-strong);
+  background: var(--product-surface);
   font-size: 10px;
   font-weight: 800;
   cursor: pointer;
@@ -587,9 +587,9 @@ function statusTone(tone) {
 
 .route-detail__actions button.primary,
 .unassigned-list__assign {
-  border-color: #119865;
+  border-color: var(--product-primary-strong);
   color: #fff;
-  background: #119865;
+  background: var(--product-primary-strong);
 }
 
 .route-detail__actions button:disabled,
@@ -601,8 +601,8 @@ function statusTone(tone) {
 .route-detail__permission {
   margin: 0;
   padding: 0 14px 9px;
-  color: #9a6e22;
-  background: #fff;
+  color: var(--product-warning);
+  background: var(--product-surface);
   font-size: 8px;
 }
 
@@ -612,9 +612,9 @@ function statusTone(tone) {
   gap: 1px;
   margin: 10px 14px 0;
   overflow: hidden;
-  border: 1px solid #deebe5;
+  border: 1px solid var(--product-primary-soft);
   border-radius: 9px;
-  background: #deebe5;
+  background: var(--product-primary-soft);
 }
 
 .route-detail__plan-time > span {
@@ -622,18 +622,18 @@ function statusTone(tone) {
   min-width: 0;
   padding: 8px;
   flex-direction: column;
-  background: #f7fbf9;
+  background: var(--product-primary-soft);
 }
 
 .route-detail__plan-time small {
-  color: #84928c;
+  color: var(--product-text-muted);
   font-size: 7px;
 }
 
 .route-detail__plan-time strong {
   margin-top: 3px;
   overflow: hidden;
-  color: #1c7655;
+  color: var(--product-primary-strong);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -647,12 +647,12 @@ function statusTone(tone) {
 }
 
 .route-detail__list-head strong {
-  color: #2a4038;
+  color: var(--product-text);
   font-size: 11px;
 }
 
 .route-detail__list-head span {
-  color: #929d99;
+  color: var(--product-text-muted);
   font-size: 8px;
 }
 
@@ -666,13 +666,13 @@ function statusTone(tone) {
 }
 
 .stop-list li {
-  border-bottom: 1px solid #edf1ef;
+  border-bottom: 1px solid var(--product-tint);
 }
 
 .stop-list li.active {
   border-color: transparent;
   border-radius: 9px;
-  background: #eef9f5;
+  background: var(--product-primary-soft);
 }
 
 .stop-list__row {
@@ -704,19 +704,19 @@ function statusTone(tone) {
 
 .stop-list__actions button {
   padding: 5px 7px;
-  border: 1px solid #b9d5ca;
+  border: 1px solid var(--product-primary-soft);
   border-radius: 6px;
-  color: #187452;
-  background: #f3faf7;
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
   font-size: 8px;
   font-weight: 800;
   cursor: pointer;
 }
 
 .stop-list__actions button.danger {
-  border-color: #e2bab7;
-  color: #a44c45;
-  background: #fff6f5;
+  border-color: var(--product-danger);
+  color: var(--product-danger);
+  background: var(--product-danger-soft);
 }
 
 .stop-list__actions button:disabled {
@@ -739,8 +739,8 @@ function statusTone(tone) {
   height: 27px;
   place-items: center;
   border-radius: 50%;
-  color: #197855;
-  background: #e4f3ed;
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
   font-size: 10px;
   font-weight: 900;
 }
@@ -754,7 +754,7 @@ function statusTone(tone) {
 
 .stop-list__copy strong {
   overflow: hidden;
-  color: #233a32;
+  color: var(--product-text);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -763,7 +763,7 @@ function statusTone(tone) {
 .stop-list__copy small {
   overflow: hidden;
   margin-top: 3px;
-  color: #87938f;
+  color: var(--product-text-muted);
   font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -771,7 +771,7 @@ function statusTone(tone) {
 
 .stop-list__copy em {
   margin-top: 3px;
-  color: #5d776e;
+  color: var(--product-primary-strong);
   font-size: 8px;
   font-style: normal;
 }
@@ -781,13 +781,13 @@ function statusTone(tone) {
 }
 
 .stop-list__time strong {
-  color: #40564f;
+  color: var(--product-primary-strong);
   font-size: 9px;
 }
 
 .stop-list__time small {
   margin-top: 3px;
-  color: #8b9793;
+  color: var(--product-text-muted);
   font-size: 8px;
 }
 
@@ -801,16 +801,16 @@ function statusTone(tone) {
 
 .stop-list__depot > span {
   color: #fff;
-  background: #263d35;
+  background: var(--product-text);
 }
 
 .stop-list__depot strong {
-  color: #43564f;
+  color: var(--product-primary-strong);
   font-size: 10px;
 }
 
 .stop-list__depot small {
-  color: #89948f;
+  color: var(--product-text-muted);
   font-size: 8px;
 }
 
@@ -826,17 +826,17 @@ function statusTone(tone) {
   align-items: center;
   margin-bottom: 7px;
   padding: 10px;
-  border: 1px solid #e2e8e5;
+  border: 1px solid var(--product-border);
   border-radius: 9px;
   color: inherit;
-  background: #fff;
+  background: var(--product-surface);
   text-align: left;
   cursor: pointer;
 }
 
 .unassigned-list > button.active {
-  border-color: #66b899;
-  background: #eff9f5;
+  border-color: var(--product-primary);
+  background: var(--product-primary-soft);
 }
 
 .unassigned-list > button > span:first-child {
@@ -845,8 +845,8 @@ function statusTone(tone) {
   height: 27px;
   place-items: center;
   border-radius: 50%;
-  color: #6b7773;
-  background: #edf0ef;
+  color: var(--product-text-muted);
+  background: var(--product-tint);
   font-weight: 900;
 }
 
@@ -857,14 +857,14 @@ function statusTone(tone) {
 }
 
 .unassigned-list strong {
-  color: #2c4039;
+  color: var(--product-text);
   font-size: 10px;
 }
 
 .unassigned-list small {
   overflow: hidden;
   margin-top: 3px;
-  color: #87938f;
+  color: var(--product-text-muted);
   font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -881,7 +881,7 @@ function statusTone(tone) {
   flex: 1;
   place-items: center;
   align-content: center;
-  color: #83918c;
+  color: var(--product-text-muted);
   text-align: center;
 }
 
@@ -891,14 +891,14 @@ function statusTone(tone) {
   height: 42px;
   place-items: center;
   border-radius: 50%;
-  color: #19845e;
-  background: #eaf6f1;
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
   font-size: 18px;
 }
 
 .control-panel__empty strong {
   margin-top: 10px;
-  color: #41564f;
+  color: var(--product-primary-strong);
   font-size: 12px;
 }
 
@@ -914,8 +914,8 @@ function statusTone(tone) {
   align-items: center;
   flex: none;
   padding: 10px 13px;
-  border-top: 1px solid #e4ebe7;
-  background: #f8fbfa;
+  border-top: 1px solid var(--product-tint);
+  background: var(--product-primary-soft);
 }
 
 .selected-stop > span {
@@ -925,7 +925,7 @@ function statusTone(tone) {
   place-items: center;
   border-radius: 9px;
   color: #fff;
-  background: #16865e;
+  background: var(--product-primary-strong);
   font-size: 11px;
   font-weight: 900;
 }
@@ -937,14 +937,14 @@ function statusTone(tone) {
 }
 
 .selected-stop small {
-  color: #8a9692;
+  color: var(--product-text-muted);
   font-size: 8px;
 }
 
 .selected-stop strong {
   overflow: hidden;
   margin-top: 1px;
-  color: #283e36;
+  color: var(--product-text);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -953,7 +953,7 @@ function statusTone(tone) {
 .selected-stop em {
   overflow: hidden;
   margin-top: 2px;
-  color: #82908b;
+  color: var(--product-text-muted);
   font-size: 8px;
   font-style: normal;
   text-overflow: ellipsis;
@@ -964,8 +964,8 @@ function statusTone(tone) {
   margin: 0;
   padding: 4px 7px;
   border-radius: 99px;
-  color: #276d55;
-  background: #e5f3ed;
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
   font-size: 8px;
   font-weight: 800;
 }
@@ -989,41 +989,41 @@ function statusTone(tone) {
 .route-detail__plan-time small { font-size: 9px; }
 .route-detail__plan-time strong { margin-top: 3px; font-size: 16px; line-height: 1.08; }
 .route-detail__plan-time em { margin-top: 3px; padding: 2px 6px; border-radius: 99px; font-size: 9px; font-style: normal; }
-.is-success { color: #11825c; background: #e3f7ef; }
-.is-warning { color: #a36a0c; background: #fff3d6; }
-.is-danger { color: #ad473e; background: #ffe9e6; }
+.is-success { color: var(--product-primary-strong); background: var(--product-primary-soft); }
+.is-warning { color: var(--product-warning); background: var(--product-warning-soft); }
+.is-danger { color: var(--product-danger); background: var(--product-danger-soft); }
 .route-detail__progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; margin: 6px 14px 0; }
-.route-detail__progress > span { height: 7px; overflow: hidden; border-radius: 99px; background: #e7efeb; }
-.route-detail__progress i { display: block; height: 100%; border-radius: inherit; background: #16a06e; }
-.route-detail__progress strong { color: #63766e; font-size: 11px; }
-.route-detail__distance-line { display: flex; justify-content: center; gap: 18px; margin: 6px 14px 0; padding: 6px 0; border-top: 1px solid #edf2ef; border-bottom: 1px solid #edf2ef; color: #70827a; font-size: 11px; }
+.route-detail__progress > span { height: 7px; overflow: hidden; border-radius: 99px; background: var(--product-primary-soft); }
+.route-detail__progress i { display: block; height: 100%; border-radius: inherit; background: var(--product-primary-strong); }
+.route-detail__progress strong { color: var(--product-text-muted); font-size: 11px; }
+.route-detail__distance-line { display: flex; justify-content: center; gap: 18px; margin: 6px 14px 0; padding: 6px 0; border-top: 1px solid var(--product-tint); border-bottom: 1px solid var(--product-tint); color: var(--product-text-muted); font-size: 11px; }
 .route-detail__list-head { padding: 7px 16px 6px; }
 .route-detail__list-head strong { font-size: 14px; }
 .route-detail__list-head span { font-size: 10px; }
 .stop-list { padding: 0 12px 16px 14px; scrollbar-gutter: stable; }
 .stop-list::-webkit-scrollbar { width: 8px; }
-.stop-list::-webkit-scrollbar-thumb { border: 2px solid #fff; border-radius: 99px; background: #c7d8d1; }
-.stop-list li { margin-bottom: 6px; border: 1px solid #e3ebe7; border-radius: 11px; background: #fff; }
-.stop-list li.active { border-color: #7ac8aa; box-shadow: 0 0 0 2px rgba(18, 143, 96, .08); }
+.stop-list::-webkit-scrollbar-thumb { border: 2px solid #fff; border-radius: 99px; background: var(--product-primary-soft); }
+.stop-list li { margin-bottom: 6px; border: 1px solid var(--product-tint); border-radius: 11px; background: var(--product-surface); }
+.stop-list li.active { border-color: var(--product-primary); box-shadow: 0 0 0 2px rgba(var(--product-primary-strong-rgb), 0.08); }
 .stop-list__row { align-items: stretch; }
 .stop-list__select { grid-template-columns: 34px minmax(0, 1fr); gap: 9px; align-items: flex-start; padding: 9px; }
 .stop-list__sequence,
 .stop-list__depot > span { width: 31px; height: 31px; font-size: 12px; }
 .stop-list__content { display: flex; min-width: 0; flex-direction: column; }
-.stop-list__leg { margin: -9px -9px 7px; padding: 6px 9px; border-radius: 9px 9px 0 0; color: #567169; background: #f2f6f4; font-size: 10px; }
+.stop-list__leg { margin: -9px -9px 7px; padding: 6px 9px; border-radius: 9px 9px 0 0; color: var(--product-primary-strong); background: var(--product-tint); font-size: 10px; }
 .stop-list__title { display: flex; align-items: center; gap: 8px; }
-.stop-list__title strong { overflow: hidden; color: #263d35; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
-.stop-list__title em { flex: none; padding: 2px 6px; border-radius: 5px; color: #d48618; background: #fff4dc; font-size: 10px; font-style: normal; font-weight: 800; }
-.stop-list__goods { overflow: hidden; margin-top: 4px; color: #74847e; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.stop-list__time-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 7px; padding-top: 6px; border-top: 1px solid #edf2ef; }
-.stop-list__time-grid > span { display: flex; min-width: 0; align-items: center; flex-direction: column; padding: 0 7px; border-right: 1px solid #e5ece8; text-align: center; }
+.stop-list__title strong { overflow: hidden; color: var(--product-text); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.stop-list__title em { flex: none; padding: 2px 6px; border-radius: 5px; color: var(--product-warning); background: var(--product-warning-soft); font-size: 10px; font-style: normal; font-weight: 800; }
+.stop-list__goods { overflow: hidden; margin-top: 4px; color: var(--product-text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.stop-list__time-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--product-tint); }
+.stop-list__time-grid > span { display: flex; min-width: 0; align-items: center; flex-direction: column; padding: 0 7px; border-right: 1px solid var(--product-tint); text-align: center; }
 .stop-list__time-grid > span:last-child { border-right: 0; }
-.stop-list__time-grid small { color: #8c9994; font-size: 9px; }
-.stop-list__time-grid strong { margin-top: 3px; color: #263c34; font-size: 14px; }
+.stop-list__time-grid small { color: var(--product-text-muted); font-size: 9px; }
+.stop-list__time-grid strong { margin-top: 3px; color: var(--product-text); font-size: 14px; }
 .stop-list__time-grid em { margin-top: 3px; padding: 2px 6px; border-radius: 99px; font-size: 9px; font-style: normal; }
 .stop-list__actions { align-items: flex-start; flex-direction: column; padding: 12px 10px 0 0; }
 .stop-list__actions button { min-width: 58px; padding: 7px 9px; font-size: 10px; }
-.stop-list__depot { margin-bottom: 0 !important; padding: 12px; border-color: #dfe8e3 !important; }
+.stop-list__depot { margin-bottom: 0 !important; padding: 12px; border-color: var(--product-tint) !important; }
 .stop-list__depot > span + span { display: flex; flex-direction: column; }
 .stop-list__depot strong { font-size: 14px; }
 .stop-list__depot small { font-size: 11px; }
@@ -1119,9 +1119,9 @@ function statusTone(tone) {
 
 /* Desktop route sheet: compact overview and table rows matching the approved reference. */
 .control-panel {
-  border: 1px solid #dce5e1;
+  border: 1px solid var(--product-tint);
   border-radius: 10px;
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .route-switcher {
@@ -1167,8 +1167,8 @@ function statusTone(tone) {
   flex: none;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
-  border-bottom: 1px solid #e6ece9;
-  background: #fff;
+  border-bottom: 1px solid var(--product-tint);
+  background: var(--product-surface);
 }
 
 .route-detail__metrics {
@@ -1185,7 +1185,7 @@ function statusTone(tone) {
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  border-left: 1px solid #e5ebe8;
+  border-left: 1px solid var(--product-tint);
   text-align: center;
 }
 
@@ -1196,7 +1196,7 @@ function statusTone(tone) {
 .route-detail__metrics dt {
   order: 2;
   margin-top: 5px;
-  color: #7d8b86;
+  color: var(--product-text-muted);
   font-size: 9px;
 }
 
@@ -1204,7 +1204,7 @@ function statusTone(tone) {
   order: 1;
   overflow: hidden;
   margin: 0;
-  color: #14241f;
+  color: var(--product-text);
   font-size: 14px;
   line-height: 1.15;
   font-weight: 800;
@@ -1213,7 +1213,7 @@ function statusTone(tone) {
 }
 
 .route-detail__metrics > div:nth-child(n + 4) dd {
-  color: #078249;
+  color: var(--product-primary-strong);
 }
 
 .route-detail__actions,
@@ -1229,7 +1229,7 @@ function statusTone(tone) {
   gap: 6px;
   padding: 9px 11px;
   border: 0;
-  border-left: 1px solid #e5ebe8;
+  border-left: 1px solid var(--product-tint);
 }
 
 .route-detail__actions button,
@@ -1237,21 +1237,21 @@ function statusTone(tone) {
   width: 100%;
   min-height: 34px;
   padding: 7px 12px;
-  border: 1px solid #0c8752;
+  border: 1px solid var(--product-primary-strong);
   border-radius: 6px;
-  color: #087b49;
-  background: #fff;
+  color: var(--product-primary-strong);
+  background: var(--product-surface);
   font-size: 11px;
 }
 
 .route-detail__actions button.primary {
   color: #fff;
-  background: #07864d;
+  background: var(--product-primary-strong);
 }
 
 .route-detail__permission {
   padding: 6px 12px;
-  border-bottom: 1px solid #edf1ef;
+  border-bottom: 1px solid var(--product-tint);
   font-size: 10px;
 }
 
@@ -1281,10 +1281,10 @@ function statusTone(tone) {
   min-height: 36px;
   margin: 0 10px;
   padding: 0 8px;
-  border: 1px solid #e2e8e5;
+  border: 1px solid var(--product-border);
   border-radius: 7px 7px 0 0;
-  color: #697873;
-  background: #f7f9f8;
+  color: var(--product-text-muted);
+  background: var(--product-tint);
   font-size: 9px;
   text-align: center;
 }
@@ -1303,10 +1303,10 @@ function statusTone(tone) {
   margin: 0 10px 10px;
   padding: 0;
   overflow-y: auto;
-  border: 1px solid #e2e8e5;
+  border: 1px solid var(--product-border);
   border-top: 0;
   border-radius: 0 0 7px 7px;
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .stop-list li,
@@ -1314,14 +1314,14 @@ function statusTone(tone) {
   position: relative;
   margin: 0;
   border: 0;
-  border-bottom: 1px solid #e9eeeb;
+  border-bottom: 1px solid var(--product-tint);
   border-radius: 0;
-  background: #fff;
+  background: var(--product-surface);
   box-shadow: none;
 }
 
 .stop-list li.active {
-  background: #f1faf6;
+  background: var(--product-primary-soft);
 }
 
 .stop-list li:last-child {
@@ -1348,7 +1348,7 @@ function statusTone(tone) {
 .stop-list__select > span {
   min-width: 0;
   padding: 12px 7px;
-  border-left: 1px solid #eef2f0;
+  border-left: 1px solid var(--product-tint);
 }
 
 .stop-list__select > span:first-child,
@@ -1362,7 +1362,7 @@ function statusTone(tone) {
   height: 28px;
   padding: 0 !important;
   color: #fff;
-  background: #07894e;
+  background: var(--product-primary-strong);
   font-size: 12px;
 }
 
@@ -1376,7 +1376,7 @@ function statusTone(tone) {
 .stop-list__customer strong {
   overflow: hidden;
   max-width: 100%;
-  color: #15251f;
+  color: var(--product-text);
   font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1386,27 +1386,27 @@ function statusTone(tone) {
   overflow: hidden;
   max-width: 100%;
   margin-top: 5px;
-  color: #6d7d77;
+  color: var(--product-text-muted);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .stop-list__window {
-  color: #e17b08;
+  color: var(--product-warning);
   font-size: 10px;
   font-weight: 700;
 }
 
 .stop-list__leg {
   margin: 0;
-  color: #5c6d67;
+  color: var(--product-text-muted);
   background: transparent;
   font-size: 10px;
 }
 
 .stop-list__value {
-  color: #182821;
+  color: var(--product-text);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1416,8 +1416,8 @@ function statusTone(tone) {
   padding: 3px 7px !important;
   border: 0 !important;
   border-radius: 99px;
-  color: #07884e;
-  background: #e6f7ef;
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
   font-size: 10px;
   font-weight: 700;
 }
@@ -1432,7 +1432,7 @@ function statusTone(tone) {
   flex-direction: column;
   gap: 4px;
   padding: 7px 6px;
-  border-left: 1px solid #eef2f0;
+  border-left: 1px solid var(--product-tint);
 }
 
 .stop-list__actions button {
@@ -1457,7 +1457,7 @@ function statusTone(tone) {
   width: 28px;
   height: 28px;
   color: #fff;
-  background: #263e35;
+  background: var(--product-text);
 }
 
 .stop-list__depot > .stop-list__depot-copy {
@@ -1470,7 +1470,7 @@ function statusTone(tone) {
   flex-direction: column;
   padding: 0 10px;
   border-radius: 0;
-  color: #263d35;
+  color: var(--product-text);
   background: transparent;
   text-align: left;
 }
@@ -1478,7 +1478,7 @@ function statusTone(tone) {
 .stop-list__depot-copy small {
   overflow: hidden;
   max-width: 100%;
-  color: #61736c;
+  color: var(--product-text-muted);
   font-size: 10px;
   line-height: 1.4;
   text-overflow: ellipsis;
@@ -1487,13 +1487,13 @@ function statusTone(tone) {
 
 .stop-list__depot-copy strong {
   margin-top: 3px;
-  color: #263d35;
+  color: var(--product-text);
 }
 
 .stop-list__depot-time {
   justify-self: end;
   padding-right: 8px;
-  color: #7b8984;
+  color: var(--product-text-muted);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -1514,19 +1514,19 @@ function statusTone(tone) {
 
 .return-pickup-name-tag {
   flex: none;
-  color: #d84b3e;
+  color: var(--product-danger);
   font-size: 11px;
   font-weight: 900;
   white-space: nowrap;
 }
 
 .stop-list li.is-return-pickup {
-  background: #fffaf9;
-  box-shadow: inset 4px 0 0 #e55b4e;
+  background: var(--product-danger-soft);
+  box-shadow: inset 4px 0 0 var(--product-danger);
 }
 
 .stop-list li.is-return-pickup.active {
-  background: #fff5f3;
+  background: var(--product-danger-soft);
 }
 
 .stop-list__return-reminder {
@@ -1535,28 +1535,28 @@ function statusTone(tone) {
   gap: 10px;
   margin: 0 82px 8px 54px;
   padding: 7px 10px;
-  border: 1px solid #f1b5ad;
+  border: 1px solid var(--product-danger);
   border-radius: 6px;
-  background: #fff1ef;
+  background: var(--product-danger-soft);
 }
 
 .stop-list__return-reminder strong {
   flex: none;
-  color: #c63f33;
+  color: var(--product-danger);
   font-size: 10px;
 }
 
 .stop-list__return-reminder span,
 .unassigned-return-reminder {
-  color: #8d514b;
+  color: var(--product-danger);
   font-size: 9px;
   font-weight: 700;
 }
 
 .unassigned-list button.is-return-pickup {
-  border-color: #f1b5ad;
-  background: #fffaf9;
-  box-shadow: inset 4px 0 0 #e55b4e;
+  border-color: var(--product-danger);
+  background: var(--product-danger-soft);
+  box-shadow: inset 4px 0 0 var(--product-danger);
 }
 
 .unassigned-return-reminder {

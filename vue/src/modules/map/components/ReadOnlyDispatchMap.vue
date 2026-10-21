@@ -12,13 +12,13 @@
       <svg viewBox="0 0 1000 600" role="img" aria-label="今日配送路线坐标概览">
         <defs>
           <pattern id="dispatch-grid" width="50" height="50" patternUnits="userSpaceOnUse">
-            <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#dbe5ef" stroke-width="1" />
+            <path d="M 50 0 L 0 0 0 50" fill="none" stroke="var(--product-info-soft)" stroke-width="1" />
           </pattern>
           <filter id="dispatch-shadow" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#23334d" flood-opacity="0.22" />
+            <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="var(--product-text)" flood-opacity="0.22" />
           </filter>
         </defs>
-        <rect width="1000" height="600" rx="20" fill="#f4f8fb" />
+        <rect width="1000" height="600" rx="20" fill="var(--product-info-soft)" />
         <rect width="1000" height="600" rx="20" fill="url(#dispatch-grid)" />
 
         <g
@@ -53,7 +53,7 @@
         </g>
 
         <g v-if="projectedDepot" filter="url(#dispatch-shadow)">
-          <circle :cx="projectedDepot.x" :cy="projectedDepot.y" r="22" fill="#172033" />
+          <circle :cx="projectedDepot.x" :cy="projectedDepot.y" r="22" fill="var(--product-text)" />
           <text
             :x="projectedDepot.x"
             :y="projectedDepot.y + 6"
@@ -79,7 +79,7 @@
             :cy="marker.y"
             :r="isSelected(marker.raw) ? 23 : 19"
             :fill="marker.color"
-            :stroke="isSelected(marker.raw) ? '#0f172a' : '#fff'"
+            :stroke="isSelected(marker.raw) ? 'var(--product-text)' : '#fff'"
             :stroke-width="isSelected(marker.raw) ? 6 : 4"
             filter="url(#dispatch-shadow)"
           />
@@ -94,7 +94,7 @@
           <text
             :x="marker.x"
             :y="marker.y - 31"
-            fill="#22324b"
+            fill="var(--product-text)"
             font-size="15"
             font-weight="700"
             text-anchor="middle"
@@ -111,7 +111,7 @@
 
     <div v-if="legend.length" class="route-map__legend" aria-label="路线图例">
       <span v-for="item in legend" :key="`${item.kind}-${item.driverUserId || item.label}`">
-        <i :style="{ backgroundColor: item.color || '#64748b' }"></i>
+        <i :style="{ backgroundColor: item.color || 'var(--product-info)' }"></i>
         {{ item.label }}
       </span>
     </div>
@@ -302,13 +302,13 @@ function lineOpacity(line) {
 }
 
 .route-map__header h2 {
-  color: #172033;
+  color: var(--product-text);
   font-size: 17px;
 }
 
 .route-map__eyebrow {
   margin-bottom: 3px !important;
-  color: #7a8aa2;
+  color: var(--product-info);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .06em;
@@ -318,17 +318,17 @@ function lineOpacity(line) {
 .route-map__badge {
   padding: 4px 9px;
   border-radius: 99px;
-  color: #42617c;
-  background: #eef4f8;
+  color: var(--product-info);
+  background: var(--product-info-soft);
   font-size: 11px;
   font-weight: 700;
 }
 
 .route-map__canvas {
   overflow: hidden;
-  border: 1px solid #d9e3ec;
+  border: 1px solid var(--product-info-soft);
   border-radius: 14px;
-  background: #f4f8fb;
+  background: var(--product-info-soft);
 }
 
 .route-map.is-prominent .route-map__canvas {
@@ -353,7 +353,7 @@ function lineOpacity(line) {
 }
 
 .route-map__line:focus polyline:last-child {
-  filter: drop-shadow(0 0 5px rgba(15, 23, 42, .35));
+  filter: drop-shadow(0 0 5px rgba(var(--product-text-rgb), 0.35));
 }
 
 .route-map__marker {
@@ -362,7 +362,7 @@ function lineOpacity(line) {
 }
 
 .route-map__marker:focus circle {
-  stroke: #0f172a;
+  stroke: var(--product-text);
   stroke-width: 7;
 }
 
@@ -371,21 +371,21 @@ function lineOpacity(line) {
   min-height: 240px;
   place-items: center;
   align-content: center;
-  border: 1px dashed #c4d1de;
+  border: 1px dashed var(--product-info);
   border-radius: 14px;
-  color: #718096;
-  background: #f7fafc;
+  color: var(--product-info);
+  background: var(--product-info-soft);
   text-align: center;
 }
 
 .route-map__empty span {
   margin-bottom: 8px;
-  color: #8aa2b8;
+  color: var(--product-info);
   font-size: 34px;
 }
 
 .route-map__empty strong {
-  color: #3e5068;
+  color: var(--product-info);
 }
 
 .route-map__empty p {
@@ -398,7 +398,7 @@ function lineOpacity(line) {
   flex-wrap: wrap;
   gap: 8px 13px;
   margin-top: 10px;
-  color: #617087;
+  color: var(--product-info);
   font-size: 11px;
 }
 
@@ -421,7 +421,7 @@ function lineOpacity(line) {
 
 .route-map__missing {
   margin: 10px 0 0;
-  color: #9a6916;
+  color: var(--product-warning);
   font-size: 11px;
 }
 

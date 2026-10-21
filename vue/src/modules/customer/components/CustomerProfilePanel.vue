@@ -94,24 +94,24 @@ export default {
   grid-template-columns:1.25fr .75fr;
   gap:0;
   overflow:hidden;
-  background:#fff;
-  border:1px solid #dfe7e3;
+  background:var(--product-surface);
+  border:1px solid var(--product-tint);
   border-radius:6px;
 }
 .info-card{
   min-width:0;
   padding:20px 24px;
-  background:#fff;
+  background:var(--product-surface);
   border:0;
   border-radius:0;
   box-shadow:none;
 }
 .info-card.wide{
   grid-column:1/-1;
-  border-bottom:1px solid #e4ebe7;
+  border-bottom:1px solid var(--product-tint);
 }
 .info-card.full-width{grid-column:1/-1}
-.info-card:not(.wide)+.info-card{border-left:1px solid #e4ebe7}
+.info-card:not(.wide)+.info-card{border-left:1px solid var(--product-tint)}
 .info-card.full-width{border-left:0!important}
 .section-head{
   display:flex;
@@ -151,14 +151,14 @@ export default {
   font-weight:900;
 }
 .section-mark.delivery{
-  border-left-color:#5e83c8;
+  border-left-color:var(--product-info);
   background:transparent;
-  color:#4268b4;
+  color:var(--product-info);
 }
 .section-mark.labels{
-  border-left-color:#d49a2d;
+  border-left-color:var(--product-warning);
   background:transparent;
-  color:#a86b08;
+  color:var(--product-warning);
 }
 .detail-grid{
   display:grid;
@@ -170,15 +170,15 @@ export default {
   flex-direction:column;
   gap:5px;
   padding:11px 0;
-  border-top:1px solid #edf1ef;
+  border-top:1px solid var(--product-tint);
 }
 .detail-grid span,.stacked-details span{
   font-size:12px;
-  color:#84908b;
+  color:var(--product-text-muted);
 }
 .detail-grid strong,.stacked-details strong{
   font-size:15px;
-  color:#26312d;
+  color:var(--product-text);
   overflow-wrap:anywhere;
 }
 .detail-grid strong.wechat-mode{color:var(--product-primary-strong)}
@@ -216,15 +216,15 @@ export default {
   justify-content:space-between;
   gap:16px;
   padding:11px 0;
-  border-top:1px solid #edf1ef;
+  border-top:1px solid var(--product-tint);
 }
-.department-summary span{font-size:12px;color:#8d9994}
+.department-summary span{font-size:12px;color:var(--product-text-muted)}
 @media(max-width:1100px){
   .detail-grid{grid-template-columns:repeat(2,1fr)}
 }
 @media(max-width:800px){
   .profile-grid{grid-template-columns:1fr}
-  .info-card:not(.wide)+.info-card{border-left:0;border-top:1px solid #e4ebe7}
+  .info-card:not(.wide)+.info-card{border-left:0;border-top:1px solid var(--product-tint)}
   .detail-grid{grid-template-columns:1fr}
 }
 </style>

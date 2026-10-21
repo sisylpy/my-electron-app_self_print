@@ -95,6 +95,12 @@ window.addEventListener('unhandledrejection', (event) => {
   });
 });
 
+// 应用主题（日间 / 夜间），持久化在 localStorage，避免登录页闪烁
+(function applyInitialTheme() {
+  const saved = (typeof localStorage !== 'undefined' && localStorage.getItem('product-theme')) || 'day';
+  document.documentElement.setAttribute('data-theme', saved === 'night' ? 'night' : 'day');
+})();
+
 // 挂载应用
 const mountElement = document.getElementById('app');
 if (mountElement) {

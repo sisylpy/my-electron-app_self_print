@@ -42,7 +42,7 @@
 
                             <!-- 图片预览 -->
                             <div v-if="imagePreview" class="border rounded p-0 position-relative flex-grow-1"
-                                 style="min-height: 0; overflow: hidden; cursor: move; background-color: #f5f5f5; display: flex; align-items: start; justify-content: start; position: relative !important;"
+                                 style="min-height: 0; overflow: hidden; cursor: move; background-color: var(--product-tint); display: flex; align-items: start; justify-content: start; position: relative !important;"
                                  @mousedown="handleStartDrag"
                                  @mousemove="handleOnDrag"
                                  @mouseup="handleEndDrag"
@@ -59,26 +59,26 @@
                                     </div>
                                 </div>
                                 <div class="position-absolute top-0 end-0 m-2 d-flex gap-1"
-                                     style="z-index: 1000; background-color: rgba(255, 255, 255, 0.9); padding: 4px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                     style="z-index: 1000; background-color: rgba(var(--product-tint-rgb), 0.9); padding: 4px; border-radius: 4px; box-shadow: 0 2px 4px rgba(var(--product-text-rgb), 0.2);">
                                     <button class="btn btn-sm btn-outline-secondary"
                                             @click.stop="$emit('reset-transform')"
                                             @mousedown.stop
                                             title="重置"
-                                            style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
+                                            style="background-color: var(--product-surface); border-color: var(--product-text-muted); color: var(--product-text-muted);">
                                         🔄
                                     </button>
                                     <button class="btn btn-sm btn-outline-secondary"
                                             @click.stop="$emit('zoom-in')"
                                             @mousedown.stop
                                             title="放大"
-                                            style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
+                                            style="background-color: var(--product-surface); border-color: var(--product-text-muted); color: var(--product-text-muted);">
                                         ➕
                                     </button>
                                     <button class="btn btn-sm btn-outline-secondary"
                                             @click.stop="$emit('zoom-out')"
                                             @mousedown.stop
                                             title="缩小"
-                                            style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
+                                            style="background-color: var(--product-surface); border-color: var(--product-text-muted); color: var(--product-text-muted);">
                                         ➖
                                     </button>
                                 </div>
@@ -447,7 +447,7 @@ export default {
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: rgba(0, 0, 0, 0.6);
+        background-color: rgba(var(--product-text-rgb), 0.6);
         display: flex;
         justify-content: center;
         align-items: center;
@@ -469,7 +469,7 @@ export default {
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: rgba(255, 0, 0, 0.5);
+        background-color: rgba(var(--product-danger-rgb), 0.5);
         display: flex;
         justify-content: center;
         align-items: center;
@@ -495,8 +495,8 @@ export default {
 
     .popup-content {
         pointer-events: auto; /* ✅ 只有内容可点击 */
-        background-color: rgba(255, 255, 255, 0.95);
-        color: #000;
+        background-color: rgba(var(--product-tint-rgb), 0.95);
+        color: var(--product-text);
         padding: 10px 15px;
         border-radius: 6px;
         font-size: 14px;
@@ -505,8 +505,8 @@ export default {
         max-width: 300px;
         word-wrap: break-word;
         white-space: normal;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-        border: 1px solid rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 8px rgba(var(--product-text-rgb), 0.3);
+        border: 1px solid rgba(var(--product-text-rgb), 0.1);
     }
 </style>
 

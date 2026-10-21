@@ -1,8 +1,15 @@
 <template>
   <aside class="product-sidebar" aria-label="产品导航">
-    <div class="product-sidebar__brand">
-      <span :title="distributerName">{{ distributerName }}</span>
-    </div>
+    <button
+      type="button"
+      class="product-sidebar__brand"
+      :title="themeTitle"
+      :aria-label="themeTitle"
+      @click="toggleTheme"
+    >
+      <span class="product-sidebar__brand-avatar">{{ distributerName }}</span>
+      <span class="product-sidebar__brand-theme" aria-hidden="true">{{ themeIcon }}</span>
+    </button>
 
     <nav class="product-sidebar__navigation">
       <section v-for="group in navigation" :key="group.label">
@@ -89,6 +96,17 @@ const distributerName = computed(() => (
 ));
 const activeKey = computed(() => route.meta?.navKey || '');
 
+const isNight = ref(document.documentElement.getAttribute('data-theme') === 'night');
+const themeIcon = computed(() => (isNight.value ? '☾' : '☀'));
+const themeTitle = computed(() => (isNight.value ? '切换到日间模式' : '切换到夜间模式'));
+
+function toggleTheme() {
+  isNight.value = !isNight.value;
+  const next = isNight.value ? 'night' : 'day';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('product-theme', next);
+}
+
 function closeLogoutDialog() {
   if (loggingOut.value) return;
   logoutDialogVisible.value = false;
@@ -123,7 +141,7 @@ async function confirmLogout() {
   padding: 16px 8px 14px;
   border-right: 1px solid var(--product-border);
   color: var(--product-text);
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .product-sidebar__brand {
@@ -132,10 +150,15 @@ async function confirmLogout() {
   align-items: center;
   gap: 6px;
   padding: 4px 0 14px;
-  border-bottom: 1px solid #edf1ef;
+  border: 0;
+  border-bottom: 1px solid var(--product-border);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
 }
 
-.product-sidebar__brand > span {
+.product-sidebar__brand-avatar {
   display: grid;
   width: 42px;
   height: 42px;
@@ -143,15 +166,32 @@ async function confirmLogout() {
   place-items: center;
   overflow: hidden;
   padding: 0 3px;
-  border: 1px solid #c2ccc6;
+  border: 1px solid var(--product-border-strong);
   border-radius: 50%;
   color: #fff;
-  background: #9aa6a0;
+  background: var(--product-primary);
   font-size: 9px;
   font-weight: 700;
   line-height: 1.15;
   text-align: center;
   word-break: break-all;
+}
+
+.product-sidebar__brand-theme {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--product-text-secondary);
+  background: var(--product-tint);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.product-sidebar__brand:hover .product-sidebar__brand-theme {
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
 }
 
 .product-sidebar__navigation {
@@ -178,20 +218,20 @@ async function confirmLogout() {
   padding: 9px 2px;
   border: 1px solid transparent;
   border-radius: 6px;
-  color: #53625a;
+  color: var(--product-text-secondary);
   text-decoration: none;
   transition: background .16s ease, border-color .16s ease, color .16s ease;
 }
 
 .product-sidebar__navigation a:hover {
   color: var(--product-text);
-  background: #f5f8f6;
+  background: var(--product-tint-hover);
 }
 
 .product-sidebar__navigation a.active {
-  border-color: #dfeae4;
+  border-color: var(--product-tint-border);
   color: var(--product-primary-strong);
-  background: #f7faf8;
+  background: var(--product-tint);
   box-shadow: inset 2px 0 0 var(--product-primary);
 }
 
@@ -201,7 +241,7 @@ async function confirmLogout() {
   height: 30px;
   place-items: center;
   border-radius: 6px;
-  color: #718078;
+  color: var(--product-text-muted);
   background: transparent;
   font-size: 9px;
   font-weight: 900;
@@ -231,7 +271,7 @@ async function confirmLogout() {
 }
 
 .product-sidebar__navigation a.active small {
-  color: #668579;
+  color: var(--product-primary-strong);
 }
 
 .product-sidebar__footer {
@@ -239,7 +279,7 @@ async function confirmLogout() {
   align-items: center;
   gap: 6px;
   padding: 10px 5px 0;
-  border-top: 1px solid #edf1ef;
+  border-top: 1px solid var(--product-border);
 }
 
 .product-sidebar__bottom {
@@ -255,16 +295,16 @@ async function confirmLogout() {
   padding: 8px 7px;
   border: 1px solid transparent;
   border-radius: 5px;
-  color: #7d514c;
+  color: var(--product-text-secondary);
   background: transparent;
   text-align: left;
   cursor: pointer;
 }
 
 .product-sidebar__logout:hover {
-  border-color: #eedbd8;
-  color: #a13e35;
-  background: #fff8f7;
+  border-color: var(--product-danger-soft);
+  color: var(--product-danger);
+  background: var(--product-danger-soft);
 }
 
 .product-sidebar__logout strong {
@@ -279,34 +319,34 @@ async function confirmLogout() {
   inset: 0;
   place-items: center;
   padding: 24px;
-  background: rgba(19, 35, 29, .46);
+  background: rgba(var(--product-text-rgb), 0.46);
   backdrop-filter: blur(3px);
 }
 
 .logout-dialog {
   width: min(410px, calc(100vw - 48px));
   padding: 22px;
-  border: 1px solid #e7edea;
+  border: 1px solid var(--product-border);
   border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 20px 60px rgba(14, 34, 26, .22);
+  background: var(--product-surface);
+  box-shadow: 0 20px 60px rgba(var(--product-text-rgb), 0.22);
 }
 
 .logout-dialog > span {
-  color: #aa443a;
+  color: var(--product-danger);
   font-size: 11px;
   font-weight: 800;
 }
 
 .logout-dialog h2 {
   margin: 6px 0 8px;
-  color: #1d3029;
+  color: var(--product-text);
   font-size: 20px;
 }
 
 .logout-dialog p {
   margin: 0;
-  color: #6f7e78;
+  color: var(--product-text-secondary);
   font-size: 13px;
   line-height: 1.65;
 }
@@ -314,7 +354,7 @@ async function confirmLogout() {
 .logout-dialog > small {
   display: block;
   margin-top: 9px;
-  color: #b4473d;
+  color: var(--product-danger);
 }
 
 .logout-dialog div {
@@ -327,18 +367,18 @@ async function confirmLogout() {
 .logout-dialog button {
   min-width: 86px;
   padding: 9px 14px;
-  border: 1px solid #dce5e0;
+  border: 1px solid var(--product-border);
   border-radius: 7px;
-  color: #54675f;
-  background: #fff;
+  color: var(--product-text-secondary);
+  background: var(--product-surface);
   font-weight: 700;
   cursor: pointer;
 }
 
 .logout-dialog button.danger {
-  border-color: #b6483e;
+  border-color: var(--product-danger);
   color: #fff;
-  background: #b6483e;
+  background: var(--product-danger);
 }
 
 .logout-dialog button:disabled {

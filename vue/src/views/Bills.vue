@@ -309,7 +309,7 @@
                                     <!-- 子部门选择（只在"下单"标签页显示） -->
                                     <div v-if="allCustomerTabIndex === 1 && hasSubDepartments" 
                                          class="d-flex align-items-center gap-2 px-2"
-                                         style="border-left: 1px solid #dee2e6; height: 100%;">
+                                         style="border-left: 1px solid var(--product-border); height: 100%;">
                                         <!-- <span class="text-muted small">部门：</span> -->
                                         <select
                                                 v-model="selectedSubDepartment"
@@ -2260,25 +2260,25 @@
 
     /* 确保btn-primary使用蓝色，而不是紫色（覆盖AdminLTE默认主题色） */
     :deep(.btn-group .btn.btn-primary) {
-        background-color: #0d6efd !important;
-        border-color: #0d6efd !important;
+        background-color: var(--product-primary) !important;
+        border-color: var(--product-primary) !important;
         color: #fff !important;
     }
 
     :deep(.btn-group .btn.btn-primary:hover) {
-        background-color: #0b5ed7 !important;
-        border-color: #0a58ca !important;
+        background-color: var(--product-primary-hover) !important;
+        border-color: var(--product-primary-strong) !important;
     }
 
     :deep(.btn-group .btn.btn-primary:focus) {
-        background-color: #0b5ed7 !important;
-        border-color: #0a58ca !important;
-        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.5) !important;
+        background-color: var(--product-primary-hover) !important;
+        border-color: var(--product-primary-strong) !important;
+        box-shadow: 0 0 0 0.25rem rgba(var(--product-info-rgb), 0.5) !important;
     }
 
     .btn-group .btn:hover {
         /* 移除 transform 避免布局抖动 */
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 4px 8px rgba(var(--product-text-rgb), 0.2);
     }
 
     .btn-group .btn:first-child {
@@ -2310,13 +2310,13 @@
         margin-bottom: 10px;
         padding: 8px;
         border-radius: 5px;
-        background-color: #f8f9fa;
+        background-color: var(--product-tint);
         transition: background-color 0.2s ease;
         flex-shrink: 0; /* 防止 header 被压缩 */
     }
 
     .customer-type-header:hover {
-        background-color: #e9ecef;
+        background-color: var(--product-tint-hover);
     }
 
     /* 客户列表 - 移除独立滚动，使用外层统一滚动容器 */
@@ -2332,17 +2332,17 @@
     }
 
     .customer-list-body::-webkit-scrollbar-track {
-        background: #f7fafc;
+        background: var(--product-tint);
         border-radius: 4px;
     }
 
     .customer-list-body::-webkit-scrollbar-thumb {
-        background: #cbd5e0;
+        background: var(--product-tint-line);
         border-radius: 4px;
     }
 
     .customer-list-body::-webkit-scrollbar-thumb:hover {
-        background: #a0aec0;
+        background: var(--product-text-muted);
     }
 
     /* 空状态提示样式 */
@@ -2374,11 +2374,11 @@
     }
 
     .customer-type-section .nav-pills li:hover {
-        background-color: #e9ecef;
+        background-color: var(--product-tint-hover);
     }
 
     .customer-type-section .nav-pills li.active {
-        background-color: #007bff;
+        background-color: var(--product-primary);
         color: white;
     }
 
@@ -2393,7 +2393,7 @@
         border: 1px solid transparent !important;
         border-top-left-radius: 0.375rem;
         border-top-right-radius: 0.375rem;
-        color: #495057;
+        color: var(--product-text-secondary);
         font-weight: 500;
         /* 确保边框稳定，避免hover时变化 */
         box-sizing: border-box;
@@ -2418,7 +2418,7 @@
 
     /* 月份标签页稳定性样式 */
     .nav-tabs {
-        border-bottom: 1px solid #dee2e6;
+        border-bottom: 1px solid var(--product-border);
         /* 强制固定布局 */
         display: flex !important;
         flex-wrap: nowrap !important;
@@ -2435,7 +2435,7 @@
 
     .nav-tabs .nav-link:hover {
         /* 移除 border-color 变化，避免布局抖动 */
-        color: #0d6efd;
+        color: var(--product-primary);
         border-color: transparent !important;
         /* 确保hover时没有任何其他变化 */
         transition: none !important;
@@ -2458,10 +2458,10 @@
     }
 
     .nav-tabs .nav-link.active {
-        color: #495057;
-        background-color: #fff;
-        border: 1px solid #86b7fe !important;
-        border-bottom-color: #fff !important;
+        color: var(--product-text-secondary);
+        background-color: var(--product-surface);
+        border: 1px solid var(--product-primary-soft) !important;
+        border-bottom-color: var(--product-surface) !important;
         font-weight: 600;
         /* 确保边框稳定 */
         box-sizing: border-box;
@@ -2481,9 +2481,9 @@
 
     /* 下单按钮的包装器样式（选中时淡蓝色边框） */
     .nav-link-active-wrapper {
-        border: 1px solid #86b7fe !important;
-        border-bottom-color: #fff !important;
-        background-color: #fff;
+        border: 1px solid var(--product-primary-soft) !important;
+        border-bottom-color: var(--product-surface) !important;
+        background-color: var(--product-surface);
     }
 
     /* 侧边栏和内容区域的整体布局 */
@@ -2514,8 +2514,8 @@
     /* 客户搜索框样式 */
     .customer-search-box {
         padding: 10px 15px;
-        background-color: #f8f9fa;
-        border-bottom: 1px solid #dee2e6;
+        background-color: var(--product-tint);
+        border-bottom: 1px solid var(--product-border);
     }
 
     .customer-search-box .input-group {
@@ -2523,7 +2523,7 @@
     }
 
     .customer-search-box .input-group-text {
-        background-color: #fff;
+        background-color: var(--product-surface);
         border-right: none;
     }
 
@@ -2532,7 +2532,7 @@
     }
 
     .customer-search-box .form-control:focus {
-        border-color: #ced4da;
+        border-color: var(--product-border-strong);
         box-shadow: none;
     }
 
@@ -2559,14 +2559,14 @@
         padding-bottom: 30px; /* 底部留白 */
         /* 滚动条样式 */
         scrollbar-width: thin;
-        scrollbar-color: #cbd5e0 #f7fafc;
+        scrollbar-color: var(--product-tint-line) var(--product-tint);
     }
 
     /* 到底了提示样式 */
     .customer-list-bottom-tip {
         text-align: center;
         padding: 15px;
-        color: #6c757d;
+        color: var(--product-text-muted);
         font-size: 14px;
         margin-top: 10px;
         flex-shrink: 0;
@@ -2603,15 +2603,15 @@
     .nav-pills .tab-item {
         padding: 20px 20px;
         cursor: pointer;
-        border-bottom: 1px solid #ddd;
+        border-bottom: 1px solid var(--product-border);
         transition: background-color 0.3s ease;
     }
 
     .nav-pills .tab-item .tab-item-sub {
         padding: 20px 20px;
         cursor: pointer;
-        border-bottom: 1px solid #ddd;
-        color: #343333;
+        border-bottom: 1px solid var(--product-border);
+        color: var(--product-text);
         transition: background-color 0.3s ease;
     }
 
@@ -2623,22 +2623,22 @@
 
     /* 父部门选中时仍是浅色底，子部门文字与父部门保持同一深绿色。 */
     .nav-pills .tab-item.active .tab-item-sub {
-        color: #086d42;
+        color: var(--product-primary-strong);
     }
 
     .nav-pills .tab-item:hover {
-        background-color: #f4f4f4;
-        color: #000;
+        background-color: var(--product-tint);
+        color: var(--product-text);
     }
 
     .nav-pills .active {
-        background-color: #0d6efd;
+        background-color: var(--product-primary);
         color: #fff;
         font-weight: bold;
     }
 
     .nav-pills .tab-item.active {
-        background-color: #0d6efd; /* 父类选中的背景色 */
+        background-color: var(--product-primary); /* 父类选中的背景色 */
         color: white;
     }
 
@@ -2647,9 +2647,9 @@
     .main-content-container {
         padding-left: 15px; /* 减少左右 padding */
         padding-right: 15px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 10px rgba(var(--product-text-rgb), 0.1);
         border-radius: 10px;
-        background-color: #fff;
+        background-color: var(--product-surface);
     }
 
     /* 客户视图 - 让内容区域充分利用空间 */
@@ -2686,8 +2686,8 @@
             gap: 12px;
             align-items: center;
             padding: 12px 16px;
-            border-bottom: 1px solid #dde5e0;
-            background: #fff;
+            border-bottom: 1px solid var(--product-border);
+            background: var(--product-surface);
         }
 
         .main-content-container > :deep(.applyBodyPage > .d-flex.justify-content-between.p-20 .pagination) {
@@ -2750,7 +2750,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
+        background-color: rgba(var(--product-text-rgb), 0.5);
         display: flex;
         justify-content: center;
         align-items: center;
@@ -2758,13 +2758,13 @@
     }
 
     .modal-content {
-        background-color: white;
+        background-color: var(--product-surface);
         border-radius: 8px;
         width: 90%;
         max-width: 800px;
         max-height: 90vh;
         overflow-y: auto;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 4px 20px rgba(var(--product-text-rgb), 0.3);
     }
 
 
@@ -2775,9 +2775,9 @@
     .print-preview-section {
         margin-top: 20px;
         padding: 15px;
-        border: 1px solid #dee2e6;
+        border: 1px solid var(--product-border);
         border-radius: 6px;
-        background-color: #f8f9fa;
+        background-color: var(--product-tint);
     }
 
     .print-component-preview {
@@ -2791,7 +2791,7 @@
             margin: 0;
             padding: 0;
             gap: 0;
-            background: #f6f9f7;
+            background: var(--product-tint);
         }
 
         .is-print-center .sidebar-container {
@@ -2799,8 +2799,8 @@
             max-width: 310px;
             flex: 0 0 310px;
             padding: 13px 10px;
-            border-right: 1px solid #dde8e1;
-            background: #fff;
+            border-right: 1px solid var(--product-border);
+            background: var(--product-surface);
         }
 
         .is-print-center .customer-list-box {
@@ -2814,7 +2814,7 @@
             align-items: center;
             justify-content: space-between;
             padding: 3px 9px 12px;
-            color: #52635a;
+            color: var(--product-text-secondary);
         }
 
         .print-customer-heading strong {
@@ -2826,8 +2826,8 @@
             min-width: 25px;
             padding: 2px 7px;
             border-radius: 99px;
-            background: #eef6f1;
-            color: #08794b;
+            background: var(--product-primary-soft);
+            color: var(--product-primary-strong);
             font-size: 11px;
             font-weight: 800;
             text-align: center;
@@ -2851,21 +2851,21 @@
             border: 1px solid transparent;
             border-radius: 9px;
             background: transparent;
-            color: #27362d;
+            color: var(--product-text);
             transition: background-color .15s ease, border-color .15s ease;
         }
 
         .is-print-center .customer-list > .tab-item:hover {
-            border-color: #e4eee8;
-            background: #f6faf8;
-            color: #27362d;
+            border-color: var(--product-primary-soft);
+            background: var(--product-tint);
+            color: var(--product-text);
         }
 
         .is-print-center .customer-list > .tab-item.active {
-            border-color: #b9dfca;
-            background: #eaf7f0;
-            color: #135d3d;
-            box-shadow: inset 3px 0 0 #15965a;
+            border-color: var(--product-border-strong);
+            background: var(--product-primary-soft);
+            color: var(--product-primary-strong);
+            box-shadow: inset 3px 0 0 var(--product-primary);
         }
 
         .is-print-center .customer-list .print-customer-name {
@@ -2885,7 +2885,7 @@
             grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
             gap: 5px 10px;
             margin-top: 8px;
-            color: #65766c;
+            color: var(--product-text-secondary);
             font-size: 12px;
             font-weight: 700;
         }
@@ -2897,7 +2897,7 @@
         }
 
         .is-print-center .print-customer-metrics strong {
-            color: #08794b;
+            color: var(--product-primary-strong);
             font-size: 13px;
             font-weight: 800;
         }
@@ -2908,7 +2908,7 @@
             flex: 1 1 0;
             padding: 12px 14px;
             border-radius: 0;
-            background: #f6f9f7;
+            background: var(--product-tint);
             box-shadow: none;
         }
 
@@ -2921,18 +2921,18 @@
             min-height: 62px;
             margin: 0;
             padding: 10px 14px;
-            border: 1px solid #dde8e1;
+            border: 1px solid var(--product-border);
             border-radius: 11px;
-            background: #fff;
+            background: var(--product-surface);
         }
 
         .is-print-center .main-content-container > :deep(.applyBodyPage > .card) {
             margin: 0;
             padding: 18px !important;
-            border: 1px solid #dde8e1;
+            border: 1px solid var(--product-border);
             border-radius: 11px;
-            background: #fff;
-            box-shadow: 0 5px 18px rgba(39, 78, 61, .04) !important;
+            background: var(--product-surface);
+            box-shadow: 0 5px 18px rgba(var(--product-primary-strong-rgb), 0.04) !important;
         }
 
         .is-print-center .main-content-container :deep(.order-preview-actions .btn) {
@@ -2951,7 +2951,7 @@
             gap: 8px;
             min-width: 230px;
             margin: 0 12px;
-            color: #52635a;
+            color: var(--product-text-secondary);
             font-size: 12px;
             font-weight: 800;
         }
@@ -2960,45 +2960,45 @@
             min-width: 150px;
             height: 38px;
             padding: 6px 32px 6px 11px;
-            border: 1px solid #cfe0d6;
+            border: 1px solid var(--product-border-strong);
             border-radius: 7px;
-            background-color: #fff;
-            color: #1f4f38;
+            background-color: var(--product-surface);
+            color: var(--product-text);
             font-size: 13px;
             font-weight: 700;
             outline: none;
         }
 
         .print-department-filter select:focus {
-            border-color: #15965a;
-            box-shadow: 0 0 0 3px rgba(21, 150, 90, .12);
+            border-color: var(--product-primary);
+            box-shadow: 0 0 0 3px rgba(var(--product-primary-strong-rgb), 0.12);
         }
 
         .is-print-center .main-content-container :deep(.order-preview-actions .btn-secondary) {
-            border-color: #d1dfd7;
-            background: #fff;
-            color: #4e6458;
+            border-color: var(--product-border-strong);
+            background: var(--product-surface);
+            color: var(--product-text-secondary);
         }
 
         .is-print-center .main-content-container :deep(.order-preview-actions .btn-primary),
         .is-print-center .main-content-container :deep(.order-preview-actions .btn-success) {
-            border-color: #108c54;
-            background: #108c54;
+            border-color: var(--product-primary);
+            background: var(--product-primary);
             color: #fff;
         }
 
         .is-print-center .main-content-container :deep(.order-preview-actions .page-link) {
             min-height: 36px;
             padding: 7px 11px;
-            border-color: #d9e5de;
-            color: #16784d;
+            border-color: var(--product-border);
+            color: var(--product-primary-strong);
             font-size: 12px;
             font-weight: 700;
         }
 
         .is-print-center .main-content-container :deep(.order-preview-actions .page-link:disabled) {
-            color: #a3b0a8;
-            background: #f7f9f8;
+            color: var(--product-text-muted);
+            background: var(--product-tint);
         }
 
     }

@@ -869,7 +869,7 @@ onUnmounted(() => {
   border: 1px solid var(--product-border-strong);
   border-radius: var(--product-radius-sm);
   color: var(--product-text-secondary);
-  background: #fff;
+  background: var(--product-surface);
   font-size: 13px;
   font-weight: 800;
 }
@@ -890,7 +890,7 @@ onUnmounted(() => {
   grid-template-columns: 110px minmax(0, 1fr);
   gap: 14px;
   align-items: center;
-  border-bottom: 1px solid #edf1f5;
+  border-bottom: 1px solid var(--product-info-soft);
 }
 
 .settings-card dl > div:last-child {
@@ -939,7 +939,7 @@ onUnmounted(() => {
   padding: 6px 8px;
   border: 1px solid var(--product-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--product-surface);
   font-size: 13px;
 }
 .a4-printer-row button {
@@ -977,7 +977,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  border-bottom: 1px solid #edf1f5;
+  border-bottom: 1px solid var(--product-info-soft);
 }
 
 .preference-row:last-child {
@@ -1013,7 +1013,7 @@ onUnmounted(() => {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #b7c0ca;
+  background: var(--product-info);
 }
 
 .settings-card .preference-switch.is-on {
@@ -1069,7 +1069,7 @@ onUnmounted(() => {
   border: 1px solid var(--product-border-strong);
   border-radius: var(--product-radius-sm);
   color: var(--product-text);
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .auto-read-empty {
@@ -1080,7 +1080,7 @@ onUnmounted(() => {
 
 .auto-read-add {
   padding-top: 12px;
-  border-top: 1px solid #edf1f5;
+  border-top: 1px solid var(--product-info-soft);
 }
 
 .auto-read-add-button {
@@ -1094,7 +1094,7 @@ onUnmounted(() => {
 }
 
 .settings-card__feedback.is-error {
-  color: #d9363e;
+  color: var(--product-danger);
 }
 
 .connector-token {
@@ -1117,7 +1117,7 @@ onUnmounted(() => {
   border: 1px solid var(--product-border-strong);
   border-radius: var(--product-radius-sm);
   color: var(--product-text);
-  background: #fff;
+  background: var(--product-surface);
   font-size: 14px;
   line-height: 1.5;
   resize: vertical;
@@ -1137,7 +1137,7 @@ onUnmounted(() => {
   border: 1px solid var(--product-border-strong);
   border-radius: var(--product-radius-sm);
   color: var(--product-primary);
-  background: #fff;
+  background: var(--product-surface);
   font-size: 13px;
   font-weight: 800;
 }
@@ -1176,7 +1176,7 @@ onUnmounted(() => {
   border: 1px solid var(--product-border-strong);
   border-radius: var(--product-radius-sm);
   color: var(--product-text-secondary);
-  background: #fff;
+  background: var(--product-surface);
   font-size: 13px;
   font-weight: 800;
 }
@@ -1194,7 +1194,7 @@ onUnmounted(() => {
   align-items: center;
   min-height: 44px;
   padding: 6px 0;
-  border-bottom: 1px solid #edf1f5;
+  border-bottom: 1px solid var(--product-info-soft);
   color: var(--product-text);
   font-size: 13px;
   font-weight: 700;
@@ -1219,10 +1219,10 @@ onUnmounted(() => {
 .connector-revoke {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #f0c2c2;
+  border: 1px solid var(--product-danger-soft);
   border-radius: var(--product-radius-sm);
-  color: #d9363e;
-  background: #fff;
+  color: var(--product-danger);
+  background: var(--product-surface);
   font-size: 13px;
   font-weight: 800;
 }
@@ -1252,14 +1252,14 @@ onUnmounted(() => {
   padding: 5px 10px;
   border: 1px solid var(--product-border-strong);
   border-radius: var(--product-radius-sm);
-  background: #fff;
+  background: var(--product-surface);
   font-size: 13px;
   font-weight: 800;
 }
 
 .connector-confirm__actions button:first-child {
   color: #fff;
-  border-color: #d9363e;
-  background: #d9363e;
+  border-color: var(--product-danger);
+  background: var(--product-danger);
 }
 </style>

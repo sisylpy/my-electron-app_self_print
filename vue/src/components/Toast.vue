@@ -102,33 +102,33 @@ export default {
     gap: 8px;
     padding: 12px 20px;
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px rgba(var(--product-text-rgb), 0.15);
     min-width: 200px;
     max-width: 500px;
 }
 
 .toast-success {
-    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-    color: #155724;
-    border: 1px solid #b8dabc;
+    background: linear-gradient(135deg, var(--product-primary-soft) 0%, var(--product-primary-soft) 100%);
+    color: var(--product-text);
+    border: 1px solid var(--product-primary-soft);
 }
 
 .toast-error {
-    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-    color: #721c24;
-    border: 1px solid #f1aeb5;
+    background: linear-gradient(135deg, var(--product-danger-soft) 0%, var(--product-danger-soft) 100%);
+    color: var(--product-danger);
+    border: 1px solid var(--product-danger);
 }
 
 .toast-warning {
-    background: linear-gradient(135deg, #fff3cd 0%, #ffeba7 100%);
-    color: #856404;
-    border: 1px solid #fde2e6;
+    background: linear-gradient(135deg, var(--product-warning-soft) 0%, var(--product-warning-soft) 100%);
+    color: var(--product-warning);
+    border: 1px solid var(--product-danger-soft);
 }
 
 .toast-info {
-    background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
-    color: #0c5460;
-    border: 1px solid #cff4fc;
+    background: linear-gradient(135deg, var(--product-primary-soft) 0%, var(--product-primary-soft) 100%);
+    color: var(--product-text);
+    border: 1px solid var(--product-info-soft);
 }
 
 .toast-icon {

@@ -895,7 +895,7 @@ export default controller;
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: rgba(0, 0, 0, 0.5);
+        background-color: rgba(var(--product-text-rgb), 0.5);
         z-index: 1050;
         display: flex;
         align-items: center;
@@ -903,13 +903,13 @@ export default controller;
     }
 
     .order-edit-popup {
-        background: white;
+        background: var(--product-surface);
         border-radius: 8px;
         min-width: 500px;
         max-width: 90%;
         max-height: 90vh;
         overflow-y: auto;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 6px rgba(var(--product-text-rgb), 0.1);
     }
 
     .popup-header {
@@ -925,11 +925,11 @@ export default controller;
 
     /* 弹窗输入框边框：默认深灰色，编辑/聚焦时淡蓝色 */
     .order-edit-popup .form-control {
-        border-color: #6c757d;
+        border-color: var(--product-text-muted);
     }
     .order-edit-popup .form-control:focus {
-        border-color: #86b7fe;
-        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+        border-color: var(--product-info);
+        box-shadow: 0 0 0 0.2rem rgba(var(--product-info-rgb), 0.15);
     }
 
     .popup-footer {
@@ -946,31 +946,31 @@ export default controller;
     }
 
     .standard-btn.btn-primary {
-        background-color: #007bff;
-        border-color: #007bff;
+        background-color: var(--product-info);
+        border-color: var(--product-info);
         color: white;
     }
 
     .standard-btn.btn-outline-secondary {
-        border-color: #6c757d;
-        color: #6c757d;
+        border-color: var(--product-text-muted);
+        color: var(--product-text-muted);
     }
 
     .standard-btn.btn-outline-secondary:hover {
-        background-color: #6c757d;
+        background-color: var(--product-text-muted);
         color: white;
     }
 
     .brand {
-        background-color: #ffc107;
-        color: #000;
+        background-color: var(--product-warning);
+        color: var(--product-text);
         padding: 2px 6px;
         border-radius: 3px;
         font-size: 12px;
     }
 
     .table-cell {
-        border-right: 1px solid #dee2e6;
+        border-right: 1px solid var(--product-info-soft);
         padding: 0 8px;
     }
 

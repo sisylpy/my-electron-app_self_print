@@ -17,7 +17,7 @@
                         </div>
                         
                         <!-- 识别中蒙版（不依赖 uploadedExcelFile，只要有任务就显示） -->
-                        <div v-if="hasRunningTask && !hasCache" class="recognizing-overlay" style="position: absolute !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; z-index: 10; background-color: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center;">
+                        <div v-if="hasRunningTask && !hasCache" class="recognizing-overlay" style="position: absolute !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; z-index: 10; background-color: rgba(var(--product-text-rgb), 0.7); display: flex; align-items: center; justify-content: center;">
                             <div class="recognizing-content text-center">
                                 <div class="spinner-border text-primary mb-3" role="status">
                                     <span class="visually-hidden">识别中...</span>
@@ -42,19 +42,19 @@
 
                             <!-- Excel内容预览 -->
                             <div v-if="uploadedExcelPreview" class="border rounded flex-grow-1"
-                                 style="min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #dee2e6 !important;">
+                                 style="min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--product-info-soft) !important;">
                                 <div v-if="uploadedExcelPreview.sheets && uploadedExcelPreview.sheets.length > 0"
                                      style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;">
                                     <!-- 工作表名称显示（即使只有一个sheet也显示） -->
                                     <div class="p-2"
-                                         style="flex-shrink: 0; border-bottom: 1px solid #dee2e6;">
+                                         style="flex-shrink: 0; border-bottom: 1px solid var(--product-info-soft);">
                                         <div v-if="uploadedExcelPreview.sheets.length > 1" class="d-flex align-items-center gap-2">
                                             <label class="small text-muted mb-0" style="white-space: nowrap;">工作表:</label>
                                             <select
                                                 class="form-select form-select-sm"
                                                 :value="uploadedExcelPreview.currentSheet || 0"
                                                 @change="handleChangeSheet($event.target.value)"
-                                                style="border: 1px solid #dee2e6; flex: 1;">
+                                                style="border: 1px solid var(--product-info-soft); flex: 1;">
                                                 <option
                                                     v-for="(sheet, sheetIndex) in uploadedExcelPreview.sheets"
                                                     :key="sheetIndex"
@@ -316,7 +316,7 @@ export default {
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: rgba(0, 0, 0, 0.6);
+        background-color: rgba(var(--product-text-rgb), 0.6);
         display: flex;
         justify-content: center;
         align-items: center;
@@ -344,16 +344,16 @@ export default {
     }
 
     .excel-table-scroll-container::-webkit-scrollbar-track {
-        background: #f1f1f1;
+        background: var(--product-tint);
     }
 
     .excel-table-scroll-container::-webkit-scrollbar-thumb {
-        background: #888;
+        background: var(--product-text-muted);
         border-radius: 4px;
     }
 
     .excel-table-scroll-container::-webkit-scrollbar-thumb:hover {
-        background: #555;
+        background: var(--product-text-secondary);
     }
 </style>
 

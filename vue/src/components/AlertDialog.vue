@@ -104,7 +104,7 @@ export default {
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(var(--product-text-rgb), 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -114,9 +114,9 @@ export default {
 
 /* Modal */
 .ad-modal {
-    background-color: #ffffff;
+    background-color: var(--product-surface);
     border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 20px rgba(var(--product-text-rgb), 0.15);
     min-width: 320px;
     max-width: 480px;
     animation: adSlideIn 0.3s ease-out;
@@ -160,35 +160,35 @@ export default {
 }
 
 .ad-icon:not(.confirm) {
-    background-color: #e3f2fd;
-    color: #1976d2;
+    background-color: var(--product-info-soft);
+    color: var(--product-info);
 }
 
 .ad-icon.confirm {
-    background-color: #fff3e0;
-    color: #f57c00;
+    background-color: var(--product-warning-soft);
+    color: var(--product-warning);
 }
 
 .ad-icon[data-type="success"] {
-    background-color: #e8f5e9;
-    color: #43a047;
+    background-color: var(--product-primary-soft);
+    color: var(--product-primary);
 }
 
 .ad-icon[data-type="error"] {
-    background-color: #ffebee;
-    color: #d32f2f;
+    background-color: var(--product-danger-soft);
+    color: var(--product-danger);
 }
 
 .ad-icon[data-type="warning"] {
-    background-color: #fff8e1;
-    color: #ffa000;
+    background-color: var(--product-warning-soft);
+    color: var(--product-warning);
 }
 
 /* Message */
 .ad-message {
     flex: 1;
     font-size: 15px;
-    color: #333333;
+    color: var(--product-text);
     line-height: 1.6;
     word-wrap: break-word;
 }
@@ -214,13 +214,13 @@ export default {
 }
 
 .ad-btn {
-    background-color: #1976d2;
+    background-color: var(--product-info);
     color: white;
 }
 
 .ad-btn:hover {
-    background-color: #1565c0;
-    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+    background-color: var(--product-info);
+    box-shadow: 0 2px 8px rgba(var(--product-info-rgb), 0.3);
 }
 
 .ad-btn:active {
@@ -229,14 +229,14 @@ export default {
 
 .ad-btn.ghost {
     background-color: transparent;
-    color: #666666;
-    border: 1px solid #d0d0d0;
+    color: var(--product-text-muted);
+    border: 1px solid var(--product-border);
 }
 
 .ad-btn.ghost:hover {
-    background-color: #f5f5f5;
-    color: #333333;
-    border-color: #b0b0b0;
+    background-color: var(--product-tint);
+    color: var(--product-text);
+    border-color: var(--product-border-strong);
 }
 
 /* 响应式 */

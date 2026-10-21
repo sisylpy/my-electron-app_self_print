@@ -208,17 +208,17 @@ function lastOrderText(row) {
 </script>
 
 <style scoped>
-.forecast-check{display:grid;height:100%;min-width:0;min-height:0;grid-template-rows:minmax(0,1fr);padding:12px;overflow:hidden;background:#f6f9f7;color:var(--product-text)}
+.forecast-check{display:grid;height:100%;min-width:0;min-height:0;grid-template-rows:minmax(0,1fr);padding:12px;overflow:hidden;background:var(--product-tint);color:var(--product-text)}
 .forecast-check__columns{display:grid;min-width:0;min-height:0;grid-template-columns:repeat(3,minmax(270px,1fr));align-items:stretch;gap:10px;overflow-x:auto;overflow-y:hidden}
-.forecast-check__group{display:flex;min-width:0;min-height:0;height:100%;flex-direction:column;overflow:hidden;border:1px solid var(--product-border);border-radius:8px;background:#fff}
-.forecast-check__group-title{display:flex;min-height:42px;align-items:center;justify-content:space-between;gap:8px;padding:0 11px;border-bottom:1px solid #e8eeeb;font-size:13px}
+.forecast-check__group{display:flex;min-width:0;min-height:0;height:100%;flex-direction:column;overflow:hidden;border:1px solid var(--product-border);border-radius:8px;background:var(--product-surface)}
+.forecast-check__group-title{display:flex;min-height:42px;align-items:center;justify-content:space-between;gap:8px;padding:0 11px;border-bottom:1px solid var(--product-tint);font-size:13px}
 .forecast-check__group-body{min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
-.forecast-check__group-title span{flex:none;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.8);font-size:10px;font-weight:800}
-.forecast-check__group.is-reminder .forecast-check__group-title{color:#a64b18;background:#fff1e7}
-.forecast-check__group.is-matched .forecast-check__group-title{color:#08794b;background:#edf8f2}
-.forecast-check__group.is-customer_ordered .forecast-check__group-title{color:#41637f;background:#f0f5f8}
-.forecast-check__row{min-width:0;padding:9px 11px;border-bottom:1px solid #edf1ef;background:#fff}
-.forecast-check__group.is-reminder .forecast-check__row{background:#fffaf6}
+.forecast-check__group-title span{flex:none;padding:3px 8px;border-radius:999px;background:rgba(var(--product-tint-rgb), 0.8);font-size:10px;font-weight:800}
+.forecast-check__group.is-reminder .forecast-check__group-title{color:var(--product-warning);background:var(--product-warning-soft)}
+.forecast-check__group.is-matched .forecast-check__group-title{color:var(--product-primary-strong);background:var(--product-primary-soft)}
+.forecast-check__group.is-customer_ordered .forecast-check__group-title{color:var(--product-info);background:var(--product-info-soft)}
+.forecast-check__row{min-width:0;padding:9px 11px;border-bottom:1px solid var(--product-tint);background:var(--product-surface)}
+.forecast-check__group.is-reminder .forecast-check__row{background:var(--product-warning-soft)}
 .forecast-check__row:last-child{border-bottom:0}
 .forecast-check__goods{display:flex;min-width:0;align-items:baseline;justify-content:space-between;gap:8px}
 .forecast-check__goods-name{display:flex;min-width:0;flex:1;align-items:baseline;gap:5px}
@@ -235,8 +235,8 @@ function lastOrderText(row) {
 .forecast-check__empty{display:flex;min-height:100%;align-items:center;justify-content:center;color:var(--product-text-muted);font-size:11px}
 .forecast-check__state{display:flex;grid-row:1/-1;height:100%;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--product-text-muted);font-size:12px}
 .forecast-check__state strong{color:var(--product-text);font-size:17px}
-.forecast-check__state i{width:26px;height:26px;border:3px solid #d9e7df;border-top-color:var(--product-primary);border-radius:50%;animation:forecast-spin .75s linear infinite}
-.forecast-check__state.is-error{color:#b14343}
-.forecast-check__state button{padding:8px 12px;border:1px solid #b14343;border-radius:5px;color:#fff;background:#b14343;font-size:11px;font-weight:800}
+.forecast-check__state i{width:26px;height:26px;border:3px solid var(--product-primary-soft);border-top-color:var(--product-primary);border-radius:50%;animation:forecast-spin .75s linear infinite}
+.forecast-check__state.is-error{color:var(--product-danger)}
+.forecast-check__state button{padding:8px 12px;border:1px solid var(--product-danger);border-radius:5px;color:#fff;background:var(--product-danger);font-size:11px;font-weight:800}
 @keyframes forecast-spin{to{transform:rotate(360deg)}}
 </style>

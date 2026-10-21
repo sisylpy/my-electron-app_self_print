@@ -2,7 +2,8 @@
  * ProductShell 视觉精修层。
  *
  * 只约束产品壳层内的交互界面，不触碰 Apply* 等打印模板的尺寸、DPI、分页和边距。
- * 视觉基准：白色工作面、低饱和灰绿背景、翡翠绿单一强调色、细边框、克制圆角。
+ * 视觉基准（暖梅 / 深暖灰夜间）：暖白工作面、低饱和暖灰填充、梅子色单一强调色、细边框、克制直角。
+ * 所有颜色走 product-tokens.css 的 CSS 变量，day/night 通过 html[data-theme] 切换。
  */
 
 .product-shell {
@@ -55,7 +56,7 @@
   overflow: hidden;
   border: 1px solid var(--product-border);
   border-radius: 4px;
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .product-shell .bills-container .customer-search-box .input-group-text,
@@ -63,7 +64,7 @@
 .product-shell .bills-container .customer-search-box .btn {
   border: 0;
   border-radius: 0;
-  background: #fff;
+  background: var(--product-surface);
   box-shadow: none;
 }
 
@@ -87,14 +88,14 @@
   border: 1px solid var(--product-border);
   border-radius: 4px;
   color: var(--product-text-secondary) !important;
-  background: #f8faf9;
+  background: var(--product-tint);
   font-size: 13px;
   font-weight: 750;
 }
 
 .product-shell .bills-container .customer-type-header:hover {
   color: var(--product-text) !important;
-  background: #f3f7f5;
+  background: var(--product-tint-hover);
 }
 
 .product-shell .bills-container .customer-list li,
@@ -108,8 +109,8 @@
 
 .product-shell .bills-container .customer-list li:hover,
 .product-shell .bills-container .customer-type-section li:hover {
-  border-color: #e4eae6;
-  background: #f7f9f8;
+  border-color: var(--product-tint-border);
+  background: var(--product-tint-hover);
 }
 
 .product-shell .bills-container .customer-list li.active,
@@ -136,7 +137,7 @@
 .product-shell .bills-container .btn-outline-primary {
   border-color: var(--product-border-strong) !important;
   color: var(--product-primary-strong) !important;
-  background: #fff !important;
+  background: var(--product-surface) !important;
 }
 
 .product-shell .bills-container .btn,
@@ -154,7 +155,7 @@
   border: 1px solid var(--product-border);
   border-radius: 6px;
   background: var(--product-surface);
-  box-shadow: 0 12px 34px rgba(24, 51, 38, .045);
+  box-shadow: 0 12px 34px rgba(var(--product-text-rgb), 0.05);
 }
 
 .product-shell .bills-container .empty-state-mark {
@@ -162,7 +163,7 @@
   width: 38px;
   height: 38px;
   place-items: center;
-  border: 1px solid #d6e4dc;
+  border: 1px solid var(--product-tint-border);
   border-radius: 4px;
   color: var(--product-primary-strong);
   background: var(--product-primary-soft);
@@ -229,14 +230,14 @@
 .product-shell .save-order-tab .card-header,
 .product-shell .upload-section .card-header {
   border-bottom: 1px solid var(--product-border);
-  background: #f7f9f8;
+  background: var(--product-tint-hover);
 }
 
 .product-shell .save-order-tab .form-control,
 .product-shell .save-order-tab .form-select,
 .product-shell .upload-section .form-control,
 .product-shell .upload-section .form-select {
-  border-color: #d5dfd9;
+  border-color: var(--product-border-strong);
   border-radius: 3px;
   box-shadow: none;
 }
@@ -246,7 +247,7 @@
 .product-shell .upload-section .form-control:focus,
 .product-shell .upload-section .form-select:focus {
   border-color: var(--product-primary);
-  box-shadow: 0 0 0 2px rgba(166, 111, 63, .1);
+  box-shadow: 0 0 0 2px var(--product-primary-ring);
 }
 
 .product-shell .save-order-tab .table,
@@ -258,8 +259,8 @@
 .product-shell .save-order-tab .table thead th,
 .product-shell .upload-section .table thead th {
   border-color: var(--product-border);
-  color: #3c4b43;
-  background: #f5f7f6;
+  color: var(--product-on-tint);
+  background: var(--product-tint-strong);
 }
 
 .product-shell .save-order-tab .btn,
@@ -297,7 +298,7 @@
   padding: 8px 12px;
   border: 1px solid var(--product-border);
   border-radius: 5px !important;
-  background: #fff !important;
+  background: var(--product-surface) !important;
   box-shadow: none !important;
 }
 
@@ -311,7 +312,7 @@
 
 .product-shell .dispatch-workbench__status i {
   background: var(--product-primary);
-  box-shadow: 0 0 0 3px rgba(166, 111, 63, .09);
+  box-shadow: 0 0 0 3px var(--product-primary-ring);
 }
 
 .product-shell .dispatch-workbench__header-actions button,
@@ -340,7 +341,7 @@
 .product-shell .dispatch-workbench__warning {
   border-color: var(--product-border);
   border-radius: 4px !important;
-  background: #f8faf9 !important;
+  background: var(--product-tint) !important;
   box-shadow: none !important;
 }
 
@@ -432,7 +433,7 @@
 .product-shell .dispatch-workbench .customer-detail__hero {
   border: 1px solid var(--product-border);
   border-radius: 4px !important;
-  background: #f7faf8 !important;
+  background: var(--product-tint) !important;
 }
 
 .product-shell .dispatch-workbench .workspace__summary-copy strong,
@@ -442,12 +443,12 @@
 }
 
 .product-shell .dispatch-workbench .route-card__header {
-  background: #f8faf9;
+  background: var(--product-tint);
 }
 
 .product-shell .dispatch-workbench .route-card__progress > i {
   border-radius: 1px;
-  background: #e2e9e5;
+  background: var(--product-tint-line);
 }
 
 .product-shell .dispatch-workbench .route-card__progress b {
@@ -466,7 +467,7 @@
 
 .product-shell .dispatch-workbench .route-card__connector,
 .product-shell .dispatch-workbench .customer-detail__timeline > div:not(:last-child)::after {
-  background: #d8e3dd;
+  background: var(--product-tint-line);
 }
 
 .product-shell .dispatch-workbench .customer-detail__timeline > div > span {
@@ -485,7 +486,7 @@
   border-color: var(--product-border);
   border-radius: 4px;
   color: var(--product-text-secondary);
-  background: #f7faf8;
+  background: var(--product-tint);
 }
 
 .product-shell .dispatch-workbench .route-map__eyebrow {
@@ -501,7 +502,7 @@
 .product-shell .settings-card {
   border-color: var(--product-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--product-surface);
   box-shadow: none;
 }
 
@@ -513,14 +514,14 @@
 
 .product-shell .summary-icon.is-mcp,
 .product-shell .summary-icon.is-runtime {
-  color: #4f6258 !important;
-  background: #eef2f0 !important;
+  color: var(--product-tint-accent) !important;
+  background: var(--product-tint) !important;
 }
 
 .product-shell .settings-card header,
 .product-shell .settings-card__note,
 .product-shell .settings-card__feedback {
-  background: #f8faf9;
+  background: var(--product-tint);
 }
 
 .product-shell .settings-card button {
@@ -531,7 +532,7 @@
 /* 弹窗：克制层级，不使用渐变和大圆角。 */
 .product-shell .dialog-backdrop,
 .product-shell .confirm-backdrop {
-  background: rgba(20, 29, 24, .48);
+  background: rgba(var(--product-text-rgb), 0.48);
 }
 
 .product-shell .driver-dialog,
@@ -539,7 +540,7 @@
 .product-shell .confirm-dialog {
   border: 1px solid var(--product-border);
   border-radius: 6px !important;
-  box-shadow: 0 18px 55px rgba(17, 34, 25, .18) !important;
+  box-shadow: 0 18px 55px rgba(var(--product-text-rgb), 0.18) !important;
 }
 
 .product-shell .driver-dialog button,
@@ -577,9 +578,7 @@
  */
 .product-shell {
   --bs-primary: var(--product-primary);
-  --bs-primary-rgb: 166, 111, 63;
   --bs-success: var(--product-primary);
-  --bs-success-rgb: 166, 111, 63;
   accent-color: var(--product-primary);
 }
 

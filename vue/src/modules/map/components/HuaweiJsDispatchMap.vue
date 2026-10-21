@@ -322,9 +322,9 @@ onBeforeUnmount(() => {
   min-height: 470px;
   flex: 1;
   overflow: hidden;
-  border: 1px solid #d9e4df;
+  border: 1px solid var(--product-primary-soft);
   border-radius: 12px;
-  background: #eef4f1;
+  background: var(--product-primary-soft);
 }
 
 .dispatch-huawei-map__state {
@@ -334,18 +334,18 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   align-content: center;
-  border: 1px solid #dce7e2;
+  border: 1px solid var(--product-tint);
   border-radius: 12px;
-  color: #536a61;
-  background: #f4f8f6;
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
 }
 
 .dispatch-huawei-map__state span {
   width: 27px;
   height: 27px;
   margin-bottom: 10px;
-  border: 3px solid #d5e7df;
-  border-top-color: #109869;
+  border: 3px solid var(--product-primary-soft);
+  border-top-color: var(--product-primary-strong);
   border-radius: 50%;
   animation: map-spin .8s linear infinite;
 }
@@ -361,20 +361,20 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 6px 7px 6px 10px;
-  border: 1px solid rgba(204, 218, 212, .9);
+  border: 1px solid rgba(var(--product-primary-soft-rgb), 0.9);
   border-radius: 9px;
-  background: rgba(255, 255, 255, .94);
-  box-shadow: 0 5px 18px rgba(21, 47, 37, .12);
+  background: rgba(var(--product-tint-rgb), 0.94);
+  box-shadow: 0 5px 18px rgba(var(--product-text-rgb), 0.12);
 }
 
-.dispatch-huawei-map__hint span { color: #6c7f77; font-size: 8px; }
+.dispatch-huawei-map__hint span { color: var(--product-text-muted); font-size: 8px; }
 
 .dispatch-huawei-map__hint button {
   padding: 5px 8px;
   border: 0;
   border-radius: 6px;
   color: #fff;
-  background: #128a61;
+  background: var(--product-primary-strong);
   font-size: 8px;
   font-weight: 800;
   cursor: pointer;

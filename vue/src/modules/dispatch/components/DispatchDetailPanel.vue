@@ -124,15 +124,15 @@ function initial(name) {
   gap: 14px;
   overflow: auto;
   padding: 14px;
-  border: 1px solid #dce5ee;
+  border: 1px solid var(--product-info-soft);
   border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 8px 30px rgba(33, 54, 85, .05);
+  background: var(--product-surface);
+  box-shadow: 0 8px 30px rgba(var(--product-text-rgb), 0.05);
 }
 
 .customer-detail {
   padding-top: 14px;
-  border-top: 1px solid #e7edf3;
+  border-top: 1px solid var(--product-info-soft);
 }
 
 .customer-detail__header {
@@ -147,21 +147,21 @@ function initial(name) {
 }
 
 .customer-detail__header h2 {
-  color: #172033;
+  color: var(--product-text);
   font-size: 17px;
 }
 
 .customer-detail__header p {
   margin-bottom: 3px;
-  color: #8190a4;
+  color: var(--product-info);
   font-size: 10px;
 }
 
 .customer-detail__header > span {
   padding: 4px 9px;
   border-radius: 99px;
-  color: #42617c;
-  background: #eef4f8;
+  color: var(--product-info);
+  background: var(--product-info-soft);
   font-size: 10px;
   font-weight: 700;
 }
@@ -174,7 +174,7 @@ function initial(name) {
   margin-top: 12px;
   padding: 12px;
   border-radius: 12px;
-  background: linear-gradient(110deg, #f0f6ff, #f8fbff);
+  background: linear-gradient(110deg, var(--product-info-soft), var(--product-info-soft));
 }
 
 .customer-detail__hero > span {
@@ -184,7 +184,7 @@ function initial(name) {
   place-items: center;
   border-radius: 12px;
   color: #fff;
-  background: #3873c3;
+  background: var(--product-info);
   font-size: 14px;
   font-weight: 800;
 }
@@ -197,7 +197,7 @@ function initial(name) {
 
 .customer-detail__hero strong {
   overflow: hidden;
-  color: #223148;
+  color: var(--product-text);
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -205,15 +205,15 @@ function initial(name) {
 
 .customer-detail__hero small {
   margin-top: 4px;
-  color: #6e7e93;
+  color: var(--product-info);
   font-size: 10px;
 }
 
 .customer-detail__hero em {
   padding: 5px 7px;
   border-radius: 99px;
-  color: #2a659e;
-  background: #e5f0fb;
+  color: var(--product-info);
+  background: var(--product-info-soft);
   font-size: 9px;
   font-style: normal;
   font-weight: 700;
@@ -229,7 +229,7 @@ function initial(name) {
 .customer-detail__field {
   min-width: 0;
   padding: 9px 10px;
-  border: 1px solid #e6ebf0;
+  border: 1px solid var(--product-info-soft);
   border-radius: 9px;
 }
 
@@ -238,14 +238,14 @@ function initial(name) {
 }
 
 .customer-detail__field dt {
-  color: #8a97a8;
+  color: var(--product-info);
   font-size: 9px;
 }
 
 .customer-detail__field dd {
   overflow-wrap: anywhere;
   margin: 4px 0 0;
-  color: #34445a;
+  color: var(--product-info);
   font-size: 11px;
   font-weight: 650;
 }
@@ -256,7 +256,7 @@ function initial(name) {
 
 .customer-detail__timeline h3 {
   margin: 0 0 8px;
-  color: #53647a;
+  color: var(--product-info);
   font-size: 11px;
 }
 
@@ -274,7 +274,7 @@ function initial(name) {
   bottom: -2px;
   left: 4px;
   width: 1px;
-  background: #d7e0e9;
+  background: var(--product-info-soft);
   content: '';
 }
 
@@ -285,8 +285,8 @@ function initial(name) {
   margin-top: 3px;
   border: 2px solid #fff;
   border-radius: 50%;
-  background: #477cbd;
-  box-shadow: 0 0 0 1px #9cb7d6;
+  background: var(--product-info);
+  box-shadow: 0 0 0 1px var(--product-info);
 }
 
 .customer-detail__timeline p {
@@ -296,13 +296,13 @@ function initial(name) {
 }
 
 .customer-detail__timeline strong {
-  color: #4e5f74;
+  color: var(--product-info);
   font-size: 10px;
 }
 
 .customer-detail__timeline small {
   margin-top: 2px;
-  color: #7e8b9c;
+  color: var(--product-info);
   font-size: 9px;
 }
 
@@ -311,12 +311,12 @@ function initial(name) {
   min-height: 180px;
   place-items: center;
   align-content: center;
-  color: #8190a4;
+  color: var(--product-info);
   text-align: center;
 }
 
 .customer-detail__empty strong {
-  color: #596a7e;
+  color: var(--product-info);
   font-size: 12px;
 }
 

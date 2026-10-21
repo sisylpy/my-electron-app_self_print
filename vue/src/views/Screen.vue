@@ -74,7 +74,7 @@
   
         <!-- 右侧按钮 -->
         <div class="right-btn d-flex gap-3 align-items-center flex-wrap">
-<!--          <button @click="printWidthTest" class="settings-btn" style="background-color: #17a2b8;">宽度测试</button>-->
+<!--          <button @click="printWidthTest" class="settings-btn" style="background-color: var(--product-primary-strong);">宽度测试</button>-->
 <!--          <button @click="openDeviceSettings" class="settings-btn">设备管理</button>-->
           <label class="remember-user-label">
             <input
@@ -793,40 +793,40 @@ import {
       margin: 0;
       padding: ${TEST_TOP_MARGIN}mm ${TEST_RIGHT_MARGIN}mm 0 ${TEST_LEFT_MARGIN}mm;
       position: relative;
-      background: #fff;
+      background: var(--product-surface);
     }
     /* 页面边界标记 - 帮助识别实际可打印区域 */
     .page-marker {
       position: absolute;
-      border: 1px dashed #ccc;
+      border: 1px dashed var(--product-border);
     }
     .page-left {
       left: 0;
       top: 0;
       bottom: 0;
       width: 0;
-      border-left: 2px solid #ff0000;
+      border-left: 2px solid var(--product-danger);
     }
     .page-right {
       right: 0;
       top: 0;
       bottom: 0;
       width: 0;
-      border-right: 2px solid #ff0000;
+      border-right: 2px solid var(--product-danger);
     }
     .page-top {
       top: 0;
       left: 0;
       right: 0;
       height: 0;
-      border-top: 2px solid #ff0000;
+      border-top: 2px solid var(--product-danger);
     }
     /* 测试矩形 */
     .test-rect {
       width: ${TEST_WIDTH}mm;
       height: ${TEST_HEIGHT}mm;
-      border: 2px solid #000;
-      background: #f0f0f0;
+      border: 2px solid var(--product-text);
+      background: var(--product-tint);
       margin: 10mm auto 0;
       display: flex;
       align-items: center;
@@ -844,7 +844,7 @@ import {
       display: flex;
       justify-content: space-between;
       font-size: 10px;
-      color: #666;
+      color: var(--product-text-muted);
     }
     .width-markers::before {
       content: '0';
@@ -862,7 +862,7 @@ import {
       top: ${TEST_TOP_MARGIN + TEST_HEIGHT + 15}mm;
       left: ${TEST_LEFT_MARGIN}mm;
       font-size: 10px;
-      color: #666;
+      color: var(--product-text-muted);
       line-height: 1.4;
     }
   </style>
@@ -1000,7 +1000,7 @@ import {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background-color: #ff8c00; /* 鲜艳的背景色 */
+    background-color: var(--product-warning); /* 鲜艳的背景色 */
     color: white;
     padding: 20px 40px;
     width: 100%;
@@ -1050,7 +1050,7 @@ import {
     padding: 15px 25px;
     font-size: 16px;
     font-weight: bold;
-    background-color: #6c757d;  /* 灰色背景 */
+    background-color: var(--product-text-muted);  /* 灰色背景 */
     color: white;
     border: none;
     border-radius: 8px;
@@ -1060,14 +1060,14 @@ import {
   }
   
   .settings-btn:hover {
-    background-color: #5a6268;  /* 更深的灰色，增加悬停效果 */
+    background-color: var(--product-text-muted);  /* 更深的灰色，增加悬停效果 */
   }
   
   .print-btn {
     padding: 15px 30px;
     font-size: 18px;
     font-weight: bold;
-    background-color: #e53935;  /* 红色背景 */
+    background-color: var(--product-danger);  /* 红色背景 */
     color: white;
     border: none;
     border-radius: 8px;
@@ -1076,12 +1076,12 @@ import {
   }
   
   .print-btn:hover {
-    background-color: #d32f2f;  /* 更深的红色，增加悬停效果 */
+    background-color: var(--product-danger);  /* 更深的红色，增加悬停效果 */
   }
 
   /* ==================== 设备管理员弹窗样式 ==================== */
   .modal-overlay {
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: rgba(var(--product-text-rgb), 0.7);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -1105,13 +1105,13 @@ import {
   }
 
   .modal-content {
-    background-color: white;
+    background-color: var(--product-surface);
     border-radius: 12px;
     width: 90%;
     max-width: 500px;
     max-height: 80vh;
     overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 32px rgba(var(--product-text-rgb), 0.3);
     animation: modalSlideIn 0.3s ease-out;
   }
 
@@ -1138,7 +1138,7 @@ import {
   .device-completed h3 {
     text-align: center;
     margin-bottom: 25px;
-    color: #333;
+    color: var(--product-text);
     font-size: 20px;
   }
 
@@ -1150,13 +1150,13 @@ import {
     display: block;
     margin-bottom: 8px;
     font-weight: 600;
-    color: #555;
+    color: var(--product-text-secondary);
   }
 
   .phone-input {
     width: 100%;
     padding: 12px 16px;
-    border: 2px solid #ddd;
+    border: 2px solid var(--product-border);
     border-radius: 8px;
     font-size: 16px;
     transition: border-color 0.3s ease;
@@ -1165,12 +1165,12 @@ import {
 
   .phone-input:focus {
     outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    border-color: var(--product-info);
+    box-shadow: 0 0 0 3px rgba(var(--product-info-rgb), 0.1);
   }
 
   .error-message {
-    color: #dc3545;
+    color: var(--product-danger);
     font-size: 14px;
     margin-top: 5px;
   }
@@ -1184,7 +1184,7 @@ import {
 
   .login-btn,
   .confirm-btn {
-    background: linear-gradient(135deg, #007bff, #0056b3);
+    background: linear-gradient(135deg, var(--product-info), var(--product-info));
     color: white;
     border: none;
     padding: 12px 24px;
@@ -1198,21 +1198,21 @@ import {
 
   .login-btn:hover,
   .confirm-btn:hover {
-    background: linear-gradient(135deg, #0056b3, #004085);
+    background: linear-gradient(135deg, var(--product-info), var(--product-info));
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--product-info-rgb), 0.3);
   }
 
   .login-btn:disabled,
   .confirm-btn:disabled {
-    background: #6c757d;
+    background: var(--product-text-muted);
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
   }
 
   .cancel-btn {
-    background: #6c757d;
+    background: var(--product-text-muted);
     color: white;
     border: none;
     padding: 12px 24px;
@@ -1225,34 +1225,34 @@ import {
   }
 
   .cancel-btn:hover {
-    background: #5a6268;
+    background: var(--product-text-muted);
     transform: translateY(-2px);
   }
 
   /* 设备选择样式 */
   .market-info {
-    background: #f8f9fa;
+    background: var(--product-info-soft);
     padding: 15px;
     border-radius: 8px;
     margin-bottom: 20px;
-    border-left: 4px solid #007bff;
+    border-left: 4px solid var(--product-info);
   }
 
   .market-info p {
     margin: 5px 0;
-    color: #555;
+    color: var(--product-text-secondary);
   }
 
   .device-list {
     max-height: 300px;
     overflow-y: auto;
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--product-info-soft);
     border-radius: 8px;
   }
 
   .device-item {
     padding: 15px;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid var(--product-info-soft);
     cursor: pointer;
     transition: all 0.3s ease;
   }
@@ -1262,24 +1262,24 @@ import {
   }
 
   .device-item:hover {
-    background-color: #f8f9fa;
+    background-color: var(--product-info-soft);
   }
 
   .device-item.selected {
-    background-color: #e3f2fd;
-    border-left: 4px solid #007bff;
+    background-color: var(--product-info-soft);
+    border-left: 4px solid var(--product-info);
   }
 
   .device-name {
     font-weight: 600;
     font-size: 16px;
-    color: #333;
+    color: var(--product-text);
     margin-bottom: 5px;
   }
 
   .device-info {
     font-size: 14px;
-    color: #666;
+    color: var(--product-text-muted);
     margin-bottom: 8px;
   }
 
@@ -1301,50 +1301,50 @@ import {
   }
 
   .status-normal {
-    background-color: #d4edda;
-    color: #155724;
+    background-color: var(--product-primary-soft);
+    color: var(--product-text);
   }
 
   .status-offline {
-    background-color: #f8d7da;
-    color: #721c24;
+    background-color: var(--product-danger-soft);
+    color: var(--product-danger);
   }
 
   .status-error {
-    background-color: #f5c6cb;
-    color: #721c24;
+    background-color: var(--product-danger-soft);
+    color: var(--product-danger);
   }
 
   .status-paper {
-    background-color: #fff3cd;
-    color: #856404;
+    background-color: var(--product-warning-soft);
+    color: var(--product-warning);
   }
 
   .paper-count {
     font-size: 12px;
-    color: #666;
+    color: var(--product-text-muted);
     font-weight: 500;
   }
 
   .no-devices {
     text-align: center;
     padding: 40px 20px;
-    color: #666;
+    color: var(--product-text-muted);
     font-style: italic;
   }
 
   /* 配置完成样式 */
   .config-info {
-    background: #f8f9fa;
+    background: var(--product-info-soft);
     padding: 20px;
     border-radius: 8px;
     margin-bottom: 25px;
-    border-left: 4px solid #28a745;
+    border-left: 4px solid var(--product-primary-strong);
   }
 
   .config-info p {
     margin: 8px 0;
-    color: #555;
+    color: var(--product-text-secondary);
   }
 
   /* 打印机设置样式 */
@@ -1355,27 +1355,27 @@ import {
   .printer-settings h3 {
     text-align: center;
     margin-bottom: 25px;
-    color: #333;
+    color: var(--product-text);
     font-size: 20px;
   }
 
   .loading-message {
     text-align: center;
     padding: 40px 20px;
-    color: #666;
+    color: var(--product-text-muted);
   }
 
   .printer-list {
     max-height: 400px;
     overflow-y: auto;
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--product-info-soft);
     border-radius: 8px;
     margin-bottom: 20px;
   }
 
   .printer-item {
     padding: 15px;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid var(--product-info-soft);
     cursor: pointer;
     transition: all 0.3s ease;
   }
@@ -1385,18 +1385,18 @@ import {
   }
 
   .printer-item:hover {
-    background-color: #f8f9fa;
+    background-color: var(--product-info-soft);
   }
 
   .printer-item.selected {
-    background-color: #e3f2fd;
-    border-left: 4px solid #007bff;
+    background-color: var(--product-info-soft);
+    border-left: 4px solid var(--product-info);
   }
 
   .printer-name {
     font-weight: 600;
     font-size: 16px;
-    color: #333;
+    color: var(--product-text);
     margin-bottom: 8px;
     display: flex;
     align-items: center;
@@ -1404,7 +1404,7 @@ import {
   }
 
   .default-badge {
-    background-color: #28a745;
+    background-color: var(--product-primary-strong);
     color: white;
     padding: 2px 8px;
     border-radius: 4px;
@@ -1414,7 +1414,7 @@ import {
 
   .printer-info {
     font-size: 14px;
-    color: #666;
+    color: var(--product-text-muted);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1428,62 +1428,62 @@ import {
   }
 
   .status-idle {
-    background-color: #d4edda;
-    color: #155724;
+    background-color: var(--product-primary-soft);
+    color: var(--product-text);
   }
 
   .status-printing {
-    background-color: #cce5ff;
-    color: #004085;
+    background-color: var(--product-info-soft);
+    color: var(--product-info);
   }
 
   .status-paused {
-    background-color: #fff3cd;
-    color: #856404;
+    background-color: var(--product-warning-soft);
+    color: var(--product-warning);
   }
 
   .status-error {
-    background-color: #f8d7da;
-    color: #721c24;
+    background-color: var(--product-danger-soft);
+    color: var(--product-danger);
   }
 
   .no-printers {
     text-align: center;
     padding: 40px 20px;
-    color: #666;
+    color: var(--product-text-muted);
     font-style: italic;
   }
 
   .current-printer-info {
-    background: #f8f9fa;
+    background: var(--product-info-soft);
     padding: 15px;
     border-radius: 8px;
     margin-bottom: 20px;
-    border-left: 4px solid #28a745;
+    border-left: 4px solid var(--product-primary-strong);
   }
 
   .current-printer-info p {
     margin: 4px 0;
-    color: #555;
+    color: var(--product-text-secondary);
   }
 
   .default-info {
     font-size: 12px;
-    color: #28a745 !important;
+    color: var(--product-primary-strong) !important;
     font-style: italic;
   }
 
   .hint-info {
-    background: #e7f3ff;
+    background: var(--product-info-soft);
     padding: 12px;
     border-radius: 8px;
     margin-bottom: 20px;
-    border-left: 4px solid #007bff;
+    border-left: 4px solid var(--product-info);
   }
 
   .hint-info p {
     margin: 0;
-    color: #004085;
+    color: var(--product-info);
     font-size: 14px;
   }
 

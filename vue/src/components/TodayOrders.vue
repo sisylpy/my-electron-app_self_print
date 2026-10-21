@@ -1,29 +1,31 @@
 ﻿<template>
   <div class="saved-orders-tab"
        style="height: 100%; overflow: hidden; display: flex; flex-direction: column;">
-    <div v-if="batchPrintMode" class="batch-print-bar">
-      <div class="batch-print-bar__actions">
-        <label>
-          <input
-            type="checkbox"
-            :checked="allPrintableSelected"
-            :disabled="!printableOrders.length"
-            @change="toggleAllPrintable($event.target.checked)"
-          >
-          全选可打印订单
-        </label>
-        <button class="btn btn-primary btn-sm" :disabled="!canDownloadExcel" @click="handlePrintDeliveryOrder">
-          生成并打印（{{ selectedPrintOrders.length }}项）
-        </button>
-      </div>
-    </div>
+    <!-- 批量打印：生成按钮传送到工作台详情头部（订单提醒按钮之后） -->
+    <Teleport v-if="batchPrintMode" defer to="#order-flow-print-actions">
+      <button class="btn btn-primary btn-sm" :disabled="!canDownloadExcel" @click="handlePrintDeliveryOrder">
+        生成并打印（{{ selectedPrintOrders.length }}项）
+      </button>
+    </Teleport>
     <!-- 订单列表显示区域 -->
     <div class="order-list-container" style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
       <!-- 无子部门的情况 -->
       <div v-if="!hasSubDepartments" class="order-table-wrapper">
         <!-- 固定表头 -->
         <div class="table-header-fixed bg-light border-bottom p-2 d-flex align-items-center fw-bold small">
-          <div style="width: 70px; flex-shrink: 0;" class="text-center table-cell">{{ batchPrintMode ? '本批' : '序号' }}</div>
+          <div style="width: 70px; flex-shrink: 0;" class="text-center table-cell">
+          <input
+            v-if="batchPrintMode"
+            type="checkbox"
+            class="batch-select-all"
+            :checked="allPrintableSelected"
+            :disabled="!printableOrders.length"
+            title="全选可打印订单"
+            aria-label="全选可打印订单"
+            @change="toggleAllPrintable($event.target.checked)"
+          >
+          <template v-else>序号</template>
+        </div>
           <div style="width: 200px; flex-shrink: 0;" class="table-cell">商品名称</div>
           <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">订货</div>
           <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">出货数量</div>
@@ -78,7 +80,7 @@
                   {{ order.nxDoWeight }}
                 </span>
                 <span 
-                 v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
+                 v-if="order.nxDoStatus > -2 && !isOutboundFinished(order)"
                  class="ms-1 text-primary" 
                  style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                  @click.stop="handleOpenEditWeightModal(order, index, 'list')"
@@ -92,7 +94,7 @@
                   {{ order.nxDoPrintStandard}}
                </span>
                <span 
-                 v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
+                 v-if="order.nxDoStatus > -2 && !isOutboundFinished(order)"
                  class="ms-1 text-primary" 
                  style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                  @click.stop="handleOpenEditPrintStandardModal(order, index, 'list')"
@@ -122,7 +124,7 @@
           <div style="width: 120px; flex-shrink: 0;" class="text-center  table-cell" v-if="order.nxDoPrice > 0.1">
               <span class="">{{order.nxDoPrice }}</span>
               <span 
-                v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
+                v-if="order.nxDoStatus > -2 && !isOutboundFinished(order)"
                 class="ms-1 text-primary" 
                 style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                 @click.stop="handleOpenEditPriceModal(order, index, 'list')"
@@ -135,7 +137,7 @@
                -
               </span>
               <span 
-                v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
+                v-if="order.nxDoStatus > -2 && !isOutboundFinished(order)"
                 class="ms-1 text-primary" 
                 style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                 @click.stop="handleOpenEditPriceModal(order, index, 'list')"
@@ -203,7 +205,19 @@
       <!-- 有子部门的情况（列表抬头与列操作与单部门一致） -->
       <div v-else class="order-table-wrapper" style="flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
         <div class="table-header-fixed bg-light border-bottom p-2 d-flex align-items-center fw-bold small" style="flex-shrink: 0;">
-          <div style="width: 70px; flex-shrink: 0;" class="text-center table-cell">{{ batchPrintMode ? '本批' : '序号' }}</div>
+          <div style="width: 70px; flex-shrink: 0;" class="text-center table-cell">
+          <input
+            v-if="batchPrintMode"
+            type="checkbox"
+            class="batch-select-all"
+            :checked="allPrintableSelected"
+            :disabled="!printableOrders.length"
+            title="全选可打印订单"
+            aria-label="全选可打印订单"
+            @change="toggleAllPrintable($event.target.checked)"
+          >
+          <template v-else>序号</template>
+        </div>
           <div style="width: 200px; flex-shrink: 0;" class="table-cell">商品名称</div>
           <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">订货</div>
           <div style="width: 100px; flex-shrink: 0;" class="text-center table-cell">出货数量</div>
@@ -265,7 +279,7 @@
                     {{ order.nxDoWeight }}
                   </span>
                   <span
-                    v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
+                    v-if="order.nxDoStatus > -2 && !isOutboundFinished(order)"
                     class="ms-1 text-primary"
                     style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                     @click.stop="handleOpenEditWeightModal(order, index, 'dep', depIndex)"
@@ -279,7 +293,7 @@
                     {{ order.nxDoPrintStandard }}
                   </span>
                   <span
-                    v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
+                    v-if="order.nxDoStatus > -2 && !isOutboundFinished(order)"
                     class="ms-1 text-primary"
                     style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                     @click.stop="handleOpenEditPrintStandardModal(order, index, 'dep', depIndex)"
@@ -307,7 +321,7 @@
                 <div style="width: 120px; flex-shrink: 0;" class="text-center  table-cell" v-if="order.nxDoPrice > 0.1">
                   <span class="">{{ order.nxDoPrice }}</span>
                   <span
-                    v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
+                    v-if="order.nxDoStatus > -2 && !isOutboundFinished(order)"
                     class="ms-1 text-primary"
                     style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                     @click.stop="handleOpenEditPriceModal(order, index, 'dep', depIndex)"
@@ -320,7 +334,7 @@
                     -
                   </span>
                   <span
-                    v-if="order.nxDoStatus > -2 && !isCompletedOrder(order)"
+                    v-if="order.nxDoStatus > -2 && !isOutboundFinished(order)"
                     class="ms-1 text-primary"
                     style="cursor: pointer; font-size: 12px; opacity: 0.7; transition: opacity 0.2s;"
                     @click.stop="handleOpenEditPriceModal(order, index, 'dep', depIndex)"
@@ -735,7 +749,7 @@
     </div>
 
     <!-- 模态框留在底部操作栏外，避免被隐藏。 -->
-    <div v-if="showDatePicker" class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" @click.self="showDatePicker = false">
+    <div v-if="showDatePicker" class="modal fade show" style="display: block; background-color: rgba(var(--product-text-rgb), 0.5);" @click.self="showDatePicker = false">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content" @click.stop>
           <div class="modal-header">
@@ -1227,6 +1241,11 @@ export default {
     isCompletedOrder(order) {
       return Number(order?.nxDoStatus) === 2;
     },
+    // 只有状态为完成且出库已完成（purchaseStatus >= 4、库存已扣减）才算真正完成出库；
+    // 写单价自动置为完成但出库未完成的订单仍可修改数量、单价、规格。
+    isOutboundFinished(order) {
+      return Number(order?.nxDoStatus) === 2 && Number(order?.nxDoPurchaseStatus) >= 4;
+    },
     getOrderActionPolicy(order) {
       return getTodayOrderActionPolicy(order);
     },
@@ -1347,7 +1366,9 @@ export default {
       }
     },
     rejectCompletedOrderMutation(order) {
-      if (!this.isCompletedOrder(order)) return false;
+      // 只有真正完成出库（状态=2 且 purchaseStatus >= 4）后才锁定修改与删除；
+      // 写单价自动置为完成但出库未完成的订单，库存尚未扣减，仍允许修改。
+      if (!this.isOutboundFinished(order)) return false;
       this.$refs.alertDialog?.alert(
         '该订单已经完成出货，不能修改数量、单价、规格或删除。如需调整，请先点击“重新出库”。',
         'warning'
@@ -2867,28 +2888,16 @@ export default {
 </script>
 
 <style scoped>
-.batch-print-bar {
-  display: flex;
-  min-height: 44px;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 8px 14px;
-  border-bottom: 1px solid #cfe8da;
-  color: #315b47;
-  background: #f1faf5;
+
+.batch-select-all {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--product-primary-strong);
+  cursor: pointer;
 }
-
-.batch-print-bar__actions { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.batch-print-bar__actions button { white-space: nowrap; }
-
-.batch-print-bar label {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0;
-  color: #15734a;
-  font-size: 11px;
-  font-weight: 700;
+.batch-select-all:disabled {
+  cursor: not-allowed;
+  opacity: .28;
 }
 
 .order-batch-cell {
@@ -2900,11 +2909,6 @@ export default {
 }
 
 .order-batch-cell input,
-.batch-print-bar input {
-  width: 15px;
-  height: 15px;
-  accent-color: #119b5d;
-}
 
 .order-batch-cell input:disabled {
   cursor: not-allowed;
@@ -2917,7 +2921,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(var(--product-text-rgb), 0.5);
   z-index: 1050;
   display: flex;
   align-items: center;
@@ -2925,25 +2929,25 @@ export default {
 }
 
 .order-edit-popup {
-  background: white;
+  background: var(--product-surface);
   border-radius: 8px;
   min-width: 500px;
   max-width: 90%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(var(--product-text-rgb), 0.15);
 }
 
 .liziBack {
-  background-color: #e5f8f6;
+  background-color: var(--product-primary-soft);
 }
 
 .liziDelivery {
-  background-color: #d1ecf1;
+  background-color: var(--product-primary-soft);
 }
 
 .liziClock {
-  background-color: #f8d7da;
+  background-color: var(--product-danger-soft);
 }
 
 /* 表格美化样式 */
@@ -2959,11 +2963,11 @@ export default {
   position: sticky;
   top: 0;
   z-index: 10;
-  background-color: #f8f9fa !important;
+  background-color: var(--product-info-soft) !important;
 }
 
 .table-cell {
-  border-right: 1px solid #dee2e6;
+  border-right: 1px solid var(--product-info-soft);
   padding: 0 8px;
 }
 
@@ -2982,7 +2986,7 @@ export default {
   align-items: center;
   justify-content: center;
   padding: 28px 12px 48px;
-  color: #8b9993;
+  color: var(--product-text-muted);
   font-size: 12px;
 }
 
@@ -2991,7 +2995,7 @@ export default {
 }
 
 .order-item .table-cell {
-  border-right: 1px solid #e9ecef;
+  border-right: 1px solid var(--product-info-soft);
 }
 
 .order-item .table-cell:last-child {
@@ -3017,18 +3021,18 @@ export default {
 }
 
 .standard-btn.btn-primary {
-  background-color: #007bff;
-  border-color: #007bff;
+  background-color: var(--product-info);
+  border-color: var(--product-info);
   color: white;
 }
 
 .standard-btn.btn-outline-secondary {
-  border-color: #6c757d;
-  color: #6c757d;
+  border-color: var(--product-text-muted);
+  color: var(--product-text-muted);
 }
 
 .standard-btn.btn-outline-secondary:hover {
-  background-color: #6c757d;
+  background-color: var(--product-text-muted);
   color: white;
 }
 </style>

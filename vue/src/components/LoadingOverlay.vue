@@ -26,7 +26,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5); /* 半透明背景 */
+    background-color: rgba(var(--product-text-rgb), 0.5); /* 半透明背景 */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -34,8 +34,8 @@
   }
   
   .spinner {
-    border: 16px solid #f3f3f3; /* Light grey */
-    border-top: 16px solid #3498db; /* Blue */
+    border: 16px solid var(--product-tint); /* Light grey */
+    border-top: 16px solid var(--product-info); /* Blue */
     border-radius: 50%;
     width: 120px;
     height: 120px;

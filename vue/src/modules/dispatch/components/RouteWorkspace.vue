@@ -207,10 +207,10 @@ function progressValue(route) {
   min-height: 0;
   flex-direction: column;
   padding: 16px;
-  border: 1px solid #dce5ee;
+  border: 1px solid var(--product-info-soft);
   border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 8px 30px rgba(33, 54, 85, .05);
+  background: var(--product-surface);
+  box-shadow: 0 8px 30px rgba(var(--product-text-rgb), 0.05);
 }
 
 .workspace__top {
@@ -226,13 +226,13 @@ function progressValue(route) {
 }
 
 .workspace__top h2 {
-  color: #19283e;
+  color: var(--product-text);
   font-size: 19px;
 }
 
 .workspace__top p {
   margin-bottom: 3px;
-  color: #8190a4;
+  color: var(--product-info);
   font-size: 10px;
 }
 
@@ -241,7 +241,7 @@ function progressValue(route) {
   gap: 5px;
   padding: 4px;
   border-radius: 10px;
-  background: #eef2f6;
+  background: var(--product-info-soft);
 }
 
 .workspace__phase-tabs button {
@@ -251,7 +251,7 @@ function progressValue(route) {
   padding: 8px 11px;
   border: 0;
   border-radius: 7px;
-  color: #64738a;
+  color: var(--product-info);
   background: transparent;
   font-size: 11px;
   font-weight: 700;
@@ -259,9 +259,9 @@ function progressValue(route) {
 }
 
 .workspace__phase-tabs button.active {
-  color: #1d57ad;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(31, 57, 91, .1);
+  color: var(--product-info);
+  background: var(--product-surface);
+  box-shadow: 0 2px 8px rgba(var(--product-text-rgb), 0.1);
 }
 
 .workspace__phase-tabs span {
@@ -271,14 +271,14 @@ function progressValue(route) {
   place-items: center;
   padding: 0 4px;
   border-radius: 99px;
-  color: #5b6d85;
-  background: #dde5ed;
+  color: var(--product-info);
+  background: var(--product-info-soft);
   font-size: 9px;
 }
 
 .workspace__phase-tabs button.active span {
   color: #fff;
-  background: #3a70bd;
+  background: var(--product-info);
 }
 
 .workspace__summary {
@@ -288,9 +288,9 @@ function progressValue(route) {
   gap: 18px;
   margin-top: 14px;
   padding: 12px 14px;
-  border: 1px solid #e0e8f0;
+  border: 1px solid var(--product-info-soft);
   border-radius: 12px;
-  background: linear-gradient(100deg, #f4f8fe, #fafcff);
+  background: linear-gradient(100deg, var(--product-info-soft), var(--product-info-soft));
 }
 
 .workspace__summary-copy {
@@ -301,13 +301,13 @@ function progressValue(route) {
 }
 
 .workspace__summary-copy span {
-  color: #738399;
+  color: var(--product-info);
   font-size: 10px;
 }
 
 .workspace__summary-copy strong {
   margin-top: 4px;
-  color: #24599e;
+  color: var(--product-info);
   font-size: 12px;
 }
 
@@ -320,17 +320,17 @@ function progressValue(route) {
 
 .workspace__summary dl div {
   padding: 0 12px;
-  border-left: 1px solid #dce5ef;
+  border-left: 1px solid var(--product-info-soft);
 }
 
 .workspace__summary dt {
-  color: #8391a3;
+  color: var(--product-info);
   font-size: 9px;
 }
 
 .workspace__summary dd {
   margin: 4px 0 0;
-  color: #24334a;
+  color: var(--product-text);
   font-size: 13px;
   font-weight: 800;
 }
@@ -349,14 +349,14 @@ function progressValue(route) {
 .route-card {
   flex: none;
   overflow: hidden;
-  border: 1px solid #dfe7ef;
+  border: 1px solid var(--product-info-soft);
   border-radius: 13px;
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .route-card.selected {
-  border-color: #78a2df;
-  box-shadow: 0 0 0 2px rgba(65, 120, 196, .09);
+  border-color: var(--product-info);
+  box-shadow: 0 0 0 2px rgba(var(--product-info-rgb), 0.09);
 }
 
 .route-card__header {
@@ -367,9 +367,9 @@ function progressValue(route) {
   align-items: center;
   padding: 12px 14px;
   border: 0;
-  border-bottom: 1px solid #edf1f5;
+  border-bottom: 1px solid var(--product-info-soft);
   color: inherit;
-  background: #fbfcfe;
+  background: var(--product-info-soft);
   text-align: left;
   cursor: pointer;
 }
@@ -388,7 +388,7 @@ function progressValue(route) {
   flex: none;
   border-radius: 10px;
   color: #fff;
-  background: #356fbe;
+  background: var(--product-info);
   font-size: 12px;
   font-style: normal;
   font-weight: 800;
@@ -404,7 +404,7 @@ function progressValue(route) {
 .route-card__driver strong,
 .route-card__headline strong {
   overflow: hidden;
-  color: #223148;
+  color: var(--product-text);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -414,7 +414,7 @@ function progressValue(route) {
 .route-card__headline small {
   overflow: hidden;
   margin-top: 3px;
-  color: #7c899a;
+  color: var(--product-info);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -423,8 +423,8 @@ function progressValue(route) {
 .route-card__badge {
   padding: 5px 8px;
   border-radius: 99px;
-  color: #2d65ae;
-  background: #eaf2ff;
+  color: var(--product-info);
+  background: var(--product-info-soft);
   font-size: 9px;
   font-weight: 800;
 }
@@ -436,12 +436,12 @@ function progressValue(route) {
 .route-card__progress > div {
   display: flex;
   justify-content: space-between;
-  color: #64748b;
+  color: var(--product-info);
   font-size: 10px;
 }
 
 .route-card__progress > div strong {
-  color: #2665b7;
+  color: var(--product-info);
 }
 
 .route-card__progress > i {
@@ -450,14 +450,14 @@ function progressValue(route) {
   overflow: hidden;
   margin-top: 6px;
   border-radius: 99px;
-  background: #e7edf4;
+  background: var(--product-info-soft);
 }
 
 .route-card__progress b {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #3a79cc, #27a77c);
+  background: linear-gradient(90deg, var(--product-info), var(--product-primary-strong));
 }
 
 .route-card__timeline {
@@ -492,7 +492,7 @@ function progressValue(route) {
 
 .route-card__timeline li > button:hover,
 .route-card__timeline li.active > button {
-  background: #f0f6ff;
+  background: var(--product-info-soft);
 }
 
 .route-card__connector {
@@ -502,7 +502,7 @@ function progressValue(route) {
   bottom: -9px;
   left: 29px;
   width: 2px;
-  background: #dce5ee;
+  background: var(--product-info-soft);
 }
 
 .route-card__return .route-card__connector {
@@ -518,14 +518,14 @@ function progressValue(route) {
   border: 3px solid #fff;
   border-radius: 50%;
   color: #fff;
-  background: #3b75c3;
-  box-shadow: 0 0 0 1px #bbcee7;
+  background: var(--product-info);
+  box-shadow: 0 0 0 1px var(--product-info);
   font-size: 9px;
   font-weight: 800;
 }
 
 .route-card__seq--return {
-  background: #334155;
+  background: var(--product-info);
 }
 
 .route-card__stop-copy,
@@ -537,7 +537,7 @@ function progressValue(route) {
 
 .route-card__stop-copy strong {
   overflow: hidden;
-  color: #28374c;
+  color: var(--product-text);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -546,7 +546,7 @@ function progressValue(route) {
 .route-card__stop-copy small {
   overflow: hidden;
   margin-top: 3px;
-  color: #7f8b9c;
+  color: var(--product-info);
   font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -557,20 +557,20 @@ function progressValue(route) {
 }
 
 .route-card__stop-time strong {
-  color: #334e70;
+  color: var(--product-info);
   font-size: 10px;
 }
 
 .route-card__stop-time small {
   margin-top: 3px;
-  color: #73849a;
+  color: var(--product-info);
   font-size: 9px;
 }
 
 .route-card__timeline li > em {
   display: block;
   margin: -2px 0 2px 46px;
-  color: #9aa6b4;
+  color: var(--product-info);
   font-size: 8px;
   font-style: normal;
 }
@@ -581,7 +581,7 @@ function progressValue(route) {
   flex: 1;
   place-items: center;
   align-content: center;
-  color: #8190a4;
+  color: var(--product-info);
   text-align: center;
 }
 
@@ -592,13 +592,13 @@ function progressValue(route) {
   place-items: center;
   margin-bottom: 10px;
   border-radius: 50%;
-  color: #52739b;
-  background: #eaf0f6;
+  color: var(--product-info);
+  background: var(--product-info-soft);
   font-size: 18px;
 }
 
 .workspace__state strong {
-  color: #56677c;
+  color: var(--product-info);
   font-size: 13px;
 }
 
@@ -609,17 +609,17 @@ function progressValue(route) {
 }
 
 .workspace__state--error > span {
-  color: #a84545;
-  background: #fff0f0;
+  color: var(--product-danger);
+  background: var(--product-danger-soft);
 }
 
 .workspace__state--error p {
-  color: #a84545;
+  color: var(--product-danger);
 }
 
 .workspace__spinner {
-  border: 3px solid #dfe8f2;
-  border-top-color: #3a76c6;
+  border: 3px solid var(--product-info-soft);
+  border-top-color: var(--product-info);
   animation: route-spin .8s linear infinite;
 }
 

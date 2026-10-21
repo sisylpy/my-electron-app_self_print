@@ -6,7 +6,7 @@
                  style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;">
               
                  <div class="card h-100"
-                     style="display: flex; flex-direction: column; border: 2px solid #007bff;">
+                     style="display: flex; flex-direction: column; border: 2px solid var(--product-info);">
                      
                      <div class="card-body p-1"
                          style="display: flex; flex-direction: column; min-height: 0;">
@@ -52,14 +52,14 @@
                             <div v-if="autoProcessFiles.length > 0"
                                  style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
                                 <h6 class="mb-1 red" v-if="pendingFiles.length > 0"
-                                    style="background-color: #fff3cd; font-size: 12px; color: #dc3545; padding: 4px 8px; border-radius: 4px; flex-shrink: 0;">
+                                    style="background-color: var(--product-warning-soft); font-size: 12px; color: var(--product-danger); padding: 4px 8px; border-radius: 4px; flex-shrink: 0;">
                                     待转换新文件{{ pendingFiles.length }}个</h6>
                                 <div style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
                                     <!-- 已处理的文件：标签页显示 -->
                                     <div v-if="processedFiles.length > 0"
                                          style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
                                         <!-- 标签页导航（固定，不滚动） -->
-                                        <div style="flex-shrink: 0; overflow-x: auto; overflow-y: hidden; border-bottom: 1px solid #dee2e6;">
+                                        <div style="flex-shrink: 0; overflow-x: auto; overflow-y: hidden; border-bottom: 1px solid var(--product-info-soft);">
                                             <ul class="nav nav-tabs" role="tablist"
                                                 style="flex-wrap: nowrap; white-space: nowrap; margin-bottom: 0;">
                                                 <li
@@ -100,30 +100,30 @@
                                                             <!-- 图片预览 -->
                                                             <div v-if="currentPreviewImageSrc"
                                                                  class="border rounded p-0 position-relative flex-grow-1"
-                                                                 style="min-height: 0; overflow-y: auto; overflow-x: auto; cursor: move; background-color: #f5f5f5; display: flex; align-items: start; justify-content: start;"
+                                                                 style="min-height: 0; overflow-y: auto; overflow-x: auto; cursor: move; background-color: var(--product-tint); display: flex; align-items: start; justify-content: start;"
                                                                  @mousedown="$emit('start-drag', $event)"
                                                                  @wheel.prevent="$emit('wheel', $event)">
                                                                 <div class="position-absolute top-0 end-0 m-2 d-flex gap-1"
-                                                                     style="z-index: 1000; background-color: rgba(255, 255, 255, 0.9); padding: 4px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                                                     style="z-index: 1000; background-color: rgba(var(--product-tint-rgb), 0.9); padding: 4px; border-radius: 4px; box-shadow: 0 2px 4px rgba(var(--product-text-rgb), 0.2);">
                                                                     <button class="btn btn-sm btn-outline-secondary"
                                                                             @click.stop="$emit('reset-transform')"
                                                                             @mousedown.stop
                                                                             title="重置"
-                                                                            style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
+                                                                            style="background-color: var(--product-surface); border-color: var(--product-text-muted); color: var(--product-text-muted);">
                                                                         🔄
                                                                     </button>
                                                                     <button class="btn btn-sm btn-outline-secondary"
                                                                             @click.stop="$emit('zoom-in')"
                                                                             @mousedown.stop
                                                                             title="放大"
-                                                                            style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
+                                                                            style="background-color: var(--product-surface); border-color: var(--product-text-muted); color: var(--product-text-muted);">
                                                                         ➕
                                                                     </button>
                                                                     <button class="btn btn-sm btn-outline-secondary"
                                                                             @click.stop="$emit('zoom-out')"
                                                                             @mousedown.stop
                                                                             title="缩小"
-                                                                            style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
+                                                                            style="background-color: var(--product-surface); border-color: var(--product-text-muted); color: var(--product-text-muted);">
                                                                         ➖
                                                                     </button>
                                                                 </div>
@@ -272,7 +272,7 @@
             <div class="col-md-6 order-items-section"
                  style="display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;">
                 <div class="card h-100 p-2"
-                     style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; border: 2px solid #28a745;">
+                     style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; border: 2px solid var(--product-primary-strong);">
                     <div class="d-flex justify-content-between align-items-center mb-3"
                          style="flex-shrink: 0;">
                         <h6 class="mb-0">转换订单 ({{ filteredOrderItems.length }} 项)</h6>
@@ -417,7 +417,7 @@ export default {
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: rgba(0, 0, 0, 0.6);
+        background-color: rgba(var(--product-text-rgb), 0.6);
         display: flex;
         justify-content: center;
         align-items: center;

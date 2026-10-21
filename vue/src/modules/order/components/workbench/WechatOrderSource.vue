@@ -274,10 +274,10 @@ function formatTime(value) {
   flex: none;
   margin-bottom: 10px;
   padding: 12px 14px;
-  border: 1px solid #b9dacb;
+  border: 1px solid var(--product-primary-soft);
   border-radius: 8px;
-  background: #f6fcf8;
-  color: #183f30;
+  background: var(--product-primary-soft);
+  color: var(--product-text);
 }
 
 .wechat-order-source__title,
@@ -292,18 +292,18 @@ function formatTime(value) {
 .wechat-order-source__title > div,
 .wechat-order-source__bound > div { display: grid; gap: 3px; }
 .wechat-order-source__title span,
-.wechat-order-source__bound small { color: #64766e; font-size: 12px; }
-.wechat-order-source__label { color: #64766e; font-size: 11px; }
-.wechat-order-source__message { padding: 10px 0 2px; color: #64766e; }
+.wechat-order-source__bound small { color: var(--product-text-muted); font-size: 12px; }
+.wechat-order-source__label { color: var(--product-text-muted); font-size: 11px; }
+.wechat-order-source__message { padding: 10px 0 2px; color: var(--product-text-muted); }
 .wechat-order-source__bound { margin-top: 10px; }
 .wechat-order-source__bind-row { margin-top: 10px; justify-content: flex-start; }
 .wechat-order-source__bind-row input {
   width: min(420px, 70%);
   height: 38px;
   padding: 0 12px;
-  border: 1px solid #aac7ba;
+  border: 1px solid var(--product-primary);
   border-radius: 6px;
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .primary-button,
@@ -317,10 +317,10 @@ function formatTime(value) {
   padding: 0 16px;
   border-radius: 6px;
   color: #fff;
-  background: #178454;
+  background: var(--product-primary-strong);
   font-weight: 700;
 }
-.link-button { color: #16744c; background: transparent; }
+.link-button { color: var(--product-primary-strong); background: transparent; }
 button:disabled { cursor: not-allowed; opacity: .55; }
 .wechat-order-source__matches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .wechat-order-source__matches button {
@@ -328,19 +328,19 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   min-width: 210px;
   gap: 3px;
   padding: 9px 11px;
-  border: 1px solid #b9dacb;
+  border: 1px solid var(--product-primary-soft);
   border-radius: 6px;
   text-align: left;
-  background: #fff;
+  background: var(--product-surface);
 }
-.wechat-order-source__matches span { color: #64766e; font-size: 11px; }
-.wechat-order-source__group-mode { margin-top: 10px; padding: 11px; border: 1px solid #e3c77a; border-radius: 7px; background: #fffaf0; }
-.wechat-order-source__group-mode > p { margin: 5px 0 9px; color: #7d6b3d; font-size: 12px; }
+.wechat-order-source__matches span { color: var(--product-text-muted); font-size: 11px; }
+.wechat-order-source__group-mode { margin-top: 10px; padding: 11px; border: 1px solid var(--product-warning); border-radius: 7px; background: var(--product-warning-soft); }
+.wechat-order-source__group-mode > p { margin: 5px 0 9px; color: var(--product-warning); font-size: 12px; }
 .wechat-order-source__group-mode > div { display: flex; flex-wrap: wrap; gap: 8px; }
-.wechat-order-source__group-mode button { display: grid; gap: 3px; min-width: 240px; padding: 9px 11px; border: 1px solid #d8c17d; border-radius: 6px; background: #fff; text-align: left; color: #183f30; cursor: pointer; }
-.wechat-order-source__group-mode button span { color: #75683f; font-size: 11px; }
+.wechat-order-source__group-mode button { display: grid; gap: 3px; min-width: 240px; padding: 9px 11px; border: 1px solid var(--product-warning); border-radius: 6px; background: var(--product-surface); text-align: left; color: var(--product-text); cursor: pointer; }
+.wechat-order-source__group-mode button span { color: var(--product-warning); font-size: 11px; }
 .wechat-order-source__status { margin: 9px 0 0; font-size: 12px; }
-.wechat-order-source__status.error { color: #bd2c2c; }
-.wechat-order-source__status.warning { color: #9a6300; }
-.wechat-order-source__status.success { color: #16744c; }
+.wechat-order-source__status.error { color: var(--product-danger); }
+.wechat-order-source__status.warning { color: var(--product-warning); }
+.wechat-order-source__status.success { color: var(--product-primary-strong); }
 </style>

@@ -30,7 +30,7 @@
                         <div v-show="refTab === 'image'" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
                             <div v-if="!refImageDataUrl" class="drop-zone border rounded p-3 text-center flex-grow-1 d-flex flex-column align-items-center justify-content-center"
                                  :class="{ 'drag-over': isRefImageDragOver }"
-                                 style="background-color: #f8f9fa; cursor: pointer; transition: all 0.3s;"
+                                 style="background-color: var(--product-info-soft); cursor: pointer; transition: all 0.3s;"
                                  @dragover.prevent="handleRefImageDragOver"
                                  @dragenter.prevent="handleRefImageDragEnter"
                                  @dragleave.prevent="handleRefImageDragLeave"
@@ -43,7 +43,7 @@
                                 <small class="text-primary mt-1">💡 可从微信拖放图片，或复制图片后 Ctrl+V 粘贴</small>
                             </div>
                             <div v-else class="position-relative border rounded overflow-hidden"
-                                 style="flex: 1; min-height: 0; display: flex; flex-direction: column; cursor: move; background-color: #f5f5f5;"
+                                 style="flex: 1; min-height: 0; display: flex; flex-direction: column; cursor: move; background-color: var(--product-tint);"
                                  @mousedown="refImageStartDrag"
                                  @mousemove="refImageOnDrag"
                                  @mouseup="refImageEndDrag"
@@ -119,7 +119,7 @@
                                     <div class="d-flex align-items-center gap-1" style="min-width: 0;">
                                         <input type="text" class="form-control form-control-sm flex-grow-1"
                                                spellcheck="false"
-                                               style="font-size: 22px; min-width: 0; background-color: #fff;"
+                                               style="font-size: 22px; min-width: 0; background-color: var(--product-surface);"
                                                :value="beforeOrderForm.goodsName"
                                                @focus="scrollInputIntoView"
                                                @input="$emit('before-order-goods-name-input', $event.target.value)"
@@ -143,7 +143,7 @@
                                              :class="{ 'bg-primary bg-opacity-10': beforeOrderForm.selectedSearchIndex === gi }"
                                              @click="$emit('select-before-order-goods', g)">
                                             <div>
-                                                <span class="text-muted fw-bold me-2" style="color: #666;">{{ gi + 1 }}.</span>
+                                                <span class="text-muted fw-bold me-2" style="color: var(--product-text-muted);">{{ gi + 1 }}.</span>
                                                 <span v-if="disUser?.nxDiuDistributerId != null && g.nxDgDistributerId != null && g.nxDgDistributerId !== disUser.nxDiuDistributerId && g.goodsNxDistributerName"
                                                       class="font-xs text-primary me-1">[{{ g.goodsNxDistributerName }}]</span>
                                                 <span v-if="g.nxDgGoodsBrand && g.nxDgGoodsBrand !== 'null'"
@@ -209,7 +209,7 @@
                                 <td class="p-1" style="width: 10%;">
                                     <input type="text" class="form-control form-control-sm"
                                            spellcheck="false"
-                                           style="font-size: 22px; background-color: #fff;"
+                                           style="font-size: 22px; background-color: var(--product-surface);"
                                            :value="beforeOrderForm.quantity"
                                            @focus="scrollInputIntoView"
                                            @input="$emit('before-order-quantity-input', $event.target.value)"
@@ -221,7 +221,7 @@
                                 <td class="p-1" style="width: 10%;">
                                     <input type="text" class="form-control form-control-sm"
                                            spellcheck="false"
-                                           style="font-size: 22px; background-color: #fff;"
+                                           style="font-size: 22px; background-color: var(--product-surface);"
                                            :value="beforeOrderForm.standard"
                                            @focus="scrollInputIntoView"
                                            @input="$emit('before-order-standard-input', $event.target.value)"
@@ -233,7 +233,7 @@
                                 <td class="p-1" style="width: 15%;">
                                     <input type="text" class="form-control form-control-sm"
                                            spellcheck="false"
-                                           style="font-size: 22px; background-color: #fff;"
+                                           style="font-size: 22px; background-color: var(--product-surface);"
                                            :value="beforeOrderForm.remark"
                                            @focus="scrollInputIntoView"
                                            @input="$emit('before-order-remark-input', $event.target.value)"
@@ -247,11 +247,11 @@
                                         <button v-if="String(beforeOrderForm.goodsName || '').length > 0"
                                                 class="btn btn-sm"
                                                 :disabled="!canAddBeforeOrder(beforeOrderForm)"
-                                                :style="!canAddBeforeOrder(beforeOrderForm) ? 'font-size: 14px; padding: 4px 8px; background-color: transparent !important; border: none; color: #adb5bd; cursor: not-allowed;' : 'font-size: 14px; padding: 4px 8px; background-color: transparent !important; border: none; color: #6c757d; transition: all 0.2s;'"
+                                                :style="!canAddBeforeOrder(beforeOrderForm) ? 'font-size: 14px; padding: 4px 8px; background-color: transparent !important; border: none; color: var(--product-border-strong); cursor: not-allowed;' : 'font-size: 14px; padding: 4px 8px; background-color: transparent !important; border: none; color: var(--product-text-muted); transition: all 0.2s;'"
                                                 @click="beforeOrderForm.selectedGoods ? $emit('save-before-order', { item, orderIndex: orderItemsIndexOf(item) }) : $emit('save-new-goods-from-before-order', { item, orderIndex: orderItemsIndexOf(item) })"
                                                 :title="beforeOrderForm.selectedGoods ? '保存订单' : '保存新商品'"
-                                                @mouseenter="canAddBeforeOrder(beforeOrderForm) ? $event.target.style.color='#495057' : null"
-                                                @mouseleave="canAddBeforeOrder(beforeOrderForm) ? $event.target.style.color='#6c757d' : null">
+                                                @mouseenter="canAddBeforeOrder(beforeOrderForm) ? $event.target.style.color='var(--product-text-secondary)' : null"
+                                                @mouseleave="canAddBeforeOrder(beforeOrderForm) ? $event.target.style.color='var(--product-text-muted)' : null">
                                             💾
                                         </button>
                                     </div>
@@ -310,7 +310,7 @@
                                              :class="{ 'bg-primary bg-opacity-10': row.selectedSearchIndex === gi }"
                                              @click="onSelectGoods(rowIndex, g, 'dis')">
                                             <div>
-                                                <span class="text-muted fw-bold me-2" style="color: #666;">{{ gi + 1 }}.</span>
+                                                <span class="text-muted fw-bold me-2" style="color: var(--product-text-muted);">{{ gi + 1 }}.</span>
                                                 <span v-if="disUser?.nxDiuDistributerId != null && g.nxDgDistributerId != null && g.nxDgDistributerId !== disUser.nxDiuDistributerId && g.goodsNxDistributerName"
                                                       class="font-xs text-primary me-1">[{{ g.goodsNxDistributerName }}]</span>
                                                 <span v-if="g.nxDgGoodsBrand && g.nxDgGoodsBrand !== 'null'"
@@ -413,11 +413,11 @@
                                     <button v-if="String(row.goodsName || '').length > 0"
                                             class="btn btn-sm"
                                             :disabled="!canAddOrder(row)"
-                                            :style="!canAddOrder(row) ? 'font-size: 14px; padding: 4px 8px; background-color: transparent !important; border: none; color: #adb5bd; cursor: not-allowed;' : 'font-size: 14px; padding: 4px 8px; background-color: transparent !important; border: none; color: #6c757d; transition: all 0.2s;'"
+                                            :style="!canAddOrder(row) ? 'font-size: 14px; padding: 4px 8px; background-color: transparent !important; border: none; color: var(--product-border-strong); cursor: not-allowed;' : 'font-size: 14px; padding: 4px 8px; background-color: transparent !important; border: none; color: var(--product-text-muted); transition: all 0.2s;'"
                                             @click="onSaveOrderClick(rowIndex, row)"
                                             :title="addOrderButtonTitle(row)"
-                                            @mouseenter="canAddOrder(row) ? $event.target.style.color='#495057' : null"
-                                            @mouseleave="canAddOrder(row) ? $event.target.style.color='#6c757d' : null">
+                                            @mouseenter="canAddOrder(row) ? $event.target.style.color='var(--product-text-secondary)' : null"
+                                            @mouseleave="canAddOrder(row) ? $event.target.style.color='var(--product-text-muted)' : null">
 <!--                                        {{ addOrderButtonText(row) }}--> 💾
                                     </button>
                                 </td>
@@ -1109,8 +1109,8 @@
     transition: all 0.3s ease;
 }
 .drop-zone.drag-over {
-    background-color: #e3f2fd !important;
-    border-color: #2196f3 !important;
+    background-color: var(--product-info-soft) !important;
+    border-color: var(--product-info) !important;
     border-width: 2px !important;
 }
 .ref-image-fill {
@@ -1123,7 +1123,7 @@
 }
 .manual-entry-action-btn {
     font-size: 14px;
-    color: #6c757d;
+    color: var(--product-text-muted);
     cursor: pointer;
     padding: 0 4px;
     margin-right: 12px;
@@ -1134,7 +1134,7 @@
     margin-right: 0;
 }
 .manual-entry-action-btn:hover {
-    color: #495057;
+    color: var(--product-text-secondary);
 }
 </style>
 

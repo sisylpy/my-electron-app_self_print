@@ -122,12 +122,12 @@
   
   <style scoped>
   .card-body {
-    background-color: #ffffff;
+    background-color: var(--product-surface);
   }
   
   .card-header {
-    background-color: #f8f9fa;
-    border-bottom: 2px solid #ddd;
+    background-color: var(--product-info-soft);
+    border-bottom: 2px solid var(--product-border);
   }
   
   .list-group-item {
@@ -139,7 +139,7 @@
   }
   
   .table-striped tbody tr:nth-child(odd) {
-    background-color: #f9f9f9;
+    background-color: var(--product-tint);
   }
   
   .pagination-sm .page-item .page-link {
@@ -157,11 +157,11 @@
   }
   
   .shadow-sm {
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 8px rgba(var(--product-text-rgb), 0.1);
   }
   
   .border {
-    border: 1px solid #ddd;
+    border: 1px solid var(--product-border);
   }
   
   .rounded {
@@ -170,7 +170,7 @@
   
   .top-gradient, .bottom-gradient {
     height: 50px; /* 设置渐变色的高度 */
-    background: linear-gradient(to right, #6a11cb, #2575fc);
+    background: linear-gradient(to right, var(--product-primary), var(--product-info));
   }
   
   @media (max-width: 767px) {

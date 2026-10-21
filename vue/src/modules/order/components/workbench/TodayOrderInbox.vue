@@ -169,7 +169,7 @@ function customerMeta(customer) {
   grid-template-rows: auto auto minmax(0, 1fr);
   padding: 14px 12px 12px;
   border-right: 1px solid var(--product-border);
-  background: #fbfcfb;
+  background: var(--product-tint);
 }
 
 .today-inbox__customers > header,
@@ -206,7 +206,7 @@ function customerMeta(customer) {
   border: 1px solid var(--product-border);
   border-radius: 4px;
   color: var(--product-text-secondary);
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .today-inbox__customers > header button {
@@ -231,12 +231,12 @@ function customerMeta(customer) {
   border: 1px solid var(--product-border);
   border-radius: 4px;
   color: var(--product-text-muted);
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .today-inbox__search:focus-within {
   border-color: var(--product-primary);
-  box-shadow: 0 0 0 2px rgba(17, 155, 93, .08);
+  box-shadow: 0 0 0 2px rgba(var(--product-primary-strong-rgb), 0.08);
 }
 
 .today-inbox__search input {
@@ -271,12 +271,12 @@ function customerMeta(customer) {
 }
 
 .today-inbox__list > button:hover {
-  border-color: #e2e9e5;
-  background: #f6f9f7;
+  border-color: var(--product-tint);
+  background: var(--product-tint);
 }
 
 .today-inbox__list > button.is-active {
-  border-color: #cce5d7;
+  border-color: var(--product-primary-soft);
   color: var(--product-primary-strong);
   background: var(--product-primary-soft);
   box-shadow: inset 3px 0 0 var(--product-primary);
@@ -342,7 +342,7 @@ function customerMeta(customer) {
   border: 1px solid currentColor;
   border-radius: 4px;
   color: inherit;
-  background: #fff;
+  background: var(--product-surface);
   font-size: 10px;
   font-weight: 800;
 }
@@ -359,7 +359,7 @@ function customerMeta(customer) {
   min-height: 66px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--product-border);
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .today-inbox__detail-header span {
@@ -431,7 +431,7 @@ function customerMeta(customer) {
   width: 28px;
   height: 28px;
   margin-bottom: 6px;
-  border: 3px solid #dce7e1;
+  border: 3px solid var(--product-tint);
   border-top-color: var(--product-primary);
   border-radius: 50%;
   animation: today-spin .75s linear infinite;
@@ -453,7 +453,7 @@ function customerMeta(customer) {
   height: 48px;
   margin-bottom: 6px;
   place-items: center;
-  border: 1px solid #d1e5da;
+  border: 1px solid var(--product-primary-soft);
   border-radius: 8px;
   color: var(--product-primary-strong);
   background: var(--product-primary-soft);

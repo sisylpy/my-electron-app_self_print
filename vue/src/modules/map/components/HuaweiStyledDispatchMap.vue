@@ -151,18 +151,18 @@ watch(
   flex: 1;
   place-items: center;
   align-content: center;
-  border: 1px solid #dce7e2;
+  border: 1px solid var(--product-tint);
   border-radius: 12px;
-  color: #536a61;
-  background: #f4f8f6;
+  color: var(--product-primary-strong);
+  background: var(--product-primary-soft);
 }
 
 .dispatch-map-loader span {
   width: 27px;
   height: 27px;
   margin-bottom: 10px;
-  border: 3px solid #d5e7df;
-  border-top-color: #109869;
+  border: 3px solid var(--product-primary-soft);
+  border-top-color: var(--product-primary-strong);
   border-radius: 50%;
   animation: map-spin .8s linear infinite;
 }

@@ -263,13 +263,13 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', handleDocumentPo
   padding: 0 9px;
   border: 1px solid var(--product-border-strong);
   border-radius: var(--product-radius-md);
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .customer-context__input-wrap.is-open,
 .customer-context__input-wrap:focus-within {
   border-color: var(--product-primary);
-  box-shadow: 0 0 0 3px rgba(17, 155, 93, .09);
+  box-shadow: 0 0 0 3px rgba(var(--product-primary-strong-rgb), 0.09);
 }
 
 .customer-context__input-wrap > span {
@@ -308,8 +308,8 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', handleDocumentPo
   padding: 5px;
   border: 1px solid var(--product-border);
   border-radius: var(--product-radius-md);
-  background: #fff;
-  box-shadow: 0 18px 44px rgba(21, 42, 31, .14);
+  background: var(--product-surface);
+  box-shadow: 0 18px 44px rgba(var(--product-text-rgb), 0.14);
 }
 
 .customer-context__options > button {
@@ -383,7 +383,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', handleDocumentPo
   border-radius: var(--product-radius-md);
   outline: 0;
   color: var(--product-text);
-  background: #fff;
+  background: var(--product-surface);
   font-size: 12px;
 }
 
@@ -394,7 +394,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', handleDocumentPo
 
 .customer-context__department select:focus {
   border-color: var(--product-primary);
-  box-shadow: 0 0 0 3px rgba(17, 155, 93, .09);
+  box-shadow: 0 0 0 3px rgba(var(--product-primary-strong-rgb), 0.09);
 }
 
 .customer-context__selected {
@@ -404,7 +404,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', handleDocumentPo
   align-items: center;
   gap: 8px;
   padding: 0 10px;
-  border: 1px solid #cce5d7;
+  border: 1px solid var(--product-primary-soft);
   border-radius: var(--product-radius-md);
   background: var(--product-primary-soft);
   width: 210px;

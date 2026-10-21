@@ -49,7 +49,7 @@
                         </div>
                         <!-- TaskOrder：加载任务内容时显示占位动画，不显示空白 textarea；接口返回后再淡入输入框 -->
                         <div v-if="source === 'taskOrder' && selectTaskLoading" class="paste-task-loading-placeholder"
-                             style="display: flex; flex-direction: column; flex: 1; min-height: 0; align-items: center; justify-content: center; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 0.375rem; animation: paste-placeholder-pulse 1.5s ease-in-out infinite;">
+                             style="display: flex; flex-direction: column; flex: 1; min-height: 0; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--product-info-soft) 0%, var(--product-info-soft) 100%); border-radius: 0.375rem; animation: paste-placeholder-pulse 1.5s ease-in-out infinite;">
                             <div class="spinner-border text-primary" role="status"
                                  style="width: 2.5rem; height: 2.5rem;"></div>
                             <div class="mt-2 small text-muted">加载任务内容...</div>
@@ -597,7 +597,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: rgba(0, 0, 0, 0.6);
+        background-color: rgba(var(--product-text-rgb), 0.6);
         display: flex;
         justify-content: center;
         align-items: center;
@@ -635,13 +635,13 @@
         justify-content: space-between;
         flex: 0 0 auto;
         padding: 3px 2px 5px;
-        color: #476656;
+        color: var(--product-primary-strong);
         font-size: 12px;
         font-weight: 700;
     }
 
     .wechat-input-label small {
-        color: #7a8d82;
+        color: var(--product-text-muted);
         font-size: 11px;
         font-weight: 400;
     }
@@ -649,7 +649,7 @@
     /* 显示 overlay 时隐藏 textarea 文字，避免重影；仅保留光标可见 */
     .paste-textarea--overlay-visible {
         color: transparent !important;
-        caret-color: #212529;
+        caret-color: var(--product-text);
         text-shadow: none;
     }
 
@@ -659,7 +659,7 @@
     }
 
     .paste-textarea--has-invalid {
-        border-color: #dc3545;
+        border-color: var(--product-danger);
         border-width: 2px;
     }
 
@@ -671,7 +671,7 @@
 
     /* v-html 动态插入的内容需用 :deep 才能命中 scoped 样式 */
     .paste-invalid-alert :deep(.paste-invalid-line) {
-        color: #dc3545 !important;
+        color: var(--product-danger) !important;
         font-weight: 500;
     }
 
@@ -681,8 +681,8 @@
 
     @keyframes pasteContentUpdated {
         0% {
-            background-color: rgba(23, 162, 184, 0.22);
-            box-shadow: 0 0 0 2px rgba(23, 162, 184, 0.35);
+            background-color: rgba(var(--product-primary-strong-rgb), 0.22);
+            box-shadow: 0 0 0 2px rgba(var(--product-primary-strong-rgb), 0.35);
         }
         100% {
             background-color: transparent;
@@ -696,11 +696,11 @@
 
     @keyframes pasteContentUpdatedWithBg {
         0% {
-            background-color: rgba(23, 162, 184, 0.28);
-            box-shadow: 0 0 0 2px rgba(23, 162, 184, 0.4);
+            background-color: rgba(var(--product-primary-strong-rgb), 0.28);
+            box-shadow: 0 0 0 2px rgba(var(--product-primary-strong-rgb), 0.4);
         }
         100% {
-            background-color: var(--bs-light, #f8f9fa);
+            background-color: var(--bs-light, var(--product-info-soft));
             box-shadow: none;
         }
     }

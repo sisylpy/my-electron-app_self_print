@@ -49,7 +49,7 @@
                                  @paste.prevent="handlePaste"
                                  @click="$refs.imageFileInput && $refs.imageFileInput.click()"
                                  tabindex="0"
-                                 style="cursor: pointer; transition: all 0.3s; background-color: #f8f9fa;">
+                                 style="cursor: pointer; transition: all 0.3s; background-color: var(--product-info-soft);">
                                 <input
                                         type="file"
                                         ref="imageFileInput"
@@ -97,7 +97,7 @@
                         </div>
                         <!-- TaskOrder：加载任务内容时显示与 PasteUpload 一致的占位动画，接口返回后淡入图片 -->
                         <div v-if="source === 'taskOrder' && selectTaskLoading" class="image-task-loading-placeholder"
-                             style="display: flex; flex-direction: column; flex: 1; min-height: 0; align-items: center; justify-content: center; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 0.375rem; animation: image-placeholder-pulse 1.5s ease-in-out infinite;">
+                             style="display: flex; flex-direction: column; flex: 1; min-height: 0; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--product-info-soft) 0%, var(--product-info-soft) 100%); border-radius: 0.375rem; animation: image-placeholder-pulse 1.5s ease-in-out infinite;">
                             <div class="spinner-border text-primary" role="status"
                                  style="width: 2.5rem; height: 2.5rem;"></div>
                             <div class="mt-2 small text-muted">加载任务内容...</div>
@@ -109,7 +109,7 @@
                                  style="display: flex; flex-direction: column; min-height: 0;">
                                 <!-- 图片预览 -->
                                 <div v-if="imagePreview" class="border rounded p-0 position-relative flex-grow-1"
-                                         style="min-height: 0; overflow: hidden; cursor: move; background-color: #f5f5f5; display: flex; align-items: start; justify-content: start; position: relative !important;"
+                                         style="min-height: 0; overflow: hidden; cursor: move; background-color: var(--product-tint); display: flex; align-items: start; justify-content: start; position: relative !important;"
                              @mousedown="handleStartDrag"
                              @mousemove="handleOnDrag"
                              @mouseup="handleEndDrag"
@@ -131,26 +131,26 @@
                                 </div>
                             </div>
                             <div class="position-absolute top-0 end-0 m-2 d-flex gap-1"
-                                 style="z-index: 1000; background-color: rgba(255, 255, 255, 0.9); padding: 4px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                 style="z-index: 1000; background-color: rgba(var(--product-tint-rgb), 0.9); padding: 4px; border-radius: 4px; box-shadow: 0 2px 4px rgba(var(--product-text-rgb), 0.2);">
                                 <button class="btn btn-sm btn-outline-secondary"
                                         @click.stop="$emit('reset-transform')"
                                         @mousedown.stop
                                         title="重置"
-                                        style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
+                                        style="background-color: var(--product-surface); border-color: var(--product-text-muted); color: var(--product-text-muted);">
                                     🔄
                                 </button>
                                 <button class="btn btn-sm btn-outline-secondary"
                                         @click.stop="$emit('zoom-in')"
                                         @mousedown.stop
                                         title="放大"
-                                        style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
+                                        style="background-color: var(--product-surface); border-color: var(--product-text-muted); color: var(--product-text-muted);">
                                     ➕
                                 </button>
                                 <button class="btn btn-sm btn-outline-secondary"
                                         @click.stop="$emit('zoom-out')"
                                         @mousedown.stop
                                         title="缩小"
-                                        style="background-color: #fff; border-color: #6c757d; color: #6c757d;">
+                                        style="background-color: var(--product-surface); border-color: var(--product-text-muted); color: var(--product-text-muted);">
                                     ➖
                                 </button>
                             </div>
@@ -881,7 +881,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: rgba(0, 0, 0, 0.6);
+        background-color: rgba(var(--product-text-rgb), 0.6);
         display: flex;
         justify-content: center;
         align-items: center;
@@ -903,7 +903,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: rgba(0, 0, 0, 0.55);
+        background-color: rgba(var(--product-text-rgb), 0.55);
         display: flex;
         justify-content: center;
         align-items: center;
@@ -939,8 +939,8 @@
 
     .popup-content {
         pointer-events: auto; /* ✅ 只有内容可点击 */
-        background-color: rgba(255, 255, 255, 0.95);
-        color: #000;
+        background-color: rgba(var(--product-tint-rgb), 0.95);
+        color: var(--product-text);
         padding: 10px 15px;
         border-radius: 6px;
         font-size: 14px;
@@ -949,8 +949,8 @@
         max-width: 300px;
         word-wrap: break-word;
         white-space: normal;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-        border: 1px solid rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 8px rgba(var(--product-text-rgb), 0.3);
+        border: 1px solid rgba(var(--product-text-rgb), 0.1);
     }
 
     /* 拖放区域样式 */
@@ -959,8 +959,8 @@
     }
 
     .drop-zone.drag-over {
-        background-color: #e3f2fd !important;
-        border-color: #2196f3 !important;
+        background-color: var(--product-info-soft) !important;
+        border-color: var(--product-info) !important;
         border-width: 2px !important;
         transform: scale(1.02);
     }
@@ -976,8 +976,8 @@
 
     @keyframes imageTaskHeaderFlash {
         0% {
-            background-color: rgba(23, 162, 184, 0.2);
-            box-shadow: inset 0 0 0 2px rgba(23, 162, 184, 0.35);
+            background-color: rgba(var(--product-primary-strong-rgb), 0.2);
+            box-shadow: inset 0 0 0 2px rgba(var(--product-primary-strong-rgb), 0.35);
         }
         100% {
             background-color: transparent;

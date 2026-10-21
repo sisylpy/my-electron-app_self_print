@@ -97,7 +97,7 @@ function confirm() {
   inset: 0;
   place-items: center;
   padding: 24px;
-  background: rgba(14, 25, 40, .56);
+  background: rgba(var(--product-text-rgb), 0.56);
   backdrop-filter: blur(5px);
 }
 
@@ -106,8 +106,8 @@ function confirm() {
   max-height: min(680px, 88vh);
   overflow: hidden;
   border-radius: 20px;
-  background: #fff;
-  box-shadow: 0 24px 80px rgba(9, 22, 40, .28);
+  background: var(--product-surface);
+  box-shadow: 0 24px 80px rgba(var(--product-text-rgb), 0.28);
 }
 
 header {
@@ -116,24 +116,24 @@ header {
   justify-content: space-between;
   gap: 18px;
   padding: 24px 25px 17px;
-  border-bottom: 1px solid #e4eaf0;
+  border-bottom: 1px solid var(--product-info-soft);
 }
 
 header span {
-  color: #286c54;
+  color: var(--product-primary-strong);
   font-size: 10px;
   font-weight: 800;
 }
 
 header h2 {
   margin: 4px 0;
-  color: #1a293e;
+  color: var(--product-text);
   font-size: 20px;
 }
 
 header p {
   margin: 0;
-  color: #718095;
+  color: var(--product-info);
   font-size: 10px;
 }
 
@@ -142,8 +142,8 @@ header button {
   height: 32px;
   border: 0;
   border-radius: 50%;
-  color: #64748a;
-  background: #eef2f6;
+  color: var(--product-info);
+  background: var(--product-info-soft);
   font-size: 22px;
   cursor: pointer;
 }
@@ -163,19 +163,19 @@ header button {
   gap: 11px;
   align-items: center;
   padding: 11px;
-  border: 1px solid #e0e7ee;
+  border: 1px solid var(--product-info-soft);
   border-radius: 12px;
   color: inherit;
-  background: #fff;
+  background: var(--product-surface);
   text-align: left;
   cursor: pointer;
 }
 
 .driver-dialog__list > button:hover,
 .driver-dialog__list > button.selected {
-  border-color: #6d9cda;
-  background: #f1f6fd;
-  box-shadow: 0 0 0 2px rgba(71, 126, 198, .09);
+  border-color: var(--product-info);
+  background: var(--product-info-soft);
+  box-shadow: 0 0 0 2px rgba(var(--product-info-rgb), 0.09);
 }
 
 .driver-dialog__avatar {
@@ -185,7 +185,7 @@ header button {
   place-items: center;
   border-radius: 12px;
   color: #fff;
-  background: linear-gradient(135deg, #3577ca, #235598);
+  background: linear-gradient(135deg, var(--product-info), var(--product-info));
   font-weight: 900;
 }
 
@@ -196,14 +196,14 @@ header button {
 }
 
 .driver-dialog__copy strong {
-  color: #25354b;
+  color: var(--product-text);
   font-size: 13px;
 }
 
 .driver-dialog__copy small {
   overflow: hidden;
   margin-top: 4px;
-  color: #76859a;
+  color: var(--product-info);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -213,7 +213,7 @@ header button {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: #8a96a7;
+  color: var(--product-info);
   font-size: 9px;
 }
 
@@ -221,20 +221,20 @@ header button {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #a8b1bd;
+  background: var(--product-info);
 }
 
 .driver-dialog__status.online {
-  color: #26805f;
+  color: var(--product-primary-strong);
 }
 
 .driver-dialog__status.online i {
-  background: #24a878;
+  background: var(--product-primary-strong);
 }
 
 .driver-dialog__empty {
   padding: 50px 20px;
-  color: #8491a3;
+  color: var(--product-info);
   text-align: center;
   font-size: 11px;
 }
@@ -244,7 +244,7 @@ footer {
   justify-content: flex-end;
   gap: 9px;
   padding: 16px 25px 22px;
-  border-top: 1px solid #edf1f5;
+  border-top: 1px solid var(--product-info-soft);
 }
 
 footer button {
@@ -256,15 +256,15 @@ footer button {
 }
 
 footer .secondary {
-  border: 1px solid #d3dce6;
-  color: #5f7085;
-  background: #fff;
+  border: 1px solid var(--product-info-soft);
+  color: var(--product-info);
+  background: var(--product-surface);
 }
 
 footer .primary {
-  border: 1px solid #236c51;
+  border: 1px solid var(--product-primary-strong);
   color: #fff;
-  background: #236c51;
+  background: var(--product-primary-strong);
 }
 
 footer button:disabled {

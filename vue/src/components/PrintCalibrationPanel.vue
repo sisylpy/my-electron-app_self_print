@@ -1,99 +1,99 @@
 ﻿<template>
-    <div v-if="visible" style="background: #f5f5f5; border: 1px solid #ddd; margin: 10px; padding: 15px; border-radius: 5px; max-height: 80vh; overflow-y: auto;">
-        <h3 style="margin: 0 0 15px 0; color: #333;">🔧 打印校准设置</h3>
+    <div v-if="visible" style="background: var(--product-tint); border: 1px solid var(--product-border); margin: 10px; padding: 15px; border-radius: 5px; max-height: 80vh; overflow-y: auto;">
+        <h3 style="margin: 0 0 15px 0; color: var(--product-text);">🔧 打印校准设置</h3>
         
         <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
             <!-- 左侧安全边距 -->
             <div style="display: flex; align-items: center; gap: 5px;">
                 <label style="font-weight: bold; min-width: 80px;">左侧边距:</label>
-                <button @click="adjustLeftMargin(-1)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1mm</button>
-                <button @click="adjustLeftMargin(-0.5)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5mm</button>
+                <button @click="adjustLeftMargin(-1)" style="background: var(--product-warning); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1mm</button>
+                <button @click="adjustLeftMargin(-0.5)" style="background: var(--product-warning); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5mm</button>
                 <span style="min-width: 40px; text-align: center; font-weight: bold;">{{ displayCurrentLeftMargin }}mm</span>
-                <button @click="adjustLeftMargin(0.5)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5mm</button>
-                <button @click="adjustLeftMargin(1)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1mm</button>
+                <button @click="adjustLeftMargin(0.5)" style="background: var(--product-primary); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5mm</button>
+                <button @click="adjustLeftMargin(1)" style="background: var(--product-primary); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1mm</button>
             </div>
 
             <!-- 右侧安全边距 -->
             <div style="display: flex; align-items: center; gap: 5px;">
                 <label style="font-weight: bold; min-width: 80px;">右侧边距:</label>
-                <button @click="adjustRightMargin(-1)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1mm</button>
-                <button @click="adjustRightMargin(-0.5)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5mm</button>
+                <button @click="adjustRightMargin(-1)" style="background: var(--product-warning); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1mm</button>
+                <button @click="adjustRightMargin(-0.5)" style="background: var(--product-warning); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5mm</button>
                 <span style="min-width: 40px; text-align: center; font-weight: bold;">{{ displayCurrentRightMargin }}mm</span>
-                <button @click="adjustRightMargin(0.5)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5mm</button>
-                <button @click="adjustRightMargin(1)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1mm</button>
+                <button @click="adjustRightMargin(0.5)" style="background: var(--product-primary); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5mm</button>
+                <button @click="adjustRightMargin(1)" style="background: var(--product-primary); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1mm</button>
             </div>
 
             <!-- 配送商名称字体大小 -->
             <div style="display: flex; align-items: center; gap: 5px;">
                 <label style="font-weight: bold; min-width: 100px;">配送商名称:</label>
-                <button @click="adjustDistributorNameFontSize(-1)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1px</button>
-                <button @click="adjustDistributorNameFontSize(-0.5)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5px</button>
+                <button @click="adjustDistributorNameFontSize(-1)" style="background: var(--product-warning); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1px</button>
+                <button @click="adjustDistributorNameFontSize(-0.5)" style="background: var(--product-warning); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5px</button>
                 <span style="min-width: 50px; text-align: center; font-weight: bold;">{{ displayDistributorNameFontSize }}px</span>
-                <button @click="adjustDistributorNameFontSize(0.5)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5px</button>
-                <button @click="adjustDistributorNameFontSize(1)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1px</button>
+                <button @click="adjustDistributorNameFontSize(0.5)" style="background: var(--product-primary); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5px</button>
+                <button @click="adjustDistributorNameFontSize(1)" style="background: var(--product-primary); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1px</button>
             </div>
             <!-- 表头字体大小 -->
             <div style="display: flex; align-items: center; gap: 5px;">
                 <label style="font-weight: bold; min-width: 100px;">表头:</label>
-                <button @click="adjustHeaderFontSize(-1)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1px</button>
-                <button @click="adjustHeaderFontSize(-0.5)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5px</button>
+                <button @click="adjustHeaderFontSize(-1)" style="background: var(--product-warning); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1px</button>
+                <button @click="adjustHeaderFontSize(-0.5)" style="background: var(--product-warning); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5px</button>
                 <span style="min-width: 50px; text-align: center; font-weight: bold;">{{ displayHeaderFontSize }}px</span>
-                <button @click="adjustHeaderFontSize(0.5)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5px</button>
-                <button @click="adjustHeaderFontSize(1)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1px</button>
+                <button @click="adjustHeaderFontSize(0.5)" style="background: var(--product-primary); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5px</button>
+                <button @click="adjustHeaderFontSize(1)" style="background: var(--product-primary); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1px</button>
             </div>
 
             <!-- 订单内容字体大小 -->
             <div style="display: flex; align-items: center; gap: 5px;">
                 <label style="font-weight: bold; min-width: 100px;">订单内容:</label>
-                <button @click="adjustOrderContentFontSize(-1)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1px</button>
-                <button @click="adjustOrderContentFontSize(-0.5)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5px</button>
+                <button @click="adjustOrderContentFontSize(-1)" style="background: var(--product-warning); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1px</button>
+                <button @click="adjustOrderContentFontSize(-0.5)" style="background: var(--product-warning); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5px</button>
                 <span style="min-width: 50px; text-align: center; font-weight: bold;">{{ displayOrderContentFontSize }}px</span>
-                <button @click="adjustOrderContentFontSize(0.5)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5px</button>
-                <button @click="adjustOrderContentFontSize(1)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1px</button>
+                <button @click="adjustOrderContentFontSize(0.5)" style="background: var(--product-primary); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5px</button>
+                <button @click="adjustOrderContentFontSize(1)" style="background: var(--product-primary); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1px</button>
             </div>
 
             <!-- 行间距 -->
             <div style="display: flex; align-items: center; gap: 5px;">
                 <label style="font-weight: bold; min-width: 100px;">行间距:</label>
-                <button @click="adjustLineHeight(-1)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1px</button>
-                <button @click="adjustLineHeight(-0.5)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5px</button>
+                <button @click="adjustLineHeight(-1)" style="background: var(--product-warning); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1px</button>
+                <button @click="adjustLineHeight(-0.5)" style="background: var(--product-warning); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-0.5px</button>
                 <span style="min-width: 50px; text-align: center; font-weight: bold;">{{ displayLineHeight }}px</span>
-                <button @click="adjustLineHeight(0.5)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5px</button>
-                <button @click="adjustLineHeight(1)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1px</button>
+                <button @click="adjustLineHeight(0.5)" style="background: var(--product-primary); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+0.5px</button>
+                <button @click="adjustLineHeight(1)" style="background: var(--product-primary); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1px</button>
             </div>
 
             <!-- 最大可打印宽度（内容区域上限，避免右侧裁切） -->
             <div style="display: flex; align-items: center; gap: 5px;">
                 <label style="font-weight: bold; min-width: 120px;" title="内容区域宽度上限，超过会被缩小。右侧被裁切时调小此值。">最大可打印宽度:</label>
-                <button @click="adjustMaxPrintableWidth(-5)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-5mm</button>
-                <button @click="adjustMaxPrintableWidth(-1)" style="background: #ff9800; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1mm</button>
+                <button @click="adjustMaxPrintableWidth(-5)" style="background: var(--product-warning); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-5mm</button>
+                <button @click="adjustMaxPrintableWidth(-1)" style="background: var(--product-warning); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">-1mm</button>
                 <span style="min-width: 45px; text-align: center; font-weight: bold;">{{ maxPrintableWidth }}mm</span>
-                <button @click="adjustMaxPrintableWidth(1)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1mm</button>
-                <button @click="adjustMaxPrintableWidth(5)" style="background: #4CAF50; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+5mm</button>
-                <span style="font-size: 11px; color: #666;">(180-205)</span>
+                <button @click="adjustMaxPrintableWidth(1)" style="background: var(--product-primary); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+1mm</button>
+                <button @click="adjustMaxPrintableWidth(5)" style="background: var(--product-primary); color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">+5mm</button>
+                <span style="font-size: 11px; color: var(--product-text-muted);">(180-205)</span>
             </div>
         </div>
 
         <!-- 缩放系数校准区域 -->
-        <div style="margin-top: 20px; padding: 15px; background: #f0f7ff; border: 1px solid #b3d9ff; border-radius: 5px;">
-            <h4 style="margin: 0 0 10px 0; color: #1976d2;">📏 打印尺寸校准（解决整体缩小问题）</h4>
+        <div style="margin-top: 20px; padding: 15px; background: var(--product-info-soft); border: 1px solid var(--product-info-soft); border-radius: 5px;">
+            <h4 style="margin: 0 0 10px 0; color: var(--product-info);">📏 打印尺寸校准（解决整体缩小问题）</h4>
             
             <div style="margin-bottom: 15px;">
-                <button @click="handlePrintCalibrationPage" style="background: #2196F3; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer; margin-right: 10px;">
+                <button @click="handlePrintCalibrationPage" style="background: var(--product-info); color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer; margin-right: 10px;">
                     ⚙️ 打开打印设置（分辨率等）
                 </button>
-                <button @click="handleSyncSystemConfig" style="background: #4CAF50; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer; margin-right: 10px;">
+                <button @click="handleSyncSystemConfig" style="background: var(--product-primary); color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer; margin-right: 10px;">
                     🔄 一键同步系统配置
                 </button>
                 <span v-if="isMac" style="margin-right: 10px; font-size: 12px;">设为系统默认:</span>
                 <template v-if="isMac">
                     <button v-for="res in resolutionOptions" :key="res.label" @click="handleSetResolution(res.h, res.v)" 
-                        style="background: #9C27B0; color: white; border: none; padding: 6px 12px; border-radius: 3px; cursor: pointer; margin-right: 6px; font-size: 12px;">
+                        style="background: var(--product-primary); color: white; border: none; padding: 6px 12px; border-radius: 3px; cursor: pointer; margin-right: 6px; font-size: 12px;">
                         {{ res.label }}
                     </button>
                 </template>
             </div>
-            <div style="margin-bottom: 10px; font-size: 12px; color: #666;">
+            <div style="margin-bottom: 10px; font-size: 12px; color: var(--product-text-muted);">
                 Mac 提示：「存储预置」存在单独文件，不会更新系统默认。选好分辨率后点上方「设为系统默认」的按钮，再点「一键同步」即可看到。
             </div>
             
@@ -107,7 +107,7 @@
                         step="0.1" 
                         min="50" 
                         max="150"
-                        style="width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 3px;"
+                        style="width: 80px; padding: 5px; border: 1px solid var(--product-border); border-radius: 3px;"
                         placeholder="100"
                     />
                 </div> -->
@@ -115,7 +115,7 @@
                     <label style="font-weight: bold; min-width: 100px;">缩放系数:</label>
                     <button 
                         @click="decreaseZoomFactor" 
-                        style="background: #f44336; color: white; border: none; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-weight: bold; font-size: 16px; min-width: 40px;"
+                        style="background: var(--product-danger); color: white; border: none; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-weight: bold; font-size: 16px; min-width: 40px;"
                         title="减少 0.005"
                     >
                         −
@@ -127,10 +127,10 @@
                         min="0.5" 
                         max="1.5"
                         placeholder="1.0"
-                        style="width: 100px; padding: 5px; border: 1px solid #ddd; border-radius: 3px; text-align: center; font-weight: bold;"
+                        style="width: 100px; padding: 5px; border: 1px solid var(--product-border); border-radius: 3px; text-align: center; font-weight: bold;"
                         @blur="validateZoomFactor"
                     />
-                    <span style="margin-left: 5px; color: #999; font-size: 12px;">
+                    <span style="margin-left: 5px; color: var(--product-text-muted); font-size: 12px;">
                         (默认: 1.0)
                     </span>
                     <span 
@@ -140,75 +140,75 @@
                             borderRadius: '3px',
                             fontSize: '12px',
                             fontWeight: 'bold',
-                            backgroundColor: isWidthExceeded ? '#ffebee' : '#e8f5e9',
-                            color: isWidthExceeded ? '#c62828' : '#2e7d32',
-                            border: isWidthExceeded ? '1px solid #ef5350' : '1px solid #4caf50'
+                            backgroundColor: isWidthExceeded ? 'var(--product-danger-soft)' : 'var(--product-primary-soft)',
+                            color: isWidthExceeded ? 'var(--product-danger)' : 'var(--product-primary-strong)',
+                            border: isWidthExceeded ? '1px solid var(--product-danger)' : '1px solid var(--product-primary)'
                         }"
                         :title="`容器内容区域宽度: ${containerContentWidth.toFixed(2)} mm (容器 ${containerTotalWidth.toFixed(2)} - 左padding ${(internalCurrentLeftMargin * zoomFactor).toFixed(2)} - 右padding ${(internalCurrentRightMargin * zoomFactor).toFixed(2)})`"
                     >
                         📏 宽度: {{ containerContentWidth.toFixed(2) }} mm
-                        <span v-if="isWidthExceeded" style="color: #c62828; font-weight: bold;">
+                        <span v-if="isWidthExceeded" style="color: var(--product-danger); font-weight: bold;">
                             ⚠️ 超过{{ maxPrintableWidth }}mm，实际打印会缩小
                         </span>
                     </span>
                     <button 
                         @click="increaseZoomFactor" 
-                        style="background: #4CAF50; color: white; border: none; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-weight: bold; font-size: 16px; min-width: 40px;"
+                        style="background: var(--product-primary); color: white; border: none; padding: 5px 12px; border-radius: 3px; cursor: pointer; font-weight: bold; font-size: 16px; min-width: 40px;"
                         title="增加 0.005"
                     >
                         +
                     </button>
-                    <span style="margin-left: 10px; color: #666; font-size: 12px;">
+                    <span style="margin-left: 10px; color: var(--product-text-muted); font-size: 12px;">
                         (每次调整 ±0.005)
                     </span>
                 </div>
                 
                 <!-- 缩放系数建议提示 -->
-                <div v-if="zoomFactorWarning" style="margin-top: 10px; padding: 8px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 3px;">
-                    <div style="font-size: 12px; color: #856404; font-weight: bold;">
+                <div v-if="zoomFactorWarning" style="margin-top: 10px; padding: 8px; background: var(--product-warning-soft); border-left: 4px solid var(--product-warning); border-radius: 3px;">
+                    <div style="font-size: 12px; color: var(--product-warning); font-weight: bold;">
                         ⚠️ 缩放系数建议
                     </div>
-                    <div style="font-size: 11px; color: #856404; margin-top: 4px;">
+                    <div style="font-size: 11px; color: var(--product-warning); margin-top: 4px;">
                         当前缩放系数 {{ zoomFactor.toFixed(3) }} 会导致内容宽度 {{ containerContentWidth.toFixed(2) }}mm 超过最大可打印宽度 {{ maxPrintableWidth }}mm
                     </div>
-                    <div style="font-size: 11px; color: #856404; margin-top: 4px;">
+                    <div style="font-size: 11px; color: var(--product-warning); margin-top: 4px;">
                         建议最大缩放系数：<strong>{{ maxRecommendedZoomFactor.toFixed(3) }}</strong>
-                        <span style="margin-left: 10px; color: #666;">
+                        <span style="margin-left: 10px; color: var(--product-text-muted);">
                             （当前边距：左{{ internalCurrentLeftMargin }}mm + 右{{ internalCurrentRightMargin }}mm）
                         </span>
                     </div>
                 </div>
                 
                 <!-- 计算并应用按钮已屏蔽 -->
-                <!-- <button @click="handleCalculateZoom" style="background: #FF9800; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
+                <!-- <button @click="handleCalculateZoom" style="background: var(--product-warning); color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
                     第二步：计算并应用
                 </button> -->
             </div>
             
-            <div v-if="displayZoomFactor !== 1.0 && !zoomFactorWarning" style="margin-top: 10px; padding: 8px; background: #e8f5e9; border-left: 4px solid #4CAF50; border-radius: 3px;">
-                <span style="font-size: 12px; color: #2e7d32;">
+            <div v-if="displayZoomFactor !== 1.0 && !zoomFactorWarning" style="margin-top: 10px; padding: 8px; background: var(--product-primary-soft); border-left: 4px solid var(--product-primary); border-radius: 3px;">
+                <span style="font-size: 12px; color: var(--product-primary-strong);">
                     ✅ 校准系数已生效：当前缩放补偿为 {{ (displayZoomFactor * 100).toFixed(2) }}%
                 </span>
             </div>
         </div>
 
         <div style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
-            <button @click="handleReset" style="background: #FF9800; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
+            <button @click="handleReset" style="background: var(--product-warning); color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
                 🔄 恢复默认
             </button>
             <button 
                 @click="handleSave" 
-                style="background: #9C27B0; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;"
+                style="background: var(--product-primary); color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;"
                 :title="`保存配置：左边距 ${internalCurrentLeftMargin}mm，右边距 ${internalCurrentRightMargin}mm，配送商字体 ${internalDistributorNameFontSize}px，订单字体 ${internalOrderContentFontSize}px，行间距 ${internalLineHeight}px，缩放系数 ${zoomFactor.toFixed(3)}`"
             >
                 💾 保存配置
             </button>
-            <button @click="handleClose" style="background: #f44336; color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
+            <button @click="handleClose" style="background: var(--product-danger); color: white; border: none; padding: 8px 15px; border-radius: 3px; cursor: pointer;">
                 ❌ 关闭
             </button>
         </div>
 
-<!--        <div style="margin-top: 10px; padding: 10px; background: #e3f2fd; border-radius: 3px; font-size: 12px; color: #1976d2;">-->
+<!--        <div style="margin-top: 10px; padding: 10px; background: var(--product-info-soft); border-radius: 3px; font-size: 12px; color: var(--product-info);">-->
 <!--            <strong>使用说明：</strong><br>-->
 <!--            1. 先打印校准页，检查右侧边框是否完整显示<br>-->
 <!--            2. 如果右侧边框被裁掉，增加右侧边距<br>-->
@@ -809,7 +809,7 @@ export default {
     }
     
     .red-line {
-      background-color: #ff0000;
+      background-color: var(--product-danger);
       /* 强制打印背景颜色，防止驱动优化掉颜色 */
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
@@ -831,7 +831,7 @@ export default {
     
     .label {
       font-size: 12px;
-      color: #333;
+      color: var(--product-text);
       margin-top: 10px;
       display: block;
     }
@@ -846,18 +846,18 @@ export default {
     .instructions {
       margin-top: 50mm;
       padding: 20px;
-      border: 1px dashed #ccc;
-      background: #f9f9f9;
+      border: 1px dashed var(--product-border);
+      background: var(--product-tint);
     }
     
     .instructions h3 {
       margin-bottom: 10px;
-      color: #333;
+      color: var(--product-text);
     }
     
     .instructions p {
       margin: 5px 0;
-      color: #666;
+      color: var(--product-text-muted);
       line-height: 1.6;
     }
   </style>

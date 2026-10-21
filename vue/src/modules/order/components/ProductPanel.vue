@@ -19,7 +19,7 @@
                     :key="goods?.nxDistributerGoodsId || idx"
                     class="p-2 border-bottom product-panel__row"
                     :data-search-index="idx"
-                    :style="{ backgroundColor: form.selectedSearchIndex === idx ? 'rgba(13, 110, 253, 0.1)' : (idx % 2 === 0 ? '#fff' : '#f8f9fa') }"
+                    :style="{ backgroundColor: form.selectedSearchIndex === idx ? 'rgba(var(--product-info-rgb), 0.1)' : (idx % 2 === 0 ? '#fff' : 'var(--product-info-soft)') }"
                     @click="$emit('select', goods)">
                 <div class="d-flex">
                     <div class="flex-grow-1" style="min-width: 0;">
@@ -82,7 +82,7 @@
                     :key="goods?.nxGoodsId || idx"
                     class="p-2 border-bottom product-panel__row"
                     :data-search-index="(form.disArr?.length || 0) + idx"
-                    :style="{ backgroundColor: form.selectedSearchIndex === (form.disArr?.length || 0) + idx ? 'rgba(13, 110, 253, 0.1)' : (idx % 2 === 0 ? '#fff' : '#f8f9fa') }">
+                    :style="{ backgroundColor: form.selectedSearchIndex === (form.disArr?.length || 0) + idx ? 'rgba(var(--product-info-rgb), 0.1)' : (idx % 2 === 0 ? '#fff' : 'var(--product-info-soft)') }">
                 <div v-if="goods" class="d-flex justify-content-between align-items-center">
                     <div>
                         <span class="text-muted fw-bold me-2">{{ idx + 1 }}.</span>
@@ -151,18 +151,18 @@ export default {
     margin-top: 4px;
     overflow-y: auto;
     border-radius: 3px;
-    box-shadow: 0 8px 20px rgba(23, 38, 54, 0.12);
+    box-shadow: 0 8px 20px rgba(var(--product-text-rgb), 0.12);
 }
 
 .product-panel__header {
     position: sticky;
     top: 0;
     z-index: 1;
-    background: #f8f9fa;
+    background: var(--product-info-soft);
 }
 
 .product-panel__close {
-    color: #856404;
+    color: var(--product-warning);
     font-size: 14px;
     text-decoration: none;
 }

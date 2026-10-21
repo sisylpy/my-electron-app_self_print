@@ -68,13 +68,13 @@ defineEmits(['select', 'delete-selected']);
   flex: none;
   flex-wrap: wrap;
   padding: 7px 12px;
-  border-bottom: 1px solid var(--product-border, #dde5e0);
-  background: #fff;
+  border-bottom: 1px solid var(--product-border, var(--product-tint));
+  background: var(--product-surface);
 }
 
 .task-selector > span,
 .task-selector > small {
-  color: var(--product-text-muted, #89958f);
+  color: var(--product-text-muted, var(--product-text-muted));
   font-size: 11px;
 }
 
@@ -96,7 +96,7 @@ defineEmits(['select', 'delete-selected']);
   padding: 7px 8px;
   border: 0;
   border-bottom: 2px solid transparent;
-  color: #316d9d;
+  color: var(--product-info);
   background: transparent;
   font-size: 15px;
   font-weight: 800;
@@ -107,8 +107,8 @@ defineEmits(['select', 'delete-selected']);
 
 .task-selector__item.active .task-selector__name {
   padding-right: 27px;
-  border-bottom-color: #1673b8;
-  color: #1265a8;
+  border-bottom-color: var(--product-info);
+  color: var(--product-info);
 }
 
 .task-selector__delete {
@@ -122,17 +122,17 @@ defineEmits(['select', 'delete-selected']);
   padding: 0;
   border: 0;
   border-radius: 50%;
-  color: #a83c42;
-  background: #fff;
+  color: var(--product-danger);
+  background: var(--product-surface);
   font-size: 17px;
   font-weight: 700;
   line-height: 1;
 }
 
 .task-selector__delete:disabled { opacity: .4; cursor: not-allowed; }
-.task-selector__delete:not(:disabled):hover { color: #fff; background: #c23d46; }
+.task-selector__delete:not(:disabled):hover { color: #fff; background: var(--product-danger); }
 .task-selector__name:focus-visible,
-.task-selector__delete:focus-visible { outline: 2px solid #1673b8; outline-offset: 2px; }
+.task-selector__delete:focus-visible { outline: 2px solid var(--product-info); outline-offset: 2px; }
 
 .task-selector__items {
   display: flex;
@@ -156,8 +156,8 @@ defineEmits(['select', 'delete-selected']);
   flex: none;
   padding: 3px 6px;
   border-radius: 4px;
-  color: #7d5a25;
-  background: #fff4df;
+  color: var(--product-warning);
+  background: var(--product-warning-soft);
   font-size: 9px;
   font-weight: 900;
 }

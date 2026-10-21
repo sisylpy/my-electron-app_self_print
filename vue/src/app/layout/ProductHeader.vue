@@ -82,7 +82,7 @@ const mcpStatus = computed(() => {
   align-items: center;
   padding: 11px 22px;
   border-bottom: 1px solid var(--product-border);
-  background: #fff;
+  background: var(--product-surface);
 }
 
 .product-header__context {
@@ -167,7 +167,7 @@ const mcpStatus = computed(() => {
   gap: 7px;
   padding: 4px 13px;
   border: 0;
-  border-left: 1px solid #edf1ef;
+  border-left: 1px solid var(--product-border);
   border-radius: 0;
   background: transparent;
 }
@@ -177,22 +177,22 @@ const mcpStatus = computed(() => {
   height: 7px;
   flex: none;
   border-radius: 50%;
-  background: #20a875;
+  background: var(--product-success);
   box-shadow: none;
 }
 
 .runtime-chip > i.printer {
-  background: #4f7563;
+  background: var(--product-info);
   box-shadow: none;
 }
 
 .runtime-chip > i.mcp {
-  background: #7b8b83;
+  background: var(--product-text-muted);
   box-shadow: none;
 }
 
 .runtime-chip.warning > i {
-  background: #d99426;
+  background: var(--product-warning);
   box-shadow: none;
 }
 
