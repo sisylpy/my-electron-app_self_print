@@ -5,6 +5,7 @@ import {
   normalizeGroupMode,
   selectWechatOrderMessages,
 } from './wechatOrderMessagePolicy.js';
+import { applyCustomerWechatProfile } from '../../../utils/customerWechatProfile.js';
 
 export const WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED = 'WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED';
 export const WECHAT_IMAGE_DOWNLOAD_RETRY_DELAYS_MS = Object.freeze([
@@ -310,7 +311,8 @@ export async function loadCustomerWechatBinding(customerId, electronAPI = window
   const id = requireCustomerId(customerId);
   const api = electronAPI?.customerWechatOrders;
   if (!api?.loadBinding) throw new Error('当前安装包不支持微信聊天订单');
-  return normalizeWechatBinding(unwrapWechatServer(await api.loadBinding(id)));
+  const binding = normalizeWechatBinding(unwrapWechatServer(await api.loadBinding(id)));
+  return normalizeWechatBinding(applyCustomerWechatProfile(id, binding));
 }
 
 export async function prepareWechatOrderImport({

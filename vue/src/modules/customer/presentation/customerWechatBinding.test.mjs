@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  WECHAT_CONVERSATION_GROUP,
   WECHAT_GROUP_ALL_MEMBERS,
   WECHAT_GROUP_MENTION_SELF,
   buildCustomerWechatBindingPayload,
@@ -29,7 +30,13 @@ assert.equal(
   '客户资料群名',
 );
 assert.deepEqual(
-  buildCustomerWechatBindingPayload(18, groupBinding, '新调料群', WECHAT_GROUP_MENTION_SELF),
+  buildCustomerWechatBindingPayload(
+    18,
+    groupBinding,
+    '新调料群',
+    WECHAT_CONVERSATION_GROUP,
+    WECHAT_GROUP_MENTION_SELF,
+  ),
   {
     customerId: 18,
     displayName: '新调料群',
@@ -40,6 +47,14 @@ assert.deepEqual(
   },
 );
 assert.equal(customerWechatTypeLabel(null, true), '待关联');
-assert.equal(buildCustomerWechatBindingPayload(18, null, '未绑定', WECHAT_GROUP_ALL_MEMBERS), null);
+assert.equal(
+  customerWechatTypeLabel({ profileConfigured: true, conversationKind: 'group', groupMode: WECHAT_GROUP_ALL_MEMBERS }),
+  '专属群（待关联）',
+);
+assert.equal(
+  buildCustomerWechatBindingPayload(18, groupBinding, '新好友', 'direct', null),
+  null,
+);
+assert.equal(buildCustomerWechatBindingPayload(18, null, '未绑定', 'group', WECHAT_GROUP_ALL_MEMBERS), null);
 
 console.log('customer WeChat binding presentation tests passed');

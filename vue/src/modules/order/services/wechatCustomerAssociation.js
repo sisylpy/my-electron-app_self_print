@@ -9,6 +9,7 @@ import {
 } from './wechatOrderMessagePolicy.js';
 
 export const WECHAT_GROUP_MODE_REQUIRED = 'WECHAT_GROUP_MODE_REQUIRED';
+export const WECHAT_PROFILE_REQUIRED = 'WECHAT_PROFILE_REQUIRED';
 
 function timingNow() {
   return globalThis.performance?.now?.() ?? Date.now();
@@ -173,6 +174,17 @@ export async function ensureWechatCustomerBinding({
   const conversation = selectExactConversation(exactMatches);
   if (!conversation) throw new Error('微信中存在多个同名会话，请先在订单录入页手动绑定');
 
+  // 好友/群以及群规则必须在客户资料中一次设定。这里不能根据微信搜索结果
+  // 偷偷猜测，更不能在自动读取过程中临时弹选择框，否则无人值守任务会中断。
+  if (row?.binding?.profileConfigured !== true) {
+    const error = new Error('请先在客户中心设置该微信名称是好友还是微信群');
+    error.code = WECHAT_PROFILE_REQUIRED;
+    throw error;
+  }
+  if (current.conversationKind !== conversation.kind) {
+    throw new Error(`客户资料设置为${current.conversationKind === 'group' ? '微信群' : '微信好友'}，但微信中找到的是${conversation.kind === 'group' ? '微信群' : '微信好友'}，请先在客户中心更正`);
+  }
+
   const priorRow = (directory?.allRows || []).find(candidate => (
     candidate?.binding?.bound
     && candidate.binding.accountFingerprint === account.id
@@ -186,7 +198,7 @@ export async function ensureWechatCustomerBinding({
       current.groupMode,
     ].find(value => [GROUP_ALL_MEMBER_MESSAGES, GROUP_MENTION_SELF_ONLY].includes(value)) || null;
     if (!groupMode) {
-      const error = new Error('请选择这个群的订单接收方式');
+      const error = new Error('请先在客户中心设置微信群是专属群还是混合群');
       error.code = WECHAT_GROUP_MODE_REQUIRED;
       error.conversationTitle = conversation.displayName;
       throw error;

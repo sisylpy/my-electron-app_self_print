@@ -4,7 +4,6 @@ import {
   ensureWechatCustomerBinding,
   findWechatCustomerProfileMatches,
   resolveWechatCustomerAssociation,
-  WECHAT_GROUP_MODE_REQUIRED,
 } from './wechatCustomerAssociation.js';
 
 const oldCustomer = {
@@ -19,7 +18,7 @@ const oldCustomer = {
 };
 const newCustomer = {
   customer: { nxDepartmentId: 8, nxDepartmentWechatDisplayName: ' 金调料 ' },
-  binding: { enabled: 0, displayName: '金调料' },
+  binding: { enabled: 0, displayName: '金调料', profileConfigured: true, conversationKind: 'direct' },
 };
 const directory = buildWechatCustomerAssociationDirectory([oldCustomer, newCustomer]);
 
@@ -108,7 +107,7 @@ let activeDuplicatePayload = null;
 const activeDuplicateBinding = await ensureWechatCustomerBinding({
   row: {
     customer: { nxDepartmentId: 20, nxDepartmentWechatDisplayName: '李沛谊' },
-    binding: { enabled: 0 },
+    binding: { enabled: 0, profileConfigured: true, conversationKind: 'direct' },
   },
   selectedTitle: '李沛谊',
   directory: buildWechatCustomerAssociationDirectory([]),
@@ -195,7 +194,12 @@ await assert.rejects(
 
 const groupRow = {
   customer: { nxDepartmentId: 18, nxDepartmentWechatDisplayName: '调料群' },
-  binding: { enabled: 0 },
+  binding: {
+    enabled: 0,
+    profileConfigured: true,
+    conversationKind: 'group',
+    groupMode: 'MENTION_SELF_ONLY',
+  },
 };
 const groupDirectory = buildWechatCustomerAssociationDirectory([groupRow]);
 const groupApi = {
@@ -215,20 +219,10 @@ const groupApi = {
     saveBinding: async (payload) => ({ ok: true, data: { ...payload, enabled: 1 } }),
   },
 };
-await assert.rejects(
-  ensureWechatCustomerBinding({
-    row: groupRow,
-    selectedTitle: '调料群',
-    directory: groupDirectory,
-    electronAPI: groupApi,
-  }),
-  error => error?.code === WECHAT_GROUP_MODE_REQUIRED
-);
 const groupBinding = await ensureWechatCustomerBinding({
   row: groupRow,
   selectedTitle: '调料群',
   directory: groupDirectory,
-  groupMode: 'MENTION_SELF_ONLY',
   electronAPI: groupApi,
 });
 assert.equal(groupBinding.bound, true);

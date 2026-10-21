@@ -33,26 +33,30 @@
             <small class="field-tip">用于微信聊天订单搜索；保存后可在订单录入页通过“转所选微信好友订单”自动完成关联或迁移。</small>
           </label>
           <div class="wechat-mode-field">
-            <span>微信订单接收方式</span>
-            <template v-if="wechatBinding?.bound && wechatBinding.conversationKind === WECHAT_CONVERSATION_GROUP">
-              <div class="wechat-mode-options">
-                <label :class="{ selected: wechatGroupMode === WECHAT_GROUP_ALL_MEMBERS }">
-                  <input v-model="wechatGroupMode" type="radio" :value="WECHAT_GROUP_ALL_MEMBERS" />
-                  <strong>专属群</strong>
-                  <small>群内其他成员发送的文字和图片都可以作为订单</small>
-                </label>
-                <label :class="{ selected: wechatGroupMode === WECHAT_GROUP_MENTION_SELF }">
-                  <input v-model="wechatGroupMode" type="radio" :value="WECHAT_GROUP_MENTION_SELF" />
-                  <strong>混合群</strong>
-                  <small>只接收明确 @ 当前微信账号的文字消息</small>
-                </label>
-              </div>
-            </template>
-            <div v-else-if="wechatBinding?.bound" class="wechat-mode-readonly">
-              <strong>微信好友</strong><small>当前关联为好友单聊，不需要设置群消息规则</small>
+            <span>微信会话类型</span>
+            <div class="wechat-mode-options">
+              <label :class="{ selected: wechatConversationKind === WECHAT_CONVERSATION_DIRECT }">
+                <input v-model="wechatConversationKind" type="radio" :value="WECHAT_CONVERSATION_DIRECT" />
+                <strong>微信好友</strong>
+                <small>客户通过好友单聊发送订单</small>
+              </label>
+              <label :class="{ selected: wechatConversationKind === WECHAT_CONVERSATION_GROUP }">
+                <input v-model="wechatConversationKind" type="radio" :value="WECHAT_CONVERSATION_GROUP" />
+                <strong>微信群</strong>
+                <small>客户通过微信群发送订单</small>
+              </label>
             </div>
-            <div v-else class="wechat-mode-readonly muted">
-              <strong>尚未关联</strong><small>可先保存微信名称，之后在订单工作台完成微信关联</small>
+            <div v-if="wechatConversationKind === WECHAT_CONVERSATION_GROUP" class="wechat-mode-options wechat-group-options">
+              <label :class="{ selected: wechatGroupMode === WECHAT_GROUP_ALL_MEMBERS }">
+                <input v-model="wechatGroupMode" type="radio" :value="WECHAT_GROUP_ALL_MEMBERS" />
+                <strong>专属群</strong>
+                <small>群内其他成员发送的文字和图片都可以作为订单</small>
+              </label>
+              <label :class="{ selected: wechatGroupMode === WECHAT_GROUP_MENTION_SELF }">
+                <input v-model="wechatGroupMode" type="radio" :value="WECHAT_GROUP_MENTION_SELF" />
+                <strong>混合群</strong>
+                <small>只接收明确 @ 当前微信账号的文字消息</small>
+              </label>
             </div>
           </div>
           <div class="auto-read-field">
@@ -153,7 +157,7 @@
       </div>
 
       <footer class="drawer-footer">
-        <span class="save-error">{{ errorText }}</span>
+        <span class="save-error">{{ localError || errorText }}</span>
         <button type="button" class="secondary-button" @click="$emit('close')">取消</button>
         <button type="button" class="primary-button" :disabled="saving" @click="submit">
           {{ saving ? '保存中…' : '保存客户资料' }}
@@ -165,6 +169,7 @@
 
 <script>
 import {
+  WECHAT_CONVERSATION_DIRECT,
   WECHAT_CONVERSATION_GROUP,
   WECHAT_GROUP_ALL_MEMBERS,
   WECHAT_GROUP_MENTION_SELF,
@@ -217,10 +222,15 @@ export default {
     return {
       activeTab: 'base',
       printOptions: PRINT_OPTIONS.map(([value, label]) => ({ value, label })),
+      WECHAT_CONVERSATION_DIRECT,
       WECHAT_CONVERSATION_GROUP,
       WECHAT_GROUP_ALL_MEMBERS,
       WECHAT_GROUP_MENTION_SELF,
       form,
+      localError: '',
+      wechatConversationKind: (this.wechatBinding?.bound || this.wechatBinding?.profileConfigured)
+        ? this.wechatBinding.conversationKind
+        : null,
       wechatGroupMode: this.wechatBinding?.groupMode === WECHAT_GROUP_ALL_MEMBERS
         ? WECHAT_GROUP_ALL_MEMBERS
         : WECHAT_GROUP_MENTION_SELF,
@@ -246,12 +256,24 @@ export default {
   methods: {
     submit() {
       if (!this.form.nxDepartmentName || !this.form.nxDepartmentAttrName) return;
+      this.localError = '';
+      const wechatName = String(this.form.nxDepartmentWechatDisplayName || '').trim();
+      if (wechatName && ![WECHAT_CONVERSATION_DIRECT, WECHAT_CONVERSATION_GROUP].includes(this.wechatConversationKind)) {
+        this.localError = '设置微信名称时，请同时选择微信好友或微信群';
+        return;
+      }
+      if (wechatName && this.wechatConversationKind === WECHAT_CONVERSATION_GROUP
+        && ![WECHAT_GROUP_ALL_MEMBERS, WECHAT_GROUP_MENTION_SELF].includes(this.wechatGroupMode)) {
+        this.localError = '微信群还需要选择专属群或混合群';
+        return;
+      }
       this.form.nxDepartmentEarliestDeliveryTime = timeToSeconds(this.earliestTime);
       this.form.nxDepartmentLatestDeliveryTime = timeToSeconds(this.latestTime);
       this.form.nxDepartmentAllowEarlyDelivery = this.allowEarlyDelivery ? 1 : 0;
       this.$emit('save', {
         customer: clone(this.form),
         labelIds: this.selectedLabelIds.slice(),
+        wechatConversationKind: wechatName ? this.wechatConversationKind : null,
         wechatGroupMode: this.wechatGroupMode,
         participatesInAutoRead: this.autoReadParticipation,
       });

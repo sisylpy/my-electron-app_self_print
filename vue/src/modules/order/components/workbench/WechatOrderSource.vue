@@ -51,18 +51,6 @@
           <span>{{ match.kind === CONVERSATION_GROUP ? '群聊' : '好友' }} · 最近活跃 {{ formatTime(match.lastMessageAt) }}</span>
         </button>
       </div>
-      <div v-if="pendingGroup" class="wechat-order-source__group-mode">
-        <strong>“{{ pendingGroup.displayName }}”的订单接收方式</strong>
-        <p>专属客户群可接收群内全部成员消息；混合业务群只接收明确 @ 当前微信账号的消息。</p>
-        <div>
-          <button type="button" :disabled="busy" @click="bindConversation(pendingGroup, GROUP_ALL_MEMBER_MESSAGES)">
-            <strong>专属客户群</strong><span>群内其他成员发的文字都作为订单</span>
-          </button>
-          <button type="button" :disabled="busy" @click="bindConversation(pendingGroup, GROUP_MENTION_SELF_ONLY)">
-            <strong>混合业务群</strong><span>只接收 @ 当前微信账号的文字</span>
-          </button>
-        </div>
-      </div>
     </template>
 
     <p v-if="statusMessage" :class="['wechat-order-source__status', statusType]">
@@ -76,7 +64,6 @@ import { computed, onMounted, ref, watch } from 'vue';
 import {
   CONVERSATION_GROUP,
   GROUP_ALL_MEMBER_MESSAGES,
-  GROUP_MENTION_SELF_ONLY,
 } from '../../services/wechatOrderMessagePolicy';
 import {
   loadCustomerWechatBinding,
@@ -98,7 +85,6 @@ const busy = ref(false);
 const binding = ref(null);
 const searchName = ref('');
 const matches = ref([]);
-const pendingGroup = ref(null);
 const statusMessage = ref('');
 const statusType = ref('info');
 let bindingLoadPromise = null;
@@ -133,7 +119,6 @@ async function performLoadBinding() {
   loadingBinding.value = true;
   searchName.value = '';
   matches.value = [];
-  pendingGroup.value = null;
   setStatus('');
   try {
     const loaded = await loadCustomerWechatBinding(Number(props.customerId));
@@ -160,7 +145,6 @@ async function searchConversation() {
   if (!searchName.value || busy.value) return;
   busy.value = true;
   matches.value = [];
-  pendingGroup.value = null;
   setStatus('');
   try {
     const account = await activeAccount();
@@ -178,13 +162,18 @@ async function searchConversation() {
 }
 
 function chooseConversation(conversation) {
-  if (conversation.kind === CONVERSATION_GROUP) {
-    pendingGroup.value = conversation;
-    setStatus('请选择这个群的订单接收方式', 'warning');
+  if (binding.value?.profileConfigured !== true) {
+    setStatus('请先在客户中心设置该微信名称是好友还是微信群', 'warning');
     return;
   }
-  pendingGroup.value = null;
-  void bindConversation(conversation, null);
+  if (binding.value.conversationKind !== conversation.kind) {
+    setStatus(`客户资料设置为${binding.value.conversationKind === CONVERSATION_GROUP ? '微信群' : '微信好友'}，与所选微信会话类型不一致`, 'warning');
+    return;
+  }
+  void bindConversation(
+    conversation,
+    conversation.kind === CONVERSATION_GROUP ? binding.value.groupMode : null,
+  );
 }
 
 async function bindConversation(conversation, groupMode) {
@@ -204,7 +193,6 @@ async function bindConversation(conversation, groupMode) {
     }));
     binding.value = normalizeWechatBinding(saved);
     matches.value = [];
-    pendingGroup.value = null;
     setStatus(`已把 ${conversation.displayName} 绑定到当前客户`, 'success');
   } catch (error) {
     setStatus(error.message, 'error');
@@ -221,10 +209,14 @@ async function clearBinding() {
     const cleared = unwrapWechatServer(
       await window.electronAPI.customerWechatOrders.clearBinding(Number(props.customerId))
     );
-    binding.value = normalizeWechatBinding(cleared);
+    binding.value = normalizeWechatBinding({
+      ...cleared,
+      conversationKind: binding.value.conversationKind,
+      groupMode: binding.value.groupMode,
+      profileConfigured: binding.value.profileConfigured,
+    });
     searchName.value = '';
     matches.value = [];
-    pendingGroup.value = null;
     setStatus('已解除绑定，可以重新选择微信好友或群聊', 'success');
   } catch (error) {
     setStatus(error.message, 'error');

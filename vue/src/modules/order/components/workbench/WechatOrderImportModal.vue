@@ -522,7 +522,7 @@
 
           <Transition name="wechat-import-action">
             <div
-              v-if="(conversationSwitching && !busy) || selectedImportBusy || actionMessage || unmatchedConversationTitle || customerMatchOpen || groupModeRequest"
+              v-if="(conversationSwitching && !busy) || selectedImportBusy || actionMessage || unmatchedConversationTitle || customerMatchOpen"
               class="wechat-import-modal__action-mask"
               @click.self="handleActionMaskClick"
             >
@@ -541,37 +541,6 @@
                   <h3>正在打开“{{ conversationSwitchingTitle || '当前客户' }}”</h3>
                   <p>左侧微信正在搜索并切换会话，完成前请稍候，不要重复操作。</p>
                 </div>
-              </section>
-              <section
-                v-else-if="groupModeRequest"
-                class="wechat-import-modal__group-mode-dialog"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="wechat-group-mode-title"
-              >
-                <header>
-                  <small>微信群转订单</small>
-                  <h3 id="wechat-group-mode-title">选择群订单接收方式</h3>
-                  <p>
-                    已找到客户 <strong>{{ groupModeRequest.customerName }}</strong>
-                    对应的微信群 <strong>“{{ groupModeRequest.title }}”</strong>。请选择哪些群消息可以作为订单。
-                  </p>
-                </header>
-                <div class="wechat-import-modal__group-mode-options">
-                  <button type="button" @click="$emit('select-group-mode', 'ALL_MEMBER_MESSAGES')">
-                    <span aria-hidden="true">全</span>
-                    <strong>专属客户群</strong>
-                    <em>接收群内所有成员发送的文字和图片订单</em>
-                  </button>
-                  <button type="button" @click="$emit('select-group-mode', 'MENTION_SELF_ONLY')">
-                    <span aria-hidden="true">@</span>
-                    <strong>混合业务群</strong>
-                    <em>仅接收明确 @ 当前微信账号的文字和图片订单</em>
-                  </button>
-                </div>
-                <footer>
-                  <button type="button" @click="$emit('cancel-group-mode')">取消</button>
-                </footer>
               </section>
               <section
                 v-else-if="customerMatchOpen"
@@ -734,7 +703,6 @@ const props = defineProps({
   customerMatchCustomers: { type: Array, default: () => [] },
   customerMatchBusy: { type: Boolean, default: false },
   customerMatchError: { type: String, default: '' },
-  groupModeRequest: { type: Object, default: null },
 });
 
 const emit = defineEmits([
@@ -750,8 +718,6 @@ const emit = defineEmits([
   'start-customer-match',
   'cancel-customer-match',
   'confirm-customer-match',
-  'select-group-mode',
-  'cancel-group-mode',
   'dismiss-action-message',
   'refresh-selected-conversation',
 ]);
@@ -892,8 +858,7 @@ const selectedImportBusyMessage = computed(() => (
 
 function handleActionMaskClick() {
   if (props.conversationSwitching) return;
-  if (props.groupModeRequest) emit('cancel-group-mode');
-  else emit('dismiss-action-message');
+  emit('dismiss-action-message');
 }
 
 watch(

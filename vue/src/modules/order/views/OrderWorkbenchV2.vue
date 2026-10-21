@@ -117,7 +117,6 @@
       :customer-match-customers="customerContext.customers.value"
       :customer-match-busy="wechatCustomerMatchBusy"
       :customer-match-error="wechatCustomerMatchError"
-      :group-mode-request="wechatGroupModeRequest"
       @close="closeWechatImportModal"
       @refresh="refreshActiveWechatImport({ manual: true })"
       @merge-new="mergeActiveWechatImport"
@@ -130,8 +129,6 @@
       @start-customer-match="openWechatCustomerMatcher"
       @cancel-customer-match="closeWechatCustomerMatcher"
       @confirm-customer-match="confirmWechatCustomerMatch"
-      @select-group-mode="selectWechatGroupMode"
-      @cancel-group-mode="cancelWechatGroupMode"
       @dismiss-action-message="dismissWechatSelectedAction"
       @refresh-selected-conversation="refreshSelectedWechatConversation"
     >
@@ -371,12 +368,7 @@ import {
   ensureWechatCustomerBinding,
   findWechatCustomerProfileMatches,
   resolveWechatCustomerAssociation,
-  WECHAT_GROUP_MODE_REQUIRED,
 } from '../services/wechatCustomerAssociation';
-import {
-  GROUP_ALL_MEMBER_MESSAGES,
-  GROUP_MENTION_SELF_ONLY,
-} from '../services/wechatOrderMessagePolicy';
 import {
   customerParticipatesInAutoRead,
   databaseResultCoversConversation,
@@ -441,8 +433,6 @@ const wechatUnmatchedConversationTitle = ref('');
 const wechatCustomerMatchOpen = ref(false);
 const wechatCustomerMatchBusy = ref(false);
 const wechatCustomerMatchError = ref('');
-const wechatGroupModeRequest = ref(null);
-let wechatGroupModeResolver = null;
 let wechatImportSequence = 0;
 let wechatConversationFocusDepth = 0;
 let wechatReaderWarmupStarted = false;
@@ -466,7 +456,6 @@ const wechatOrderTimingLabels = Object.freeze({
   'binding-reuse': '复用已有微信绑定',
   'reader-list-accounts': '读取本机微信账号',
   'reader-find-conversation': '搜索微信会话',
-  'group-mode-selection': '等待选择群接收方式',
   'server-save-binding': '保存客户微信绑定',
   'customer-match-remember': '更新本次客户匹配',
   'reader-self-participant': '识别当前微信账号',
@@ -1738,7 +1727,6 @@ function discardWechatImportSession() {
 function resetWechatImportModalState() {
   wechatConversationObservationRequestId += 1;
   wechatConversationObservationRunning = false;
-  cancelWechatGroupMode();
   wechatImportModalOpen.value = false;
   wechatScanReportOpen.value = false;
   wechatWorkspaceReady.value = false;
@@ -1782,7 +1770,6 @@ async function closeWechatImportModal() {
 onBeforeUnmount(() => {
   stopAsyncImageTaskPoller();
   if (asyncImageTaskProgressTimer !== null) window.clearTimeout(asyncImageTaskProgressTimer);
-  cancelWechatGroupMode();
   if (wechatConversationObservationPoller !== null) {
     window.clearInterval(wechatConversationObservationPoller);
   }
@@ -2023,53 +2010,10 @@ async function handleDirectWechatTasks(event) {
   await openActiveWechatImport();
 }
 
-function requestWechatGroupMode(row, selectedTitle) {
-  return new Promise((resolve) => {
-    if (wechatGroupModeResolver) wechatGroupModeResolver(null);
-    wechatGroupModeResolver = resolve;
-    wechatGroupModeRequest.value = {
-      title: selectedTitle,
-      customerName: row?.customer?.nxDepartmentAttrName
-        || row?.customer?.nxDepartmentName
-        || row?.customer?.departmentName
-        || selectedTitle,
-    };
-  });
-}
-
-function settleWechatGroupMode(groupMode) {
-  const resolve = wechatGroupModeResolver;
-  wechatGroupModeResolver = null;
-  wechatGroupModeRequest.value = null;
-  if (resolve) resolve(groupMode);
-}
-
-function selectWechatGroupMode(groupMode) {
-  if (![GROUP_ALL_MEMBER_MESSAGES, GROUP_MENTION_SELF_ONLY].includes(groupMode)) return;
-  settleWechatGroupMode(groupMode);
-}
-
-function cancelWechatGroupMode() {
-  settleWechatGroupMode(null);
-}
-
-async function ensureWechatBindingWithGroupMode(options) {
-  try {
-    return await ensureWechatCustomerBinding(options);
-  } catch (error) {
-    if (error?.code !== WECHAT_GROUP_MODE_REQUIRED) throw error;
-    const groupModeStartedAt = timingNow();
-    const groupMode = await requestWechatGroupMode(options.row, options.selectedTitle);
-    if (typeof options.onTiming === 'function') {
-      options.onTiming({
-        stage: 'group-mode-selection',
-        durationMs: timingNow() - groupModeStartedAt,
-        cancelled: !groupMode,
-      });
-    }
-    if (!groupMode) throw new Error('已取消选择群订单接收方式');
-    return ensureWechatCustomerBinding({ ...options, groupMode });
-  }
+// 好友/群类型与群规则只允许在客户资料中设置。读单（包括定时任务）不得
+// 再弹出选择框，否则无人值守自动读取会停在交互界面。
+async function ensureWechatBindingFromCustomerProfile(options) {
+  return ensureWechatCustomerBinding(options);
 }
 
 async function prepareWechatConversationForCustomer(
@@ -2093,7 +2037,7 @@ async function prepareWechatConversationForCustomer(
       'binding-directory-build',
       () => buildWechatCustomerAssociationDirectory([row])
     );
-    row.binding = await ensureWechatBindingWithGroupMode({
+    row.binding = await ensureWechatBindingFromCustomerProfile({
       row,
       selectedTitle: title,
       directory,
@@ -2459,7 +2403,7 @@ async function readUnreadWechatOrders() {
         customerName,
       });
       try {
-        row.binding = await ensureWechatBindingWithGroupMode({
+        row.binding = await ensureWechatBindingFromCustomerProfile({
           row,
           selectedTitle: title,
           directory: associationDirectory,
@@ -2889,7 +2833,7 @@ async function scanAllBoundWechatOrders(options = {}) {
           row.binding = await timeWechatOrderPhase(
             timing,
             'scan-binding-check',
-            () => ensureWechatBindingWithGroupMode({
+            () => ensureWechatBindingFromCustomerProfile({
               row,
               selectedTitle: title,
               directory: associationDirectory,

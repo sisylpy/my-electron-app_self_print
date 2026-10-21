@@ -64,7 +64,7 @@ const unreadAction = workbench.match(
 assert.match(unreadAction, /loadBoundWechatCustomers/);
 assert.match(unreadAction, /loadBoundWechatCustomers\(\{ refreshCustomers: true \}\)/);
 assert.match(unreadAction, /wechatUi\?\.readUnread/);
-assert.match(unreadAction, /ensureWechatBindingWithGroupMode/);
+assert.match(unreadAction, /ensureWechatBindingFromCustomerProfile/);
 assert.match(workbench, /resolveWechatCustomerAssociation/);
 
 assert.match(modal, /读取未读订单/);
@@ -146,13 +146,13 @@ assert.match(
 assert.match(modal, /去跟客户匹配/);
 assert.match(modal, /关联并继续转订单/);
 assert.match(modal, /unmatchedConversationTitle/);
-assert.match(modal, /选择群订单接收方式/);
-assert.match(modal, /ALL_MEMBER_MESSAGES/);
-assert.match(modal, /MENTION_SELF_ONLY/);
+assert.doesNotMatch(modal, /选择群订单接收方式/);
+assert.doesNotMatch(modal, /groupModeRequest/);
 assert.match(modal, /showSelectedImportAction && !selectedConversation && \(items\.length \|\| activeItem\)/);
 assert.match(workbench, /:show-selected-import-action="showCurrentWechatReadButton"/);
-assert.match(workbench, /WECHAT_GROUP_MODE_REQUIRED/);
-assert.match(workbench, /ensureWechatBindingWithGroupMode/);
+assert.doesNotMatch(workbench, /WECHAT_GROUP_MODE_REQUIRED/);
+assert.doesNotMatch(workbench, /group-mode-selection/);
+assert.match(workbench, /ensureWechatBindingFromCustomerProfile/);
 
 const selectedAction = workbench.match(
   /async function importSelectedWechatConversation\(\) \{([\s\S]*?)\n\}\n\nasync function openWechatCustomerMatcher/,
@@ -205,7 +205,7 @@ assert.match(allCustomerAction, /beginWechatScanStep/);
 assert.match(allCustomerAction, /onResult/);
 assert.match(allCustomerAction, /completeWechatScanStep/);
 assert.match(allCustomerAction, /focusWechatImportConversation/);
-assert.match(allCustomerAction, /ensureWechatBindingWithGroupMode/);
+assert.match(allCustomerAction, /ensureWechatBindingFromCustomerProfile/);
 assert.match(allCustomerAction, /prepareWechatOrderImport/);
 assert.match(allCustomerAction, /readWechatCustomerDatabaseFirst/);
 assert.match(allCustomerAction, /mode === 'database' \? \[250, 500\] : \[250\]/);

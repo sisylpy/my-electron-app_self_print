@@ -238,6 +238,10 @@ import {
   normalizeCustomerWechatBinding,
 } from '../presentation/customerWechatBinding';
 import { canAccessModule } from '@/utils/disUserRole';
+import {
+  applyCustomerWechatProfile,
+  saveCustomerWechatProfile,
+} from '@/utils/customerWechatProfile';
 
 const historyPrintComponentLoaders = {
   ApplyPanel: () => import('@/components/Applys/ApplyPanel.vue'),
@@ -426,7 +430,7 @@ export default {
         this.labels = labelPayload.labelList || [];
         this.selectedLabelIds = labelPayload.selectedLabelIds || [];
         this.wechatBinding = normalizeCustomerWechatBinding(
-          bindingResponse?.ok ? bindingResponse.data : null,
+          applyCustomerWechatProfile(id, bindingResponse?.ok ? bindingResponse.data : null),
         );
         this.participatesInAutoRead = autoReadResponse?.ok
           ? autoReadResponse.participates !== false
@@ -472,6 +476,7 @@ export default {
           payload.customer.nxDepartmentId,
           this.wechatBinding,
           payload.customer.nxDepartmentWechatDisplayName,
+          payload.wechatConversationKind,
           payload.wechatGroupMode,
         );
         if (bindingPayload) {
@@ -481,6 +486,16 @@ export default {
           }
           this.wechatBinding = normalizeCustomerWechatBinding(bindingResponse.data);
         }
+        // 会话类型属于客户资料：首次技术关联前服务端尚无会话指纹，先保存在
+        // 当前桌面环境；读单只消费这里的设置，不再临时询问好友/群规则。
+        const wechatName = String(payload.customer.nxDepartmentWechatDisplayName || '').trim();
+        saveCustomerWechatProfile(payload.customer.nxDepartmentId, wechatName ? {
+          conversationKind: payload.wechatConversationKind,
+          groupMode: payload.wechatGroupMode,
+        } : null);
+        this.wechatBinding = normalizeCustomerWechatBinding(
+          applyCustomerWechatProfile(payload.customer.nxDepartmentId, this.wechatBinding),
+        );
         const autoReadAction = window.electronAPI?.wechatAutoRead?.setCustomerParticipation;
         if (typeof autoReadAction === 'function') {
           const autoReadResponse = await autoReadAction(
