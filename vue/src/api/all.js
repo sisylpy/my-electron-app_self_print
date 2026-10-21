@@ -21,6 +21,40 @@ function toPickListForm(data) {
   return params;
 }
 
+// 开发态（vite 代理）下拣货单接口同样要改写到 /api/owner/** 并携带 Owner 凭据。
+// 凭据用当前桌面会话换取，模块内缓存；401 时重换一次。
+let devOwnerToken = null;
+
+async function ensureDevOwnerToken() {
+  if (devOwnerToken) return devOwnerToken;
+  const res = await axiosInstance.post('desktop-order-session/v1/owner-token', {});
+  const body = res?.data || {};
+  if (Number(body.code) !== 0 || typeof body.data !== 'string' || !body.data) {
+    throw new Error(body.msg || 'Owner 凭据获取失败，请重新扫码登录');
+  }
+  devOwnerToken = body.data;
+  return devOwnerToken;
+}
+
+async function ownerPickListRequest(path, data) {
+  const token = await ensureDevOwnerToken();
+  const send = (t) => axiosInstance.post(`owner/${path}`, toPickListForm(data), {
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-NX-Owner-Token': t,
+    },
+  });
+  try {
+    return await send(token);
+  } catch (error) {
+    if (error?.response?.status === 401) {
+      devOwnerToken = null;
+      return send(await ensureDevOwnerToken());
+    }
+    throw error;
+  }
+}
+
 const apiMethods = {
   // 根据 prompt_key 获取 prompt
   getPromptByKey(promptKey) {
@@ -98,11 +132,7 @@ const apiMethods = {
     if (isPackagedDesktop()) {
       return desktopOrderSessionRequest('pickListCategories', data);
     }
-    return axiosInstance.post(
-      'nxdepartmentorders/stockerGetCategoryListWithDepIds',
-      toPickListForm(data),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
+    return ownerPickListRequest('nxdepartmentorders/stockerGetCategoryListWithDepIds', data);
   },
 
   // 按商品：单个大类下的待出货商品
@@ -110,11 +140,7 @@ const apiMethods = {
     if (isPackagedDesktop()) {
       return desktopOrderSessionRequest('pickListCategoryGoods', data);
     }
-    return axiosInstance.post(
-      'nxdepartmentorders/stockerGetCategoryGoodsDetail',
-      toPickListForm(data),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
+    return ownerPickListRequest('nxdepartmentorders/stockerGetCategoryGoodsDetail', data);
   },
 
   // 按货架：待出货货架列表
@@ -122,11 +148,7 @@ const apiMethods = {
     if (isPackagedDesktop()) {
       return desktopOrderSessionRequest('pickListShelves', data);
     }
-    return axiosInstance.post(
-      'nxdepartmentorders/stockerGetShelfListWithDepIds',
-      toPickListForm(data),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
+    return ownerPickListRequest('nxdepartmentorders/stockerGetShelfListWithDepIds', data);
   },
 
   // 按货架：单个货架下的待出货商品（含层位）
@@ -134,11 +156,7 @@ const apiMethods = {
     if (isPackagedDesktop()) {
       return desktopOrderSessionRequest('pickListShelfGoods', data);
     }
-    return axiosInstance.post(
-      'nxdepartmentorders/stockerGetShelfGoodsDetail',
-      toPickListForm(data),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
+    return ownerPickListRequest('nxdepartmentorders/stockerGetShelfGoodsDetail', data);
   },
 
   // 拣货单打印成功后，固定规格订单默认完成出库
@@ -149,9 +167,7 @@ const apiMethods = {
     const path = data && data.shelfId
       ? 'nxdepartmentorders/pickerGiveOrderWeightUpdateShelfStock'
       : 'nxdepartmentorders/pickerGiveOrderWeight';
-    return axiosInstance.post(path, toPickListForm(data), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
+    return ownerPickListRequest(path, data);
   },
 
   disGetToFillDepOrdersReturn(data) {

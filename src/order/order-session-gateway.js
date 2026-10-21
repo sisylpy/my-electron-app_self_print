@@ -92,6 +92,9 @@ function createOrderSessionGateway({
   });
   let pendingSessionId = null;
   let authenticatedDisId = null;
+  // 拣货单的货架/库存接口只认 /api/owner/** 网关的 X-NX-Owner-Token，
+  // 该凭据与订单会话是两套体系，按需用订单会话换取并保存在本进程内。
+  let ownerToken = null;
 
   async function cookieHeader() {
     const cookies = await cookieStore.get({ url: baseURL });
@@ -260,26 +263,73 @@ function createOrderSessionGateway({
     return result;
   }
 
-  async function requestOrder(method, path, form) {
+  /** 用当前订单会话换取 Owner 凭据；失败时返回 failure，由调用方决定提示。 */
+  async function adoptOwnerToken() {
+    const cookie = await cookieHeader();
+    if (!cookie) return failure(401, null, '订单登录会话已失效，请重新扫码登录');
+    try {
+      const response = await http.post('desktop-order-session/v1/owner-token', {}, {
+        headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+      });
+      const body = response.data && typeof response.data === 'object' ? response.data : null;
+      if (response.status < 200 || response.status >= 300
+          || Number(body?.code) !== 0 || typeof body?.data !== 'string' || !body.data) {
+        return failure(response.status, body,
+          Number(body?.code) === 403
+            ? (body?.msg || '当前账号没有 Boss 端权限，无法打印拣货单')
+            : 'Owner 凭据获取失败，请重新扫码登录');
+      }
+      ownerToken = body.data;
+      return { ok: true, token: ownerToken };
+    } catch {
+      return failure(0, null, '无法连接订单服务');
+    }
+  }
+
+  /**
+   * 订单请求。options.owner = true 时改写到 /api/owner/** 路由并携带
+   * Owner 凭据（拣货单货架接口按货架责任校验身份，必须走该网关）。
+   * Owner 凭据失效时自动重换一次，不影响订单会话本身。
+   */
+  async function requestOrder(method, path, form, options = {}) {
     return withSessionRetry(async () => {
       const cookie = await cookieHeader();
       if (!cookie) return failure(401, null, '订单登录会话已失效，请重新扫码登录');
-      try {
-        const config = { headers: { Cookie: cookie } };
-        const response = method === 'GET'
-          ? await http.get(path, config)
-          : await http.post(path, form.toString(), {
-            ...config,
-            headers: { ...config.headers, 'Content-Type': 'application/x-www-form-urlencoded' },
-          });
-        if (response.status < 200 || response.status >= 300
-            || Number(response.data?.code) !== 0) {
-          return failure(response.status, response.data, '订单读取失败');
-        }
-        return { ok: true, status: response.status, data: response.data };
-      } catch {
-        return failure(0, null, '无法连接订单服务');
+
+      const ownerMode = options.owner === true;
+      if (ownerMode && !ownerToken) {
+        const adopted = await adoptOwnerToken();
+        if (!adopted.ok) return adopted;
       }
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const requestPath = ownerMode ? `owner/${path}` : path;
+        const headers = { Cookie: cookie };
+        if (ownerMode) headers['X-NX-Owner-Token'] = ownerToken;
+        try {
+          const response = method === 'GET'
+            ? await http.get(requestPath, { headers })
+            : await http.post(requestPath, form.toString(), {
+              headers: { ...headers, 'Content-Type': 'application/x-www-form-urlencoded' },
+            });
+          if (response.status < 200 || response.status >= 300
+              || Number(response.data?.code) !== 0) {
+            const errorCode = response.data?.errorCode || response.data?.data?.errorCode || '';
+            if (ownerMode && attempt === 0 && response.status === 401
+                && String(errorCode).startsWith('OWNER_TOKEN')) {
+              ownerToken = null;
+              const adopted = await adoptOwnerToken();
+              if (!adopted.ok) return adopted;
+              continue;
+            }
+            return failure(response.status, response.data, response.data?.msg || '订单读取失败');
+          }
+          return { ok: true, status: response.status, data: response.data };
+        } catch {
+          return failure(0, null, '无法连接订单服务');
+        }
+      }
+      return failure(500, null, '订单读取失败');
     });
   }
 
@@ -454,7 +504,7 @@ function createOrderSessionGateway({
     if (Number.isSafeInteger(supplierId) && supplierId > 0) {
       scope.form.set('supplierId', String(supplierId));
     }
-    return requestOrder('POST', 'nxdepartmentorders/stockerGetCategoryListWithDepIds', scope.form);
+    return requestOrder('POST', 'nxdepartmentorders/stockerGetCategoryListWithDepIds', scope.form, { owner: true });
   }
 
   // 按商品：单个大类下的待出货商品
@@ -468,14 +518,14 @@ function createOrderSessionGateway({
     if (Number.isSafeInteger(supplierId) && supplierId > 0) {
       scope.form.set('supplierId', String(supplierId));
     }
-    return requestOrder('POST', 'nxdepartmentorders/stockerGetCategoryGoodsDetail', scope.form);
+    return requestOrder('POST', 'nxdepartmentorders/stockerGetCategoryGoodsDetail', scope.form, { owner: true });
   }
 
   // 按货架：货架列表
   function pickListShelves(input) {
     const scope = pickListScope(input);
     if (scope.error) return Promise.resolve(scope.error);
-    return requestOrder('POST', 'nxdepartmentorders/stockerGetShelfListWithDepIds', scope.form);
+    return requestOrder('POST', 'nxdepartmentorders/stockerGetShelfListWithDepIds', scope.form, { owner: true });
   }
 
   // 按货架：单个货架下的待出货商品（含层位）
@@ -485,7 +535,7 @@ function createOrderSessionGateway({
     const shelfId = positiveId(input.shelfId);
     if (!shelfId) return Promise.resolve(failure(400, null, '货架 ID 无效'));
     scope.form.set('shelfId', String(shelfId));
-    return requestOrder('POST', 'nxdepartmentorders/stockerGetShelfGoodsDetail', scope.form);
+    return requestOrder('POST', 'nxdepartmentorders/stockerGetShelfGoodsDetail', scope.form, { owner: true });
   }
 
   /**
@@ -510,9 +560,9 @@ function createOrderSessionGateway({
     const shelfId = positiveId(input.shelfId);
     if (shelfId) {
       form.set('shelfId', String(shelfId));
-      return requestOrder('POST', 'nxdepartmentorders/pickerGiveOrderWeightUpdateShelfStock', form);
+      return requestOrder('POST', 'nxdepartmentorders/pickerGiveOrderWeightUpdateShelfStock', form, { owner: true });
     }
-    return requestOrder('POST', 'nxdepartmentorders/pickerGiveOrderWeight', form);
+    return requestOrder('POST', 'nxdepartmentorders/pickerGiveOrderWeight', form, { owner: true });
   }
 
   /**
@@ -615,6 +665,7 @@ function createOrderSessionGateway({
       await clear();
       pendingSessionId = null;
       authenticatedDisId = null;
+      ownerToken = null;
     }
     return remoteFailed
       ? failure(0, null, '本机已退出，服务端会话清理未确认')
