@@ -33,12 +33,30 @@ function normalizeTimeRange(timeRange) {
   return Object.keys(output).length ? output : undefined;
 }
 
+// ReaderBridge.request() 曾从“直接返回业务值”升级为返回 { value, start }，
+// 开发模式下 Electron 主进程不会随源码热更新，可能短暂出现新旧版本混用。
+// 这里同时兼容两种契约，避免本人账号、消息或附件被错误解包成 null。
+function unpackBridgeResponse(response) {
+  const isTimedEnvelope = response
+    && typeof response === 'object'
+    && Object.prototype.hasOwnProperty.call(response, 'value')
+    && Object.prototype.hasOwnProperty.call(response, 'start');
+  return isTimedEnvelope ? response : { value: response, start: null };
+}
+
 function createWechatReaderService(appLogger) {
-  const request = (method, params) => getBridge(appLogger).request(method, params);
+  const request = async (method, params, timeoutMs) => unpackBridgeResponse(
+    await getBridge(appLogger).request(method, params, timeoutMs)
+  );
 
   async function run(work) {
     try {
-      return { ok: true, result: await work() };
+      // request() 返回 { value, start }：start 是本次请求专属的启动快照，
+      // 随响应一起返回，避免渲染层再去读可能被其它请求覆盖的全局状态。
+      const { value, start } = await work();
+      const result = { ok: true, result: value === undefined ? null : value };
+      if (start) result.start = start;
+      return result;
     } catch (error) {
       const payload = error instanceof ReaderError
         ? error.payload
@@ -59,11 +77,16 @@ function createWechatReaderService(appLogger) {
       conversationId: requireString(input?.conversationId, 'conversationId'),
     })),
     getSelfParticipant: (input) => run(async () => {
-      const participants = await request('getParticipants', {
+      const { value: participants, start } = await request('getParticipants', {
         conversationId: requireString(input?.conversationId, 'conversationId'),
         selfOnly: true,
       });
-      return Array.isArray(participants) ? participants[0] || null : null;
+      // run() 约定 work() 必须返回 { value, start }；这里在内部转换后仍需保持该形状，
+      // 否则会被解包成 undefined（曾导致本人账号识别失败）。
+      return {
+        value: Array.isArray(participants) ? participants[0] || null : null,
+        start,
+      };
     }),
     getMessages: (input) => run(() => {
       const params = {
@@ -76,14 +99,18 @@ function createWechatReaderService(appLogger) {
     }),
     getAttachment: (input) => run(async () => {
       const attachmentId = requireString(input?.attachmentId, 'attachmentId');
-      const envelope = await request('getAttachment', { attachmentId }, 90_000);
+      const { value: envelope, start } = await request('getAttachment', { attachmentId }, 90_000);
       try {
         const decoded = await decodeWechatImageEnvelopeAsync(envelope);
+        // 同样必须保持 { value, start } 形状，否则附件结果会被解包成 null。
         return {
-          attachmentId,
-          mimeType: decoded.mimeType,
-          size: decoded.size,
-          dataUrl: `data:${decoded.mimeType};base64,${decoded.base64}`,
+          value: {
+            attachmentId,
+            mimeType: decoded.mimeType,
+            size: decoded.size,
+            dataUrl: `data:${decoded.mimeType};base64,${decoded.base64}`,
+          },
+          start,
         };
       } catch (error) {
         throw transportError(
@@ -95,6 +122,7 @@ function createWechatReaderService(appLogger) {
         );
       }
     }),
+    lastColdStart: () => getBridge(appLogger).lastColdStart(),
   });
 }
 
