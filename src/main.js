@@ -1028,15 +1028,21 @@ function setupIpcHandlers() {
   });
   ipcMain.handle('wechat-ui-current-conversation', async (event, input) => {
     assertTrustedRendererEvent(event);
-    const result = await getWechatUiAutomationService().currentConversation(input);
+    // includeAvatar is a main-process presentation option. Keep it out of the
+    // strict automation request whitelist so title recognition retains its
+    // existing input contract and continues rejecting every unknown field.
+    const { includeAvatar = true, ...automationInput } = input || {};
+    const result = await getWechatUiAutomationService().currentConversation(automationInput);
     if (!result?.ok || !result.result) return result;
     rememberWindowsWechatConversationTitle(result.result.title);
-    try {
-      const avatarDataUrl = await wechatWorkspaceWindowService
-        ?.captureSelectedConversationAvatar?.();
-      if (avatarDataUrl) result.result.avatarDataUrl = avatarDataUrl;
-    } catch {
-      // Avatar is presentation-only; title/order reading must still succeed.
+    if (includeAvatar !== false) {
+      try {
+        const avatarDataUrl = await wechatWorkspaceWindowService
+          ?.captureSelectedConversationAvatar?.();
+        if (avatarDataUrl) result.result.avatarDataUrl = avatarDataUrl;
+      } catch {
+        // Avatar is presentation-only; title/order reading must still succeed.
+      }
     }
     // This read is also used as a passive Windows observer while the user is
     // clicking Weixin. Do not steal focus here: the renderer returns focus to

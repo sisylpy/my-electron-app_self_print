@@ -2177,7 +2177,11 @@ async function importSelectedWechatConversation() {
     const selected = await timeWechatOrderPhase(
       timing,
       'current-conversation-api',
-      () => currentConversationApi()
+      // The order import needs an authoritative live title, but not a fresh
+      // desktop screenshot of the avatar. The avatar is presentation-only and
+      // already has observer/cache/Reader fallbacks; awaiting desktopCapturer
+      // here added several seconds to every explicit order read on macOS.
+      () => currentConversationApi({ includeAvatar: false })
     );
     if (!selected?.ok) {
       throw new Error(selected?.error?.message || '没有识别到当前微信好友');

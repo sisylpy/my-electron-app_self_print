@@ -241,6 +241,7 @@ const electronAPI = Object.freeze({
     currentConversation: (options = {}) =>
       ipcRenderer.invoke('wechat-ui-current-conversation', {
         requireForeground: options?.requireForeground === true,
+        includeAvatar: options?.includeAvatar !== false,
       }),
     focusConversation: (title, options = {}) =>
       ipcRenderer.invoke('wechat-ui-focus-conversation', {
