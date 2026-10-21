@@ -37,6 +37,21 @@ test('nxDoStatus=2 的订单锁定修改和删除，只允许重新出库', () =
   assert.equal(policy.canFinishDelivery, true);
 });
 
+test('写单价自动置为完成但出库未完成的订单，仍允许修改和完成出库', () => {
+  const policy = getTodayOrderActionPolicy({
+    nxDepartmentOrdersId: 14,
+    nxDoStatus: 2,
+    nxDoPurchaseStatus: 3,
+  });
+
+  assert.equal(policy.canModify, true);
+  assert.equal(policy.canDelete, false);
+  assert.equal(policy.canReplaceGoods, false);
+  assert.equal(policy.canFinishOutbound, true);
+  assert.equal(policy.canRestock, false);
+  assert.equal(policy.canFinishDelivery, false);
+});
+
 test('已送货订单只能撤回送货状态，不允许修改订单', () => {
   const policy = getTodayOrderActionPolicy({
     nxDepartmentOrdersId: 12,
