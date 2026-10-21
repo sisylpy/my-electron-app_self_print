@@ -13,6 +13,7 @@ if str(MAC_ROOT) not in sys.path:
 from automation.accessibility_focus import (  # noqa: E402
     focus_conversation_with_accessibility,
     header_matches_target,
+    raise_and_current_conversation_header,
 )
 
 
@@ -27,6 +28,21 @@ class AccessibilityFocusTest(unittest.TestCase):
     def test_partial_or_wrong_title_is_rejected(self) -> None:
         self.assertFalse(header_matches_target("调料群测试(3)", "调料群"))
         self.assertFalse(header_matches_target("蔬菜群(3)", "调料群"))
+
+    @patch("automation.accessibility_focus._osascript")
+    def test_raise_and_read_title_uses_one_live_accessibility_call(
+        self, run_script
+    ) -> None:
+        run_script.return_value = "测试7群 (3)"
+
+        title = raise_and_current_conversation_header()
+
+        self.assertEqual(title, "测试7群")
+        run_script.assert_called_once()
+        script_lines = run_script.call_args.args[0]
+        self.assertIn('tell application "WeChat" to activate', script_lines)
+        self.assertIn('perform action "AXRaise" of window "微信"', script_lines)
+        self.assertIn("return name of chatHeader as text", script_lines)
 
     @patch("automation.accessibility_focus._osascript")
     def test_focus_uses_one_combined_accessibility_script(self, run_script) -> None:

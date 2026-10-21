@@ -53,11 +53,49 @@ def _conversation_header(*, focus_search: bool = False) -> str:
     return _osascript(lines)
 
 
-def current_conversation_header() -> str:
-    visible = _conversation_header(focus_search=False).strip()
+def _normalize_conversation_header(value: str) -> str:
+    visible = str(value or "").strip()
     if visible.casefold() == "missing value":
         return ""
     return _GROUP_MEMBER_COUNT.sub("", visible).strip()
+
+
+def current_conversation_header() -> str:
+    return _normalize_conversation_header(_conversation_header(focus_search=False))
+
+
+def raise_and_current_conversation_header() -> str:
+    """Raise WeChat and read its live chat title in one System Events call.
+
+    Starting separate ``osascript`` processes for activation and title lookup
+    makes macOS rebuild WeChat's deep accessibility tree twice. Keep both
+    operations in one process, but return only the title read from the live AX
+    tree. Callers retain the old two-step and OCR paths as safety fallbacks.
+    """
+
+    visible = _osascript(
+        [
+            'tell application "WeChat" to activate',
+            'tell application "System Events" to tell process "WeChat"',
+            "set frontmost to true",
+            "repeat 30 times",
+            'if exists window "微信" then exit repeat',
+            "delay 0.1",
+            "end repeat",
+            'if not (exists window "微信") then error "WECHAT_MAIN_WINDOW_NOT_FOUND"',
+            'perform action "AXRaise" of window "微信"',
+            # Keep a short settling interval inside the same process. This is
+            # long enough for the raised AX hierarchy to become readable while
+            # avoiding another process launch and the former fixed 200ms wait.
+            "delay 0.1",
+            'set rootSplit to UI element 1 of UI element 7 of UI element 1 of window "微信"',
+            'set chatGroup to UI element 1 of UI element 1 of UI element 1 of UI element 1 of rootSplit',
+            "set chatHeader to UI element 1 of chatGroup",
+            "return name of chatHeader as text",
+            "end tell",
+        ]
+    )
+    return _normalize_conversation_header(visible)
 
 
 def focus_conversation_with_accessibility(

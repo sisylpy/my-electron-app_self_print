@@ -7,7 +7,10 @@ from datetime import datetime
 from pathlib import Path
 from time import perf_counter
 
-from ..accessibility_focus import current_conversation_header
+from ..accessibility_focus import (
+    current_conversation_header,
+    raise_and_current_conversation_header,
+)
 from ..coordinates import Rect
 from ..results import OperationResult, ResultCode
 from ..window import WindowError, activate_wechat, main_wechat_window
@@ -146,19 +149,54 @@ class CurrentConversationFlow:
         code = ResultCode.INTERNAL_ERROR
         message = "未完成"
         try:
-            self._raise_wechat()
             try:
                 self.conversation_title = self._timed(
                     "accessibilityHeaderMs",
                     current_conversation_header,
                 )
+                if not self.conversation_title:
+                    raise RuntimeError("WECHAT_ACCESSIBILITY_HEADER_EMPTY")
                 self.details.append(
-                    f"ACCESSIBILITY_HEADER_FOUND={1 if self.conversation_title else 0}"
+                    "ACCESSIBILITY_HEADER_FOUND=1"
                 )
             except Exception as exc:
                 self.details.append(
-                    f"ACCESSIBILITY_HEADER_FALLBACK: {type(exc).__name__}: {exc}"
+                    f"BACKGROUND_ACCESSIBILITY_FALLBACK: {type(exc).__name__}: {exc}"
                 )
+                try:
+                    self.conversation_title = self._timed(
+                        "raiseAndAccessibilityHeaderMs",
+                        raise_and_current_conversation_header,
+                    )
+                    if not self.conversation_title:
+                        raise RuntimeError("WECHAT_ACCESSIBILITY_HEADER_EMPTY")
+                    self.details.append("VISIBLE_WINDOW_RAISED=1")
+                    self.details.append(
+                        "COMBINED_ACCESSIBILITY_HEADER_FOUND=1"
+                    )
+                except Exception as combined_exc:
+                    self.details.append(
+                        "COMBINED_ACCESSIBILITY_FALLBACK: "
+                        f"{type(combined_exc).__name__}: {combined_exc}"
+                    )
+                    # Preserve the proven two-step implementation verbatim as
+                    # the final accessibility compatibility path. Every path
+                    # reads the live AX title; none uses an observed/cache value.
+                    self._raise_wechat()
+                    try:
+                        self.conversation_title = self._timed(
+                            "legacyAccessibilityHeaderMs",
+                            current_conversation_header,
+                        )
+                        self.details.append(
+                            "LEGACY_ACCESSIBILITY_HEADER_FOUND="
+                            f"{1 if self.conversation_title else 0}"
+                        )
+                    except Exception as fallback_exc:
+                        self.details.append(
+                            "ACCESSIBILITY_HEADER_FALLBACK: "
+                            f"{type(fallback_exc).__name__}: {fallback_exc}"
+                        )
 
             recognized_text = True
             if not self.conversation_title:
