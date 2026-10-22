@@ -1051,6 +1051,8 @@ function setupIpcHandlers() {
   });
   ipcMain.handle('wechat-ui-focus-conversation', async (event, input) => {
     assertTrustedRendererEvent(event);
+    const resumeConversationWatcher = getWechatWorkspaceWindowService()
+      .suspendConversationWatcher?.() || (() => {});
     const focusStartedAt = Date.now();
     let automationFinishedAt = 0;
     let automationOk = false;
@@ -1141,12 +1143,19 @@ function setupIpcHandlers() {
       // two windows remain visible side by side, but GrainPrint must become the
       // active app again or macOS consumes the user's next click merely to
       // activate Electron instead of pressing the intended button.
-      if (mainWindow && !mainWindow.isDestroyed() && needsWorkspaceFocus) {
-        // A plain BrowserWindow.focus() is not enough after a PowerShell UIA
-        // helper activates Weixin on Windows: the first click would only
-        // reactivate Electron. The workspace service performs the native HWND
-        // foreground hand-off and falls back to Electron focus elsewhere.
-        await getWechatWorkspaceWindowService().focus();
+      try {
+        if (mainWindow && !mainWindow.isDestroyed() && needsWorkspaceFocus) {
+          // A plain BrowserWindow.focus() is not enough after a PowerShell UIA
+          // helper activates Weixin on Windows: the first click would only
+          // reactivate Electron. The workspace service performs the native HWND
+          // foreground hand-off and falls back to Electron focus elsewhere.
+          await getWechatWorkspaceWindowService().focus();
+        }
+      } finally {
+        // Resume only after GrainPrint is frontmost again. Otherwise the Mac
+        // observer can race the final exact-title verification and rebuild the
+        // same accessibility tree in a second osascript process.
+        resumeConversationWatcher();
       }
       if (automationOk && requestedTitle) {
         windowsWechatVerifiedConversationTitle = requestedTitle;

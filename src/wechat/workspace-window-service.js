@@ -296,6 +296,7 @@ function createWechatWorkspaceWindowService(options = {}) {
   let conversationWatcher = null;
   let conversationWatcherRunning = false;
   let conversationWatcherGeneration = 0;
+  let conversationWatcherPauseDepth = 0;
   let lastConversationTitle = '';
 
   if (typeof execFileAsync !== 'function' || !screen || typeof getMainWindow !== 'function') {
@@ -449,7 +450,7 @@ function createWechatWorkspaceWindowService(options = {}) {
 
   function startConversationWatcher() {
     stopConversationWatcher();
-    if (platform !== 'darwin') return;
+    if (platform !== 'darwin' || conversationWatcherPauseDepth > 0) return;
     const generation = conversationWatcherGeneration;
     conversationWatcher = setInterval(() => {
       void observeConversationTitle(generation);
@@ -457,8 +458,33 @@ function createWechatWorkspaceWindowService(options = {}) {
     conversationWatcher.unref?.();
   }
 
+  function suspendConversationWatcher() {
+    if (platform !== 'darwin') return () => {};
+    conversationWatcherPauseDepth += 1;
+    conversationWatcherGeneration += 1;
+    if (conversationWatcher) clearInterval(conversationWatcher);
+    conversationWatcher = null;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      conversationWatcherPauseDepth = Math.max(0, conversationWatcherPauseDepth - 1);
+      if (conversationWatcherPauseDepth > 0 || !session) return;
+      const generation = conversationWatcherGeneration;
+      conversationWatcher = setInterval(() => {
+        void observeConversationTitle(generation);
+      }, 450);
+      conversationWatcher.unref?.();
+    };
+  }
+
   return Object.freeze({
     captureSelectedConversationAvatar,
+    // Programmatic search and the passive user-selection observer both walk
+    // WeChat's deep AX tree. Pause the observer during an authoritative switch
+    // so the two osascript processes cannot compete or publish an intermediate
+    // title. The verified switch remains the sole source of truth.
+    suspendConversationWatcher,
     isOpen() {
       return Boolean(session);
     },

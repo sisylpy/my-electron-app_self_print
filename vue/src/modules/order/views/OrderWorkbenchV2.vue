@@ -439,7 +439,6 @@ let wechatReaderWarmupStarted = false;
 let wechatOrderTimingSequence = 0;
 let selectedWechatConversationRequestId = 0;
 let wechatConversationObservationRequestId = 0;
-const WECHAT_SCAN_REPORT_LEAVE_MS = 280;
 let wechatConversationObservationRunning = false;
 let lastWechatConversationObservationAt = 0;
 const wechatConversationAvatars = new Map();
@@ -996,16 +995,15 @@ async function dismissWechatScanReport() {
   wechatScanReportOpen.value = false;
   if (!activeWechatImport.value) return;
 
-  // The completed report is a stable user-controlled state. Do not start the
-  // first WeChat search while its leave transition is still visible; that
-  // looks like automation resumed on its own. Only continue after the user
-  // clicks the action and the report has completely left the page.
+  // Closing the report only selects the first collected customer and displays
+  // its existing task data. It must not imply that WeChat has switched to that
+  // customer: a later explicit read/switch still performs live title
+  // verification before messages can be attributed to the selected customer.
   await nextTick();
-  await new Promise(resolve => window.setTimeout(resolve, WECHAT_SCAN_REPORT_LEAVE_MS));
   await openActiveWechatImport({
     preserveScanMessage: true,
     openWorkspace: false,
-    focusConversation: true,
+    focusConversation: false,
   });
 }
 
