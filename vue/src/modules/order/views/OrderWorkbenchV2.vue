@@ -1001,7 +1001,10 @@ async function dismissWechatScanReport() {
   if (!activeWechatImport.value) {
     await restoreWechatDraftTasks({ surfaceError: true });
   }
-  if (!activeWechatImport.value) return;
+  if (!activeWechatImport.value) {
+    await closeWechatImportModal();
+    return;
+  }
 
   if (!activeWechatImportToken.value) {
     activeWechatImportToken.value = activeWechatImport.value.token;
