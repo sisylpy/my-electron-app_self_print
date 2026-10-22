@@ -40,6 +40,7 @@ import api from '../services/orderApi';
             'upload-type-change',
             'switch-to-today-orders',
             'task-added',
+            'wechat-draft-changed',
             'wechat-tasks-loaded'
         ],
         props: {
@@ -3572,6 +3573,9 @@ import api from '../services/orderApi';
                         ...(this.uploadType === 'wechat' && this.wechatOrderSource
                             ? {wechatOrderSource: this.wechatOrderSource}
                             : {}),
+                        ...(this.uploadType === 'wechat' && this.wechatOrderSource?.orderTaskId
+                            ? {existingOcrTaskId: this.wechatOrderSource.orderTaskId}
+                            : {}),
                     });
 
                     if (res && res.data && res.data.code === 0) {
@@ -3686,6 +3690,9 @@ import api from '../services/orderApi';
                     type: 3,
                     ...(this.uploadType === 'wechat' && this.wechatOrderSource
                         ? {wechatOrderSource: this.wechatOrderSource}
+                        : {}),
+                    ...(this.uploadType === 'wechat' && this.wechatOrderSource?.orderTaskId
+                        ? {existingOcrTaskId: this.wechatOrderSource.orderTaskId}
                         : {}),
                 });
 
@@ -4327,7 +4334,9 @@ import api from '../services/orderApi';
                     depFatherId: this.selectedAllCustomer,
                     disId: this.disUser.nxDiuDistributerId,
                     userId: this.disUser.nxDistributerUserId || this.disUser.nxDiuDistributerId,
-                    ...(this.wechatOrderSource ? { wechatOrderSource: this.wechatOrderSource } : {})
+                    ...(this.wechatOrderSource ? { wechatOrderSource: this.wechatOrderSource } : {}),
+                    ...(this.wechatOrderSource?.orderTaskId
+                        ? { existingOcrTaskId: this.wechatOrderSource.orderTaskId } : {})
                 };
                 try {
                     const res = await api.recognizeOrderOCR(ocrData);
@@ -4874,7 +4883,9 @@ import api from '../services/orderApi';
                         depFatherId: this.selectedAllCustomer,
                         disId: this.disUser?.nxDiuDistributerId,
                         userId: this.disUser?.nxDistributerUserId || this.disUser?.nxDiuDistributerId,
-                        ...(this.wechatOrderSource ? { wechatOrderSource: this.wechatOrderSource } : {})
+                        ...(this.wechatOrderSource ? { wechatOrderSource: this.wechatOrderSource } : {}),
+                        ...(this.wechatOrderSource?.orderTaskId
+                            ? { existingOcrTaskId: this.wechatOrderSource.orderTaskId } : {})
                     };
 
                     const res = await api.recognizeOrderOCRWithAi(requestData, {showLoading: false});
@@ -5258,6 +5269,9 @@ import api from '../services/orderApi';
                     this.pasteInvalidSegments = [];
                     this.pasteNoValidOrder = false;
                 }
+                if (this.uploadType === 'wechat' && this.wechatOrderSource?.orderTaskId) {
+                    this.$emit('wechat-draft-changed', { text });
+                }
             },
 
             // PasteUpload 组件的事件适配器
@@ -5386,6 +5400,9 @@ import api from '../services/orderApi';
                 };
                 if (this.wechatOrderSource) {
                     ocrData.wechatOrderSource = this.wechatOrderSource;
+                    if (this.wechatOrderSource.orderTaskId) {
+                        ocrData.existingOcrTaskId = this.wechatOrderSource.orderTaskId;
+                    }
                 }
                 const res = await api.recognizeOrderQwen(ocrData);
                 if (res && res.data && res.data.code === 0) {

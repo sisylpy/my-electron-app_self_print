@@ -211,8 +211,18 @@ const electronAPI = Object.freeze({
     loadBinding: (customerId) => ipcRenderer.invoke('customer-wechat-binding-load', { customerId }),
     saveBinding: (payload) => ipcRenderer.invoke('customer-wechat-binding-save', payload),
     clearBinding: (customerId) => ipcRenderer.invoke('customer-wechat-binding-clear', { customerId }),
-    prepareMessages: (customerId, messages) =>
-      ipcRenderer.invoke('customer-wechat-messages-prepare', { customerId, messages }),
+    commitReliableScan: (payload) =>
+      ipcRenderer.invoke('customer-wechat-scan-v2-commit', payload),
+    claimTask: (payload) => ipcRenderer.invoke('customer-wechat-task-v2-claim', payload),
+    loadPendingTasks: (payload = {}) =>
+      ipcRenderer.invoke('customer-wechat-task-v2-pending', payload),
+    loadPendingMessages: (payload) =>
+      ipcRenderer.invoke('customer-wechat-messages-v2-pending', payload),
+    updateDraft: (payload) => ipcRenderer.invoke('customer-wechat-task-v2-draft', payload),
+    reportAttachment: (payload) =>
+      ipcRenderer.invoke('customer-wechat-attachment-v2-report', payload),
+    acknowledgeMixedImage: (payload) =>
+      ipcRenderer.invoke('customer-wechat-mixed-image-v2-ack', payload),
   }),
 
   // Reader 只返回不可逆 ID 和业务 DTO；绝不暴露启动命令、路径、stdio 或 access material。
@@ -228,8 +238,10 @@ const electronAPI = Object.freeze({
       ipcRenderer.invoke('wechat-reader-get-self-participant', { conversationId }),
     getMessages: (conversationId, timeRange, page) =>
       ipcRenderer.invoke('wechat-reader-get-messages', { conversationId, timeRange, page }),
-    getAttachment: (attachmentId) =>
-      ipcRenderer.invoke('wechat-reader-get-attachment', { attachmentId }),
+    getAttachment: (attachmentId, locator = null) =>
+      ipcRenderer.invoke('wechat-reader-get-attachment', { attachmentId, locator }),
+    lastColdStart: () =>
+      ipcRenderer.invoke('wechat-reader-last-cold-start'),
   }),
 
   // 只允许扫描渲染层提交的已绑定会话标题；主进程负责启动、超时和退出回收。

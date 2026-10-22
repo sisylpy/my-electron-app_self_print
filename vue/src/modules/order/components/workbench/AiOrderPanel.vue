@@ -58,6 +58,7 @@
         @upload-type-change="selectedMode = $event"
         @order-saved="$emit('order-saved', $event)"
         @task-added="handleTaskAdded"
+        @wechat-draft-changed="$emit('wechat-draft-changed', $event)"
         @wechat-tasks-loaded="handleWechatTasksLoaded"
         @switch-to-today-orders="$emit('show-today-orders')"
       />
@@ -103,6 +104,7 @@ const emit = defineEmits([
   'show-today-orders',
   'wechat-import-error',
   'wechat-tasks-loaded',
+  'wechat-draft-changed',
   'wechat-batch-save-result',
 ]);
 

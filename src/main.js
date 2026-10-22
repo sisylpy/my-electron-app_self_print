@@ -1004,6 +1004,10 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     return getWechatReaderService().getAttachment(input);
   });
+  ipcMain.handle('wechat-reader-last-cold-start', async (event) => {
+    assertTrustedRendererEvent(event);
+    return getWechatReaderService().lastColdStart();
+  });
   ipcMain.handle('wechat-ui-inspect-unread', async (event, input) => {
     assertTrustedRendererEvent(event);
     try {
@@ -1414,9 +1418,33 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().clearCustomerWechatBinding(command);
   });
-  ipcMain.handle('customer-wechat-messages-prepare', async (event, command) => {
+  ipcMain.handle('customer-wechat-scan-v2-commit', async (event, command) => {
     assertTrustedRendererEvent(event);
-    return getDispatchGateway().prepareCustomerWechatMessages(command);
+    return getDispatchGateway().commitReliableWechatScan(command);
+  });
+  ipcMain.handle('customer-wechat-task-v2-claim', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().claimWechatTask(command);
+  });
+  ipcMain.handle('customer-wechat-task-v2-pending', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadPendingWechatTasks(command);
+  });
+  ipcMain.handle('customer-wechat-messages-v2-pending', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().loadPendingWechatMessages(command);
+  });
+  ipcMain.handle('customer-wechat-task-v2-draft', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().updateWechatTaskDraft(command);
+  });
+  ipcMain.handle('customer-wechat-attachment-v2-report', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().reportWechatAttachment(command);
+  });
+  ipcMain.handle('customer-wechat-mixed-image-v2-ack', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().acknowledgeWechatMixedImage(command);
   });
   ipcMain.handle('sales-analysis-load-overview', async (event, range) => {
     assertTrustedRendererEvent(event);

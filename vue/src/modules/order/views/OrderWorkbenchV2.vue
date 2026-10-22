@@ -152,6 +152,7 @@
         @retry-customers="customerContext.reload"
         @order-saved="handleOrderChanged"
         @task-added="handleTaskAdded"
+        @wechat-draft-changed="scheduleWechatDraftSave"
         @wechat-import-error="handleWechatImportError"
         @show-today-orders="closeWechatImportModal"
       />
@@ -356,6 +357,9 @@ import {
   mergeWechatOrderPayload,
   normalizeWechatAvatarSource,
   prepareWechatOrderImport,
+  safeReadColdStart,
+  unwrapWechatReader,
+  unwrapWechatServer,
   WECHAT_IMAGE_DOWNLOAD_RETRY_DELAYS_MS,
   removeWechatImportQueueItem,
 } from '../services/wechatOrderImport';
@@ -377,6 +381,7 @@ import {
 } from '../services/wechatAllCustomerScan';
 import {
   customerId,
+  customerDepartments,
   customerName,
   loadSmartReplenishmentCustomerDirectory,
   loadOrderWorkbenchOverview,
@@ -1020,6 +1025,119 @@ function replaceWechatImportItem(token, replacement) {
   ));
 }
 
+async function wechatTaskSourceKey(item) {
+  const source = item?.payload?.source || {};
+  const canonical = JSON.stringify({
+    customerId: Number(item?.customerId),
+    taskType: item?.taskType || 'mixed',
+    bindingRevision: Number(source.bindingRevision) || 0,
+    messages: (source.messages || []).map(message => String(message.messageFingerprint || '')).sort(),
+  });
+  const bytes = new TextEncoder().encode(canonical);
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return `wechat2:${Array.from(new Uint8Array(digest))
+    .map(value => value.toString(16).padStart(2, '0')).join('')}`;
+}
+
+async function ensureWechatImportClaimed(item) {
+  if (!item?.payload?.source) return item;
+  const api = window.electronAPI?.customerWechatOrders;
+  if (!api?.claimTask) throw new Error('当前安装包缺少微信可靠任务接口，请升级后重试');
+  const departmentId = Number(item.departmentId || customerContext.selectedDepartmentId.value || item.customerId);
+  const sourceKey = item.sourceKey || await wechatTaskSourceKey(item);
+  const response = await api.claimTask({
+    customerId: Number(item.customerId),
+    bindingRevision: Number(item.payload.source.bindingRevision),
+    departmentId,
+    sourceKey,
+    orderTaskId: item.payload.source.orderTaskId || null,
+    taskKind: item.taskType === 'image' ? 'IMAGE' : 'TEXT',
+    draftText: item.taskType === 'text' ? String(item.payload.text || '') : '',
+    messageFingerprints: (item.payload.source.messages || [])
+      .map(message => String(message.messageFingerprint || '')).filter(Boolean),
+  });
+  const claimed = unwrapWechatServer(response);
+  const replacement = {
+    ...item,
+    departmentId,
+    sourceKey,
+    draftRevision: Number(claimed?.draftRevision) || 0,
+    payload: {
+      ...item.payload,
+      source: {
+        ...item.payload.source,
+        orderTaskId: claimed.orderTaskId,
+      },
+    },
+  };
+  replaceWechatImportItem(item.token, replacement);
+  return replacement;
+}
+
+async function claimWechatImportItems(items) {
+  const result = [];
+  for (const item of (Array.isArray(items) ? items : [])) {
+    result.push(await ensureWechatImportClaimed(item));
+  }
+  return result;
+}
+
+const wechatDraftSaves = new Map();
+async function flushWechatDraftSave(taskId) {
+  const state = wechatDraftSaves.get(taskId);
+  if (!state || state.inFlight || state.pendingText === null) return;
+  const latest = wechatImportQueue.value.find(item => Number(item?.payload?.source?.orderTaskId) === taskId);
+  if (!latest) return;
+  const draftText = state.pendingText;
+  state.pendingText = null;
+  state.inFlight = true;
+  try {
+    const response = await window.electronAPI?.customerWechatOrders?.updateDraft?.({
+      taskId,
+      draftRevision: Number(latest.draftRevision) || 0,
+      draftText,
+    });
+    const saved = unwrapWechatServer(response);
+    const current = wechatImportQueue.value.find(item => Number(item?.payload?.source?.orderTaskId) === taskId);
+    if (current) {
+      replaceWechatImportItem(current.token, {
+        ...current,
+        draftRevision: Number(saved?.draftRevision) || (Number(current.draftRevision) + 1),
+        payload: { ...current.payload, text: draftText },
+      });
+    }
+  } catch (error) {
+    state.pendingText = state.pendingText ?? draftText;
+    setWechatScanStatus(`微信待确认文字自动保存失败：${error?.message || '请稍后重试'}`, 'error');
+    state.timer = window.setTimeout(() => {
+      state.timer = null;
+      void flushWechatDraftSave(taskId);
+    }, 2000);
+  } finally {
+    state.inFlight = false;
+    if (state.pendingText !== null && !state.timer) void flushWechatDraftSave(taskId);
+    else if (!state.timer) wechatDraftSaves.delete(taskId);
+  }
+}
+
+function scheduleWechatDraftSave(event) {
+  const current = activeWechatImport.value;
+  if (!current?.payload?.source?.orderTaskId || current.taskType !== 'text') return;
+  const taskId = Number(current.payload.source.orderTaskId);
+  const state = wechatDraftSaves.get(taskId) || {
+    timer: null,
+    inFlight: false,
+    pendingText: null,
+  };
+  state.pendingText = String(event?.text ?? '');
+  if (state.timer) window.clearTimeout(state.timer);
+  state.timer = window.setTimeout(() => {
+    state.timer = null;
+    void flushWechatDraftSave(taskId);
+  }, 150);
+  wechatDraftSaves.set(taskId, state);
+}
+
 async function refreshActiveWechatImport(options = {}) {
   const item = activeWechatImport.value;
   if (!item || wechatImportRefreshing.value || !wechatImportModalOpen.value) return false;
@@ -1115,7 +1233,9 @@ async function refreshActiveWechatImport(options = {}) {
       wechatImportTaskKey(candidate) === wechatImportTaskKey(item)
     ));
     const otherItems = incomingItems.filter(candidate => candidate !== matchingItem);
-    if (otherItems.length) enqueueWechatImportItems(otherItems, { activate: false });
+    if (otherItems.length) {
+      enqueueWechatImportItems(await claimWechatImportItems(otherItems), { activate: false });
+    }
     if (!matchingItem) {
       if (options.manual) {
         replaceWechatImportItem(item.token, {
@@ -1142,10 +1262,11 @@ async function refreshActiveWechatImport(options = {}) {
       return false;
     }
     const mergedPayload = mergeWechatOrderPayload(item.payload, matchingItem.payload);
+    const claimedMerged = await ensureWechatImportClaimed({ ...item, payload: mergedPayload });
     replaceWechatImportItem(item.token, {
-      ...item,
+      ...claimedMerged,
       binding: result.binding || item.binding,
-      pendingRefreshPayload: mergedPayload,
+      pendingRefreshPayload: claimedMerged.payload,
       pendingMessageCount: mergedPayload.source.messages.length,
       lateMessageCount,
       refreshNote: `发现 ${lateMessageCount} 条后来到达的新消息`,
@@ -1259,7 +1380,7 @@ function prewarmWechatReader() {
 }
 
 async function openActiveWechatImport(options = {}) {
-  const item = activeWechatImport.value;
+  let item = activeWechatImport.value;
   if (!item) return false;
   clearSelectedWechatConversation();
   smartModeActive.value = false;
@@ -1272,6 +1393,13 @@ async function openActiveWechatImport(options = {}) {
     return false;
   }
   customerContext.selectCustomer(customer);
+  await nextTick();
+  try {
+    item = await ensureWechatImportClaimed(item);
+  } catch (error) {
+    setWechatScanStatus(`“${item.customerName}”待确认任务创建失败：${error?.message || '请重试'}`, 'error');
+    return false;
+  }
   if (options.preserveScanMessage !== true) wechatScanMessage.value = '';
   // Opening the workspace raises WeChat on macOS. A task-card change only
   // changes the right-side draft, so keep the existing side-by-side windows
@@ -1508,7 +1636,7 @@ async function showSelectedWechatConversation(title, avatarDataUrl = '', options
 
     const { row, result } = prepared;
     if (result.payload) {
-      const imports = createWechatImportItems(row, normalizedTitle, result);
+      const imports = await claimWechatImportItems(createWechatImportItems(row, normalizedTitle, result));
       if (requestId !== selectedWechatConversationRequestId) {
         enqueueWechatImportItems(imports, { activate: false });
         return;
@@ -1777,7 +1905,95 @@ onBeforeUnmount(() => {
   window.removeEventListener('grain-mcp-wechat-save-orders', onMcpWechatSaveOrders);
   window.removeEventListener('grain-wechat-auto-read', onScheduledWechatAutoRead);
   void window.electronAPI?.wechatUi?.closeWorkspace?.();
+  wechatDraftSaves.forEach((state, taskId) => {
+    if (state.timer) window.clearTimeout(state.timer);
+    state.timer = null;
+    void flushWechatDraftSave(taskId);
+  });
 });
+
+async function restoreWechatDraftTasks() {
+  const api = window.electronAPI?.customerWechatOrders;
+  if (!api?.loadPendingTasks) return;
+  try {
+    if (!customerContext.customers.value.length) await customerContext.reload();
+    const response = await api.loadPendingTasks({ limit: 200 });
+    const data = unwrapWechatServer(response);
+    const restored = [];
+    for (const task of (Array.isArray(data?.items) ? data.items : [])) {
+      const customer = customerContext.customers.value.find(candidate => (
+        String(customerId(candidate)) === String(task.customerId)
+      ));
+      if (!customer) continue;
+      const binding = await loadCustomerWechatBinding(task.customerId);
+      const messages = Array.isArray(task.messages) ? task.messages : [];
+      const taskType = task.taskKind === 'IMAGE' ? 'image' : 'text';
+      const images = [];
+      if (taskType === 'image') {
+        const image = messages.find(message => message?.readerAttachmentId && message?.readerLocator);
+        if (image) {
+          try {
+            const attachment = unwrapWechatReader(await window.electronAPI.wechatReader.getAttachment(
+              image.readerAttachmentId,
+              image.readerLocator
+            ));
+            images.push({
+              messageFingerprint: image.messageFingerprint,
+              messageTimeMs: Number(image.messageTimeMs),
+              mimeType: attachment.mimeType,
+              size: attachment.size,
+              dataUrl: attachment.dataUrl,
+            });
+          } catch {
+            // 任务仍保留在列表；下次读取会通过 pending locator 继续恢复原图。
+          }
+        }
+      }
+      const payload = {
+        taskType,
+        text: taskType === 'text' ? String(task.draftText || '') : '',
+        images,
+        entries: messages.map(message => ({
+          messageFingerprint: message.messageFingerprint,
+          messageTimeMs: Number(message.messageTimeMs),
+          type: String(message.messageKind || '').toLowerCase(),
+          text: taskType === 'text' ? String(task.draftText || '') : '',
+        })),
+        source: {
+          customerId: Number(task.customerId),
+          accountFingerprint: binding.accountFingerprint,
+          conversationFingerprint: binding.conversationFingerprint,
+          conversationKind: binding.conversationKind,
+          groupMode: binding.groupMode,
+          bindingRevision: binding.bindingRevision,
+          orderTaskId: Number(task.taskId),
+          messages: messages.map(message => ({
+            messageFingerprint: message.messageFingerprint,
+            messageTimeMs: Number(message.messageTimeMs),
+          })),
+        },
+      };
+      const row = { customer, customerId: task.customerId, binding };
+      const [item] = createWechatImportItemsFromTasks(row, binding.displayName, [payload], {
+        binding,
+        departmentId: task.departmentId,
+      });
+      if (!item) continue;
+      restored.push({
+        ...item,
+        token: `wechat-task:${task.taskId}`,
+        departmentId: Number(task.departmentId),
+        sourceKey: String(task.sourceKey || ''),
+        draftRevision: Number(task.draftRevision) || 0,
+        refreshError: taskType === 'image' && !images.length
+          ? '微信原图尚未下载，将在后续读取时继续恢复' : '',
+      });
+    }
+    enqueueWechatImportItems(restored, { activate: false });
+  } catch (error) {
+    setWechatScanStatus(`待确认微信订单恢复失败：${error?.message || '请稍后重试'}`, 'error');
+  }
+}
 
 // 由 MCP「打开微信订单」指令触发：进入本视图后运行全面检查。
 // 两种场景都覆盖：① 冷启动导航——App.vue 先置位 window.__grainPendingWechatScan，
@@ -1818,6 +2034,7 @@ onMounted(() => {
   onMcpWechatScan();
   onMcpWechatSaveOrders();
   void onScheduledWechatAutoRead();
+  void restoreWechatDraftTasks();
 });
 
 async function loadBoundWechatCustomers({ refreshCustomers = false, customerFilter = null } = {}) {
@@ -1899,6 +2116,10 @@ function createWechatImportItemsFromTasks(row, title, taskPayloads, options = {}
       taskType,
       taskLabel: wechatOrderTaskLabel(taskType),
       messageCount: payload?.source?.messages?.length || pendingCount,
+      departmentId: options.departmentId
+        || customerId(customerDepartments(customer)[0])
+        || customerId(customer)
+        || row.customerId,
       payload,
       binding,
       lateMessageCount: 0,
@@ -1965,8 +2186,10 @@ function enqueueWechatImportItems(incomingItems, { activate = true } = {}) {
   return firstToken;
 }
 
-function enqueueWechatImport(row, title, result) {
-  return enqueueWechatImportItems(createWechatImportItems(row, title, result));
+async function enqueueWechatImport(row, title, result) {
+  return enqueueWechatImportItems(
+    await claimWechatImportItems(createWechatImportItems(row, title, result))
+  );
 }
 
 async function handleDirectWechatTasks(event) {
@@ -2000,7 +2223,7 @@ async function handleDirectWechatTasks(event) {
     return;
   }
 
-  enqueueWechatImportItems(imports);
+  enqueueWechatImportItems(await claimWechatImportItems(imports));
   setWechatScanStatus(
     `已生成 ${imports.length} 个微信订单任务，请在任务列表中切换处理`,
     'success'
@@ -2132,7 +2355,7 @@ async function importWechatConversationForCustomer(
   if (!result.payload) {
     throw new Error(result.message || '已关联该微信好友，但当前没有未处理的新订单');
   }
-  timeWechatOrderSyncPhase(
+  await timeWechatOrderPhase(
     timing,
     'task-enqueue',
     () => enqueueWechatImport(row, title, result),
@@ -2968,7 +3191,8 @@ async function scanAllBoundWechatOrders(options = {}) {
     // permission must not discard the operator's unsaved edits. Stable task
     // keys merge refreshed messages into the existing token; newly discovered
     // tasks append to the same confirmation list.
-    const firstScannedToken = enqueueWechatImportItems(result.imports, { activate: false });
+    const claimedImports = await claimWechatImportItems(result.imports);
+    const firstScannedToken = enqueueWechatImportItems(claimedImports, { activate: false });
     if (!activeWechatImportToken.value) {
       activeWechatImportToken.value = firstScannedToken;
     }

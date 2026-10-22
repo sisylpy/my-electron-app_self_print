@@ -6,6 +6,7 @@ const {
 } = require('../api-runtime');
 
 const API_PREFIX = 'desktop-dispatch/v1/';
+const WECHAT_SCAN_V2_API_PREFIX = 'desktop-dispatch/v2/';
 const LEGACY_DISPATCH_API_PREFIX = 'nxdisroutedispatch/';
 const CONNECTOR_CREDENTIAL_API_PREFIX = 'connector/credential/';
 const DEFAULT_API_BASE_URL = PRODUCTION_API_BASE_URL;
@@ -941,24 +942,6 @@ function createDispatchGateway({ app, safeStorage, axios, renewDispatchSession =
     }
   }
 
-  function validateWechatMessageRefs(messages) {
-    if (!Array.isArray(messages) || messages.length < 1 || messages.length > 200) {
-      throw new Error('微信消息数量无效，单次最多 200 条');
-    }
-    return messages.map((message) => {
-      const data = strictPayload(message || {}, ['messageFingerprint', 'messageTimeMs']);
-      if (typeof data.messageFingerprint !== 'string'
-          || !/^[A-Za-z0-9:._-]{8,160}$/.test(data.messageFingerprint)) {
-        throw new Error('微信消息指纹无效');
-      }
-      const messageTimeMs = Number(data.messageTimeMs);
-      if (!Number.isSafeInteger(messageTimeMs) || messageTimeMs < 0) {
-        throw new Error('微信消息时间无效');
-      }
-      return { messageFingerprint: data.messageFingerprint, messageTimeMs };
-    });
-  }
-
   async function loadCustomerWechatBinding(input) {
     try {
       const customerId = requirePositiveId(input?.customerId, 'customerId');
@@ -1017,16 +1000,186 @@ function createDispatchGateway({ app, safeStorage, axios, renewDispatchSession =
     }
   }
 
-  async function prepareCustomerWechatMessages(input) {
+  function digestField(target, value) {
+    const normalized = value == null ? '' : String(value);
+    target.push(`${Buffer.byteLength(normalized, 'utf8')}:${normalized}\n`);
+  }
+
+  function wechatBatchDigest(messages) {
+    const canonical = [];
+    messages.forEach((message) => {
+      digestField(canonical, message.messageFingerprint);
+      digestField(canonical, message.messageTimeMs);
+      digestField(canonical, message.messageKind);
+      digestField(canonical, message.processingState);
+      digestField(canonical, message.readerLocator);
+      digestField(canonical, message.readerAttachmentId);
+    });
+    return crypto.createHash('sha256').update(canonical.join(''), 'utf8').digest('hex');
+  }
+
+  function wechatScanDigest(batches) {
+    const canonical = [];
+    batches.forEach((batch, index) => {
+      digestField(canonical, index);
+      digestField(canonical, batch.messages.length);
+      digestField(canonical, batch.digest);
+    });
+    return crypto.createHash('sha256').update(canonical.join(''), 'utf8').digest('hex');
+  }
+
+  function validateWechatScanMessages(messages) {
+    if (!Array.isArray(messages) || messages.length > 20000) throw new Error('微信扫描消息数量无效');
+    const seen = new Set();
+    return messages.map((input) => {
+      const message = strictPayload(input || {}, [
+        'messageFingerprint', 'messageTimeMs', 'messageKind', 'processingState',
+        'readerLocator', 'readerAttachmentId',
+      ]);
+      if (typeof message.messageFingerprint !== 'string'
+          || !/^[A-Za-z0-9:._-]{8,160}$/.test(message.messageFingerprint)
+          || seen.has(message.messageFingerprint)) throw new Error('微信扫描消息指纹无效或重复');
+      seen.add(message.messageFingerprint);
+      const time = Number(message.messageTimeMs);
+      if (!Number.isSafeInteger(time) || time < 0) throw new Error('微信扫描消息时间无效');
+      return {
+        messageFingerprint: message.messageFingerprint,
+        messageTimeMs: time,
+        messageKind: String(message.messageKind || '').toUpperCase(),
+        processingState: String(message.processingState || '').toUpperCase(),
+        readerLocator: message.readerLocator == null ? null : String(message.readerLocator),
+        readerAttachmentId: message.readerAttachmentId == null
+          ? null : String(message.readerAttachmentId),
+      };
+    });
+  }
+
+  async function commitReliableWechatScan(input) {
     try {
-      const data = strictPayload(input || {}, ['customerId', 'messages']);
+      const data = strictPayload(input || {}, [
+        'customerId', 'scanId', 'bindingRevision', 'protocolVersion',
+        'windowStartTimeMs', 'windowEndTimeMs', 'messages',
+      ]);
       const customerId = requirePositiveId(data.customerId, 'customerId');
-      return request('POST', `customer-wechat-orders/${customerId}/messages/prepare`, {
-        data: { messages: validateWechatMessageRefs(data.messages) },
+      const messages = validateWechatScanMessages(data.messages);
+      const batches = [];
+      for (let offset = 0; offset < messages.length; offset += 200) {
+        const rows = messages.slice(offset, offset + 200);
+        batches.push({ messages: rows, digest: wechatBatchDigest(rows) });
+      }
+      const manifest = {
+        scanId: String(data.scanId || ''),
+        bindingRevision: Number(data.bindingRevision),
+        protocolVersion: Number(data.protocolVersion) || 2,
+        windowStartTimeMs: Number(data.windowStartTimeMs),
+        windowEndTimeMs: Number(data.windowEndTimeMs),
+        expectedBatchCount: batches.length,
+        expectedMessageCount: messages.length,
+        scanDigest: wechatScanDigest(batches),
+      };
+      if (messages.length <= 200) {
+        return request('POST', `customer-wechat-orders/${customerId}/scans/commit`, {
+          apiPrefix: WECHAT_SCAN_V2_API_PREFIX,
+          data: {
+            ...manifest,
+            messages,
+            batchDigest: batches[0]?.digest || null,
+          },
+        });
+      }
+      let response = await request('POST', `customer-wechat-orders/${customerId}/scans/begin`, {
+        apiPrefix: WECHAT_SCAN_V2_API_PREFIX,
+        data: manifest,
+      });
+      if (!response?.ok) return response;
+      for (let batchNo = 0; batchNo < batches.length; batchNo += 1) {
+        response = await request('PUT',
+          `customer-wechat-orders/${customerId}/scans/${encodeURIComponent(manifest.scanId)}/batches/${batchNo}`,
+          {
+            apiPrefix: WECHAT_SCAN_V2_API_PREFIX,
+            data: { batchDigest: batches[batchNo].digest, messages: batches[batchNo].messages },
+          });
+        if (!response?.ok) return response;
+      }
+      return request('POST',
+        `customer-wechat-orders/${customerId}/scans/${encodeURIComponent(manifest.scanId)}/finalize`,
+        {
+          apiPrefix: WECHAT_SCAN_V2_API_PREFIX,
+          data: { bindingRevision: manifest.bindingRevision },
+        });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
+  async function claimWechatTask(input) {
+    try {
+      const data = strictPayload(input || {}, [
+        'customerId', 'bindingRevision', 'departmentId', 'sourceKey',
+        'orderTaskId', 'taskKind', 'draftText', 'messageFingerprints',
+      ]);
+      const customerId = requirePositiveId(data.customerId, 'customerId');
+      return request('POST', `customer-wechat-orders/${customerId}/tasks/claim`, {
+        apiPrefix: WECHAT_SCAN_V2_API_PREFIX,
+        data: {
+          bindingRevision: Number(data.bindingRevision),
+          departmentId: requirePositiveId(data.departmentId, 'departmentId'),
+          sourceKey: String(data.sourceKey || ''),
+          orderTaskId: data.orderTaskId == null
+            ? null : requirePositiveId(data.orderTaskId, 'orderTaskId'),
+          taskKind: String(data.taskKind || ''),
+          draftText: String(data.draftText || ''),
+          messageFingerprints: Array.isArray(data.messageFingerprints)
+            ? data.messageFingerprints.map(String) : [],
+        },
       });
     } catch (error) {
       return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
     }
+  }
+
+  function loadPendingWechatTasks(input = {}) {
+    return request('GET', 'customer-wechat-orders/tasks/pending', {
+      apiPrefix: WECHAT_SCAN_V2_API_PREFIX,
+      params: { afterId: input.afterId ?? undefined, limit: input.limit ?? 100 },
+    });
+  }
+
+  function loadPendingWechatMessages(input) {
+    const customerId = requirePositiveId(input?.customerId, 'customerId');
+    return request('GET', `customer-wechat-orders/${customerId}/messages/pending`, {
+      apiPrefix: WECHAT_SCAN_V2_API_PREFIX,
+      params: {
+        accountFingerprint: input.accountFingerprint,
+        conversationFingerprint: input.conversationFingerprint,
+        afterId: input.afterId ?? undefined,
+        limit: input.limit ?? 100,
+      },
+    });
+  }
+
+  function updateWechatTaskDraft(input) {
+    const taskId = requirePositiveId(input?.taskId, 'taskId');
+    return request('PATCH', `customer-wechat-orders/tasks/${taskId}/draft`, {
+      apiPrefix: WECHAT_SCAN_V2_API_PREFIX,
+      data: { draftRevision: Number(input.draftRevision), draftText: String(input.draftText || '') },
+    });
+  }
+
+  function reportWechatAttachment(input) {
+    const customerId = requirePositiveId(input?.customerId, 'customerId');
+    return request('POST', `customer-wechat-orders/${customerId}/messages/${encodeURIComponent(input.messageFingerprint)}/attachment`, {
+      apiPrefix: WECHAT_SCAN_V2_API_PREFIX,
+      data: { recovered: input.recovered === true, errorCode: input.errorCode || null },
+    });
+  }
+
+  function acknowledgeWechatMixedImage(input) {
+    const customerId = requirePositiveId(input?.customerId, 'customerId');
+    return request('POST', `customer-wechat-orders/${customerId}/messages/${encodeURIComponent(input.messageFingerprint)}/mixed-image-notice`, {
+      apiPrefix: WECHAT_SCAN_V2_API_PREFIX,
+      data: {},
+    });
   }
 
   async function loadSalesAnalysisOverview(input) {
@@ -1216,7 +1369,13 @@ function createDispatchGateway({ app, safeStorage, axios, renewDispatchSession =
     loadCustomerWechatBinding,
     saveCustomerWechatBinding,
     clearCustomerWechatBinding,
-    prepareCustomerWechatMessages,
+    commitReliableWechatScan,
+    claimWechatTask,
+    loadPendingWechatTasks,
+    loadPendingWechatMessages,
+    updateWechatTaskDraft,
+    reportWechatAttachment,
+    acknowledgeWechatMixedImage,
     loadSalesAnalysisOverview,
     loadSalesAnalysisCategory,
     loadSalesAnalysisProductCustomers,
