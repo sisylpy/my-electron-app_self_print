@@ -45,6 +45,14 @@ function createTaskPayload(payload, taskType, entries, images, taskFingerprint =
   };
 }
 
+function imageContentKey(image) {
+  const dataUrl = String(image?.dataUrl || '');
+  // Only collapse byte-identical recovered originals. Missing image data must
+  // remain independent, and visually similar/re-encoded photos must not be
+  // guessed to be the same order.
+  return dataUrl || `message:${messageId(image)}`;
+}
+
 /**
  * Splits the messages from one WeChat conversation into independently savable
  * order tasks.  Image messages must not share a source fingerprint with the
@@ -77,26 +85,42 @@ export function splitWechatOrderPayloads(payload) {
     }
     if (String(entry?.text || '').trim()) textEntries.push(entry);
   });
-  const imageEntries = images.map((image) => (
-    imageEntriesById.get(messageId(image)) || {
+  const imageGroups = new Map();
+  images.forEach((image) => {
+    const fingerprint = messageId(image);
+    if (!fingerprint) return;
+    const entry = imageEntriesById.get(fingerprint) || {
       messageFingerprint: image.messageFingerprint,
       messageTimeMs: image.messageTimeMs,
       type: IMAGE_TASK,
       text: '',
+    };
+    const key = imageContentKey(image);
+    const group = imageGroups.get(key);
+    if (group) {
+      group.entries.push(entry);
+      return;
     }
-  )).sort(compareByMessageTime);
+    imageGroups.set(key, { image, entries: [entry] });
+  });
+  const groupedImages = Array.from(imageGroups.values()).sort((left, right) => (
+    compareByMessageTime(left.entries[0], right.entries[0])
+  ));
 
   // Text can be parsed locally at once. Put it first so a long-running image
   // recognition request never blocks an already-readable text order. Each
-  // source image is deliberately its own task: different photos may be a
-  // single-column list, a multi-column list, or an unrelated attachment.
+  // distinct source image is deliberately its own task: different photos may
+  // be a single-column list, a multi-column list, or an unrelated attachment.
+  // If WeChat contains the exact same original bytes more than once, keep one
+  // visible image task but claim every physical message in that task. Saving
+  // it therefore marks all duplicates handled and they cannot reappear later.
   const tasks = [];
   if (textEntries.length) tasks.push(createTaskPayload(payload, TEXT_TASK, textEntries, []));
-  imageEntries.forEach((entry) => {
-    const fingerprint = messageId(entry);
-    const image = imageById.get(fingerprint);
+  groupedImages.forEach(({ image, entries: groupedEntries }) => {
+    const sortedEntries = groupedEntries.slice().sort(compareByMessageTime);
+    const fingerprint = messageId(sortedEntries[0]);
     if (!fingerprint || !image) return;
-    tasks.push(createTaskPayload(payload, IMAGE_TASK, [entry], [image], fingerprint));
+    tasks.push(createTaskPayload(payload, IMAGE_TASK, sortedEntries, [image], fingerprint));
   });
   return tasks;
 }

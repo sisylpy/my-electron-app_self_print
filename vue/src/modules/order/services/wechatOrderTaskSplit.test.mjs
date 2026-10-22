@@ -6,12 +6,19 @@ const payload = {
   entries: [
     { messageFingerprint: 'msg:text-001', messageTimeMs: 1000, type: 'text', text: '西红柿 2 斤' },
     { messageFingerprint: 'msg:image-001', messageTimeMs: 2000, type: 'image', text: '' },
+    { messageFingerprint: 'msg:image-001-copy', messageTimeMs: 2500, type: 'image', text: '' },
     { messageFingerprint: 'msg:image-002', messageTimeMs: 3000, type: 'image', text: '' },
   ],
   images: [
     {
       messageFingerprint: 'msg:image-001',
       messageTimeMs: 2000,
+      mimeType: 'image/jpeg',
+      dataUrl: 'data:image/jpeg;base64,/9j/2Q==',
+    },
+    {
+      messageFingerprint: 'msg:image-001-copy',
+      messageTimeMs: 2500,
       mimeType: 'image/jpeg',
       dataUrl: 'data:image/jpeg;base64,/9j/2Q==',
     },
@@ -27,6 +34,7 @@ const payload = {
     messages: [
       { messageFingerprint: 'msg:text-001', messageTimeMs: 1000 },
       { messageFingerprint: 'msg:image-001', messageTimeMs: 2000 },
+      { messageFingerprint: 'msg:image-001-copy', messageTimeMs: 2500 },
       { messageFingerprint: 'msg:image-002', messageTimeMs: 3000 },
     ],
   },
@@ -44,7 +52,14 @@ assert.equal(tasks[1].taskType, 'image');
 assert.equal(tasks[1].taskFingerprint, 'msg:image-001');
 assert.equal(tasks[1].text, '');
 assert.deepEqual(tasks[1].images.map(item => item.messageFingerprint), ['msg:image-001']);
-assert.deepEqual(tasks[1].source.messages.map(item => item.messageFingerprint), ['msg:image-001']);
+assert.deepEqual(tasks[1].entries.map(item => item.messageFingerprint), [
+  'msg:image-001',
+  'msg:image-001-copy',
+]);
+assert.deepEqual(tasks[1].source.messages.map(item => item.messageFingerprint), [
+  'msg:image-001',
+  'msg:image-001-copy',
+]);
 
 assert.equal(tasks[2].taskType, 'image');
 assert.equal(tasks[2].taskFingerprint, 'msg:image-002');
