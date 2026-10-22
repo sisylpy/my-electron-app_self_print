@@ -17,6 +17,10 @@ const profilePanel = fs.readFileSync(
 assert.match(editDrawer, /客户微信名称（好友／群昵称）/);
 assert.match(editDrawer, /v-model\.trim="form\.nxDepartmentWechatDisplayName"/);
 assert.match(editDrawer, /maxlength="255"/);
+assert.match(editDrawer, /测试微信接通/);
+assert.match(editDrawer, /focusConversation\(wechatName, \{ forceReselect: true \}\)/);
+assert.match(editDrawer, /微信接通成功/);
+assert.match(editDrawer, /请检查空格、名称及微信登录状态/);
 assert.match(editDrawer, /专属群/);
 assert.match(editDrawer, /混合群/);
 assert.match(editDrawer, /wechatGroupMode/);

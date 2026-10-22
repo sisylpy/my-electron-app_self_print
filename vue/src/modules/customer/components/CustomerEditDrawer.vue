@@ -24,12 +24,29 @@
           <label>简称（标签打印）<input v-model.trim="form.nxDepartmentAttrName" /></label>
           <label>对外订货代号<input v-model.trim="form.nxDepartmentOrderCode" /></label>
           <label>客户微信名称（好友／群昵称）
-            <input
-              v-model.trim="form.nxDepartmentWechatDisplayName"
-              type="text"
-              maxlength="255"
-              placeholder="与微信中的好友昵称或群名称一致"
-            />
+            <span class="wechat-name-input-row">
+              <input
+                v-model.trim="form.nxDepartmentWechatDisplayName"
+                type="text"
+                maxlength="255"
+                placeholder="与微信中的好友昵称或群名称一致"
+                @input="resetWechatConnectionTest"
+              />
+              <button
+                class="wechat-connection-button"
+                type="button"
+                :disabled="testingWechatConnection || !String(form.nxDepartmentWechatDisplayName || '').trim()"
+                @click="testWechatConnection"
+              >
+                {{ testingWechatConnection ? '测试中…' : '测试微信接通' }}
+              </button>
+            </span>
+            <small
+              v-if="wechatConnectionTestMessage"
+              :class="['wechat-connection-result', wechatConnectionTestStatus]"
+            >
+              {{ wechatConnectionTestMessage }}
+            </small>
             <small class="field-tip">用于微信聊天订单搜索；保存后可在订单录入页通过“转所选微信好友订单”自动完成关联或迁移。</small>
           </label>
           <div class="wechat-mode-field">
@@ -228,6 +245,9 @@ export default {
       WECHAT_GROUP_MENTION_SELF,
       form,
       localError: '',
+      testingWechatConnection: false,
+      wechatConnectionTestStatus: '',
+      wechatConnectionTestMessage: '',
       wechatConversationKind: (this.wechatBinding?.bound || this.wechatBinding?.profileConfigured)
         ? this.wechatBinding.conversationKind
         : null,
@@ -254,6 +274,40 @@ export default {
     subDepartments() { return this.form.nxDepartmentEntities || []; },
   },
   methods: {
+    resetWechatConnectionTest() {
+      this.wechatConnectionTestStatus = '';
+      this.wechatConnectionTestMessage = '';
+    },
+    async testWechatConnection() {
+      const wechatName = String(this.form.nxDepartmentWechatDisplayName || '').trim();
+      this.resetWechatConnectionTest();
+      if (!wechatName) {
+        this.wechatConnectionTestStatus = 'error';
+        this.wechatConnectionTestMessage = '请先输入微信好友或群名称';
+        return;
+      }
+      const focusConversation = window.electronAPI?.wechatUi?.focusConversation;
+      if (typeof focusConversation !== 'function') {
+        this.wechatConnectionTestStatus = 'error';
+        this.wechatConnectionTestMessage = '当前版本不支持测试微信接通';
+        return;
+      }
+      this.testingWechatConnection = true;
+      try {
+        // 强制重新搜索并核验可见会话标题，不使用旧缓存判定“接通”。
+        const result = await focusConversation(wechatName, { forceReselect: true });
+        if (!result?.ok) {
+          throw new Error(result?.error?.message || '未找到对应的微信会话');
+        }
+        this.wechatConnectionTestStatus = 'success';
+        this.wechatConnectionTestMessage = `微信接通成功：“${wechatName}”`;
+      } catch (error) {
+        this.wechatConnectionTestStatus = 'error';
+        this.wechatConnectionTestMessage = `${error?.message || '微信接通失败'}，请检查空格、名称及微信登录状态`;
+      } finally {
+        this.testingWechatConnection = false;
+      }
+    },
     submit() {
       if (!this.form.nxDepartmentName || !this.form.nxDepartmentAttrName) return;
       this.localError = '';
@@ -287,8 +341,9 @@ export default {
 .customer-drawer{width:min(640px,92vw);height:100%;background: var(--product-surface);box-shadow:-18px 0 48px rgba(var(--product-text-rgb), 0.18);display:flex;flex-direction:column;animation:slide-in .24s ease}
 .drawer-header{padding:25px 28px 18px;display:flex;justify-content:space-between;border-bottom:1px solid var(--product-border)}.drawer-header h3{margin:3px 0;font-size:25px}.drawer-header p{margin:0;color:var(--product-text-secondary)}.drawer-eyebrow{font-size:12px;font-weight:800;letter-spacing:.12em;color:var(--product-primary-strong)}.icon-button{border:0;background:var(--product-primary-soft);border-radius:12px;width:40px;height:40px;font-size:28px;color:var(--product-text-secondary)}.drawer-tabs{padding:12px 20px;display:flex;gap:7px;border-bottom:1px solid var(--product-border)}.drawer-tabs button{border:0;background:transparent;padding:9px 13px;border-radius:10px;color:var(--product-text-secondary);font-weight:700}.drawer-tabs button.active{background:var(--product-primary-soft);color:var(--product-primary-strong)}.drawer-body{flex:1;overflow:auto;padding:24px 28px}.form-section h4{font-size:16px;margin:0 0 15px}.form-section h4:not(:first-child){margin-top:28px}.form-section>label{display:flex;flex-direction:column;gap:7px;margin-bottom:15px;color:var(--product-text-secondary);font-size:14px;font-weight:700}.form-section input:not([type=radio]):not([type=checkbox]),.form-section select,.form-section textarea{width:100%;border:1px solid var(--product-border);border-radius:10px;padding:11px 12px;background: var(--product-surface);color:var(--product-text);outline:none}.form-section input:focus,.form-section select:focus,.form-section textarea:focus{border-color:var(--product-primary-hover);box-shadow:0 0 0 3px var(--product-primary-ring)}.two-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px}.two-columns label{display:flex;flex-direction:column;gap:7px;font-size:14px;font-weight:700;color:var(--product-text-secondary)}.choice-row{display:grid;grid-template-columns:120px 1fr 1fr;align-items:center;padding:13px 0;border-bottom:1px solid var(--product-border)}.choice-row>span{font-weight:700}.choice-row label,.switch-line{font-weight:500!important;margin:0!important;display:block!important}.section-tip{font-size:13px;color:var(--product-text-muted);margin-top:-7px}.label-grid{display:flex;flex-wrap:wrap;gap:10px}.label-option{border:1px solid var(--product-border);border-radius:999px;padding:8px 13px;cursor:pointer}.label-option input{display:none}.label-option.selected{background:var(--product-primary-soft);border-color:var(--product-primary);color:var(--product-primary-strong)}.department-list{display:grid;gap:9px}.department-list div{display:flex;justify-content:space-between;padding:13px;border:1px solid var(--product-border);border-radius:10px}.department-list small{color:var(--product-text-muted)}.empty-note{padding:24px;text-align:center;background:var(--product-tint);color:var(--product-text-muted);border-radius:12px}.danger-zone{margin-top:35px;padding:20px;border:1px solid var(--product-danger-soft);border-radius:14px;background:var(--product-danger-soft)}.danger-zone p{font-size:13px;color:var(--product-danger)}.danger-button{border:1px solid var(--product-danger);background: var(--product-surface);color:var(--product-danger);border-radius:10px;padding:9px 14px}.drawer-footer{padding:16px 24px;border-top:1px solid var(--product-tint);display:flex;align-items:center;gap:10px}.save-error{color:var(--product-danger);font-size:13px;margin-right:auto}.primary-button,.secondary-button{border-radius:10px;padding:10px 17px;font-weight:800}.primary-button{border:0;background:var(--product-primary-strong);color:#fff}.primary-button:disabled{opacity:.55}.secondary-button{border:1px solid var(--product-border);background: var(--product-surface);color:var(--product-text-secondary)}@keyframes slide-in{from{transform:translateX(40px);opacity:.4}to{transform:none;opacity:1}}@keyframes fade-in{from{opacity:0}to{opacity:1}}@media(max-width:700px){.two-columns{grid-template-columns:1fr}.choice-row{grid-template-columns:1fr;gap:8px}}
 .field-tip{font-size:12px;font-weight:500;color:var(--product-text-muted);line-height:1.5}
+.wechat-name-input-row{display:flex;align-items:stretch;gap:8px}.wechat-name-input-row input{min-width:0;flex:1}.wechat-connection-button{flex:none;border:1px solid var(--product-primary);border-radius:10px;padding:0 14px;background:var(--product-primary-soft);color:var(--product-primary-strong);font-size:13px;font-weight:800;white-space:nowrap}.wechat-connection-button:disabled{cursor:not-allowed;opacity:.55}.wechat-connection-result{font-size:12px;font-weight:700;line-height:1.45}.wechat-connection-result.success{color:var(--product-success, #198754)}.wechat-connection-result.error{color:var(--product-danger)}
 .wechat-mode-field{margin-bottom:18px;color:var(--product-text-secondary);font-size:14px;font-weight:700}.wechat-mode-field>span{display:block;margin-bottom:8px}.wechat-mode-options{display:grid;grid-template-columns:1fr 1fr;gap:10px}.wechat-mode-options label{position:relative;display:grid;gap:3px;padding:13px 14px;border:1px solid var(--product-primary-soft);border-radius:11px;background: var(--product-surface);cursor:pointer}.wechat-mode-options label.selected{border-color:var(--product-primary);background:var(--product-primary-soft);box-shadow:0 0 0 2px var(--product-primary-ring)}.wechat-mode-options input{position:absolute;opacity:0;pointer-events:none}.wechat-mode-options strong,.wechat-mode-readonly strong{color:var(--product-text)}.wechat-mode-options small,.wechat-mode-readonly small{font-size:11px;font-weight:500;line-height:1.45;color:var(--product-text-muted)}.wechat-mode-readonly{display:flex;flex-direction:column;gap:3px;padding:12px 14px;border:1px solid var(--product-border);border-radius:10px;background:var(--product-tint)}.wechat-mode-readonly.muted strong{color:var(--product-text-secondary)}
 .auto-read-field{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 18px;padding:13px 14px;border:1px solid var(--product-border);border-radius:10px;background:var(--product-tint)}.auto-read-field>div{display:grid;gap:4px}.auto-read-field strong{color:var(--product-text);font-size:14px}.auto-read-field small{color:var(--product-text-muted);font-size:11px;font-weight:500;line-height:1.45}.auto-read-switch{display:flex;flex:none;align-items:center;gap:7px;color:var(--product-text-secondary);font-size:12px;font-weight:800;cursor:pointer}.auto-read-switch input{width:17px;height:17px;accent-color:var(--product-primary)}
 .danger-zone{border-color:var(--product-border);background:var(--product-tint)}.danger-zone p{color:var(--product-text-muted)}.rare-actions{display:grid;gap:8px;margin:14px 0 18px}.rare-actions>button{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;padding:11px;border:1px solid var(--product-border);border-radius:10px;background: var(--product-surface);text-align:left;color:var(--product-text)}.rare-actions>button>span{width:34px;height:34px;border-radius:9px;background:var(--product-primary-soft);display:grid;place-items:center;color:var(--product-text-secondary);font-weight:900}.rare-actions>button div{min-width:0}.rare-actions strong,.rare-actions small{display:block}.rare-actions small{margin-top:3px;color:var(--product-text-muted);font-size:10px}.rare-actions b{font-size:19px;color:var(--product-text-muted)}.delete-tip{padding-top:15px;border-top:1px solid var(--product-border);color:var(--product-danger)!important}
-@media(max-width:700px){.wechat-mode-options{grid-template-columns:1fr}}
+@media(max-width:700px){.wechat-mode-options{grid-template-columns:1fr}.wechat-name-input-row{align-items:stretch;flex-direction:column}.wechat-connection-button{min-height:42px}}
 </style>
