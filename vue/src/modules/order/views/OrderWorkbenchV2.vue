@@ -367,6 +367,7 @@ import {
   splitWechatOrderPayloads,
   wechatOrderTaskLabel,
 } from '../services/wechatOrderTaskSplit';
+import { reusePendingWechatTextTask } from '../services/wechatTaskClaimPlan';
 import {
   buildWechatCustomerAssociationDirectory,
   ensureWechatCustomerBinding,
@@ -1067,11 +1068,25 @@ async function ensureWechatImportClaimed(item) {
       .map(message => String(message.messageFingerprint || '')).filter(Boolean),
   });
   const claimed = unwrapWechatServer(response);
+  let draftRevision = Number(claimed?.draftRevision) || 0;
+  const claimedDraftText = String(claimed?.draftText || '');
+  const requestedDraftText = item.taskType === 'text' ? String(item.payload.text || '') : '';
+  if (item.taskType === 'text'
+      && Number(claimed?.wechatTaskId) > 0
+      && claimedDraftText !== requestedDraftText) {
+    const draftResponse = await api.updateDraft({
+      taskId: Number(claimed.wechatTaskId),
+      draftRevision,
+      draftText: requestedDraftText,
+    });
+    const savedDraft = unwrapWechatServer(draftResponse);
+    draftRevision = Number(savedDraft?.draftRevision) || (draftRevision + 1);
+  }
   const replacement = {
     ...item,
     departmentId,
     sourceKey,
-    draftRevision: Number(claimed?.draftRevision) || 0,
+    draftRevision,
     payload: {
       ...item.payload,
       source: {
@@ -1086,7 +1101,15 @@ async function ensureWechatImportClaimed(item) {
 
 async function claimWechatImportItems(items) {
   const result = [];
-  for (const item of (Array.isArray(items) ? items : [])) {
+  for (const incomingItem of (Array.isArray(items) ? items : [])) {
+    const existingItem = wechatImportQueue.value.find(item => (
+      wechatImportTaskKey(item) === wechatImportTaskKey(incomingItem)
+    ));
+    const item = reusePendingWechatTextTask(
+      incomingItem,
+      existingItem,
+      mergeWechatOrderPayload,
+    );
     result.push(await ensureWechatImportClaimed(item));
   }
   return result;
