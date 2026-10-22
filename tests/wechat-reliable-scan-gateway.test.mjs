@@ -73,7 +73,7 @@ test('已有待确认任务可原子领取后来到达的消息', async () => {
         if (options.url === 'desktop-dispatch/v1/auth/me') {
           return { status: 200, data: { code: 0, data: { userId: 9, disId: 160 } } };
         }
-        return { status: 200, data: { code: 0, data: { orderTaskId: 88 } } };
+        return { status: 200, data: { code: 0, data: { wechatTaskId: 88 } } };
       },
     }) },
   });
@@ -84,14 +84,14 @@ test('已有待确认任务可原子领取后来到达的消息', async () => {
     bindingRevision: 3,
     departmentId: 11,
     sourceKey: `wechat2:${'a'.repeat(64)}`,
-    orderTaskId: 88,
+    wechatTaskId: 88,
     taskKind: 'TEXT',
     draftText: '苹果2斤',
     messageFingerprints: ['message-00000001', 'message-00000002'],
   });
   assert.equal(result.ok, true);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].data.orderTaskId, 88);
+  assert.equal(calls[0].data.wechatTaskId, 88);
   assert.deepEqual(calls[0].data.messageFingerprints,
     ['message-00000001', 'message-00000002']);
 });

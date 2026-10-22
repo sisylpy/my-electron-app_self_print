@@ -475,6 +475,31 @@ async function commitReliableScan({
   };
 }
 
+async function loadAllPendingWechatMessages(orderApi, params) {
+  const items = [];
+  const seenAfterIds = new Set();
+  let afterId = null;
+  while (items.length < 10000) {
+    const data = unwrapWechatServer(await orderApi.loadPendingMessages({
+      ...params,
+      afterId,
+      limit: 200,
+    }));
+    const pageItems = Array.isArray(data?.items) ? data.items : [];
+    items.push(...pageItems);
+    if (data?.hasMore !== true) break;
+    const nextAfterId = Number(data?.nextAfterId);
+    if (!Number.isSafeInteger(nextAfterId) || nextAfterId <= 0
+        || seenAfterIds.has(nextAfterId)) {
+      throw new Error('服务端待恢复消息分页异常，本次已停止读取');
+    }
+    seenAfterIds.add(nextAfterId);
+    afterId = nextAfterId;
+  }
+  if (items.length >= 10000) throw new Error('待恢复微信消息超过安全上限，请联系管理员处理');
+  return items;
+}
+
 export async function prepareWechatOrderImport({
   customerId,
   binding,
@@ -586,6 +611,27 @@ export async function prepareWechatOrderImport({
   // the Reader's DB/WAL change token this makes unchanged verification reads
   // memory-fast, while a newly written WeChat message still invalidates cache.
   const scanNow = hasFixedNow ? fixedNow : Date.now();
+  let recoveryWindowStartMs = null;
+  if (Number.isFinite(cursor) && cursor > 0) {
+    const priorRecoveryRows = await timed(
+      onTiming,
+      'server-pending-preflight',
+      () => loadAllPendingWechatMessages(orderApi, {
+        customerId: id,
+        accountFingerprint: normalizedBinding.accountFingerprint,
+        conversationFingerprint: normalizedBinding.conversationFingerprint,
+      })
+    );
+    const unclaimedTimes = priorRecoveryRows
+      .filter(row => row?.status === 'RECEIVED'
+        && row?.processingState === 'UNCLAIMED'
+        && row?.wechatTaskId == null)
+      .map(row => Number(row?.messageTimeMs))
+      .filter(value => Number.isFinite(value) && value > 0);
+    if (unclaimedTimes.length) {
+      recoveryWindowStartMs = Math.max(0, Math.min(...unclaimedTimes) - 2 * 60 * 1000);
+    }
+  }
 
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
     if (attempt > 0) {
@@ -598,9 +644,12 @@ export async function prepareWechatOrderImport({
       );
     }
     const attemptNow = scanNow;
-    const startMs = Number.isFinite(cursor) && cursor > 0
+    const normalStartMs = Number.isFinite(cursor) && cursor > 0
       ? Math.max(0, cursor - 2 * 60 * 1000)
       : attemptNow - 24 * 60 * 60 * 1000;
+    const startMs = Number.isFinite(recoveryWindowStartMs)
+      ? Math.min(normalStartMs, recoveryWindowStartMs)
+      : normalStartMs;
     // 微信消息使用服务端时间，刚到达的消息可能比电脑当前时间快几十秒。
     // 如果查询上限严格等于点击时刻，界面中已经可见的未读消息仍会被排除。
     const endMs = attemptNow + 2 * 60 * 1000;
@@ -751,13 +800,11 @@ export async function prepareWechatOrderImport({
   let recoveryRows = [];
   let mixedImageWarning = '';
   {
-    const recovery = unwrapWechatServer(await orderApi.loadPendingMessages({
+    recoveryRows = await loadAllPendingWechatMessages(orderApi, {
       customerId: id,
       accountFingerprint: nextBinding.accountFingerprint,
       conversationFingerprint: nextBinding.conversationFingerprint,
-      limit: 200,
-    }));
-    recoveryRows = Array.isArray(recovery?.items) ? recovery.items : [];
+    });
     const notices = recoveryRows.filter(row => row?.processingState === 'MIXED_IMAGE_NOTICE_PENDING');
     if (notices.length) {
       mixedImageWarning = `发现 ${notices.length} 张混合群图片，请到微信确认是否属于当前配送商`;

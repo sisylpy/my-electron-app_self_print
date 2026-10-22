@@ -1116,7 +1116,7 @@ function createDispatchGateway({ app, safeStorage, axios, renewDispatchSession =
     try {
       const data = strictPayload(input || {}, [
         'customerId', 'bindingRevision', 'departmentId', 'sourceKey',
-        'orderTaskId', 'taskKind', 'draftText', 'messageFingerprints',
+        'wechatTaskId', 'taskKind', 'draftText', 'messageFingerprints',
       ]);
       const customerId = requirePositiveId(data.customerId, 'customerId');
       return request('POST', `customer-wechat-orders/${customerId}/tasks/claim`, {
@@ -1125,8 +1125,8 @@ function createDispatchGateway({ app, safeStorage, axios, renewDispatchSession =
           bindingRevision: Number(data.bindingRevision),
           departmentId: requirePositiveId(data.departmentId, 'departmentId'),
           sourceKey: String(data.sourceKey || ''),
-          orderTaskId: data.orderTaskId == null
-            ? null : requirePositiveId(data.orderTaskId, 'orderTaskId'),
+          wechatTaskId: data.wechatTaskId == null
+            ? null : requirePositiveId(data.wechatTaskId, 'wechatTaskId'),
           taskKind: String(data.taskKind || ''),
           draftText: String(data.draftText || ''),
           messageFingerprints: Array.isArray(data.messageFingerprints)
