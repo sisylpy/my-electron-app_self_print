@@ -34,8 +34,16 @@ function cloneAndValidatePastePayload(input) {
   if (input.wechatOrderSource != null) {
     const source = input.wechatOrderSource;
     const customerId = Number(source?.customerId);
+    const bindingRevision = Number(source?.bindingRevision);
+    const wechatTaskId = Number(source?.wechatTaskId);
     if (!Number.isSafeInteger(customerId) || customerId <= 0) {
       throw new Error('微信订单客户编号无效');
+    }
+    if (!Number.isSafeInteger(bindingRevision) || bindingRevision < 0) {
+      throw new Error('微信绑定版本无效');
+    }
+    if (!Number.isSafeInteger(wechatTaskId) || wechatTaskId <= 0) {
+      throw new Error('微信待确认任务编号无效');
     }
     if (typeof source.accountFingerprint !== 'string'
         || !/^fp:[A-Za-z0-9_-]{8,60}$/.test(source.accountFingerprint)
@@ -67,6 +75,8 @@ function cloneAndValidatePastePayload(input) {
     });
     wechatOrderSource = {
       customerId,
+      bindingRevision,
+      wechatTaskId,
       accountFingerprint: source.accountFingerprint,
       conversationFingerprint: source.conversationFingerprint,
       conversationKind: source.conversationKind,

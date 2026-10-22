@@ -41,6 +41,8 @@ async function main() {
     type: 3,
     wechatOrderSource: {
       customerId: 7,
+      bindingRevision: 3,
+      wechatTaskId: 41,
       accountFingerprint: 'fp:account1234',
       conversationFingerprint: 'fp:friend12345',
       conversationKind: 'direct',
@@ -50,6 +52,8 @@ async function main() {
   });
   assert.strictEqual(wechatSuccess.ok, true);
   assert.strictEqual(capturedRequest.data.wechatOrderSource.customerId, 7);
+  assert.strictEqual(capturedRequest.data.wechatOrderSource.bindingRevision, 3);
+  assert.strictEqual(capturedRequest.data.wechatOrderSource.wechatTaskId, 41);
   assert.strictEqual(capturedRequest.data.wechatOrderSource.conversationKind, 'direct');
   assert.strictEqual(capturedRequest.data.wechatOrderSource.messages.length, 1);
 
@@ -59,6 +63,8 @@ async function main() {
     type: 3,
     wechatOrderSource: {
       customerId: 7,
+      bindingRevision: 3,
+      wechatTaskId: 42,
       accountFingerprint: 'fp:account1234',
       conversationFingerprint: 'fp:group123456',
       conversationKind: 'group',
@@ -75,6 +81,8 @@ async function main() {
     type: 3,
     wechatOrderSource: {
       customerId: 7,
+      bindingRevision: 3,
+      wechatTaskId: 43,
       accountFingerprint: 'fp:account1234',
       conversationFingerprint: 'fp:group123456',
       conversationKind: 'group',
@@ -89,6 +97,8 @@ async function main() {
     type: 3,
     wechatOrderSource: {
       customerId: 7,
+      bindingRevision: 3,
+      wechatTaskId: 44,
       accountFingerprint: 'wxid_secret',
       conversationFingerprint: 'fp:friend12345',
       conversationKind: 'direct',
@@ -97,6 +107,22 @@ async function main() {
   });
   assert.strictEqual(invalidWechatSource.ok, false);
   assert.strictEqual(invalidWechatSource.status, 400);
+
+  const missingWechatTaskId = await gateway.savePasteOrders({
+    orderList: [{ nxDoGoodsName: '土豆', nxDoQuantity: '5', nxDoStandard: '斤' }],
+    type: 3,
+    wechatOrderSource: {
+      customerId: 7,
+      bindingRevision: 3,
+      accountFingerprint: 'fp:account1234',
+      conversationFingerprint: 'fp:friend12345',
+      conversationKind: 'direct',
+      groupMode: null,
+      messages: [{ messageFingerprint: 'fp:friend12345:99', messageTimeMs: 1700000000000 }],
+    },
+  });
+  assert.strictEqual(missingWechatTaskId.ok, false);
+  assert.strictEqual(missingWechatTaskId.status, 400);
 
   const excelSuccess = await gateway.savePasteOrders({
     orderList: [{ nxDoGoodsName: '小米椒', nxDoQuantity: '2', nxDoStandard: '斤' }],
