@@ -7,7 +7,10 @@
 - 内部 ID 为 fp:<hash> 指纹，稳定且不可逆推出原始标识。
 - 材料缓存键为 (machine, account)，由 Driver.acquire 返回的不透明 AccessMaterial 承载。
 """
+import base64
 import hashlib
+import hmac
+import json
 import os
 import time
 from datetime import datetime
@@ -352,9 +355,29 @@ class WechatLocalDataService:
             ServiceError(ErrorCode.INTERNAL_ERROR, "无法解析消息发送者", diagnosticId="resolveSender")
         )
 
-    def getAttachment(self, attachment_id: AttachmentId) -> dict:
+    def getAttachment(self, attachment_id: AttachmentId, locator: Optional[str] = None) -> dict:
         """Return an encrypted image envelope for main-process-only decoding."""
         record = self._attachment_index.get(str(attachment_id))
+        if (not record or record.get("kind") != "image") and locator:
+            payload = self._peek_token(locator)
+            account_id = AccountId(str(payload.get("a") or ""))
+            acct = self._account_meta(account_id)
+            payload = self._decode_token(acct, "attachment", locator)
+            if payload.get("i") != str(attachment_id):
+                raise self._invalid_locator_error()
+            conversation_id = ConversationId(str(payload.get("c") or ""))
+            meta = self._conv_meta(conversation_id)
+            if meta.account_id != account_id:
+                raise self._invalid_locator_error()
+            packed_hex = self._db_for(acct).find_image_attachment(meta.username, payload)
+            if packed_hex is not None:
+                record = {
+                    "kind": "image",
+                    "account_id": account_id,
+                    "conversation_username": meta.username,
+                    "packed_hex": packed_hex,
+                }
+                self._attachment_index[str(attachment_id)] = record
         if not record or record.get("kind") != "image":
             raise WechatServiceError(ServiceError(ErrorCode.NO_DATA, "没有找到对应的微信图片，请重新读取消息。"))
         acct = self._account_meta(record["account_id"])
@@ -367,6 +390,13 @@ class WechatLocalDataService:
 
     # ===================== 内部 =====================
     def _read_messages(
+        self, conversation: ConversationId, timeRange, page: Page, like: Optional[str]
+    ) -> PageResult[Message]:
+        if page.keyset:
+            return self._read_messages_keyset(conversation, timeRange, page, like)
+        return self._read_messages_offset(conversation, timeRange, page, like)
+
+    def _read_messages_offset(
         self, conversation: ConversationId, timeRange, page: Page, like: Optional[str]
     ) -> PageResult[Message]:
         meta = self._conv_meta(conversation)
@@ -427,6 +457,306 @@ class WechatLocalDataService:
                     conversation, meta, acct, db, row, message_id
                 ))
         return PageResult(items=items, total=total, hasMore=has_more)
+
+    def _read_messages_keyset(
+        self, conversation: ConversationId, timeRange, page: Page, like: Optional[str]
+    ) -> PageResult[Message]:
+        """Opt-in, fixed-window keyset paging across every physical source."""
+        if timeRange is None or not timeRange.end:
+            raise WechatServiceError(ServiceError(
+                ErrorCode.INTERNAL_ERROR,
+                "稳定分页需要固定读取结束时间，请重新读取。",
+                retryable=True,
+                diagnosticId="keyset-fixed-end-required",
+            ))
+        meta = self._conv_meta(conversation)
+        acct = self._account_meta(meta.account_id)
+        db = self._db_for(acct)
+        tr = (_iso_to_epoch(timeRange.start), _iso_to_epoch(timeRange.end))
+        locations = db.locate_message_table(meta.username)
+        sources = [
+            ("message", db.message_source_id(shard), shard, table)
+            for shard, table in locations
+        ]
+        resource_source_id = db.image_resource_source_id() if like is None else None
+        if resource_source_id:
+            sources.append(("resource", resource_source_id, None, None))
+        sources.sort(key=lambda source: (1 if source[0] == "message" else 0, source[1]), reverse=True)
+        manifest = [[kind, source_id] for kind, source_id, _shard, _table in sources]
+        query_fingerprint = self._page_query_fingerprint(conversation, tr, like)
+
+        cursor = None
+        seen_identity_hashes = set()
+        scan_total = None
+        if page.pageKey:
+            token = self._decode_token(acct, "page", page.pageKey)
+            if token.get("q") != query_fingerprint or token.get("m") != manifest:
+                raise WechatServiceError(ServiceError(
+                    ErrorCode.INTERNAL_ERROR,
+                    "读取期间微信消息分片发生变化，请从第一页重新读取。",
+                    retryable=True,
+                    diagnosticId="keyset-source-changed",
+                ))
+            raw_cursor = token.get("c")
+            if not isinstance(raw_cursor, list) or len(raw_cursor) != 6:
+                raise self._invalid_page_key_error()
+            cursor = tuple(raw_cursor)
+            seen_identity_hashes = {
+                str(value) for value in (token.get("d") or []) if isinstance(value, str)
+            }
+            if isinstance(token.get("n"), int):
+                scan_total = int(token["n"])
+
+        fetch_limit = page.limit + 1
+        pairs: List[Tuple[str, Optional[str], str, list]] = []
+        source_was_full = False
+        for kind, source_id, shard, table in sources:
+            relation, cursor_tail = self._source_cursor_relation(kind, source_id, cursor)
+            cursor_time = int(cursor[0]) if cursor is not None else None
+            if kind == "message":
+                rows = db.query_messages_keyset(
+                    shard, table, tr, fetch_limit, like=like,
+                    cursor_time=cursor_time, same_second=relation,
+                    cursor_tail=cursor_tail,
+                )
+            else:
+                rows = db.query_image_resources_keyset(
+                    meta.username, tr, fetch_limit,
+                    cursor_time=cursor_time, same_second=relation,
+                    cursor_tail=cursor_tail,
+                )
+            source_was_full = source_was_full or len(rows) == fetch_limit
+            pairs.extend((kind, shard, source_id, row) for row in rows)
+
+        pairs.sort(key=self._keyset_pair_key, reverse=True)
+        resource_identities: List[list] = []
+        if like is None:
+            try:
+                resource_identities = db.image_resource_identities(
+                    meta.username,
+                    [int(row[0] or 0) for kind, _shard, _source, row in pairs if kind == "message"],
+                )
+            except WechatServiceError:
+                resource_identities = []
+
+        items: List[Message] = []
+        processed_index = -1
+        page_seen = set()
+        for index, (kind, shard, _source_id, row) in enumerate(pairs):
+            identity_hash = self._logical_identity_hash(kind, row)
+            row_time = self._keyset_pair_key(pairs[index])[0]
+            processed_index = index
+            if identity_hash in page_seen or (
+                cursor is not None
+                and row_time == int(cursor[0])
+                and identity_hash in seen_identity_hashes
+            ):
+                continue
+            page_seen.add(identity_hash)
+            message_id = self._stable_message_id(conversation, kind, row, resource_identities)
+            if kind == "message":
+                item = self._to_message(
+                    conversation, meta.kind, acct.wxid, db, shard, row, message_id
+                )
+            else:
+                item = self._to_resource_message(
+                    conversation, meta, acct, db, row, message_id
+                )
+            items.append(item)
+            if len(items) >= page.limit:
+                break
+
+        has_more = bool(pairs) and (
+            processed_index < len(pairs) - 1 or source_was_full
+        )
+        if scan_total is None:
+            scan_total = (
+                sum(db.count_messages(shard, table, tr, like=like) for shard, table in locations)
+                if has_more else len(items)
+            )
+        next_page_key = None
+        if has_more:
+            if processed_index < 0:
+                raise WechatServiceError(ServiceError(
+                    ErrorCode.INTERNAL_ERROR,
+                    "稳定分页无法推进，请重新读取。",
+                    retryable=True,
+                    diagnosticId="keyset-no-progress",
+                ))
+            next_cursor = list(self._keyset_pair_key(pairs[processed_index]))
+            next_seen = set()
+            if cursor is not None and int(cursor[0]) == int(next_cursor[0]):
+                next_seen.update(seen_identity_hashes)
+            for processed_pair in pairs[:processed_index + 1]:
+                if self._keyset_pair_key(processed_pair)[0] == int(next_cursor[0]):
+                    next_seen.add(self._logical_identity_hash(processed_pair[0], processed_pair[3]))
+            next_page_key = self._encode_token(acct, "page", {
+                "v": 1,
+                "q": query_fingerprint,
+                "m": manifest,
+                "c": next_cursor,
+                # Cross-source duplicates can straddle a page only while the
+                # cursor remains in the same second. Do not let this list grow
+                # with the whole 24-hour scan.
+                "d": sorted(next_seen),
+                "n": scan_total,
+            })
+        return PageResult(
+            items=items,
+            total=scan_total,
+            hasMore=has_more,
+            nextPageKey=next_page_key,
+        )
+
+    @staticmethod
+    def _source_cursor_relation(kind: str, source_id: str, cursor: Optional[tuple]):
+        if cursor is None:
+            return "all", None
+        source_prefix = (1 if kind == "message" else 0, source_id)
+        cursor_prefix = (int(cursor[1]), str(cursor[2]))
+        if source_prefix > cursor_prefix:
+            return "before", None
+        if source_prefix < cursor_prefix:
+            return "all", None
+        return "same", (int(cursor[3]), int(cursor[4]), int(cursor[5]))
+
+    @staticmethod
+    def _keyset_pair_key(pair: tuple) -> tuple:
+        kind, _shard, source_id, row = pair
+        if kind == "message":
+            return (
+                int(row[1] or 0), 1, source_id,
+                int(row[6] or 0), int(row[0] or 0), int(row[8] or 0),
+            )
+        return (
+            int(row[2] or 0), 0, source_id,
+            int(row[6] or 0), int(row[1] or 0), int(row[0] or 0),
+        )
+
+    @classmethod
+    def _logical_identity_hash(cls, kind: str, row: list) -> str:
+        identity = cls._message_row_key(row) if kind == "message" else cls._resource_row_key(row)
+        raw = json.dumps(identity, ensure_ascii=True, separators=(",", ":"))
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
+
+    @staticmethod
+    def _page_query_fingerprint(
+        conversation: ConversationId,
+        tr: Tuple[Optional[int], Optional[int]],
+        like: Optional[str],
+    ) -> str:
+        raw = json.dumps(
+            [str(conversation), tr[0], tr[1], like or ""],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+    def _encode_token(self, acct: AccountMeta, purpose: str, payload: dict) -> str:
+        body_payload = dict(payload)
+        body_payload["p"] = purpose
+        body = json.dumps(
+            body_payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        signature = hmac.new(self._token_key(acct), body, hashlib.sha256).digest()
+        return "%s.%s" % (self._b64url_encode(body), self._b64url_encode(signature))
+
+    def _decode_token(self, acct: AccountMeta, purpose: str, token: str) -> dict:
+        try:
+            body_text, signature_text = token.split(".", 1)
+            body = self._b64url_decode(body_text)
+            signature = self._b64url_decode(signature_text)
+            expected = hmac.new(self._token_key(acct), body, hashlib.sha256).digest()
+            if not hmac.compare_digest(signature, expected):
+                raise ValueError("signature mismatch")
+            payload = json.loads(body.decode("utf-8"))
+            if not isinstance(payload, dict) or payload.get("p") != purpose:
+                raise ValueError("purpose mismatch")
+            return payload
+        except WechatServiceError:
+            raise
+        except Exception:
+            if purpose == "page":
+                raise self._invalid_page_key_error()
+            raise self._invalid_locator_error()
+
+    @classmethod
+    def _peek_token(cls, token: str) -> dict:
+        try:
+            body_text, _signature_text = token.split(".", 1)
+            payload = json.loads(cls._b64url_decode(body_text).decode("utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("not an object")
+            return payload
+        except Exception:
+            raise cls._invalid_locator_error()
+
+    def _token_key(self, acct: AccountMeta) -> bytes:
+        material = self._acquire(acct)
+        return hashlib.sha256(
+            b"grainprint-wechat-reader-v3\0" + bytes(material.passphrase)
+        ).digest()
+
+    @staticmethod
+    def _b64url_encode(value: bytes) -> str:
+        return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
+
+    @staticmethod
+    def _b64url_decode(value: str) -> bytes:
+        return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+
+    @staticmethod
+    def _invalid_page_key_error() -> WechatServiceError:
+        return WechatServiceError(ServiceError(
+            ErrorCode.INTERNAL_ERROR,
+            "分页信息已失效，请从第一页重新读取。",
+            retryable=True,
+            diagnosticId="keyset-invalid-token",
+        ))
+
+    @staticmethod
+    def _invalid_locator_error() -> WechatServiceError:
+        return WechatServiceError(ServiceError(
+            ErrorCode.NO_DATA,
+            "图片定位信息已失效，请重新读取消息。",
+            retryable=True,
+            diagnosticId="attachment-invalid-locator",
+        ))
+
+    def _attachment_locator(
+        self,
+        account_id: AccountId,
+        conversation_id: ConversationId,
+        attachment_id: AttachmentId,
+        kind: str,
+        row: list,
+    ) -> Optional[str]:
+        if kind == "message":
+            create_time, local_id, server_id, local_type = (
+                int(row[1] or 0), int(row[0] or 0),
+                int(row[6] or 0), int(row[4] or 0),
+            )
+        else:
+            create_time, local_id, server_id, local_type = (
+                int(row[2] or 0), int(row[1] or 0),
+                int(row[6] or 0), int(row[4] or 0),
+            )
+        try:
+            acct = self._account_meta(account_id)
+            return self._encode_token(acct, "attachment", {
+                "v": 1,
+                "a": str(account_id),
+                "c": str(conversation_id),
+                "i": str(attachment_id),
+                "t": create_time,
+                "l": local_id,
+                "s": server_id,
+                "y": local_type,
+            })
+        except Exception:
+            # Locator is additive. A legacy/fake provider without access
+            # material must still receive the exact v2 AttachmentRef shape.
+            return None
 
     @staticmethod
     def _message_row_key(row: list) -> tuple:
@@ -492,6 +822,9 @@ class WechatLocalDataService:
         sender_name = nick or uname or "(未知)"
         pid = ParticipantId(_fp(uname)) if uname else ParticipantId(_fp("resource:unknown"))
         attachment_id = AttachmentId(_fp(str(message_id)))
+        locator = self._attachment_locator(
+            meta.account_id, conv_id, attachment_id, "resource", row
+        )
         self._attachment_index[str(attachment_id)] = {
             "kind": "image",
             "account_id": meta.account_id,
@@ -510,7 +843,7 @@ class WechatLocalDataService:
             senderName=sender_name,
             type=_msg_type(local_type),
             text="",
-            attachmentRef=AttachmentRef(id=attachment_id, kind="image"),
+            attachmentRef=AttachmentRef(id=attachment_id, kind="image", locator=locator),
             source="local_wechat_db",
         )
 
@@ -535,12 +868,23 @@ class WechatLocalDataService:
         )
         att: Optional[AttachmentRef] = None
         if mtype != "text":
-            att = AttachmentRef(id=AttachmentId(_fp(str(message_id))), kind=mtype)
+            attachment_id = AttachmentId(_fp(str(message_id)))
+            locator = (
+                self._attachment_locator(
+                    self._conv_meta(conv_id).account_id,
+                    conv_id,
+                    attachment_id,
+                    "message",
+                    row,
+                )
+                if mtype == "image" else None
+            )
+            att = AttachmentRef(id=attachment_id, kind=mtype, locator=locator)
             self._attachment_index[str(att.id)] = {
                 "kind": mtype,
                 "account_id": self._conv_meta(conv_id).account_id,
                 "conversation_username": self._conv_meta(conv_id).username,
-                "packed_hex": row[-1] if len(row) > 5 else None,
+                "packed_hex": row[7] if len(row) > 7 else None,
             }
         return Message(
             id=message_id,

@@ -144,6 +144,26 @@ test('D10. 兼容旧版 bridge 的裸返回值', async () => {
   }
 });
 
+test('D11. pageKey 仅在显式启用稳定分页时透传', async () => {
+  await service.getMessages({
+    conversationId: 'conv1',
+    page: { limit: 200, pageKey: null },
+    timeRange: { start: '2026-10-22T00:00:00.000Z', end: '2026-10-22T23:59:59.000Z' },
+  });
+  const call = calls.filter((item) => item.method === 'getMessages').at(-1);
+  assert.equal(call.params.page.pageKey, null, 'null 必须作为稳定分页第一页标记透传');
+  assert.equal(call.params.page.limit, 200);
+});
+
+test('D12. 图片稳定定位令牌可选透传，旧参数仍不变', async () => {
+  await service.getAttachment({ attachmentId: 'att:2', locator: 'signed.locator' });
+  const call = calls.filter((item) => item.method === 'getAttachment').at(-1);
+  assert.deepEqual(call.params, {
+    attachmentId: 'att:2',
+    locator: 'signed.locator',
+  });
+});
+
 let failed = 0;
 for (const { name, fn } of tests) {
   try {

@@ -20,7 +20,7 @@ Electron main 启动本进程，通过 **stdin/stdout 每行一个 JSON** 通信
 事件（child → main，无 id）：
 
 ```jsonc
-{"event":"ready","version":"2","platform":"darwin"}
+{"event":"ready","version":"3","platform":"darwin"}
 {"event":"log","level":"info","message":"…"}
 ```
 
@@ -42,7 +42,17 @@ Electron main 启动本进程，通过 **stdin/stdout 每行一个 JSON** 通信
 | `shutdown` | — | `{"ok":true}`（随后进程退出） |
 
 - `timeRange`: `{"start"?: ISO8601, "end"?: ISO8601}`（本地时区）
-- `page`: `{"offset"?: int, "limit"?: int}`，默认 `{offset:0, limit:50}`
+- `page`: 旧调用继续使用 `{"offset"?: int, "limit"?: int}`。稳定分页显式传
+  `{"limit":200,"pageKey":null}` 开始，后续原样传回响应中的 `nextPageKey`。
+  Keyset 模式要求固定的 `timeRange.end`；`pageKey` 与业务 `Message.id` 独立。
+- Keyset 页在 `hasMore=true` 时额外返回 `nextPageKey`；offset 页响应保持原样。
+- 首次 keyset 请求固定 `timeRange.start/end` 及当时存在的消息分片集合。翻页期间：
+  - 排在当前 key 之后的新消息不插入已开始的结果集，需由下一次扫描读取；
+  - 排在当前 key 之前、仍位于固定时间窗内的延迟写入消息可在后续页读取；
+  - 可检测的分片增删/文件替换、令牌篡改、查询条件变化均返回可重试错误，不返回伪完成页；
+  - 任一页失败时，调用方保留上一页令牌重试，Reader 不产生“扫描完成”状态。
+- 图片 `attachmentRef` 可能额外返回签名 `locator`。Reader 重启后调用
+  `getAttachment` 时可连同原 `attachmentId` 传回，不影响旧的进程内索引路径。
 - `warmMessages`: 仅预热消息分片元数据，不读取消息正文
 - `selfOnly`: 只返回当前微信账号身份，供订单过滤快速路径使用
 

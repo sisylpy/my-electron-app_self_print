@@ -13,8 +13,9 @@ import sys
 import traceback
 
 # Increment whenever the standalone Reader must be rebuilt to match a new
-# Electron-side contract. Version 2 includes Windows V2 image-key discovery.
-BRIDGE_VERSION = "2"
+# Electron-side contract. Version 3 adds opt-in keyset message pages and signed
+# attachment locators while retaining every v2 request/response field.
+BRIDGE_VERSION = "3"
 
 
 def _log(msg, level="info"):
@@ -66,7 +67,10 @@ def _attachment(att):
     if att is None:
         return None
     # 只暴露 id / kind / mimeHint：localPath 可能含本机文件路径，禁止跨进程
-    return {"id": att.id, "kind": att.kind, "mimeHint": att.mimeHint}
+    result = {"id": att.id, "kind": att.kind, "mimeHint": att.mimeHint}
+    if att.locator:
+        result["locator"] = att.locator
+    return result
 
 
 def _msg(m):
@@ -171,7 +175,7 @@ def _dispatch(svc, method, params):
     if method == "getAttachment":
         # This envelope is consumed only by Electron's main process. It contains
         # no filesystem path or raw account identifier.
-        return svc.getAttachment(p["attachmentId"])
+        return svc.getAttachment(p["attachmentId"], p.get("locator"))
     if method == "resolveSender":
         return _participant(svc.resolveSender(p["messageId"]))
     if method == "listConversations":
@@ -186,7 +190,10 @@ def _dispatch(svc, method, params):
 
 
 def _page_result_messages(pr):
-    return {"items": [_msg(m) for m in pr.items], "total": pr.total, "hasMore": pr.hasMore}
+    result = {"items": [_msg(m) for m in pr.items], "total": pr.total, "hasMore": pr.hasMore}
+    if pr.nextPageKey is not None:
+        result["nextPageKey"] = pr.nextPageKey
+    return result
 
 
 def _tr(v):
@@ -202,7 +209,12 @@ def _pg(v):
 
     if not v:
         return Page()
-    return Page(offset=int(v.get("offset") or 0), limit=int(v.get("limit") or 50))
+    return Page(
+        offset=int(v.get("offset") or 0),
+        limit=int(v.get("limit") or 50),
+        keyset=("pageKey" in v),
+        pageKey=v.get("pageKey"),
+    )
 
 
 # ---------------------------------------------------------------- 主循环

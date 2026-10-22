@@ -426,6 +426,78 @@ class WechatReadOnlyDB:
         )
         return rows
 
+    def message_source_id(self, shard: str) -> str:
+        """Return a restart-stable, non-sensitive identity for one DB shard.
+
+        The basename distinguishes numbered shards; the filesystem identity
+        detects the normal replace/rename form of shard rotation without
+        treating WAL growth as a source change.  No path is exposed outside
+        Reader.
+        """
+        return self._source_id("message", shard)
+
+    def image_resource_source_id(self) -> Optional[str]:
+        resource_db = os.path.join(self.m.db_root, "message", "message_resource.db")
+        if not os.path.isfile(resource_db):
+            return None
+        return self._source_id("resource", resource_db)
+
+    def query_messages_keyset(
+        self,
+        shard: str,
+        table: str,
+        tr: Tuple[Optional[int], Optional[int]],
+        limit: int,
+        like: Optional[str] = None,
+        cursor_time: Optional[int] = None,
+        same_second: str = "all",
+        cursor_tail: Optional[Tuple[int, int, int]] = None,
+    ) -> List[list]:
+        """Read a deterministic physical page from one message shard.
+
+        The appended rowid is Reader-only paging metadata.  The original first
+        eight columns and public Message.id contract remain unchanged.
+        """
+        packed_column = self._packed_info_column(shard, table)
+        packed_select = "hex(m.%s)" % packed_column if packed_column else "NULL"
+        conds = self._where_conditions(tr, like)
+        if cursor_time is not None:
+            if same_second == "before":
+                conds.append("m.create_time < %d" % cursor_time)
+            elif same_second == "same":
+                if cursor_tail is None:
+                    raise ValueError("cursor_tail is required for same-source paging")
+                server_id, local_id, physical_id = cursor_tail
+                conds.append(
+                    "(m.create_time < %d OR (m.create_time = %d AND ("
+                    "COALESCE(m.server_id, 0) < %d OR "
+                    "(COALESCE(m.server_id, 0) = %d AND m.local_id < %d) OR "
+                    "(COALESCE(m.server_id, 0) = %d AND m.local_id = %d AND m.rowid < %d))))"
+                    % (
+                        cursor_time, cursor_time,
+                        server_id, server_id, local_id,
+                        server_id, local_id, physical_id,
+                    )
+                )
+            elif same_second == "all":
+                conds.append("m.create_time <= %d" % cursor_time)
+            else:
+                raise ValueError("unknown same_second mode")
+        where = " WHERE " + " AND ".join(conds) if conds else ""
+        sql = (
+            "SELECT local_id, create_time, real_sender_id, hex(message_content), local_type, "
+            "(SELECT user_name FROM Name2Id WHERE rowid = m.real_sender_id), server_id, %s, m.rowid "
+            "FROM %s AS m%s "
+            "ORDER BY m.create_time DESC, COALESCE(m.server_id, 0) DESC, "
+            "m.local_id DESC, m.rowid DESC LIMIT %d"
+            % (packed_select, table, where, limit)
+        )
+        rows = self._run(shard, sql)
+        for row in rows:
+            if len(row) > 3:
+                row[3] = _decode_message_content(row[3])
+        return rows
+
     def query_image_resources(
         self,
         username: str,
@@ -476,6 +548,117 @@ class WechatReadOnlyDB:
             [list(row) for row in rows],
         )
         return rows
+
+    def query_image_resources_keyset(
+        self,
+        username: str,
+        tr: Tuple[Optional[int], Optional[int]],
+        limit: int,
+        cursor_time: Optional[int] = None,
+        same_second: str = "all",
+        cursor_tail: Optional[Tuple[int, int, int]] = None,
+    ) -> List[list]:
+        """Deterministic keyset page for resource-only image rows."""
+        resource_db = os.path.join(self.m.db_root, "message", "message_resource.db")
+        if not os.path.isfile(resource_db):
+            return []
+        lo, hi = tr
+        conds = [
+            "m.chat_id = (SELECT rowid FROM ChatName2Id WHERE user_name = %s)"
+            % _sql_text_literal(username),
+            "m.message_local_type IN (3, 47)",
+        ]
+        if lo is not None:
+            conds.append("m.message_create_time >= %d" % lo)
+        if hi is not None:
+            conds.append("m.message_create_time <= %d" % hi)
+        if cursor_time is not None:
+            if same_second == "before":
+                conds.append("m.message_create_time < %d" % cursor_time)
+            elif same_second == "same":
+                if cursor_tail is None:
+                    raise ValueError("cursor_tail is required for same-source paging")
+                server_id, local_id, physical_id = cursor_tail
+                conds.append(
+                    "(m.message_create_time < %d OR (m.message_create_time = %d AND ("
+                    "COALESCE(m.message_svr_id, 0) < %d OR "
+                    "(COALESCE(m.message_svr_id, 0) = %d AND m.message_local_id < %d) OR "
+                    "(COALESCE(m.message_svr_id, 0) = %d AND m.message_local_id = %d "
+                    "AND m.message_id < %d))))"
+                    % (
+                        cursor_time, cursor_time,
+                        server_id, server_id, local_id,
+                        server_id, local_id, physical_id,
+                    )
+                )
+            elif same_second == "all":
+                conds.append("m.message_create_time <= %d" % cursor_time)
+            else:
+                raise ValueError("unknown same_second mode")
+        sql = (
+            "SELECT m.message_id, m.message_local_id, m.message_create_time, m.sender_id, "
+            "m.message_local_type, "
+            "(SELECT user_name FROM SenderName2Id WHERE rowid = m.sender_id), "
+            "m.message_svr_id, hex(m.packed_info) "
+            "FROM MessageResourceInfo AS m WHERE %s "
+            "ORDER BY m.message_create_time DESC, COALESCE(m.message_svr_id, 0) DESC, "
+            "m.message_local_id DESC, m.message_id DESC LIMIT %d"
+            % (" AND ".join(conds), limit)
+        )
+        return self._run(resource_db, sql)
+
+    def find_image_attachment(self, username: str, locator: dict) -> Optional[str]:
+        """Re-find image packed metadata after the Reader process restarts.
+
+        Only stable numeric message properties are accepted from the signed
+        locator.  Every database is still queried read-only and the caller never
+        supplies a path, table name or raw account/conversation identifier.
+        """
+        create_time = int(locator["t"])
+        local_id = int(locator["l"])
+        server_id = int(locator.get("s") or 0)
+        local_type = int(locator["y"])
+        server_predicate = (
+            "COALESCE(m.server_id, 0) = %d" % server_id
+            if server_id else "COALESCE(m.server_id, 0) = 0"
+        )
+        for shard, table in self.locate_message_table(username):
+            packed_column = self._packed_info_column(shard, table)
+            if not packed_column:
+                continue
+            sql = (
+                "SELECT hex(m.%s) FROM %s AS m WHERE m.create_time = %d "
+                "AND m.local_id = %d AND m.local_type = %d AND %s "
+                "ORDER BY m.rowid DESC LIMIT 1"
+                % (
+                    packed_column, table, create_time, local_id,
+                    local_type, server_predicate,
+                )
+            )
+            rows = self._run(shard, sql)
+            if rows:
+                return rows[0][0]
+
+        resource_db = os.path.join(self.m.db_root, "message", "message_resource.db")
+        if not os.path.isfile(resource_db):
+            return None
+        resource_server_predicate = (
+            "COALESCE(m.message_svr_id, 0) = %d" % server_id
+            if server_id else "COALESCE(m.message_svr_id, 0) = 0"
+        )
+        sql = (
+            "SELECT hex(m.packed_info) FROM MessageResourceInfo AS m "
+            "WHERE m.chat_id = (SELECT rowid FROM ChatName2Id WHERE user_name = %s) "
+            "AND m.message_create_time = %d AND m.message_local_id = %d "
+            "AND m.message_local_type = %d AND %s "
+            "ORDER BY m.message_id DESC LIMIT 1"
+            % (
+                _sql_text_literal(username), create_time, local_id,
+                local_type, resource_server_predicate,
+            )
+        )
+        rows = self._run(resource_db, sql)
+        return rows[0][0] if rows else None
 
     def image_resource_identities(self, username: str, local_ids: List[int]) -> List[list]:
         """Return identity-only image resource rows for local-id collision checks.
@@ -583,6 +766,16 @@ class WechatReadOnlyDB:
                 state.append(None)
         return tuple(state)
 
+    @staticmethod
+    def _source_id(kind: str, path: str) -> str:
+        try:
+            stat = os.stat(path)
+            identity = "%s:%s" % (stat.st_dev, stat.st_ino)
+        except OSError:
+            identity = "missing"
+        raw = "%s:%s:%s" % (kind, os.path.basename(path), identity)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
+
     # ---- 内部 ----
     def _contact_db(self) -> str:
         return os.path.join(self.m.db_root, "contact", "contact.db")
@@ -595,6 +788,15 @@ class WechatReadOnlyDB:
         （否则 `FROM <table> AND message_content LIKE ...` 是语法错误，
         会被底层当作查询失败 → 误报 ACCESS_MATERIAL_EXPIRED）。
         """
+        conds = WechatReadOnlyDB._where_conditions(tr, like)
+        if not conds:
+            return ""
+        return " WHERE " + " AND ".join(conds)
+
+    @staticmethod
+    def _where_conditions(
+        tr: Tuple[Optional[int], Optional[int]], like: Optional[str] = None
+    ) -> List[str]:
         lo, hi = tr
         conds: List[str] = []
         if lo is not None:
@@ -604,9 +806,7 @@ class WechatReadOnlyDB:
         if like:
             # 查询词走 hex 字面量：纯 ASCII SQL，跨平台 UTF-8 语义一致
             conds.append("message_content LIKE '%%' || %s || '%%'" % _sql_text_literal(like))
-        if not conds:
-            return ""
-        return " WHERE " + " AND ".join(conds)
+        return conds
 
 
 def scquery_runner(bin_path: str, keyhex: str):

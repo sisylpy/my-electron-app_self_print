@@ -23,7 +23,15 @@ function requireString(value, name) {
 function normalizePage(page) {
   const offset = Number.isFinite(Number(page?.offset)) ? Math.max(0, Math.floor(Number(page.offset))) : 0;
   const rawLimit = Number.isFinite(Number(page?.limit)) ? Math.floor(Number(page.limit)) : 50;
-  return { offset, limit: Math.min(200, Math.max(1, rawLimit)) };
+  const output = { offset, limit: Math.min(200, Math.max(1, rawLimit)) };
+  // Presence of pageKey opts into Reader keyset paging. Null starts a new,
+  // fixed-window scan; a string resumes it. Offset-only callers stay v2-safe.
+  if (page && Object.prototype.hasOwnProperty.call(page, 'pageKey')) {
+    output.pageKey = typeof page.pageKey === 'string' && page.pageKey
+      ? page.pageKey
+      : null;
+  }
+  return output;
 }
 
 function normalizeTimeRange(timeRange) {
@@ -99,7 +107,14 @@ function createWechatReaderService(appLogger) {
     }),
     getAttachment: (input) => run(async () => {
       const attachmentId = requireString(input?.attachmentId, 'attachmentId');
-      const { value: envelope, start } = await request('getAttachment', { attachmentId }, 90_000);
+      const locator = typeof input?.locator === 'string' && input.locator.trim()
+        ? input.locator.trim()
+        : undefined;
+      const { value: envelope, start } = await request(
+        'getAttachment',
+        locator ? { attachmentId, locator } : { attachmentId },
+        90_000
+      );
       try {
         const decoded = await decodeWechatImageEnvelopeAsync(envelope);
         // 同样必须保持 { value, start } 形状，否则附件结果会被解包成 null。

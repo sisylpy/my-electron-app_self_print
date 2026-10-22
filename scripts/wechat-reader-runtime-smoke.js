@@ -30,7 +30,7 @@ const bridge = fs.readFileSync(
   path.join(runtimeRoot, 'product', 'bridge', 'ndjson_main.py'),
   'utf8'
 );
-assert.match(bridge, /BRIDGE_VERSION\s*=\s*"2"/);
+assert.match(bridge, /BRIDGE_VERSION\s*=\s*"3"/);
 
 // A user-level override left by an older installer must not hide the portable
 // runtime bundled with a newer Windows package.
