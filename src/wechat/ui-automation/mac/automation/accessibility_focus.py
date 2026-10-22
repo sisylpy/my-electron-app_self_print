@@ -109,11 +109,13 @@ def focus_conversation_with_accessibility(
     """
 
     expected = str(target or "").strip()
-    # Keep activation, exact-current-title detection, safe search-field focus,
-    # typing, opening, and final title verification inside one osascript
-    # process. The previous implementation launched several independent
-    # System Events processes per customer, each rebuilding the same deep AX
-    # tree; on a real WeChat window that dominated the all-customer scan time.
+    # Keep activation, shortcut search, opening, and final title verification
+    # inside one osascript process. Do not traverse WeChat's deep AX tree to
+    # read the current title and then traverse it again to find the search
+    # field: on a real Mac each traversal can unpredictably take several
+    # seconds. Cmd+F is WeChat's native global search entry, so only the final
+    # live chat header needs the expensive AX lookup. That final exact check is
+    # still authoritative and prevents an A-chat result being accepted for B.
     output = _osascript(
         [
             "on headerMatches(visibleTitle, expectedTitle)",
@@ -133,9 +135,8 @@ def focus_conversation_with_accessibility(
             "on searchAndRead(expectedTitle, searchDelay, openDelay)",
             "set the clipboard to expectedTitle",
             'tell application "System Events" to tell process "WeChat"',
-            'set rootSplit to UI element 1 of UI element 7 of UI element 1 of window "微信"',
-            "set searchField to UI element 2 of UI element 2 of rootSplit",
-            "set focused of searchField to true",
+            'keystroke "f" using command down',
+            "delay 0.1",
             'keystroke "a" using command down',
             "delay 0.05",
             'keystroke "v" using command down',
@@ -164,10 +165,6 @@ def focus_conversation_with_accessibility(
             'perform action "AXRaise" of window "微信"',
             "end tell",
             "delay 0.1",
-            "set currentHeader to my readHeader()",
-            "if (not forceSearch) and my headerMatches(currentHeader, expectedTitle) then",
-            'return "ALREADY_OPEN" & tab & currentHeader',
-            "end if",
             "set openedHeader to my searchAndRead(expectedTitle, 0.45, 0.75)",
             "if my headerMatches(openedHeader, expectedTitle) then",
             'return "OPENED" & tab & openedHeader',

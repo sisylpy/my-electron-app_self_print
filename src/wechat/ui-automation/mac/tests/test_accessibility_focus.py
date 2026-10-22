@@ -57,11 +57,14 @@ class AccessibilityFocusTest(unittest.TestCase):
         run_script.assert_called_once()
         self.assertEqual(run_script.call_args.args[-2:], ("调料群", "0"))
         script_lines = run_script.call_args.args[0]
+        self.assertIn('keystroke "f" using command down', script_lines)
+        self.assertNotIn("set currentHeader to my readHeader()", script_lines)
+        self.assertNotIn("set searchField to UI element 2", script_lines)
         self.assertIn('return "OPENED_RETRY" & tab & retryHeader', script_lines)
         self.assertIn("set retryHeader to my searchAndRead(expectedTitle, 0.9, 1.0)", script_lines)
 
     @patch("automation.accessibility_focus._osascript")
-    def test_focus_preserves_already_open_result(self, run_script) -> None:
+    def test_parser_preserves_legacy_already_open_result(self, run_script) -> None:
         run_script.return_value = "ALREADY_OPEN\tFangfang"
 
         result = focus_conversation_with_accessibility("Fangfang")
@@ -71,7 +74,7 @@ class AccessibilityFocusTest(unittest.TestCase):
         self.assertFalse(result.retried)
 
     @patch("automation.accessibility_focus._osascript")
-    def test_force_search_bypasses_already_open_shortcut(self, run_script) -> None:
+    def test_force_search_keeps_compatible_request_shape(self, run_script) -> None:
         run_script.return_value = "OPENED\tFangfang"
 
         result = focus_conversation_with_accessibility("Fangfang", force_search=True)
@@ -80,10 +83,7 @@ class AccessibilityFocusTest(unittest.TestCase):
         self.assertFalse(result.already_open)
         self.assertEqual(run_script.call_args.args[-2:], ("Fangfang", "1"))
         script_lines = run_script.call_args.args[0]
-        self.assertIn(
-            "if (not forceSearch) and my headerMatches(currentHeader, expectedTitle) then",
-            script_lines,
-        )
+        self.assertNotIn("set currentHeader to my readHeader()", script_lines)
 
     @patch("automation.accessibility_focus._osascript")
     def test_focus_reports_successful_retry(self, run_script) -> None:
