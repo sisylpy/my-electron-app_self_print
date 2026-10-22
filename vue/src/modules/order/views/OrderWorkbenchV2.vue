@@ -1973,6 +1973,11 @@ async function restoreWechatDraftTasks({ surfaceError = true } = {}) {
       }
       const payload = {
         taskType,
+        ...(taskType === 'image' ? {
+          taskFingerprint: String(
+            messages[0]?.messageFingerprint || task.sourceKey || task.wechatTaskId
+          ),
+        } : {}),
         text: taskType === 'text' ? String(task.draftText || '') : '',
         images,
         entries: messages.map(message => ({
@@ -2571,6 +2576,9 @@ function dismissWechatSelectedAction() {
 async function handleWechatScan() {
   if (wechatScanBusy.value || wechatSelectedImportBusy.value) return;
   wechatScanReportOpen.value = false;
+  if (!wechatImportQueue.value.length) {
+    await restoreWechatDraftTasks({ surfaceError: true });
+  }
   if (wechatImportQueue.value.length) {
     // “稍后处理”会恢复原来的全屏窗口布局。继续现有任务时需要重新
     // 建立左侧微信、右侧订单的并排工作区，但不重复搜索或切换会话。
