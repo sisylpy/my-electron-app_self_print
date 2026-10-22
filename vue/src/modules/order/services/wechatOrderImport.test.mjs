@@ -81,6 +81,36 @@ const electronAPI = {
   },
 };
 
+let firstEmptyMessageReads = 0;
+const firstEmptySleeps = [];
+const firstEmpty = await prepareWechatOrderImport({
+  customerId: 7,
+  binding,
+  retryDelaysMs: [250, 500],
+  returnFirstEmpty: true,
+  sleep: async delayMs => firstEmptySleeps.push(delayMs),
+  electronAPI: {
+    customerWechatOrders: {
+      prepareMessages: async () => {
+        throw new Error('空结果不应请求服务端准备订单');
+      },
+    },
+    wechatReader: {
+      getParticipants: async () => ({
+        ok: true,
+        result: [{ id: 'self', displayName: '李沛谊', isSelf: true }],
+      }),
+      getMessages: async () => {
+        firstEmptyMessageReads += 1;
+        return { ok: true, result: { items: [] } };
+      },
+    },
+  },
+});
+assert.equal(firstEmpty.status, 'empty');
+assert.equal(firstEmptyMessageReads, 1);
+assert.deepEqual(firstEmptySleeps, []);
+
 const loaded = await loadCustomerWechatBinding(7, electronAPI);
 assert.equal(loaded.bound, true);
 await assert.rejects(

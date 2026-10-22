@@ -257,6 +257,101 @@ function parseCurrentConversationOutput(stdout, allowedTitles = []) {
   };
 }
 
+function macFastFocusArgs(title) {
+  const lines = [
+    'on headerMatches(visibleTitle, expectedTitle)',
+    'if visibleTitle is expectedTitle then return true',
+    'set memberPrefix to expectedTitle & " ("',
+    'if visibleTitle starts with memberPrefix and visibleTitle ends with ")" then return true',
+    'return false',
+    'end headerMatches',
+    'on readHeader()',
+    'tell application "System Events" to tell process "WeChat"',
+    'set rootSplit to UI element 1 of UI element 7 of UI element 1 of window "微信"',
+    'set chatGroup to UI element 1 of UI element 1 of UI element 1 of UI element 1 of rootSplit',
+    'set chatHeader to UI element 1 of chatGroup',
+    'return name of chatHeader as text',
+    'end tell',
+    'end readHeader',
+    'on searchAndRead(expectedTitle, searchDelay, openDelay)',
+    'set the clipboard to expectedTitle',
+    'tell application "System Events" to tell process "WeChat"',
+    'keystroke "f" using command down',
+    'delay 0.1',
+    'keystroke "a" using command down',
+    'delay 0.05',
+    'keystroke "v" using command down',
+    'delay searchDelay',
+    'key code 36',
+    'delay openDelay',
+    'key code 53',
+    'end tell',
+    'delay 0.1',
+    'return my readHeader()',
+    'end searchAndRead',
+    'on run argv',
+    'set expectedTitle to item 1 of argv',
+    'tell application "WeChat" to reopen',
+    'tell application "System Events" to tell process "WeChat"',
+    'set frontmost to true',
+    'repeat 20 times',
+    'if exists window "微信" then exit repeat',
+    'delay 0.1',
+    'end repeat',
+    'if not (exists window "微信") then error "WECHAT_MAIN_WINDOW_NOT_FOUND"',
+    'perform action "AXRaise" of window "微信"',
+    'end tell',
+    'set openedHeader to my searchAndRead(expectedTitle, 0.25, 0.4)',
+    'if my headerMatches(openedHeader, expectedTitle) then return "OPENED" & tab & openedHeader',
+    // WeChat can update the visible header just after Enter. Re-read that live
+    // header once before repeating the whole search; this preserves exact
+    // verification while avoiding a second Cmd+F round trip for a settling UI.
+    'delay 0.45',
+    'set settledHeader to my readHeader()',
+    'if my headerMatches(settledHeader, expectedTitle) then return "OPENED_SETTLED" & tab & settledHeader',
+    // Retry only after an exact live-header mismatch. This keeps the common
+    // path fast while retaining the slower settling protection for a busy UI.
+    'set retryHeader to my searchAndRead(expectedTitle, 0.6, 0.8)',
+    'if my headerMatches(retryHeader, expectedTitle) then return "OPENED_RETRY" & tab & retryHeader',
+    'return "MISMATCH_RETRY" & tab & retryHeader',
+    'end run',
+  ];
+  const args = [];
+  lines.forEach(line => args.push('-e', line));
+  args.push('--', title);
+  return args;
+}
+
+function parseMacFastFocusOutput(stdout, allowedTitles = []) {
+  const expected = String(allowedTitles[0] || '').normalize('NFKC').trim();
+  const [state, ...headerParts] = String(stdout || '').trim().split('\t');
+  const visible = headerParts.join('\t').normalize('NFKC').trim();
+  const normalizedVisible = visible.replace(/\s*\(\s*\d+\s*\)\s*$/u, '').trim();
+  if (!expected || !state || !visible) throw new Error('微信快速切换返回了无效结果');
+  if (normalizedVisible !== expected || !['OPENED', 'OPENED_SETTLED', 'OPENED_RETRY'].includes(state)) {
+    return {
+      code: 'TARGET_NOT_FOUND',
+      message: `微信搜索后未能核验会话“${expected}”`,
+      metrics: { method: 'native-applescript' },
+      details: [`NATIVE_SEARCH_MISMATCH=${visible}`],
+      openedTitles: [],
+      candidateTitles: [],
+    };
+  }
+  return {
+    code: 'SUCCESS',
+    message: `已搜索并打开微信会话“${expected}”`,
+    metrics: { method: 'native-applescript' },
+    details: [state === 'OPENED_RETRY'
+      ? 'NATIVE_SEARCH_RETRY_VERIFIED'
+      : state === 'OPENED_SETTLED'
+        ? 'NATIVE_SEARCH_SETTLED_VERIFIED'
+        : 'NATIVE_SEARCH_VERIFIED'],
+    openedTitles: [expected],
+    candidateTitles: [expected],
+  };
+}
+
 function createWechatUiAutomationService(options = {}) {
   const platform = options.platform || process.platform;
   const spawnProcess = options.spawnProcess || spawn;
@@ -418,7 +513,7 @@ function createWechatUiAutomationService(options = {}) {
     });
   }
 
-  function runMacFocus(root, title, forceReselect = false) {
+  async function runMacFocus(root, title, forceReselect = false) {
     const script = path.join(root, 'scripts', 'focus_conversation.py');
     if (!fs.existsSync(script)) {
       return Promise.resolve({
@@ -426,6 +521,30 @@ function createWechatUiAutomationService(options = {}) {
         error: { code: 'FOCUS_SCRIPT_MISSING', message: '安装包内未找到微信会话切换组件' },
       });
     }
+    // The normal Mac path only needs keyboard search plus one exact live AX
+    // header check. Run it directly in osascript so a six-customer scan does
+    // not start/import a full Python + Vision runtime for every empty chat.
+    // Keep the existing Python flow as a compatibility fallback when native
+    // AppleScript cannot start or its output contract is unavailable.
+    const nativeResult = await runProcess(
+      '/usr/bin/osascript',
+      macFastFocusArgs(title),
+      root,
+      [title],
+      {
+        parseOutput: parseMacFastFocusOutput,
+        classifyEmptyOutput: () => ({
+          code: 'MAC_NATIVE_FOCUS_EXITED',
+          message: 'Mac 微信快速切换组件异常退出',
+        }),
+        missingRuntimeCode: 'MAC_NATIVE_FOCUS_MISSING',
+        missingRuntimeMessage: '系统缺少 AppleScript，无法切换微信会话',
+      }
+    );
+    if (nativeResult.ok || nativeResult.error?.code === 'TARGET_NOT_FOUND') {
+      return nativeResult;
+    }
+
     const python = resolveMacPythonCommand(options);
     const args = [script, '--title', title];
     if (forceReselect) args.push('--force-search');
@@ -744,6 +863,7 @@ module.exports = {
   parseAutomationOutput,
   parseUnreadSummaryOutput,
   parseCurrentConversationOutput,
+  parseMacFastFocusOutput,
   classifyMacPythonFailure,
   resolveMacAutomationRoot,
   resolveMacPythonCommand,

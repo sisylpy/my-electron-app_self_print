@@ -320,6 +320,7 @@ export async function prepareWechatOrderImport({
   binding,
   now = null,
   retryDelaysMs = [400, 800, 1600],
+  returnFirstEmpty = false,
   attachmentRetryDelaysMs = [],
   knownMessageFingerprints = null,
   deferPrepareUntilStable = false,
@@ -444,7 +445,15 @@ export async function prepareWechatOrderImport({
         ? incoming.filter(message => knownFingerprints.has(String(message.id))).length
         : 0,
     });
-    if (!incoming.length) continue;
+    // A database-first scan still has a separate, exact visible-conversation
+    // fallback before an empty result can be accepted. Do not spend every
+    // retry delay proving the same empty snapshot here; the post-focus read
+    // remains the authoritative hydration check. Reads that already contain
+    // messages keep all stability retries unchanged.
+    if (!incoming.length) {
+      if (returnFirstEmpty) break;
+      continue;
+    }
 
     relevantIncoming = hasKnownSnapshot
       ? incoming.filter(message => !knownFingerprints.has(String(message.id)))

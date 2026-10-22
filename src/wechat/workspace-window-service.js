@@ -295,6 +295,7 @@ function createWechatWorkspaceWindowService(options = {}) {
   let session = null;
   let conversationWatcher = null;
   let conversationWatcherRunning = false;
+  let conversationWatcherIdleWaiters = [];
   let conversationWatcherGeneration = 0;
   let conversationWatcherPauseDepth = 0;
   let lastConversationTitle = '';
@@ -438,7 +439,15 @@ function createWechatWorkspaceWindowService(options = {}) {
       // next lightweight observation will retry without interrupting the user.
     } finally {
       conversationWatcherRunning = false;
+      const waiters = conversationWatcherIdleWaiters;
+      conversationWatcherIdleWaiters = [];
+      waiters.forEach(resolve => resolve());
     }
+  }
+
+  function waitForConversationWatcherIdle() {
+    if (!conversationWatcherRunning) return Promise.resolve();
+    return new Promise(resolve => conversationWatcherIdleWaiters.push(resolve));
   }
 
   function stopConversationWatcher() {
@@ -458,12 +467,16 @@ function createWechatWorkspaceWindowService(options = {}) {
     conversationWatcher.unref?.();
   }
 
-  function suspendConversationWatcher() {
+  async function suspendConversationWatcher() {
     if (platform !== 'darwin') return () => {};
     conversationWatcherPauseDepth += 1;
     conversationWatcherGeneration += 1;
     if (conversationWatcher) clearInterval(conversationWatcher);
     conversationWatcher = null;
+    // Clearing the interval does not stop an osascript that has already begun.
+    // Let that stale observation exit before authoritative search starts so two
+    // Accessibility clients never walk or focus the same WeChat window at once.
+    await waitForConversationWatcherIdle();
     let released = false;
     return () => {
       if (released) return;

@@ -2858,6 +2858,7 @@ async function scanAllBoundWechatOrders(options = {}) {
               // conversation is opened, one short verification read is enough
               // because the focus flow already waits for the exact chat header.
               retryDelaysMs: mode === 'database' ? [250, 500] : [250],
+              returnFirstEmpty: mode === 'database',
               // Opening the exact conversation makes WeChat fetch the full
               // image asynchronously. Retry the same attachment while it is
               // being written instead of requiring an operator to open it.

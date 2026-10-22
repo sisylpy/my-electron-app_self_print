@@ -86,9 +86,9 @@ assert.match(modal, /正在查找“\$\{props\.launcherCurrentTitle\}”关联�
 assert.doesNotMatch(modal, /正在识别当前微信好友/);
 assert.match(workbench, /:conversation-switching="wechatConversationSwitching"/);
 assert.match(workbench, /:conversation-switching-title="wechatConversationSwitchingTitle"/);
-assert.match(modal, /v-if="conversationSwitching && !busy"/);
-assert.match(modal, /正在切换微信会话/);
-assert.match(modal, /完成前请稍候，不要重复操作/);
+assert.doesNotMatch(modal, /v-if="conversationSwitching && !busy"/);
+assert.doesNotMatch(modal, /正在切换微信会话/);
+assert.doesNotMatch(modal, /完成前请稍候，不要重复操作/);
 assert.match(modal, /if \(props\.conversationSwitching\) return/);
 assert.match(modal, /检查已关联微信/);
 assert.doesNotMatch(modal, /launcherUnreadCount|launcherCustomerCount|launcherSummaryLoading/);

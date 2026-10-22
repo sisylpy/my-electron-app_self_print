@@ -522,28 +522,12 @@
 
           <Transition name="wechat-import-action">
             <div
-              v-if="(conversationSwitching && !busy) || selectedImportBusy || actionMessage || unmatchedConversationTitle || customerMatchOpen"
+              v-if="selectedImportBusy || actionMessage || unmatchedConversationTitle || customerMatchOpen"
               class="wechat-import-modal__action-mask"
               @click.self="handleActionMaskClick"
             >
               <section
-                v-if="conversationSwitching && !busy"
-                class="wechat-import-modal__action-dialog is-busy is-switching"
-                role="status"
-                aria-live="polite"
-                aria-busy="true"
-              >
-                <span class="wechat-import-modal__action-icon" aria-hidden="true">
-                  <i></i>
-                </span>
-                <div>
-                  <small>正在切换微信会话</small>
-                  <h3>正在打开“{{ conversationSwitchingTitle || '当前客户' }}”</h3>
-                  <p>左侧微信正在搜索并切换会话，完成前请稍候，不要重复操作。</p>
-                </div>
-              </section>
-              <section
-                v-else-if="customerMatchOpen"
+                v-if="customerMatchOpen"
                 class="wechat-import-modal__match-dialog"
                 role="dialog"
                 aria-modal="true"

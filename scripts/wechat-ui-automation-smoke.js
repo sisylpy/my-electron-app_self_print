@@ -10,6 +10,7 @@ const {
   parseAutomationOutput,
   parseUnreadSummaryOutput,
   parseCurrentConversationOutput,
+  parseMacFastFocusOutput,
   classifyMacPythonFailure,
   resolveMacAutomationRoot,
   resolveMacPythonCommand,
@@ -27,6 +28,17 @@ assert.throws(
   () => normalizeConversationTitle({ title: '测试', forceReselect: 'yes' }),
   /强制重选参数无效/
 );
+
+const nativeFocus = parseMacFastFocusOutput('OPENED\t测试7群 (3)\n', ['测试7群']);
+assert.strictEqual(nativeFocus.code, 'SUCCESS');
+assert.deepStrictEqual(nativeFocus.openedTitles, ['测试7群']);
+assert.deepStrictEqual(nativeFocus.details, ['NATIVE_SEARCH_VERIFIED']);
+const nativeFocusSettled = parseMacFastFocusOutput('OPENED_SETTLED\t测试7群 (3)\n', ['测试7群']);
+assert.strictEqual(nativeFocusSettled.code, 'SUCCESS');
+assert.deepStrictEqual(nativeFocusSettled.details, ['NATIVE_SEARCH_SETTLED_VERIFIED']);
+const nativeFocusMismatch = parseMacFastFocusOutput('MISMATCH_RETRY\t测试2群\n', ['测试7群']);
+assert.strictEqual(nativeFocusMismatch.code, 'TARGET_NOT_FOUND');
+assert.deepStrictEqual(nativeFocusMismatch.openedTitles, []);
 assert.throws(() => normalizeConversationTitle({ title: '测试', command: 'bad' }), /未允许/);
 
 assert.deepStrictEqual(

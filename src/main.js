@@ -1051,7 +1051,7 @@ function setupIpcHandlers() {
   });
   ipcMain.handle('wechat-ui-focus-conversation', async (event, input) => {
     assertTrustedRendererEvent(event);
-    const resumeConversationWatcher = getWechatWorkspaceWindowService()
+    const resumeConversationWatcher = await getWechatWorkspaceWindowService()
       .suspendConversationWatcher?.() || (() => {});
     const focusStartedAt = Date.now();
     let automationFinishedAt = 0;
