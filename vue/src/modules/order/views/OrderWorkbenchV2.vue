@@ -1117,6 +1117,10 @@ async function flushWechatDraftSave(taskId) {
       });
     }
   } catch (error) {
+    if (wechatDiscardingTaskIds.has(taskId)) {
+      state.pendingText = null;
+      return;
+    }
     state.pendingText = state.pendingText ?? draftText;
     setWechatScanStatus(`微信待确认文字自动保存失败：${error?.message || '请稍后重试'}`, 'error');
     state.timer = window.setTimeout(() => {
@@ -1843,11 +1847,36 @@ const removeWechatConversationListener = window.electronAPI?.wechatUi
     void handleWechatConversationChanged(payload);
   });
 
-function discardWechatImportSession() {
+const wechatDiscardingTaskIds = new Set();
+
+async function discardWechatImportSession() {
   // The native window close button means “结束本轮处理”. Close any image
-  // preview first, then remove every task collected for this confirmation
-  // session. The in-page “稍后处理” action intentionally does not call this
-  // function, so its queue remains available from “继续微信订单”.
+  // preview first, then atomically release and discard every still-unconfirmed
+  // server task in this session. The in-page “稍后处理” action intentionally
+  // does not call this function, so its queue remains available next time.
+  const taskIds = Array.from(new Set(wechatImportQueue.value
+    .map(item => Number(item?.payload?.source?.wechatTaskId))
+    .filter(taskId => Number.isInteger(taskId) && taskId > 0)));
+  taskIds.forEach((taskId) => {
+    wechatDiscardingTaskIds.add(taskId);
+    const state = wechatDraftSaves.get(taskId);
+    if (state?.timer) window.clearTimeout(state.timer);
+    if (state) {
+      state.timer = null;
+      state.pendingText = null;
+    }
+  });
+  try {
+    if (taskIds.length) {
+      const response = await window.electronAPI?.customerWechatOrders?.discardTasks?.({ taskIds });
+      unwrapWechatServer(response);
+    }
+  } finally {
+    taskIds.forEach((taskId) => {
+      wechatDiscardingTaskIds.delete(taskId);
+      wechatDraftSaves.delete(taskId);
+    });
+  }
   activeWechatImportPanelRef.value?.dismissPendingWechatImport?.();
   wechatImportQueue.value = [];
   wechatImportBatch.value = [];
@@ -1877,16 +1906,21 @@ function resetWechatImportModalState() {
 }
 
 const removeWechatWorkspaceCloseRequestedListener = window.electronAPI?.wechatUi
-  ?.onWorkspaceCloseRequested?.(() => {
+  ?.onWorkspaceCloseRequested?.(async () => {
     // The main process has intercepted the native red close button and is
     // already restoring the BrowserWindow. Native close discards this round's
     // fetched task cache; “稍后处理” uses closeWechatImportModal instead and
     // deliberately preserves it. Calling closeWorkspace here would race the
     // same recovery a second time.
-    discardWechatImportSession();
-    resetWechatImportModalState();
-    void refreshAll();
-    startAsyncImageTaskPoller();
+    try {
+      await discardWechatImportSession();
+    } catch (error) {
+      console.error('[微信订单] 回退待确认任务失败', error);
+    } finally {
+      resetWechatImportModalState();
+      await refreshAll();
+      startAsyncImageTaskPoller();
+    }
   });
 
 async function closeWechatImportModal() {
