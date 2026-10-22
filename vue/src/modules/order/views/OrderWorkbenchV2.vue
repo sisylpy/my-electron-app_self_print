@@ -998,7 +998,14 @@ function completeWechatScanStep({ title, customerName = '', status, itemCount = 
 async function dismissWechatScanReport() {
   if (wechatScanBusy.value) return;
   wechatScanReportOpen.value = false;
+  if (!activeWechatImport.value) {
+    await restoreWechatDraftTasks({ surfaceError: true });
+  }
   if (!activeWechatImport.value) return;
+
+  if (!activeWechatImportToken.value) {
+    activeWechatImportToken.value = activeWechatImport.value.token;
+  }
 
   // Closing the report only selects the first collected customer and displays
   // its existing task data. It must not imply that WeChat has switched to that
@@ -1912,20 +1919,32 @@ onBeforeUnmount(() => {
   });
 });
 
-async function restoreWechatDraftTasks() {
+async function restoreWechatDraftTasks({ surfaceError = true } = {}) {
   const api = window.electronAPI?.customerWechatOrders;
-  if (!api?.loadPendingTasks) return;
+  if (!api?.loadPendingTasks) return 0;
   try {
     if (!customerContext.customers.value.length) await customerContext.reload();
-    const response = await api.loadPendingTasks({ limit: 200 });
-    const data = unwrapWechatServer(response);
+    const pendingTasks = [];
+    let afterId = null;
+    do {
+      const response = await api.loadPendingTasks({ afterId, limit: 200 });
+      const data = unwrapWechatServer(response);
+      pendingTasks.push(...(Array.isArray(data?.items) ? data.items : []));
+      const nextAfterId = Number(data?.nextAfterId) || null;
+      afterId = data?.hasMore === true && nextAfterId !== afterId ? nextAfterId : null;
+    } while (afterId !== null);
     const restored = [];
-    for (const task of (Array.isArray(data?.items) ? data.items : [])) {
+    const bindingByCustomer = new Map();
+    for (const task of pendingTasks) {
       const customer = customerContext.customers.value.find(candidate => (
         String(customerId(candidate)) === String(task.customerId)
       ));
       if (!customer) continue;
-      const binding = await loadCustomerWechatBinding(task.customerId);
+      const customerKey = String(task.customerId);
+      if (!bindingByCustomer.has(customerKey)) {
+        bindingByCustomer.set(customerKey, await loadCustomerWechatBinding(task.customerId));
+      }
+      const binding = bindingByCustomer.get(customerKey);
       const messages = Array.isArray(task.messages) ? task.messages : [];
       const taskType = task.taskKind === 'IMAGE' ? 'image' : 'text';
       const images = [];
@@ -1990,8 +2009,12 @@ async function restoreWechatDraftTasks() {
       });
     }
     enqueueWechatImportItems(restored, { activate: false });
+    return restored.length;
   } catch (error) {
-    setWechatScanStatus(`待确认微信订单恢复失败：${error?.message || '请稍后重试'}`, 'error');
+    if (surfaceError) {
+      setWechatScanStatus(`待确认微信订单恢复失败：${error?.message || '请稍后重试'}`, 'error');
+    }
+    return 0;
   }
 }
 
@@ -2969,7 +2992,6 @@ async function scanAllBoundWechatOrders(options = {}) {
       excludedCustomerKeys
     )
     : null;
-  const preservedTaskCount = wechatImportBatch.value.length;
   wechatScanBusy.value = true;
   beginWechatScanReport();
   wechatSelectedImportMessage.value = '';
@@ -2977,6 +2999,11 @@ async function scanAllBoundWechatOrders(options = {}) {
   wechatImportModalOpen.value = true;
 
   try {
+    // A previous scan may already have claimed durable draft tasks. Reload
+    // them before reading new messages so closing the prior confirmation page
+    // never makes those tasks disappear on the next entry.
+    await restoreWechatDraftTasks({ surfaceError: false });
+    const preservedTaskCount = wechatImportBatch.value.length;
     if (!wechatWorkspaceReady.value) {
       await timeWechatOrderPhase(timing, 'scan-workspace-open', async () => {
         if (!await openWechatWorkspace()) {
