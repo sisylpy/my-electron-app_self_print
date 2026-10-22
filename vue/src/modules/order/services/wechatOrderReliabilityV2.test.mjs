@@ -138,7 +138,7 @@ const result = await prepareWechatOrderImport({
               messageFingerprint: item.messageFingerprint,
               status: 'RECEIVED',
               processingState: 'UNCLAIMED',
-              orderTaskId: null,
+              wechatTaskId: null,
             })),
           },
         };
@@ -212,7 +212,7 @@ const deferred = await prepareWechatOrderImport({
             messageFingerprint: item.messageFingerprint,
             status: 'RECEIVED',
             processingState: item.processingState,
-            orderTaskId: null,
+            wechatTaskId: null,
           })),
         },
       }),

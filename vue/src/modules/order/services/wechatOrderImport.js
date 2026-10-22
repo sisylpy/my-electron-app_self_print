@@ -741,7 +741,7 @@ export async function prepareWechatOrderImport({
   )));
   pending = relevantIncoming.filter((message) => {
     const state = scanStateByFingerprint.get(String(message.id));
-    if (!state || state.status !== 'RECEIVED' || state.orderTaskId != null) return false;
+    if (!state || state.status !== 'RECEIVED' || state.wechatTaskId != null) return false;
     if (message.type === 'image') {
       return ['UNCLAIMED', 'ATTACHMENT_PENDING', 'ATTACHMENT_UNAVAILABLE']
         .includes(state.processingState);

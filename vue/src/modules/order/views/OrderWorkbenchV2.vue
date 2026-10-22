@@ -1050,7 +1050,7 @@ async function ensureWechatImportClaimed(item) {
     bindingRevision: Number(item.payload.source.bindingRevision),
     departmentId,
     sourceKey,
-    orderTaskId: item.payload.source.orderTaskId || null,
+    wechatTaskId: item.payload.source.wechatTaskId || null,
     taskKind: item.taskType === 'image' ? 'IMAGE' : 'TEXT',
     draftText: item.taskType === 'text' ? String(item.payload.text || '') : '',
     messageFingerprints: (item.payload.source.messages || [])
@@ -1066,7 +1066,7 @@ async function ensureWechatImportClaimed(item) {
       ...item.payload,
       source: {
         ...item.payload.source,
-        orderTaskId: claimed.orderTaskId,
+        wechatTaskId: claimed.wechatTaskId,
       },
     },
   };
@@ -1086,7 +1086,7 @@ const wechatDraftSaves = new Map();
 async function flushWechatDraftSave(taskId) {
   const state = wechatDraftSaves.get(taskId);
   if (!state || state.inFlight || state.pendingText === null) return;
-  const latest = wechatImportQueue.value.find(item => Number(item?.payload?.source?.orderTaskId) === taskId);
+  const latest = wechatImportQueue.value.find(item => Number(item?.payload?.source?.wechatTaskId) === taskId);
   if (!latest) return;
   const draftText = state.pendingText;
   state.pendingText = null;
@@ -1098,7 +1098,7 @@ async function flushWechatDraftSave(taskId) {
       draftText,
     });
     const saved = unwrapWechatServer(response);
-    const current = wechatImportQueue.value.find(item => Number(item?.payload?.source?.orderTaskId) === taskId);
+    const current = wechatImportQueue.value.find(item => Number(item?.payload?.source?.wechatTaskId) === taskId);
     if (current) {
       replaceWechatImportItem(current.token, {
         ...current,
@@ -1122,8 +1122,8 @@ async function flushWechatDraftSave(taskId) {
 
 function scheduleWechatDraftSave(event) {
   const current = activeWechatImport.value;
-  if (!current?.payload?.source?.orderTaskId || current.taskType !== 'text') return;
-  const taskId = Number(current.payload.source.orderTaskId);
+  if (!current?.payload?.source?.wechatTaskId || current.taskType !== 'text') return;
+  const taskId = Number(current.payload.source.wechatTaskId);
   const state = wechatDraftSaves.get(taskId) || {
     timer: null,
     inFlight: false,
@@ -1966,7 +1966,7 @@ async function restoreWechatDraftTasks() {
           conversationKind: binding.conversationKind,
           groupMode: binding.groupMode,
           bindingRevision: binding.bindingRevision,
-          orderTaskId: Number(task.taskId),
+          wechatTaskId: Number(task.wechatTaskId),
           messages: messages.map(message => ({
             messageFingerprint: message.messageFingerprint,
             messageTimeMs: Number(message.messageTimeMs),
@@ -1981,7 +1981,7 @@ async function restoreWechatDraftTasks() {
       if (!item) continue;
       restored.push({
         ...item,
-        token: `wechat-task:${task.taskId}`,
+        token: `wechat-task:${task.wechatTaskId}`,
         departmentId: Number(task.departmentId),
         sourceKey: String(task.sourceKey || ''),
         draftRevision: Number(task.draftRevision) || 0,
