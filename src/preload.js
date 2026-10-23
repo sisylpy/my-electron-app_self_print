@@ -218,6 +218,8 @@ const electronAPI = Object.freeze({
       ipcRenderer.invoke('customer-wechat-task-v2-pending', payload),
     discardTasks: (payload) =>
       ipcRenderer.invoke('customer-wechat-task-v2-discard', payload),
+    ignoreTasks: (payload) =>
+      ipcRenderer.invoke('customer-wechat-task-v2-ignore', payload),
     loadPendingMessages: (payload) =>
       ipcRenderer.invoke('customer-wechat-messages-v2-pending', payload),
     updateDraft: (payload) => ipcRenderer.invoke('customer-wechat-task-v2-draft', payload),

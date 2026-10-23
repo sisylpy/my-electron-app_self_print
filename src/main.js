@@ -1434,6 +1434,10 @@ function setupIpcHandlers() {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().discardWechatTasks(command);
   });
+  ipcMain.handle('customer-wechat-task-v2-ignore', async (event, command) => {
+    assertTrustedRendererEvent(event);
+    return getDispatchGateway().ignoreWechatTasks(command);
+  });
   ipcMain.handle('customer-wechat-messages-v2-pending', async (event, command) => {
     assertTrustedRendererEvent(event);
     return getDispatchGateway().loadPendingWechatMessages(command);

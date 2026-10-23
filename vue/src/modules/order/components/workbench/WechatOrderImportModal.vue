@@ -179,7 +179,7 @@
                   <button
                     type="button"
                     class="wechat-import-modal__remove-current"
-                    title="仅从本轮订单任务中移除，不会删除微信消息或客户绑定"
+                    title="标记为已查看的非订单内容，后续读取不再重复出现"
                     :disabled="refreshing || selectedImportBusy"
                     @click.stop.prevent="removeItem(activeItem)"
                   >移除任务</button>

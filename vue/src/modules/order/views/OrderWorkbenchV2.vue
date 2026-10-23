@@ -1482,8 +1482,39 @@ async function selectWechatImport(token) {
   await openActiveWechatImport({ openWorkspace: false, focusConversation: true });
 }
 
-async function removeWechatImport(token) {
-  const item = wechatImportBatch.value.find(candidate => candidate?.token === token);
+async function removeWechatImport(token, { markIgnored = !wechatBatchSaving.value } = {}) {
+  let item = wechatImportBatch.value.find(candidate => candidate?.token === token)
+    || wechatImportQueue.value.find(candidate => candidate?.token === token);
+  if (!item) return;
+  if (markIgnored) {
+    const api = window.electronAPI?.customerWechatOrders;
+    if (!api?.ignoreTasks) {
+      setWechatScanStatus('当前客户端不支持记录已查看的非订单内容，请升级后重试', 'error');
+      return;
+    }
+    try {
+      item = await ensureWechatImportClaimed(item);
+      const taskId = Number(item?.payload?.source?.wechatTaskId);
+      if (!Number.isInteger(taskId) || taskId <= 0) throw new Error('微信任务尚未完成登记');
+      wechatDiscardingTaskIds.add(taskId);
+      const draftState = wechatDraftSaves.get(taskId);
+      if (draftState?.timer) window.clearTimeout(draftState.timer);
+      if (draftState) {
+        draftState.timer = null;
+        draftState.pendingText = null;
+      }
+      try {
+        const response = await api.ignoreTasks({ taskIds: [taskId] });
+        unwrapWechatServer(response);
+      } finally {
+        wechatDiscardingTaskIds.delete(taskId);
+        wechatDraftSaves.delete(taskId);
+      }
+    } catch (error) {
+      setWechatScanStatus(`移除任务失败：${error?.message || '请稍后重试'}`, 'error');
+      return;
+    }
+  }
   const wasActive = activeWechatImport.value?.token === token;
   const update = removeWechatImportQueueItem(wechatImportQueue.value, token);
   if (!update.removed) return;
@@ -1503,7 +1534,9 @@ async function removeWechatImport(token) {
     activeWechatImportToken.value = null;
     await closeWechatImportModal();
     setWechatScanStatus(
-      `已从本轮列表移除“${item?.conversationTitle || item?.customerName || '该会话'}”，当前没有待确认的微信订单`,
+      markIgnored
+        ? `已将“${item?.conversationTitle || item?.customerName || '该会话'}”标记为非订单，后续不会重复出现`
+        : `已从本轮列表移除“${item?.conversationTitle || item?.customerName || '该会话'}”，当前没有待确认的微信订单`,
       'success'
     );
     return;

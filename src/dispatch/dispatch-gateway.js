@@ -1162,6 +1162,23 @@ function createDispatchGateway({ app, safeStorage, axios, renewDispatchSession =
     }
   }
 
+  function ignoreWechatTasks(input = {}) {
+    try {
+      const data = strictPayload(input, ['taskIds']);
+      const taskIds = Array.isArray(data.taskIds)
+        ? data.taskIds.map(taskId => requirePositiveId(taskId, 'taskId')) : [];
+      if (!taskIds.length || taskIds.length > 200 || new Set(taskIds).size !== taskIds.length) {
+        throw new Error('taskIds must contain 1 to 200 unique task IDs');
+      }
+      return request('POST', 'customer-wechat-orders/tasks/ignore', {
+        apiPrefix: WECHAT_SCAN_V2_API_PREFIX,
+        data: { taskIds },
+      });
+    } catch (error) {
+      return { ok: false, status: 400, errorCode: 'INVALID_REQUEST', message: error.message };
+    }
+  }
+
   function loadPendingWechatMessages(input) {
     const customerId = requirePositiveId(input?.customerId, 'customerId');
     return request('GET', `customer-wechat-orders/${customerId}/messages/pending`, {
@@ -1390,6 +1407,7 @@ function createDispatchGateway({ app, safeStorage, axios, renewDispatchSession =
     claimWechatTask,
     loadPendingWechatTasks,
     discardWechatTasks,
+    ignoreWechatTasks,
     loadPendingWechatMessages,
     updateWechatTaskDraft,
     reportWechatAttachment,
