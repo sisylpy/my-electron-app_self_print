@@ -9,9 +9,9 @@
  *   1. 完整性计数：原始 / 保留 / 按原因排除
  *   2. 200 条上限截断标记
  *   3. 图片附件：成功 / 待补齐 / 失败
- *   4. 游标边界：原图未下载时不得推进游标，且不得进入 source.messages
- *   5. 失败恢复：非「原图未下载」错误必须抛出（整次读取失败）
- *   6. 服务端 pending / processed / submitted 计数
+ *   4. V2 游标与待补台账：完整扫描推进游标，待补图片不进入 source.messages
+ *   5. 失败恢复：附件错误进入待补台账并上报稳定错误码
+ *   6. V2 扫描提交与服务端消息状态
  *   7. 隐私：计时事件里不得出现任何聊天原文
  */
 import assert from 'node:assert/strict';
@@ -27,7 +27,9 @@ const BASE_BINDING = {
   conversationFingerprint: 'fp:conversation123',
   conversationKind: 'group',
   groupMode: 'ALL_MEMBER_MESSAGES',
-  cursorTimeMs: 0,
+  bindingRevision: 1,
+  scanProtocolVersion: 2,
+  scanCursorTimeMs: 0,
 };
 
 const SELF = { id: 'self', displayName: '测试账号', isSelf: true };
@@ -38,7 +40,7 @@ async function runImport({
   messages,
   pendingMessageFingerprints = null,
   processedCount = 0,
-  preparedCursorTimeMs = 5000,
+  committedCursorTimeMs = 5000,
   attachmentImpl = null,
   attachmentRetryDelaysMs = [],
   binding = BASE_BINDING,
@@ -46,24 +48,47 @@ async function runImport({
   const events = [];
   const fingerprints = pendingMessageFingerprints
     ?? messages.filter((m) => m.senderId !== 'self').map((m) => m.id);
-  let prepareCallCount = 0;
+  let commitCallCount = 0;
   let attachmentCallCount = 0;
   let getMessagesCallCount = 0;
+  const attachmentReports = [];
+  let committedMessages = [];
 
   const electronAPI = {
     customerWechatOrders: {
-      prepareMessages: async (_customerId, submitted) => {
-        prepareCallCount += 1;
+      commitReliableScan: async (input) => {
+        commitCallCount += 1;
+        committedMessages = input.messages;
+        const pending = new Set(fingerprints);
         return {
           ok: true,
           data: {
-            binding: { ...binding, cursorTimeMs: preparedCursorTimeMs },
-            pendingMessageFingerprints: fingerprints,
-            pendingCount: fingerprints.length,
-            processedCount,
+            cursorTimeMs: committedCursorTimeMs,
+            messageStates: input.messages.map((message, index) => pending.has(message.messageFingerprint)
+              ? {
+                messageFingerprint: message.messageFingerprint,
+                status: 'RECEIVED',
+                processingState: message.processingState,
+                wechatTaskId: null,
+              }
+              : {
+                messageFingerprint: message.messageFingerprint,
+                status: 'ORDER_CREATED',
+                processingState: 'TASK_CLAIMED',
+                wechatTaskId: index + 1 + processedCount,
+              }),
           },
         };
       },
+      loadPendingMessages: async () => ({
+        ok: true,
+        data: { items: [], hasMore: false, nextAfterId: null },
+      }),
+      reportAttachment: async (payload) => {
+        attachmentReports.push(payload);
+        return { ok: true, data: { updated: true } };
+      },
+      acknowledgeMixedImage: async () => ({ ok: true, data: { updated: true } }),
     },
     wechatReader: {
       getSelfParticipant: async () => ({ ok: true, result: SELF }),
@@ -96,7 +121,9 @@ async function runImport({
     events,
     find,
     last: (stage) => find(stage).at(-1),
-    prepareCallCount,
+    commitCallCount,
+    committedMessages,
+    attachmentReports,
     attachmentCallCount,
     getMessagesCallCount,
   };
@@ -223,14 +250,14 @@ test('3. 图片附件：成功 / 待补齐 / 失败 分别计数', async () => {
 });
 
 // ---------------------------------------------------------------- 4. 游标边界
-test('4. 游标边界：有原图未下载时不得推进游标', async () => {
+test('4. V2 游标：完整扫描可推进，原图未下载由服务端台账继续恢复', async () => {
   const messages = [
     { id: 'm1', senderId: 'friend', type: 'text', text: '咖啡1杯', timestamp: ts(0) },
     { id: 'img:defer', senderId: 'friend', type: 'image', text: '', timestamp: ts(1), attachmentRef: { id: 'att:defer' } },
   ];
   const { result } = await runImport({
     messages,
-    preparedCursorTimeMs: 5000,
+    committedCursorTimeMs: 5000,
     attachmentImpl: async () => ({
       ok: false,
       error: { code: WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED, message: '原图未下载' },
@@ -239,9 +266,9 @@ test('4. 游标边界：有原图未下载时不得推进游标', async () => {
 
   assert.equal(result.deferredImageCount, 1);
   assert.equal(
-    result.binding.cursorTimeMs,
-    0,
-    '存在待补齐图片时必须沿用旧游标（0），不能采用服务端返回的 5000'
+    result.binding.scanCursorTimeMs,
+    5000,
+    'V2 完整扫描提交后采用服务端扫描游标；图片恢复不依赖冻结游标'
   );
 });
 
@@ -252,7 +279,7 @@ test('4b. 游标边界：无待补齐图片时可以推进游标（对照组）'
   ];
   const { result } = await runImport({
     messages,
-    preparedCursorTimeMs: 5000,
+    committedCursorTimeMs: 5000,
     attachmentImpl: async () => ({
       ok: true,
       result: { mimeType: 'image/png', size: 10, dataUrl: 'data:image/png;base64,AAAA' },
@@ -260,7 +287,7 @@ test('4b. 游标边界：无待补齐图片时可以推进游标（对照组）'
   });
 
   assert.equal(result.deferredImageCount, 0);
-  assert.equal(result.binding.cursorTimeMs, 5000, '无待补齐时应采用服务端推进后的游标');
+  assert.equal(result.binding.scanCursorTimeMs, 5000, '无待补齐时应采用服务端推进后的游标');
 });
 
 test('4c. 游标边界风险前提：待补齐图片不进入 source.messages（保存订单不会等它）', async () => {
@@ -280,30 +307,31 @@ test('4c. 游标边界风险前提：待补齐图片不进入 source.messages（
   assert.ok(sourceIds.includes('m1'), '文本消息应进入 source.messages');
   assert.ok(
     !sourceIds.includes('img:defer'),
-    '待补齐图片未进入 source.messages —— 这是「保存订单会把游标推进到更晚消息，' +
-    '使更早的待补齐图片可能被挤出读取窗口」这一风险成立的前提'
+    '待补齐图片不能进入正式订单来源；它由 V2 服务端消息台账独立恢复'
   );
   assert.equal(result.payload.images.length, 0);
 });
 
 // ---------------------------------------------------------------- 5. 失败恢复
-test('5. 失败恢复：非「原图未下载」错误必须抛出，整次读取失败', async () => {
+test('5. 失败恢复：附件协议错误上报并保留待补状态，不伪装成已完成', async () => {
   const messages = [
     { id: 'img:broken', senderId: 'friend', type: 'image', text: '', timestamp: ts(1), attachmentRef: { id: 'att:broken' } },
   ];
-  await assert.rejects(
-    () => runImport({
-      messages,
-      attachmentImpl: async () => ({
-        ok: false,
-        error: { code: 'PROTOCOL_ERROR', message: '微信图片解码失败' },
-      }),
+  const { result, attachmentReports } = await runImport({
+    messages,
+    attachmentImpl: async () => ({
+      ok: false,
+      error: { code: 'PROTOCOL_ERROR', message: '微信图片解码失败' },
     }),
-    (error) => {
-      assert.equal(error.code, 'PROTOCOL_ERROR');
-      return true;
-    }
-  );
+  });
+  assert.equal(result.status, 'deferred');
+  assert.equal(result.deferredImageCount, 1);
+  assert.deepEqual(attachmentReports, [{
+    customerId: 7,
+    messageFingerprint: 'img:broken',
+    recovered: false,
+    errorCode: 'PROTOCOL_ERROR',
+  }]);
 });
 
 test('5b. 「原图未下载」不抛出，走待补齐路径并可重试', async () => {
@@ -321,27 +349,25 @@ test('5b. 「原图未下载」不抛出，走待补齐路径并可重试', asyn
   });
   assert.equal(attempts, 2, 'attachmentRetryDelaysMs=[0] 应重试一次，共 2 次尝试');
   assert.equal(result.status, 'deferred', '全部图片待补齐时应返回 deferred 而非报错');
-  assert.equal(result.binding.cursorTimeMs, 0, 'deferred 时游标不得推进');
+  assert.equal(result.binding.scanCursorTimeMs, 5000, 'V2 扫描游标由完整提交决定');
 });
 
 // ---------------------------------------------------------------- 6. 服务端计数
-test('6. 服务端去重计数：submitted / pending / processed 正确上报', async () => {
+test('6. V2 扫描提交：消息清单完整，服务端状态决定待处理与已处理', async () => {
   const messages = [
     { id: 'm1', senderId: 'friend', type: 'text', text: '咖啡1杯', timestamp: ts(0) },
     { id: 'm2', senderId: 'friend', type: 'text', text: '西兰花2件', timestamp: ts(1) },
     { id: 'm3', senderId: 'friend', type: 'text', text: '土豆3斤', timestamp: ts(2) },
   ];
-  const { last, prepareCallCount } = await runImport({
+  const { result, commitCallCount, committedMessages } = await runImport({
     messages,
     pendingMessageFingerprints: ['m2'],
     processedCount: 2,
   });
-  const prepareResult = last('server-prepare-result');
-
-  assert.equal(prepareCallCount, 1);
-  assert.equal(prepareResult.submittedCount, 3, '提交给服务端 3 条');
-  assert.equal(prepareResult.pendingCount, 1, '服务端返回 1 条待处理');
-  assert.equal(prepareResult.processedCount, 2, '服务端返回 2 条已处理');
+  assert.equal(commitCallCount, 1);
+  assert.equal(committedMessages.length, 3, '一次可靠扫描应提交完整 3 条消息清单');
+  assert.equal(result.pendingCount, 1, '服务端仅把 m2 标记为可领取');
+  assert.equal(result.skippedCount, 2, '另外 2 条已处理消息不得重复生成任务');
 });
 
 // ---------------------------------------------------------------- 7. 隐私
@@ -372,7 +398,7 @@ test('8. 完整性统计不额外触发附件读取或网络请求', async () =>
     { id: 'm1', senderId: 'friend', type: 'text', text: '咖啡1杯', timestamp: ts(0) },
     { id: 'img:ok', senderId: 'friend', type: 'image', text: '', timestamp: ts(1), attachmentRef: { id: 'att:ok' } },
   ];
-  const { prepareCallCount, attachmentCallCount, getMessagesCallCount } = await runImport({
+  const { commitCallCount, attachmentCallCount, getMessagesCallCount } = await runImport({
     messages,
     attachmentImpl: async () => ({
       ok: true,
@@ -380,7 +406,7 @@ test('8. 完整性统计不额外触发附件读取或网络请求', async () =>
     }),
   });
   assert.equal(getMessagesCallCount, 1, '消息只应读取一次（retryDelaysMs=[]）');
-  assert.equal(prepareCallCount, 1, '服务端去重只应调用一次');
+  assert.equal(commitCallCount, 1, '可靠扫描提交只应调用一次');
   assert.equal(attachmentCallCount, 1, '附件读取次数应等于待处理图片数，不得额外触发');
 });
 
@@ -389,13 +415,13 @@ test('9. 统计阶段是结果快照，不重复计入操作耗时', async () =>
     { id: 'm1', senderId: 'friend', type: 'text', text: '咖啡1杯', timestamp: ts(0) },
   ];
   const { last } = await runImport({ messages });
-  const snapshot = last('server-prepare-result');
-  assert.ok(snapshot, '应输出 server-prepare-result 快照');
+  const snapshot = last('server-scan-v2-commit');
+  assert.ok(snapshot, '应输出 server-scan-v2-commit 计时');
   assert.ok(
     Number(snapshot.durationMs) < 20,
     `快照阶段耗时应接近 0，实际 ${snapshot.durationMs}`
   );
-  assert.equal(snapshot.submittedCount, 1, '快照必须携带完整计数');
+  assert.equal(snapshot.messageCount, 1, '计时事件必须携带提交消息数量');
 });
 
 test('10. 完整性统计成本可控（200 条时筛选阶段仍有界）', async () => {

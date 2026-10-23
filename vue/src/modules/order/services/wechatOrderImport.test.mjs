@@ -77,20 +77,64 @@ const binding = {
   conversationFingerprint: 'fp:conversation123',
   conversationKind: 'direct',
   groupMode: null,
-  cursorTimeMs: 0,
+  bindingRevision: 1,
+  scanProtocolVersion: 2,
+  scanCursorTimeMs: 0,
 };
 
-const electronAPI = {
-  customerWechatOrders: {
-    loadBinding: async () => ({ ok: true, data: binding }),
-    prepareMessages: async (_customerId, messages) => ({
+function reliableScanResponse(input, {
+  pendingFingerprints = input.messages.map(message => message.messageFingerprint),
+  cursorTimeMs = input.windowEndTimeMs,
+  omitStates = false,
+} = {}) {
+  const pending = new Set(pendingFingerprints);
+  return {
+    ok: true,
+    data: {
+      cursorTimeMs,
+      messageStates: omitStates ? [] : input.messages.map((message, index) => pending.has(message.messageFingerprint)
+        ? {
+          messageFingerprint: message.messageFingerprint,
+          status: 'RECEIVED',
+          processingState: message.processingState,
+          wechatTaskId: null,
+        }
+        : {
+          messageFingerprint: message.messageFingerprint,
+          status: 'ORDER_CREATED',
+          processingState: 'TASK_CLAIMED',
+          wechatTaskId: index + 1,
+        }),
+    },
+  };
+}
+
+function createOrderApi({
+  loadBinding = null,
+  commitReliableScan = null,
+  loadPendingMessages = null,
+  reportAttachment = null,
+} = {}) {
+  return {
+    ...(loadBinding ? { loadBinding } : {}),
+    commitReliableScan: commitReliableScan || (async input => reliableScanResponse(input)),
+    loadPendingMessages: loadPendingMessages || (async () => ({
       ok: true,
-      data: {
-        binding: { ...binding, cursorTimeMs: messages.at(-1).messageTimeMs },
-        pendingMessageFingerprints: [messages.at(-1).messageFingerprint],
-      },
+      data: { items: [], hasMore: false, nextAfterId: null },
+    })),
+    reportAttachment: reportAttachment || (async () => ({ ok: true, data: { updated: true } })),
+    acknowledgeMixedImage: async () => ({ ok: true, data: { updated: true } }),
+  };
+}
+
+const electronAPI = {
+  customerWechatOrders: createOrderApi({
+    loadBinding: async () => ({ ok: true, data: binding }),
+    commitReliableScan: async input => reliableScanResponse(input, {
+      pendingFingerprints: [input.messages.at(-1).messageFingerprint],
+      cursorTimeMs: input.messages.at(-1).messageTimeMs,
     }),
-  },
+  }),
   wechatReader: {
     getParticipants: async () => ({
       ok: true,
@@ -113,6 +157,7 @@ const electronAPI = {
 };
 
 let firstEmptyMessageReads = 0;
+let firstEmptyCommits = 0;
 const firstEmptySleeps = [];
 const firstEmpty = await prepareWechatOrderImport({
   customerId: 7,
@@ -121,11 +166,12 @@ const firstEmpty = await prepareWechatOrderImport({
   returnFirstEmpty: true,
   sleep: async delayMs => firstEmptySleeps.push(delayMs),
   electronAPI: {
-    customerWechatOrders: {
-      prepareMessages: async () => {
-        throw new Error('空结果不应请求服务端准备订单');
+    customerWechatOrders: createOrderApi({
+      commitReliableScan: async input => {
+        firstEmptyCommits += 1;
+        return reliableScanResponse(input);
       },
-    },
+    }),
     wechatReader: {
       getParticipants: async () => ({
         ok: true,
@@ -140,6 +186,7 @@ const firstEmpty = await prepareWechatOrderImport({
 });
 assert.equal(firstEmpty.status, 'empty');
 assert.equal(firstEmptyMessageReads, 1);
+assert.equal(firstEmptyCommits, 1, 'V2 空扫描也必须完整提交，才能安全推进扫描游标');
 assert.deepEqual(firstEmptySleeps, []);
 
 const loaded = await loadCustomerWechatBinding(7, electronAPI);
@@ -268,16 +315,11 @@ const duplicate = await prepareWechatOrderImport({
   retryDelaysMs: [],
   electronAPI: {
     wechatReader: noPendingReader,
-    customerWechatOrders: {
-      prepareMessages: async () => ({
-        ok: true,
-        data: {
-          binding,
-          pendingMessageFingerprints: [],
-          processedCount: 1,
-        },
+    customerWechatOrders: createOrderApi({
+      commitReliableScan: async input => reliableScanResponse(input, {
+        pendingFingerprints: [],
       }),
-    },
+    }),
   },
 });
 assert.equal(duplicate.status, 'duplicate');
@@ -297,20 +339,13 @@ const incompleteState = await prepareWechatOrderImport({
   retryDelaysMs: [],
   electronAPI: {
     wechatReader: noPendingReader,
-    customerWechatOrders: {
-      prepareMessages: async () => ({
-        ok: true,
-        data: {
-          binding,
-          pendingMessageFingerprints: [],
-          processedCount: 0,
-        },
-      }),
-    },
+    customerWechatOrders: createOrderApi({
+      commitReliableScan: async input => reliableScanResponse(input, { omitStates: true }),
+    }),
   },
 });
 assert.equal(incompleteState.status, 'conflict');
-assert.match(incompleteState.message, /没有返回完整的处理状态/);
+assert.match(incompleteState.message, /未返回完整的消息状态/);
 
 let queriedTimeRange = null;
 const prepared = await prepareWechatOrderImport({
@@ -349,15 +384,7 @@ const imagePrepared = await prepareWechatOrderImport({
   now: Date.parse('2026-10-01T00:30:00.000Z'),
   retryDelaysMs: [],
   electronAPI: {
-    customerWechatOrders: {
-      prepareMessages: async (_customerId, messages) => ({
-        ok: true,
-        data: {
-          binding,
-          pendingMessageFingerprints: messages.map(message => message.messageFingerprint),
-        },
-      }),
-    },
+    customerWechatOrders: createOrderApi(),
     wechatReader: {
       getParticipants: electronAPI.wechatReader.getParticipants,
       getMessages: async () => ({
@@ -406,15 +433,7 @@ const imageDownloadedAfterFocus = await prepareWechatOrderImport({
   attachmentRetryDelaysMs: [500, 1000],
   sleep: async delayMs => attachmentRetryWaits.push(delayMs),
   electronAPI: {
-    customerWechatOrders: {
-      prepareMessages: async (_customerId, messages) => ({
-        ok: true,
-        data: {
-          binding,
-          pendingMessageFingerprints: messages.map(message => message.messageFingerprint),
-        },
-      }),
-    },
+    customerWechatOrders: createOrderApi(),
     wechatReader: {
       getParticipants: electronAPI.wechatReader.getParticipants,
       getMessages: async () => ({
@@ -472,15 +491,11 @@ const mixedDeferredImage = await prepareWechatOrderImport({
   now: Date.parse('2026-10-01T00:30:00.000Z'),
   retryDelaysMs: [],
   electronAPI: {
-    customerWechatOrders: {
-      prepareMessages: async (_customerId, messages) => ({
-        ok: true,
-        data: {
-          binding: { ...binding, cursorTimeMs: Date.parse('2026-10-01T00:29:00.000Z') },
-          pendingMessageFingerprints: messages.map(message => message.messageFingerprint),
-        },
+    customerWechatOrders: createOrderApi({
+      commitReliableScan: async input => reliableScanResponse(input, {
+        cursorTimeMs: Date.parse('2026-10-01T00:29:00.000Z'),
       }),
-    },
+    }),
     wechatReader: {
       getParticipants: electronAPI.wechatReader.getParticipants,
       getMessages: async () => ({
@@ -525,9 +540,9 @@ assert.deepEqual(
 assert.equal(mixedDeferredImage.deferredImageCount, 1);
 assert.match(mixedDeferredImage.warning, /后续自动读取/);
 assert.equal(
-  mixedDeferredImage.binding.cursorTimeMs,
-  loaded.cursorTimeMs,
-  '有待下载图片时不得向前推进游标'
+  mixedDeferredImage.binding.scanCursorTimeMs,
+  Date.parse('2026-10-01T00:29:00.000Z'),
+  'V2 完整扫描推进游标，待下载图片由消息台账恢复'
 );
 
 const imageDeferred = await prepareWechatOrderImport({
@@ -536,15 +551,7 @@ const imageDeferred = await prepareWechatOrderImport({
   now: Date.parse('2026-10-01T00:30:00.000Z'),
   retryDelaysMs: [],
   electronAPI: {
-    customerWechatOrders: {
-      prepareMessages: async (_customerId, messages) => ({
-        ok: true,
-        data: {
-          binding,
-          pendingMessageFingerprints: messages.map(message => message.messageFingerprint),
-        },
-      }),
-    },
+    customerWechatOrders: createOrderApi(),
     wechatReader: {
       getParticipants: electronAPI.wechatReader.getParticipants,
       getMessages: async () => ({
@@ -586,15 +593,7 @@ const lightweightPrepared = await prepareWechatOrderImport({
   retryDelaysMs: [],
   onTiming: event => importTimings.push(event),
   electronAPI: {
-    customerWechatOrders: {
-      prepareMessages: async (_customerId, messages) => ({
-        ok: true,
-        data: {
-          binding,
-          pendingMessageFingerprints: messages.map(message => message.messageFingerprint),
-        },
-      }),
-    },
+    customerWechatOrders: createOrderApi(),
     wechatReader: {
       getSelfParticipant: async () => {
         lightweightSelfCalls += 1;
@@ -629,9 +628,7 @@ assert.deepEqual(
     'reader-self-participant',
     'reader-messages',
     'message-filter',
-    'server-prepare-messages',
-    // 完整性统计：上报提交条数与服务端 pending/processed 数量。
-    'server-prepare-result',
+    'server-scan-v2-commit',
     'payload-build',
   ]
 );
@@ -761,65 +758,67 @@ try {
 }
 
 let delayedWriteReads = 0;
-let delayedWritePrepares = 0;
+let delayedWriteCommits = 0;
+let delayedCommittedIds = [];
 const delayedWriteWaits = [];
 const delayedWriteBinding = {
   ...binding,
-  cursorTimeMs: Date.parse('2026-10-01T02:00:00.000Z'),
+  scanCursorTimeMs: Date.parse('2026-10-01T02:00:00.000Z'),
 };
-const delayedWrite = await prepareWechatOrderImport({
-  customerId: 7,
-  binding: delayedWriteBinding,
-  now: Date.parse('2026-10-01T02:02:00.000Z'),
-  retryDelaysMs: [1000],
-  sleep: async delayMs => delayedWriteWaits.push(delayMs),
-  electronAPI: {
-    customerWechatOrders: {
-      prepareMessages: async (_customerId, messages) => {
-        delayedWritePrepares += 1;
-        const pending = messages
-          .map(message => message.messageFingerprint)
-          .filter(messageId => messageId === 'msg:late-write');
-        return {
-          ok: true,
-          data: {
-            binding: delayedWriteBinding,
-            pendingMessageFingerprints: pending,
-          },
-        };
+let delayedWrite;
+Date.now = () => Date.parse('2026-10-01T02:02:00.000Z');
+try {
+  delayedWrite = await prepareWechatOrderImport({
+    customerId: 7,
+    binding: delayedWriteBinding,
+    retryDelaysMs: [1000],
+    sleep: async delayMs => delayedWriteWaits.push(delayMs),
+    electronAPI: {
+      customerWechatOrders: createOrderApi({
+        commitReliableScan: async input => {
+          delayedWriteCommits += 1;
+          delayedCommittedIds = input.messages.map(message => message.messageFingerprint);
+          const pending = input.messages
+            .map(message => message.messageFingerprint)
+            .filter(messageId => messageId === 'msg:late-write');
+          return reliableScanResponse(input, { pendingFingerprints: pending });
+        },
+      }),
+      wechatReader: {
+        getParticipants: electronAPI.wechatReader.getParticipants,
+        getMessages: async () => {
+          delayedWriteReads += 1;
+          const items = [{
+            id: 'msg:already-processed',
+            senderId: 'friend',
+            type: 'text',
+            text: '旧订单',
+            timestamp: '2026-10-01T01:59:30.000Z',
+          }];
+          if (delayedWriteReads > 1) items.push({
+            id: 'msg:late-write',
+            senderId: 'friend',
+            type: 'text',
+            text: '刚写入本地库的新订单',
+            timestamp: '2026-10-01T02:01:30.000Z',
+          });
+          return { ok: true, result: { items } };
+        },
       },
     },
-    wechatReader: {
-      getParticipants: electronAPI.wechatReader.getParticipants,
-      getMessages: async () => {
-        delayedWriteReads += 1;
-        const items = [{
-          id: 'msg:already-processed',
-          senderId: 'friend',
-          type: 'text',
-          text: '旧订单',
-          timestamp: '2026-10-01T01:59:30.000Z',
-        }];
-        if (delayedWriteReads > 1) items.push({
-          id: 'msg:late-write',
-          senderId: 'friend',
-          type: 'text',
-          text: '刚写入本地库的新订单',
-          timestamp: '2026-10-01T02:01:30.000Z',
-        });
-        return { ok: true, result: { items } };
-      },
-    },
-  },
-});
+  });
+} finally {
+  Date.now = originalDateNow;
+}
+assert.deepEqual(delayedCommittedIds, ['msg:already-processed', 'msg:late-write']);
 assert.equal(delayedWrite.status, 'ready');
 assert.equal(delayedWrite.payload.text, '刚写入本地库的新订单');
 assert.equal(delayedWriteReads, 2);
-assert.equal(delayedWritePrepares, 2);
+assert.equal(delayedWriteCommits, 1);
 assert.deepEqual(delayedWriteWaits, [1000]);
 
 let currentSnapshotReads = 0;
-let currentSnapshotPrepares = 0;
+let currentSnapshotCommits = 0;
 const currentSnapshotWaits = [];
 const currentSnapshot = await prepareWechatOrderImport({
   customerId: 7,
@@ -829,12 +828,12 @@ const currentSnapshot = await prepareWechatOrderImport({
   deferPrepareUntilStable: true,
   sleep: async delayMs => currentSnapshotWaits.push(delayMs),
   electronAPI: {
-    customerWechatOrders: {
-      prepareMessages: async () => {
-        currentSnapshotPrepares += 1;
-        throw new Error('已知消息不应该再次请求服务端');
+    customerWechatOrders: createOrderApi({
+      commitReliableScan: async input => {
+        currentSnapshotCommits += 1;
+        return reliableScanResponse(input);
       },
-    },
+    }),
     wechatReader: {
       getParticipants: electronAPI.wechatReader.getParticipants,
       getMessages: async () => {
@@ -858,12 +857,12 @@ const currentSnapshot = await prepareWechatOrderImport({
 assert.equal(currentSnapshot.status, 'current');
 assert.equal(currentSnapshot.payload, undefined);
 assert.equal(currentSnapshotReads, 2);
-assert.equal(currentSnapshotPrepares, 0);
+assert.equal(currentSnapshotCommits, 1, 'V2 仍需提交完整扫描清单，由本地快照避免重复生成任务');
 assert.deepEqual(currentSnapshotWaits, [650]);
 
 let optimizedRefreshReads = 0;
-let optimizedRefreshPrepares = 0;
-let optimizedPreparedMessages = [];
+let optimizedRefreshCommits = 0;
+let optimizedCommittedMessages = [];
 const optimizedRefreshWaits = [];
 const optimizedRefresh = await prepareWechatOrderImport({
   customerId: 7,
@@ -873,19 +872,13 @@ const optimizedRefresh = await prepareWechatOrderImport({
   deferPrepareUntilStable: true,
   sleep: async delayMs => optimizedRefreshWaits.push(delayMs),
   electronAPI: {
-    customerWechatOrders: {
-      prepareMessages: async (_customerId, messages) => {
-        optimizedRefreshPrepares += 1;
-        optimizedPreparedMessages = messages;
-        return {
-          ok: true,
-          data: {
-            binding,
-            pendingMessageFingerprints: messages.map(message => message.messageFingerprint),
-          },
-        };
+    customerWechatOrders: createOrderApi({
+      commitReliableScan: async input => {
+        optimizedRefreshCommits += 1;
+        optimizedCommittedMessages = input.messages;
+        return reliableScanResponse(input);
       },
-    },
+    }),
     wechatReader: {
       getParticipants: electronAPI.wechatReader.getParticipants,
       getMessages: async () => {
@@ -916,19 +909,20 @@ assert.deepEqual(
   ['msg:new-after-click']
 );
 assert.deepEqual(
-  optimizedPreparedMessages.map(message => message.messageFingerprint),
-  ['msg:new-after-click']
+  optimizedCommittedMessages.map(message => message.messageFingerprint),
+  ['msg:known', 'msg:new-after-click'],
+  'V2 扫描清单完整提交，当前草稿快照只控制本次生成的新任务'
 );
 assert.equal(optimizedRefreshReads, 2);
-assert.equal(optimizedRefreshPrepares, 1);
+assert.equal(optimizedRefreshCommits, 1);
 assert.deepEqual(optimizedRefreshWaits, [650]);
 
 let partialWriteReads = 0;
-let partialWritePrepares = 0;
+let partialWriteCommits = 0;
 const partialWriteWaits = [];
 const partialWriteBinding = {
   ...binding,
-  cursorTimeMs: Date.parse('2026-10-01T03:00:00.000Z'),
+  scanCursorTimeMs: Date.parse('2026-10-01T03:00:00.000Z'),
 };
 Date.now = () => Date.parse('2026-10-01T03:02:00.000Z');
 try {
@@ -938,18 +932,12 @@ try {
     retryDelaysMs: [1000, 1000, 1000, 1000],
     sleep: async delayMs => partialWriteWaits.push(delayMs),
     electronAPI: {
-      customerWechatOrders: {
-        prepareMessages: async (_customerId, messages) => {
-          partialWritePrepares += 1;
-          return {
-            ok: true,
-            data: {
-              binding: partialWriteBinding,
-              pendingMessageFingerprints: messages.map(message => message.messageFingerprint),
-            },
-          };
+      customerWechatOrders: createOrderApi({
+        commitReliableScan: async input => {
+          partialWriteCommits += 1;
+          return reliableScanResponse(input);
         },
-      },
+      }),
       wechatReader: {
         getParticipants: electronAPI.wechatReader.getParticipants,
         getMessages: async () => {
@@ -977,7 +965,7 @@ try {
   assert.equal(partialWrite.payload.text, '西葫芦5斤\n油菜8斤');
   assert.equal(partialWrite.pendingCount, 2);
   assert.equal(partialWriteReads, 5);
-  assert.equal(partialWritePrepares, 2);
+  assert.equal(partialWriteCommits, 1);
   assert.deepEqual(partialWriteWaits, [1000, 1000, 1000, 1000]);
 } finally {
   Date.now = originalDateNow;

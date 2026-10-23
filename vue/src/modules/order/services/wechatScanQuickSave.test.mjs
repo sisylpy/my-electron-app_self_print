@@ -27,7 +27,16 @@ assert.match(imagePreview, /focusConversation: false/);
 assert.match(imagePreview, /panel\.previewWechatImport\(task\.payload\)/);
 assert.match(workbench, /imagePreviews: Array\.isArray\(result\?\.imagePreviews\)/);
 assert.match(panel, /async function previewWechatImport\(payload\)/);
-assert.match(panel, /defineExpose\(\{ dismissPendingWechatImport, previewWechatImport, runWechatImportAndSave \}\)/);
+assert.match(panel, /async function appendWechatImport\(payload, incrementalPayload\)/);
+const exposedMethods = panel.match(/defineExpose\(\{([\s\S]*?)\}\);/)?.[1] || '';
+for (const method of [
+  'appendWechatImport',
+  'dismissPendingWechatImport',
+  'previewWechatImport',
+  'runWechatImportAndSave',
+]) {
+  assert.match(exposedMethods, new RegExp(`\\b${method}\\b`));
+}
 
 assert.match(panel, /suspendWechatImport/);
 assert.match(panel, /if \(props\.batchSaveMode \|\| suspended\) return/);

@@ -1099,12 +1099,20 @@ export async function prepareWechatOrderImport({
           // Pending is already durable. Recovery/reporting outages do not
           // block newly read text orders and will be retried next time.
         }
-        return null;
+        return {
+          deferred: {
+            messageFingerprint: row.messageFingerprint,
+            messageTimeMs: Number(row.messageTimeMs),
+          },
+        };
       }
     }));
-    recovered.filter(Boolean).forEach((entry) => {
-      pending.push(entry.message);
-      images.push(entry.image);
+    recovered.forEach((entry) => {
+      if (entry?.message && entry?.image) {
+        pending.push(entry.message);
+        images.push(entry.image);
+      }
+      if (entry?.deferred) deferredImages.push(entry.deferred);
     });
   }
   const availableImageIds = new Set(images.map(image => String(image.messageFingerprint)));

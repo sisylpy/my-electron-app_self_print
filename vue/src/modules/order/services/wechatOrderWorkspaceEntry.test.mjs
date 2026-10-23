@@ -36,7 +36,9 @@ const closeEntry = workbench.match(
 )?.[1] || '';
 assert.match(closeEntry, /const shouldCloseWechatWorkspace = wechatWorkspaceReady\.value/);
 assert.match(closeEntry, /resetWechatImportModalState\(\)/);
-assert.match(closeEntry, /if \(!shouldCloseWechatWorkspace\) return/);
+assert.match(closeEntry, /if \(shouldCloseWechatWorkspace\) \{[\s\S]*?closeWorkspace/);
+assert.match(closeEntry, /await refreshAll\(\)/);
+assert.match(closeEntry, /startAsyncImageTaskPoller\(\)/);
 assert.doesNotMatch(closeEntry, /discardWechatImportSession\(\)/);
 assert.match(workbench, /onWorkspaceCloseRequested/);
 assert.match(workbench, /removeWechatWorkspaceCloseRequestedListener/);
@@ -53,7 +55,7 @@ assert.match(discardEntry, /activeWechatImportToken\.value = null/);
 assert.match(discardEntry, /wechatScanResults\.value = \[\]/);
 
 const nativeCloseEntry = workbench.match(
-  /onWorkspaceCloseRequested\?\.\(\(\) => \{([\s\S]*?)\n  \}\);/,
+  /onWorkspaceCloseRequested\?\.\(async \(\) => \{([\s\S]*?)\n  \}\);/,
 )?.[1] || '';
 assert.match(nativeCloseEntry, /discardWechatImportSession\(\)/);
 assert.match(nativeCloseEntry, /resetWechatImportModalState\(\)/);
@@ -118,8 +120,9 @@ const dismissScanReportAction = workbench.match(
   /async function dismissWechatScanReport\(\) \{([\s\S]*?)\n\}/,
 )?.[1] || '';
 assert.match(dismissScanReportAction, /wechatScanReportOpen\.value = false/);
-assert.match(dismissScanReportAction, /WECHAT_SCAN_REPORT_LEAVE_MS/);
+assert.match(dismissScanReportAction, /restoreWechatDraftTasks/);
 assert.match(dismissScanReportAction, /await openActiveWechatImport/);
+assert.match(dismissScanReportAction, /appendWechatImport/);
 assert.match(modal, /选择一种方式，把微信里的订货内容同步到农心乐配送商系统/);
 assert.match(modal, /开始读取未读订单/);
 assert.match(modal, /读取当前聊天订单/);
@@ -221,13 +224,15 @@ assert.match(allCustomerAction, /readWechatCustomerDatabaseFirst/);
 assert.match(allCustomerAction, /mode === 'database' \? \[250, 500\] : \[250\]/);
 assert.doesNotMatch(allCustomerAction, /wechatImportQueue\.value = \[\]/);
 assert.doesNotMatch(allCustomerAction, /wechatImportBatch\.value = \[\]/);
-assert.match(allCustomerAction, /enqueueWechatImportItems\(result\.imports, \{ activate: false \}\)/);
+assert.match(allCustomerAction, /const claimedImports = await claimWechatImportItems\(result\.imports\)/);
+assert.match(allCustomerAction, /enqueueWechatImportItems\(claimedImports, \{ activate: false \}\)/);
 assert.match(allCustomerAction, /已保留当前 \$\{preservedTaskCount\} 个未保存任务/);
 assert.match(allCustomerAction, /await focusWechatWorkspaceApp\(\)/);
-assert.match(workbench, /@scan-all="scanAllBoundWechatOrders"/);
+assert.match(workbench, /@scan-all="requestWechatFullRescan"/);
+assert.match(workbench, /function requestWechatFullRescan/);
 
 const selectTaskAction = workbench.match(
-  /async function selectWechatImport\(token\) \{([\s\S]*?)\n\}\n\nasync function removeWechatImport/,
+  /async function selectWechatImport\(token\) \{([\s\S]*?)\n\}\n\nasync function removeWechatImport\(/,
 )?.[1] || '';
 assert.match(selectTaskAction, /activeWechatImportToken\.value = item\.token/);
 assert.match(
@@ -237,11 +242,11 @@ assert.match(
 assert.doesNotMatch(selectTaskAction, /item\.token === activeWechatImport\.value\?\.token/);
 
 const removeTaskAction = workbench.match(
-  /async function removeWechatImport\(token\) \{([\s\S]*?)\n\}\n\nfunction normalizeObservedWechatConversationTitle/,
+  /async function removeWechatImport\(token, \{ markIgnored = !wechatBatchSaving\.value \} = \{\}\) \{([\s\S]*?)\n\}\n\nfunction normalizeObservedWechatConversationTitle/,
 )?.[1] || '';
 assert.match(
   removeTaskAction,
-  /await openActiveWechatImport\(\{ openWorkspace: false, focusConversation: true \}\)/,
+  /await openActiveWechatImport\(\{[\s\S]*?openWorkspace: false,[\s\S]*?focusConversation: !wechatScanReportOpen\.value,[\s\S]*?\}\)/,
 );
 assert.match(removeTaskAction, /await closeWechatImportModal\(\)/);
 
@@ -262,7 +267,8 @@ assert.doesNotMatch(
   /activeWechatImportToken\.value = queueUpdate\.nextToken/,
 );
 assert.match(savedTaskAction, /await closeWechatImportModal\(\)/);
-assert.match(savedTaskAction, /本轮微信订单已全部确认保存/);
+assert.match(savedTaskAction, /await handleOrderChanged\(change\)/);
+assert.match(savedTaskAction, /if \(wechatBatchSaving\.value\) return/);
 
 const desktopSelectionAction = workbench.match(
   /async function syncWechatSelectionFromDesktop\(payload\) \{([\s\S]*?)\n\}\n\nconst removeWechatConversationListener/,
@@ -303,9 +309,8 @@ assert.doesNotMatch(
 const desktopSelectionListener = workbench.match(
   /async function handleWechatConversationChanged\(payload\) \{([\s\S]*?)\n\}\n\nconst removeWechatConversationListener/,
 )?.[1] || '';
-assert.match(desktopSelectionListener, /payload\?\.selectionChanged === true/);
 assert.match(desktopSelectionListener, /await syncWechatSelectionFromDesktop\(payload\)/);
-assert.match(desktopSelectionListener, /await focusWechatWorkspaceApp\(\)/);
+assert.doesNotMatch(desktopSelectionListener, /focusWechatWorkspaceApp/);
 assert.match(workbench, /void handleWechatConversationChanged\(payload\)/);
 const focusConversationAction = workbench.match(
   /async function focusWechatImportConversation\(item, options = \{\}\) \{([\s\S]*?)\n\}\n\nasync function openWechatWorkspace/,
@@ -325,7 +330,7 @@ assert.match(modal, /再次检查新订单/);
 assert.match(workspaceWindowService, /const conversationChanged = title !== lastConversationTitle/);
 assert.match(
   workspaceWindowService,
-  /publishConversationTitle\(title\);\s*if \(!conversationChanged\) return/,
+  /lastConversationTitle = title;[\s\S]*?if \(!conversationChanged\) return/,
 );
 assert.match(workspaceWindowService, /publishConversationTitle\(title, avatarDataUrl, true\)/);
 assert.match(workspaceWindowService, /Focus handoff must not depend on optional avatar capture/);
@@ -353,7 +358,8 @@ assert.match(mainProcess, /service\.close\(\)/);
 const currentConversationHandler = mainProcess.match(
   /ipcMain\.handle\('wechat-ui-current-conversation',[\s\S]*?\n  \}\);/,
 )?.[0] || '';
-assert.match(currentConversationHandler, /currentConversation\(input\)/);
+assert.match(currentConversationHandler, /const \{ includeAvatar = true, \.\.\.automationInput \} = input \|\| \{\}/);
+assert.match(currentConversationHandler, /currentConversation\(automationInput\)/);
 assert.doesNotMatch(currentConversationHandler, /mainWindow\.focus\(\)/);
 assert.match(mainProcess, /mainWindow\.on\('blur'/);
 assert.match(mainProcess, /scheduleWindowsWechatSelectionObservation\(\)/);
