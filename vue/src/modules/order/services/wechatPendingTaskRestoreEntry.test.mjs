@@ -24,3 +24,14 @@ test('恢复图片任务时保留消息级任务身份，不能合并两张图�
   assert.match(restore, /taskType === 'image'[\s\S]*?taskFingerprint:/);
   assert.match(restore, /messages\[0\]\?\.messageFingerprint/);
 });
+
+test('恢复文字任务时整份草稿不能复制到每条消息', () => {
+  const restore = workbench.match(
+    /async function restoreWechatDraftTasks\([\s\S]*?\n\}\n\n\/\/ 由 MCP/,
+  )?.[0] || '';
+  assert.match(restore, /entries: taskType === 'image'/);
+  assert.doesNotMatch(
+    restore,
+    /entries: messages\.map\([\s\S]*?text: taskType === 'text'[\s\S]*?task\.draftText/,
+  );
+});

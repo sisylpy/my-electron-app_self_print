@@ -2070,12 +2070,18 @@ async function restoreWechatDraftTasks({ surfaceError = true } = {}) {
         } : {}),
         text: taskType === 'text' ? String(task.draftText || '') : '',
         images,
-        entries: messages.map(message => ({
-          messageFingerprint: message.messageFingerprint,
-          messageTimeMs: Number(message.messageTimeMs),
-          type: String(message.messageKind || '').toLowerCase(),
-          text: taskType === 'text' ? String(task.draftText || '') : '',
-        })),
+        // The server stores one editable draft for the whole text task, not
+        // the original text of every source message. Treat that draft as an
+        // opaque snapshot: copying it onto each message makes a later refresh
+        // concatenate the same order once per fingerprint.
+        entries: taskType === 'image'
+          ? messages.map(message => ({
+            messageFingerprint: message.messageFingerprint,
+            messageTimeMs: Number(message.messageTimeMs),
+            type: String(message.messageKind || '').toLowerCase(),
+            text: '',
+          }))
+          : [],
         source: {
           customerId: Number(task.customerId),
           accountFingerprint: binding.accountFingerprint,

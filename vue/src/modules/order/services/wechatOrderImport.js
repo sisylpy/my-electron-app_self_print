@@ -280,22 +280,55 @@ export function mergeWechatOrderPayload(currentPayload, incomingPayload) {
     Number(left.messageTimeMs) - Number(right.messageTimeMs)
     || String(left.messageFingerprint).localeCompare(String(right.messageFingerprint))
   ));
-  const entryMap = new Map();
-  [...payloadEntries(currentPayload), ...payloadEntries(incomingPayload)].forEach((entry) => {
+  const currentIds = new Set(currentMessages.map(message => String(message.messageFingerprint)));
+  const currentEntryMap = new Map();
+  payloadEntries(currentPayload).forEach((entry) => {
     const id = String(entry?.messageFingerprint || '');
-    if (id) entryMap.set(id, entry);
+    if (id) currentEntryMap.set(id, entry);
+  });
+  const incomingEntryMap = new Map();
+  payloadEntries(incomingPayload).forEach((entry) => {
+    const id = String(entry?.messageFingerprint || '');
+    if (id) incomingEntryMap.set(id, entry);
+  });
+  const entryMap = new Map(currentEntryMap);
+  incomingEntryMap.forEach((entry, id) => {
+    // An existing draft may already contain manual edits. Refreshes may fill
+    // missing message metadata, but must never replace an existing entry with
+    // a restored task-level draft copied onto that message.
+    if (!entryMap.has(id) || !currentIds.has(id)) entryMap.set(id, entry);
   });
   const entries = messages
     .map(message => entryMap.get(String(message.messageFingerprint)))
     .filter(Boolean);
-  const incomingIds = new Set(incomingMessages.map(message => String(message.messageFingerprint)));
-  const currentIds = new Set(currentMessages.map(message => String(message.messageFingerprint)));
-  const incomingContainsCurrent = Array.from(currentIds).every(id => incomingIds.has(id));
-  const text = entries.length === messages.length
-    ? entries.map(entry => entry.text).filter(Boolean).join('\n')
-    : incomingContainsCurrent
-      ? incomingPayload.text
-      : [currentPayload.text, incomingPayload.text].filter(Boolean).join('\n');
+  const currentText = String(currentPayload.text || '');
+  const currentEntries = currentMessages
+    .map(message => currentEntryMap.get(String(message.messageFingerprint)))
+    .filter(Boolean);
+  const currentEntryText = currentEntries.map(entry => entry.text).filter(Boolean).join('\n');
+  const currentTextIsMessageStructured = currentEntries.length === currentMessages.length
+    && currentEntryText === currentText;
+  const newMessages = incomingMessages.filter(message => (
+    !currentIds.has(String(message?.messageFingerprint || ''))
+  ));
+  const newEntries = newMessages
+    .map(message => incomingEntryMap.get(String(message?.messageFingerprint || '')))
+    .filter(Boolean);
+  const newEntryText = newEntries.map(entry => entry.text).filter(Boolean).join('\n');
+
+  let text = currentText;
+  if (!currentMessages.length) {
+    text = String(incomingPayload.text || '');
+  } else if (newMessages.length && currentTextIsMessageStructured && entries.length === messages.length) {
+    // Untouched drafts can be rebuilt in deterministic message order.
+    text = entries.map(entry => entry.text).filter(Boolean).join('\n');
+  } else if (newMessages.length && newEntries.length === newMessages.length) {
+    // Restored or manually edited drafts are opaque task-level text. Append
+    // only verified new messages instead of re-appending the whole scan.
+    text = [currentText, newEntryText].filter(Boolean).join('\n');
+  } else if (newMessages.length === incomingMessages.length) {
+    text = [currentText, incomingPayload.text].filter(Boolean).join('\n');
+  }
   return {
     ...incomingPayload,
     text,
