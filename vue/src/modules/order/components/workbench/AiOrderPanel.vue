@@ -3,7 +3,7 @@
     <div v-if="!wechatImportMode" class="ai-order-panel__toolbar">
       <button type="button" class="ai-order-panel__back" @click="$emit('show-today-orders')">
         <span>←</span>
-        返回订单主页
+        {{ returnLabel }}
       </button>
 
       <CustomerContextPicker
@@ -93,6 +93,7 @@ const props = defineProps({
   // MCP「保存微信订单」批量模式：由 OrderWorkbenchV2 置位。
   // 解析完成后自动静默校验 + 提交，并把结果 emit 回父组件统一汇总。
   batchSaveMode: { type: Boolean, default: false },
+  returnLabel: { type: String, default: '返回订单主页' },
 });
 
 const emit = defineEmits([

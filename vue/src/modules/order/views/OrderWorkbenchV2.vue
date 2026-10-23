@@ -42,6 +42,7 @@
 
     <AiOrderPanel
       v-if="activeView === 'create'"
+      :key="`create-order-${createOrderWorkspaceSequence}`"
       class="order-workbench__content"
       :customers="customerContext.customers.value"
       :selected-customer="customerContext.selectedCustomer.value"
@@ -50,6 +51,7 @@
       :selected-department-id="customerContext.selectedDepartmentId.value"
       :customer-loading="customerContext.loading.value"
       :customer-error="customerContext.error.value"
+      :return-label="wechatManualOrderReturnToken !== null ? '返回微信订单' : '返回订单主页'"
       @select-customer="customerContext.selectCustomer"
       @select-department="customerContext.selectDepartment"
       @retry-customers="customerContext.reload"
@@ -57,7 +59,7 @@
       @task-added="handleTaskAdded"
       @wechat-tasks-loaded="handleDirectWechatTasks"
       @wechat-import-error="handleWechatImportError"
-      @show-today-orders="returnToOverview"
+      @show-today-orders="handleCreateOrderBack"
     />
 
     <OrderFlowInbox
@@ -119,6 +121,7 @@
       :customer-match-error="wechatCustomerMatchError"
       @close="closeWechatImportModal"
       @refresh="refreshActiveWechatImport({ manual: true })"
+      @append-order="openWechatManualOrder"
       @merge-new="mergeActiveWechatImport"
       @select-item="selectWechatImport"
       @remove-item="removeWechatImport"
@@ -396,6 +399,7 @@ const customerContext = useOrderCustomerContext(disUser);
 const todayInbox = useTodayOrderInbox(disUser);
 const selectedWechatTodayInbox = useTodayOrderInbox(disUser);
 const activeView = ref('overview');
+const createOrderWorkspaceSequence = ref(0);
 const stageFilter = ref('all');
 const overviewLoading = ref(false);
 const overviewError = ref('');
@@ -412,6 +416,7 @@ const wechatScanProgress = ref({ current: 0, total: 0, title: '', customerName: 
 const wechatScanResults = ref([]);
 const wechatImportQueue = ref([]);
 const wechatImportBatch = ref([]);
+const wechatManualOrderReturnToken = ref(null);
 const pendingAsyncImageTaskIds = new Map();
 const asyncImageTaskProgress = ref({ total: 0, completed: 0, failed: 0, delayed: 0, remaining: 0, syncError: '', visible: false });
 let asyncImageTaskPollTimer = null;
@@ -3532,13 +3537,66 @@ async function selectStage(stage) {
 }
 
 function openCreateOrder(customer) {
+  wechatManualOrderReturnToken.value = null;
+  activateCreateOrder(customer);
+}
+
+function activateCreateOrder(customer) {
   smartModeActive.value = false;
+  createOrderWorkspaceSequence.value += 1;
   activeView.value = 'create';
   if (!customer) return;
   const matchingCustomer = customerContext.customers.value.find(
     item => String(customerId(item)) === String(customerId(customer))
   );
   customerContext.selectCustomer(matchingCustomer || customer);
+}
+
+function openWechatManualOrder() {
+  const item = activeWechatImport.value;
+  if (wechatScanBusy.value || wechatSelectedImportBusy.value) return;
+  let returnToken = '';
+  let customer = selectedWechatConversation.value?.customer || null;
+  if (!customer && item) {
+    customer = customerContext.customers.value.find(
+      candidate => String(customerId(candidate)) === String(item.customerId)
+    );
+    if (customer) returnToken = item.token;
+  }
+  if (!customer) {
+    const title = normalizeObservedWechatConversationTitle(observedWechatConversationTitle.value);
+    const matches = findWechatCustomerProfileMatches(customerContext.customers.value, title);
+    if (matches.length === 1) customer = matches[0];
+  }
+  if (!customer) {
+    setWechatScanStatus('找不到当前微信会话对应的客户资料，暂时不能追加订单', 'error');
+    return;
+  }
+  wechatManualOrderReturnToken.value = returnToken;
+  dismissWechatSelectedAction();
+  wechatImportModalOpen.value = false;
+  activateCreateOrder(customer);
+}
+
+async function handleCreateOrderBack() {
+  const returnToken = wechatManualOrderReturnToken.value;
+  if (returnToken === null) {
+    await returnToOverview();
+    return;
+  }
+  wechatManualOrderReturnToken.value = null;
+  activeView.value = 'overview';
+  const item = wechatImportQueue.value.find(candidate => candidate.token === returnToken)
+    || wechatImportBatch.value.find(candidate => candidate.token === returnToken);
+  if (item) {
+    activeWechatImportToken.value = item.token;
+    const customer = customerContext.customers.value.find(
+      candidate => String(customerId(candidate)) === String(item.customerId)
+    );
+    if (customer) customerContext.selectCustomer(customer);
+  }
+  wechatImportModalOpen.value = true;
+  await nextTick();
 }
 
 async function returnToOverview() {

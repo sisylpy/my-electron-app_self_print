@@ -180,6 +180,13 @@
                 <div class="wechat-import-modal__current-actions">
                   <button
                     type="button"
+                    class="wechat-import-modal__append-order"
+                    title="为当前微信客户手工追加订单"
+                    :disabled="busy || refreshing || selectedImportBusy"
+                    @click="$emit('append-order')"
+                  >追加订单</button>
+                  <button
+                    type="button"
                     class="wechat-import-modal__remove-current"
                     title="标记为已查看的非订单内容，后续读取不再重复出现"
                     :disabled="refreshing || selectedImportBusy"
@@ -649,7 +656,15 @@
                   <h3 id="wechat-import-action-title">{{ selectedImportBusy ? selectedImportBusyTitle : (actionStatus === 'success' ? '已加入转订单' : '无法转订单') }}</h3>
                   <p id="wechat-import-action-message">{{ selectedImportBusy ? selectedImportBusyMessage : actionMessage }}</p>
                 </div>
-                <button v-if="!selectedImportBusy" type="button" @click="$emit('dismiss-action-message')">知道了</button>
+                <div v-if="!selectedImportBusy" class="wechat-import-modal__action-buttons">
+                  <button type="button" @click="$emit('dismiss-action-message')">知道了</button>
+                  <button
+                    v-if="actionStatus !== 'success'"
+                    type="button"
+                    class="is-primary"
+                    @click="$emit('append-order')"
+                  >追加订单</button>
+                </div>
               </section>
             </div>
           </Transition>
@@ -695,6 +710,7 @@ const emit = defineEmits([
   'close',
   'refresh',
   'merge-new',
+  'append-order',
   'select-item',
   'remove-item',
   'scan-unread',
@@ -1183,6 +1199,7 @@ function hideBrokenAvatar(event) {
   font-weight: 900;
   white-space: nowrap;
 }
+.wechat-import-modal__append-order,
 .wechat-import-modal__remove-current,
 .wechat-import-modal__refresh,
 .wechat-import-modal__rescan-all,
@@ -1195,6 +1212,8 @@ function hideBrokenAvatar(event) {
   cursor: pointer;
   white-space: nowrap;
 }
+.wechat-import-modal__append-order { border: 1px solid var(--product-primary-strong); color: #fff; background: var(--product-primary-strong); }
+.wechat-import-modal__append-order:hover { border-color: var(--product-text); background: var(--product-text); }
 .wechat-import-modal__remove-current { border: 1px solid var(--product-danger-soft); color: var(--product-danger); background: var(--product-danger-soft); }
 .wechat-import-modal__remove-current:hover { border-color: var(--product-danger); color: #fff; background: var(--product-danger); }
 .wechat-import-modal__refresh { border: 1px solid var(--product-primary-soft); color: var(--product-primary-strong); background: var(--product-primary-soft); }
@@ -1202,6 +1221,7 @@ function hideBrokenAvatar(event) {
 .wechat-import-modal__rescan-all:hover { border-color: var(--product-primary-strong); color: #fff; background: var(--product-primary-strong); }
 .wechat-import-modal__header .wechat-import-modal__rescan-all { min-height: 36px; padding: 0 14px; border-radius: 9px; }
 .wechat-import-modal__refresh:disabled,
+.wechat-import-modal__append-order:disabled,
 .wechat-import-modal__rescan-all:disabled { cursor: wait; opacity: .65; }
 .wechat-import-modal__merge { border: 1px solid var(--product-warning); color: #fff; background: var(--product-warning); box-shadow: 0 4px 10px rgba(var(--product-warning-rgb), 0.18); }
 .wechat-import-modal__sync-note { grid-row: 3; margin: -4px 4px 8px; color: var(--product-primary-strong); font-size: 9px; text-align: right; }
@@ -1713,10 +1733,14 @@ function hideBrokenAvatar(event) {
 .wechat-import-modal__action-dialog.is-success h3 { color: var(--product-text); }
 .wechat-import-modal__action-dialog p { margin: 0; color: var(--product-warning); font-size: 13px; line-height: 1.7; }
 .wechat-import-modal__action-dialog.is-success p { color: var(--product-primary-strong); }
-.wechat-import-modal__action-dialog > button {
-  min-height: 36px;
+.wechat-import-modal__action-buttons {
+  display: flex;
   grid-column: 2;
-  justify-self: start;
+  align-items: center;
+  gap: 9px;
+}
+.wechat-import-modal__action-buttons > button {
+  min-height: 36px;
   padding: 0 18px;
   border: 0;
   border-radius: 9px;
@@ -1726,7 +1750,10 @@ function hideBrokenAvatar(event) {
   font-weight: 900;
   cursor: pointer;
 }
-.wechat-import-modal__action-dialog.is-success > button { background: var(--product-primary-strong); }
+.wechat-import-modal__action-buttons > button.is-primary,
+.wechat-import-modal__action-dialog.is-success .wechat-import-modal__action-buttons > button {
+  background: var(--product-primary-strong);
+}
 
 .wechat-import-modal__group-mode-dialog {
   width: min(620px, calc(100vw - 40px));
