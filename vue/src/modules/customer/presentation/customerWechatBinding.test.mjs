@@ -48,13 +48,31 @@ assert.deepEqual(
 );
 assert.equal(customerWechatTypeLabel(null, true), '待关联');
 assert.equal(
-  customerWechatTypeLabel({ profileConfigured: true, conversationKind: 'group', groupMode: WECHAT_GROUP_ALL_MEMBERS }),
+  customerWechatTypeLabel(
+    { profileConfigured: true, conversationKind: 'group', groupMode: WECHAT_GROUP_ALL_MEMBERS },
+    false,
+  ),
+  '未设置',
+);
+assert.equal(
+  customerWechatTypeLabel(
+    { profileConfigured: true, conversationKind: 'group', groupMode: WECHAT_GROUP_ALL_MEMBERS },
+    true,
+  ),
   '专属群（待关联）',
+);
+assert.equal(
+  customerWechatDisplayName({ nxDepartmentWechatDisplayName: '' }, groupBinding),
+  '',
 );
 assert.equal(
   buildCustomerWechatBindingPayload(18, groupBinding, '新好友', 'direct', null),
   null,
 );
 assert.equal(buildCustomerWechatBindingPayload(18, null, '未绑定', 'group', WECHAT_GROUP_ALL_MEMBERS), null);
+assert.equal(
+  buildCustomerWechatBindingPayload(18, groupBinding, '', WECHAT_CONVERSATION_GROUP, WECHAT_GROUP_ALL_MEMBERS),
+  null,
+);
 
 console.log('customer WeChat binding presentation tests passed');

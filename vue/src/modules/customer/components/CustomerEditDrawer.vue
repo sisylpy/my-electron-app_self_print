@@ -30,7 +30,7 @@
                 type="text"
                 maxlength="255"
                 placeholder="与微信中的好友昵称或群名称一致"
-                @input="resetWechatConnectionTest"
+                @input="handleWechatNameInput"
               />
               <button
                 class="wechat-connection-button"
@@ -76,7 +76,7 @@
               </label>
             </div>
           </div>
-          <div class="auto-read-field">
+          <div v-if="hasWechatName" class="auto-read-field">
             <div>
               <strong>参与自动读取</strong>
               <small>仅控制定时“全部读”；关闭后仍保留客户资料、微信绑定和手动读取。</small>
@@ -231,9 +231,11 @@ export default {
   emits: ['close', 'save', 'delete', 'manage-users', 'transfer'],
   data() {
     const form = clone(this.customer);
-    if (!form.nxDepartmentWechatDisplayName && this.wechatBinding?.displayName) {
+    if (!Object.prototype.hasOwnProperty.call(form, 'nxDepartmentWechatDisplayName')
+      && this.wechatBinding?.displayName) {
       form.nxDepartmentWechatDisplayName = this.wechatBinding.displayName;
     }
+    const hasWechatName = Boolean(String(form.nxDepartmentWechatDisplayName || '').trim());
     if (!form.nxDepartmentDeliveryMode) form.nxDepartmentDeliveryMode = 'DELIVERY';
     if (!form.nxDepartmentDispatchPriorityWeight) form.nxDepartmentDispatchPriorityWeight = 3;
     return {
@@ -248,16 +250,20 @@ export default {
       testingWechatConnection: false,
       wechatConnectionTestStatus: '',
       wechatConnectionTestMessage: '',
-      wechatConversationKind: (this.wechatBinding?.bound || this.wechatBinding?.profileConfigured)
+      wechatConversationKind: hasWechatName
+        && (this.wechatBinding?.bound || this.wechatBinding?.profileConfigured)
         ? this.wechatBinding.conversationKind
         : null,
-      wechatGroupMode: this.wechatBinding?.groupMode === WECHAT_GROUP_ALL_MEMBERS
-        ? WECHAT_GROUP_ALL_MEMBERS
-        : WECHAT_GROUP_MENTION_SELF,
+      wechatGroupMode: hasWechatName
+        && this.wechatBinding?.conversationKind === WECHAT_CONVERSATION_GROUP
+        ? this.wechatBinding?.groupMode === WECHAT_GROUP_ALL_MEMBERS
+          ? WECHAT_GROUP_ALL_MEMBERS
+          : WECHAT_GROUP_MENTION_SELF
+        : null,
       earliestTime: secondsToTime(form.nxDepartmentEarliestDeliveryTime),
       latestTime: secondsToTime(form.nxDepartmentLatestDeliveryTime),
       allowEarlyDelivery: form.nxDepartmentAllowEarlyDelivery !== 0,
-      autoReadParticipation: this.participatesInAutoRead,
+      autoReadParticipation: hasWechatName ? this.participatesInAutoRead : false,
       selectedLabelIds: this.initialLabelIds.slice(),
     };
   },
@@ -272,11 +278,21 @@ export default {
       ];
     },
     subDepartments() { return this.form.nxDepartmentEntities || []; },
+    hasWechatName() { return Boolean(String(this.form.nxDepartmentWechatDisplayName || '').trim()); },
   },
   methods: {
     resetWechatConnectionTest() {
       this.wechatConnectionTestStatus = '';
       this.wechatConnectionTestMessage = '';
+    },
+    handleWechatNameInput() {
+      this.resetWechatConnectionTest();
+      if (this.hasWechatName) return;
+      // 微信名称、会话类型和自动读取是一组设置；名称被清空时不能留下
+      // “混合群/专属群”和自动巡查状态。
+      this.wechatConversationKind = null;
+      this.wechatGroupMode = null;
+      this.autoReadParticipation = false;
     },
     async testWechatConnection() {
       const wechatName = String(this.form.nxDepartmentWechatDisplayName || '').trim();
@@ -328,8 +344,10 @@ export default {
         customer: clone(this.form),
         labelIds: this.selectedLabelIds.slice(),
         wechatConversationKind: wechatName ? this.wechatConversationKind : null,
-        wechatGroupMode: this.wechatGroupMode,
-        participatesInAutoRead: this.autoReadParticipation,
+        wechatGroupMode: wechatName && this.wechatConversationKind === WECHAT_CONVERSATION_GROUP
+          ? this.wechatGroupMode
+          : null,
+        participatesInAutoRead: wechatName ? this.autoReadParticipation : false,
       });
     },
   },

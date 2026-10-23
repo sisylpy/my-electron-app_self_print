@@ -56,6 +56,9 @@ export default {
   saveWechatBinding(payload) {
     return wechatBindingBridge('saveBinding', payload);
   },
+  clearWechatBinding(customerId) {
+    return wechatBindingBridge('clearBinding', Number(customerId));
+  },
   deleteCustomer(customer) {
     return axiosInstance.post('nxdepartment/deleteGroupDep', customer);
   },

@@ -18,6 +18,10 @@
             {{ wechatBindingLoading ? '正在读取…' : wechatTypeLabel }}
           </strong>
         </div>
+        <div>
+          <span>自动读取微信订单</span>
+          <strong :class="{ 'wechat-mode': wechatName && participatesInAutoRead }">{{ autoReadLabel }}</strong>
+        </div>
       </div>
     </section>
 
@@ -71,6 +75,7 @@ export default {
     selectedLabels: { type: Array, default: () => [] },
     wechatBinding: { type: Object, default: null },
     wechatBindingLoading: Boolean,
+    participatesInAutoRead: { type: Boolean, default: true },
     showDeliverySettings: { type: Boolean, default: false },
   },
   emits: ['edit'],
@@ -79,6 +84,10 @@ export default {
     printName() { return PRINT_NAMES[this.customer.nxDepartmentPrintName] || '半张一列'; },
     wechatName() { return customerWechatDisplayName(this.customer, this.wechatBinding); },
     wechatTypeLabel() { return customerWechatTypeLabel(this.wechatBinding, Boolean(this.wechatName)); },
+    autoReadLabel() {
+      if (!this.wechatName) return '未设置';
+      return this.participatesInAutoRead ? '已开启' : '已关闭';
+    },
     deliveryWindow() {
       const start = time(this.customer.nxDepartmentEarliestDeliveryTime);
       const end = time(this.customer.nxDepartmentLatestDeliveryTime);

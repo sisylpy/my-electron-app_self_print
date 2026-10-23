@@ -22,10 +22,16 @@ export function normalizeCustomerWechatBinding(value) {
   };
 }
 
-export function customerWechatTypeLabel(binding, hasWechatName = false) {
+export function customerWechatTypeLabel(binding, hasWechatName = null) {
+  // 微信名称是后续会话类型和自动读取的前置条件。名称已清空时，不能继续
+  // 展示本机偏好或旧技术绑定留下的群类型，避免用户误以为仍在自动读单。
+  const resolvedHasWechatName = hasWechatName === null
+    ? Boolean(String(binding?.displayName || '').trim())
+    : hasWechatName === true;
+  if (!resolvedHasWechatName) return '未设置';
   const normalized = normalizeCustomerWechatBinding(binding);
   const configured = normalized.bound || binding?.profileConfigured === true;
-  if (!configured) return hasWechatName ? '待关联' : '未设置';
+  if (!configured) return '待关联';
   const typeLabel = normalized.conversationKind === WECHAT_CONVERSATION_DIRECT
     ? '微信好友'
     : normalized.groupMode === WECHAT_GROUP_ALL_MEMBERS ? '专属群' : '混合群';
@@ -33,10 +39,11 @@ export function customerWechatTypeLabel(binding, hasWechatName = false) {
 }
 
 export function customerWechatDisplayName(customer, binding) {
+  if (customer && Object.prototype.hasOwnProperty.call(customer, 'nxDepartmentWechatDisplayName')) {
+    return String(customer.nxDepartmentWechatDisplayName || '').trim();
+  }
   return String(
-    customer?.nxDepartmentWechatDisplayName
-      || binding?.displayName
-      || '',
+    binding?.displayName || '',
   ).trim();
 }
 
@@ -49,8 +56,9 @@ export function buildCustomerWechatBindingPayload(
 ) {
   const normalized = normalizeCustomerWechatBinding(binding);
   if (!normalized.bound) return null;
-  const name = String(displayName || normalized.displayName || '').trim();
-  if (!name) throw new Error('已关联微信的客户不能清空微信名称');
+  const name = String(displayName || '').trim();
+  // 空名称由调用方走 clearBinding；绝不能回退到旧绑定名称并把旧关系重新保存。
+  if (!name) return null;
   const nextKind = conversationKind === WECHAT_CONVERSATION_GROUP
     ? WECHAT_CONVERSATION_GROUP
     : WECHAT_CONVERSATION_DIRECT;

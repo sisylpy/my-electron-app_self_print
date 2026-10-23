@@ -83,6 +83,7 @@
             :show-delivery-settings="canUseDispatchModule"
             :wechat-binding="wechatBinding"
             :wechat-binding-loading="wechatBindingLoading"
+            :participates-in-auto-read="participatesInAutoRead"
             @edit="editDrawerOpen = true"
           />
           <CustomerGoodsPanel
@@ -472,24 +473,40 @@ export default {
           await customerApi.syncLabels(this.distributerId, payload.customer.nxDepartmentId, payload.labelIds),
           '客户标签保存失败',
         );
-        const bindingPayload = buildCustomerWechatBindingPayload(
-          payload.customer.nxDepartmentId,
-          this.wechatBinding,
-          payload.customer.nxDepartmentWechatDisplayName,
-          payload.wechatConversationKind,
-          payload.wechatGroupMode,
-        );
-        if (bindingPayload) {
-          const bindingResponse = await customerApi.saveWechatBinding(bindingPayload);
-          if (!bindingResponse?.ok) {
-            throw new Error(bindingResponse?.message || '微信资料保存失败');
+        const customerId = payload.customer.nxDepartmentId;
+        const wechatName = String(payload.customer.nxDepartmentWechatDisplayName || '').trim();
+        if (!wechatName) {
+          // 名称是微信绑定的根设置。清空名称时同步解除服务端旧会话指纹，
+          // 否则旧群类型和自动读取仍会继续作用于这个客户。
+          const hasTechnicalBinding = Boolean(
+            this.wechatBinding?.accountFingerprint || this.wechatBinding?.conversationFingerprint,
+          );
+          if (hasTechnicalBinding) {
+            const clearResponse = await customerApi.clearWechatBinding(customerId);
+            if (!clearResponse?.ok) {
+              throw new Error(clearResponse?.message || '旧微信绑定清除失败');
+            }
           }
-          this.wechatBinding = normalizeCustomerWechatBinding(bindingResponse.data);
+          this.wechatBinding = normalizeCustomerWechatBinding(null);
+        } else {
+          const bindingPayload = buildCustomerWechatBindingPayload(
+            customerId,
+            this.wechatBinding,
+            wechatName,
+            payload.wechatConversationKind,
+            payload.wechatGroupMode,
+          );
+          if (bindingPayload) {
+            const bindingResponse = await customerApi.saveWechatBinding(bindingPayload);
+            if (!bindingResponse?.ok) {
+              throw new Error(bindingResponse?.message || '微信资料保存失败');
+            }
+            this.wechatBinding = normalizeCustomerWechatBinding(bindingResponse.data);
+          }
         }
         // 会话类型属于客户资料：首次技术关联前服务端尚无会话指纹，先保存在
         // 当前桌面环境；读单只消费这里的设置，不再临时询问好友/群规则。
-        const wechatName = String(payload.customer.nxDepartmentWechatDisplayName || '').trim();
-        saveCustomerWechatProfile(payload.customer.nxDepartmentId, wechatName ? {
+        saveCustomerWechatProfile(customerId, wechatName ? {
           conversationKind: payload.wechatConversationKind,
           groupMode: payload.wechatGroupMode,
         } : null);
@@ -500,11 +517,13 @@ export default {
         if (typeof autoReadAction === 'function') {
           const autoReadResponse = await autoReadAction(
             this.distributerId,
-            payload.customer.nxDepartmentId,
-            payload.participatesInAutoRead,
+            customerId,
+            wechatName ? payload.participatesInAutoRead : false,
           );
           if (!autoReadResponse?.ok) throw new Error('自动读取设置保存失败');
           this.participatesInAutoRead = autoReadResponse.participates !== false;
+        } else if (!wechatName) {
+          this.participatesInAutoRead = false;
         }
         this.editDrawerOpen = false;
         this.showNotice('客户资料已保存');
