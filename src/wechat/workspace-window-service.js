@@ -4,6 +4,11 @@ const MIN_DOCK_WIDTH = 1168;
 const MIN_WINDOWS_DOCK_WIDTH = 1340;
 const MIN_DOCK_HEIGHT = 640;
 const WORKSPACE_GAP = 8;
+// Traversing WeChat's live accessibility tree too frequently can interrupt its
+// virtualized message list while a newly selected conversation is still being
+// painted. Two seconds keeps manual selection syncing responsive without
+// competing with the chat renderer several times per second.
+const CONVERSATION_WATCH_INTERVAL_MS = 2000;
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
@@ -415,11 +420,9 @@ function createWechatWorkspaceWindowService(options = {}) {
       if (!title) return;
       const conversationChanged = title !== lastConversationTitle;
       lastConversationTitle = title;
-      // Re-publish the lightweight title while WeChat is frontmost. The
-      // renderer can deliberately clear its selected-chat context after a
-      // failed programmatic focus or a saved task; suppressing an unchanged
-      // title here would then leave the two processes permanently out of sync.
-      publishConversationTitle(title);
+      // An unchanged title is not a user selection. Re-publishing it used to
+      // wake the renderer on every poll while also forcing another deep AX
+      // traversal before WeChat had finished drawing its message rows.
       if (!conversationChanged) return;
       let avatarDataUrl = '';
       try {
@@ -463,7 +466,7 @@ function createWechatWorkspaceWindowService(options = {}) {
     const generation = conversationWatcherGeneration;
     conversationWatcher = setInterval(() => {
       void observeConversationTitle(generation);
-    }, 450);
+    }, CONVERSATION_WATCH_INTERVAL_MS);
     conversationWatcher.unref?.();
   }
 
@@ -486,7 +489,7 @@ function createWechatWorkspaceWindowService(options = {}) {
       const generation = conversationWatcherGeneration;
       conversationWatcher = setInterval(() => {
         void observeConversationTitle(generation);
-      }, 450);
+      }, CONVERSATION_WATCH_INTERVAL_MS);
       conversationWatcher.unref?.();
     };
   }

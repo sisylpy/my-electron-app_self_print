@@ -1944,21 +1944,11 @@ const wechatConversationObservationPoller = /^Win/i.test(String(navigator.platfo
   : null;
 
 async function handleWechatConversationChanged(payload) {
-  const shouldRefocusWorkspace = payload?.selectionChanged === true
-    && wechatImportModalOpen.value
-    && !wechatScanBusy.value
-    && !wechatSelectedImportBusy.value
-    && !wechatCustomerMatchBusy.value
-    && wechatConversationFocusDepth === 0;
-
-  try {
-    await syncWechatSelectionFromDesktop(payload);
-  } finally {
-    // A manual conversation change activates WeChat. Return keyboard/mouse
-    // focus only after the right-hand page has adopted that conversation, so
-    // the user's very next click operates the order workbench immediately.
-    if (shouldRefocusWorkspace) await focusWechatWorkspaceApp();
-  }
+  // Keep a manually selected WeChat conversation frontmost until WeChat has
+  // finished rendering its virtualized message list. The former immediate
+  // focus hand-off could freeze the list halfway through painting, leaving the
+  // newest one or two messages blank even though they still existed locally.
+  await syncWechatSelectionFromDesktop(payload);
 }
 
 const removeWechatConversationListener = window.electronAPI?.wechatUi
