@@ -19,6 +19,8 @@ public static class GrainPrintCurrentWeixinWin32 {
   public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
   [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextLength(IntPtr hWnd);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
@@ -78,6 +80,20 @@ function Get-WeixinWindow {
     )
     if ($processIds -notcontains [int]$windowProcessId) { return $true }
     if (-not [GrainPrintCurrentWeixinWin32]::IsWindowVisible($windowHandle)) { return $true }
+    $titleLength = [GrainPrintCurrentWeixinWin32]::GetWindowTextLength($windowHandle)
+    if ($titleLength -le 0) { return $true }
+    $titleBuilder = New-Object System.Text.StringBuilder ($titleLength + 1)
+    [void][GrainPrintCurrentWeixinWin32]::GetWindowText(
+      $windowHandle,
+      $titleBuilder,
+      $titleBuilder.Capacity
+    )
+    $windowTitle = $titleBuilder.ToString().Trim()
+    # WeChatAppEx can expose large visible helper/overlay windows. Selecting
+    # the largest helper lets OCR read the adjacent GrainPrint panel as a chat
+    # title (for example "0 读取微信订单"). Only a real main-window title is
+    # eligible for passive conversation observation.
+    if ($windowTitle -notin @('微信', 'WeChat', 'Weixin')) { return $true }
     $rect = New-Object GrainPrintCurrentWeixinWin32+RECT
     [void][GrainPrintCurrentWeixinWin32]::GetWindowRect($windowHandle, [ref]$rect)
     $width = $rect.Right - $rect.Left
@@ -86,6 +102,7 @@ function Get-WeixinWindow {
     [void]$windows.Add([pscustomobject]@{
       Handle = $windowHandle
       ProcessId = [int]$windowProcessId
+      Title = $windowTitle
       Left = $rect.Left
       Top = $rect.Top
       Right = $rect.Right

@@ -191,6 +191,7 @@ function parseAutomationOutput(stdout, allowedTitles) {
       ? payload.details.filter(detail => typeof detail === 'string')
       : [],
     openedTitles,
+    openedTitlesExact: true,
     candidateTitles,
   };
 }
@@ -448,6 +449,7 @@ function createWechatUiAutomationService(options = {}) {
           if (processOptions.mapOpenedCountToAllowedTitles) {
             const openedCount = Number(result.metrics?.openedCount || 0);
             result.openedTitles = openedCount > 0 ? [...allowedTitles] : [];
+            result.openedTitlesExact = false;
             // The Windows helper does not yet return exact opened titles. Keep
             // its conservative reconciliation behavior until it does.
             result.candidateTitles = [...allowedTitles];

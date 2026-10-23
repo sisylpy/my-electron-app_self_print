@@ -67,6 +67,7 @@ const parsed = parseAutomationOutput(JSON.stringify({
   details: ['ACCESSIBILITY_SEARCH_VERIFIED'],
 }), ['金调料']);
 assert.deepStrictEqual(parsed.openedTitles, ['金调料']);
+assert.strictEqual(parsed.openedTitlesExact, true);
 assert.strictEqual(parsed.metrics.UNREAD_OPENED, '2');
 assert.deepStrictEqual(parsed.details, ['ACCESSIBILITY_SEARCH_VERIFIED']);
 
@@ -442,7 +443,8 @@ assert.match(bundledMacFlow, /CHAT_TAB_DOUBLE_CLICKED/);
 assert.match(bundledMacFlow, /chat_tab_point/);
 assert.match(bundledMacFlow, /CHAT_TAB_LOGICAL_X = 30/);
 assert.match(bundledMacFlow, /CHAT_TAB_LOGICAL_Y = 122/);
-assert.match(bundledMacFlow, /shot\.transform\.scale_x, shot\.transform\.scale_y/);
+assert.match(bundledMacFlow, /self\._window\.bounds\.x \+ CHAT_TAB_LOGICAL_X/);
+assert.match(bundledMacFlow, /self\._window\.bounds\.y \+ CHAT_TAB_LOGICAL_Y/);
 assert.doesNotMatch(bundledMacFlow, /image_height \* 0\.205/);
 assert.match(bundledMacFlow, /self\._opened_titles\.add\(saved\.title\)/);
 assert.doesNotMatch(bundledMacFlow, /page-\{page:02d\}-item-\{index:02d\}-before/);
@@ -488,6 +490,7 @@ async function verifyWindowsNoUnreadStopsImmediately() {
   assert.strictEqual(result.ok, true);
   assert.strictEqual(result.result.code, 'NO_UNREAD');
   assert.deepStrictEqual(result.result.openedTitles, []);
+  assert.strictEqual(result.result.openedTitlesExact, false);
   assert.deepStrictEqual(result.result.candidateTitles, ['金调料', '测试']);
 }
 
@@ -581,6 +584,7 @@ async function verifyWindowsConversationFocus() {
   const result = await service.focusConversation({ title: '金调料' });
   assert.strictEqual(result.ok, true);
   assert.deepStrictEqual(result.result.openedTitles, ['金调料']);
+  assert.strictEqual(result.result.openedTitlesExact, true);
   assert.ok(spawnedArgs.some(arg => String(arg).endsWith('focus-conversation.ps1')));
   assert.ok(spawnedArgs.some(arg => String(arg).endsWith('current-conversation.ps1')));
   assert.ok(spawnedArgs.includes('金调料'));

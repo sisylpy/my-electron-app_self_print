@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from PIL import Image, ImageDraw
 
-from automation.coordinates import Rect
+from automation.coordinates import CoordinateTransformer, Rect
+from automation.accessibility_focus import visible_conversation_rows
 from automation.flows.inspect_unread import matching_unread_conversations
 from automation.locators.unread_conversation import (
     UnreadConversation,
     locate_unread_conversations,
+    locate_unread_conversations_from_accessibility,
 )
 from automation.vision import OCRItem
 
@@ -18,6 +21,42 @@ def ocr(text: str, x: float, y: float, width: float, height: float) -> OCRItem:
 
 
 class LocateUnreadConversationTests(unittest.TestCase):
+    def test_accessibility_rows_keep_global_ax_coordinates(self) -> None:
+        # WeChat 4.x already returns global AX row positions. Re-adding the
+        # list origin moves the title to the wrong conversation and caused a
+        # real unread 测试1群 badge to be attributed to the row above it.
+        output = "示例联系人\t60\t77\t181\t65\n测试1群\t60\t142\t181\t65"
+        with patch(
+            "automation.accessibility_focus._osascript",
+            return_value=output,
+        ) as osascript:
+            rows = visible_conversation_rows()
+
+        script = "\n".join(osascript.call_args.args[0])
+        self.assertNotIn("listPosition", script)
+        self.assertEqual(rows[1], ("测试1群", Rect(60, 142, 181, 65)))
+
+    def test_accessibility_rows_pair_only_avatar_corner_badges(self) -> None:
+        image = Image.new("RGB", (1210, 1628), "white")
+        draw = ImageDraw.Draw(image)
+        # A real unread badge is at the avatar's top-right corner. A similarly
+        # red avatar fragment lower and farther left must never open that chat.
+        draw.rectangle((207, 123, 224, 140), fill=(235, 65, 70))
+        draw.rectangle((190, 315, 198, 323), fill=(235, 65, 70))
+        transform = CoordinateTransformer(Rect(0, 25, 605, 814), 1210, 1628)
+        rows = [
+            ("调料群", Rect(60, 89, 181, 65)),
+            ("蔬菜群", Rect(60, 154, 181, 65)),
+        ]
+
+        conversations = locate_unread_conversations_from_accessibility(
+            image,
+            transform,
+            rows,
+        )
+
+        self.assertEqual([item.title for item in conversations], ["调料群"])
+
     def test_summary_keeps_only_unique_bound_unread_titles(self) -> None:
         conversations = [
             UnreadConversation("调料群", "订单一", Rect(20, 90, 80, 24), Rect(10, 90, 12, 12)),

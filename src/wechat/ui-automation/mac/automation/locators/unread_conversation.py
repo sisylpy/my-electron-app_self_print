@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import Image
 
-from ..coordinates import Point, Rect
+from ..coordinates import CoordinateTransformer, Point, Rect
 from ..vision import OCRItem
 
 
@@ -108,6 +108,48 @@ def locate_unread_badges(image: Image.Image) -> list[Rect]:
             continue
         badges.append(rect)
     return badges
+
+
+def locate_unread_conversations_from_accessibility(
+    image: Image.Image,
+    transform: CoordinateTransformer,
+    rows: list[tuple[str, Rect]],
+) -> list[UnreadConversation]:
+    """Pair red unread badges with exact titles from WeChat's AX rows.
+
+    A badge must sit at the avatar's top-right corner. This rejects red pixels
+    inside avatars and red ``@me`` preview text without running screenshot OCR.
+    """
+
+    badges = locate_unread_badges(image)
+    conversations: list[UnreadConversation] = []
+    for title, logical_row in rows:
+        physical_origin = transform.global_logical_to_physical(
+            Point(logical_row.x, logical_row.y)
+        )
+        physical_row = Rect(
+            physical_origin.x,
+            physical_origin.y,
+            logical_row.width * transform.scale_x,
+            logical_row.height * transform.scale_y,
+        )
+        for badge in badges:
+            delta_x = badge.center.x - physical_row.x
+            delta_y = badge.center.y - physical_row.y
+            if (
+                physical_row.height * 0.66 <= delta_x <= physical_row.height * 0.9
+                and -physical_row.height * 0.05 <= delta_y <= physical_row.height * 0.3
+            ):
+                conversations.append(
+                    UnreadConversation(
+                        title=title,
+                        preview="",
+                        title_rect=physical_row,
+                        badge_rect=badge,
+                    )
+                )
+                break
+    return conversations
 
 
 def _is_title_candidate(item: OCRItem, badge: Rect, width: int, height: int) -> bool:

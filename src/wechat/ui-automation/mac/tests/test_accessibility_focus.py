@@ -11,13 +11,42 @@ if str(MAC_ROOT) not in sys.path:
     sys.path.insert(0, str(MAC_ROOT))
 
 from automation.accessibility_focus import (  # noqa: E402
+    _parse_visible_conversation_rows,
+    activate_and_current_conversation_context,
     focus_conversation_with_accessibility,
     header_matches_target,
     raise_and_current_conversation_header,
 )
+from automation.coordinates import Rect  # noqa: E402
 
 
 class AccessibilityFocusTest(unittest.TestCase):
+    @patch("automation.accessibility_focus._osascript")
+    def test_activate_context_combines_window_and_header_read(self, run_script) -> None:
+        run_script.return_value = "测试7群 (3)\t0\t25\t605\t814"
+
+        context = activate_and_current_conversation_context()
+
+        self.assertEqual(context.header, "测试7群")
+        self.assertEqual(context.bounds, Rect(0, 25, 605, 814))
+        run_script.assert_called_once()
+        script_lines = run_script.call_args.args[0]
+        self.assertIn('tell application "WeChat" to reopen', script_lines)
+        self.assertIn('perform action "AXRaise" of mainWindow', script_lines)
+
+    def test_visible_row_parser_keeps_exact_title_and_geometry(self) -> None:
+        rows = _parse_visible_conversation_rows(
+            "测试7群\t60\t89\t181\t65\nFangfang\t60\t154\t181\t65\n"
+        )
+
+        self.assertEqual(
+            rows,
+            [
+                ("测试7群", Rect(60, 89, 181, 65)),
+                ("Fangfang", Rect(60, 154, 181, 65)),
+            ],
+        )
+
     def test_exact_personal_chat(self) -> None:
         self.assertTrue(header_matches_target("Fangfang", "Fangfang"))
 

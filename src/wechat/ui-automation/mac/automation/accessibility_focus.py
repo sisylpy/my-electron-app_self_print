@@ -4,6 +4,8 @@ import re
 import subprocess
 from dataclasses import dataclass
 
+from .coordinates import Rect
+
 _GROUP_MEMBER_COUNT = re.compile(r"\s*\(\d+\)\s*$")
 _FOCUS_RESULT_SEPARATOR = "\t"
 
@@ -14,6 +16,12 @@ class AccessibilityFocusResult:
     already_open: bool
     retried: bool
     header: str
+
+
+@dataclass(frozen=True)
+class AccessibilityWindowContext:
+    header: str
+    bounds: Rect
 
 
 def header_matches_target(header: str, target: str) -> bool:
@@ -62,6 +70,93 @@ def _normalize_conversation_header(value: str) -> str:
 
 def current_conversation_header() -> str:
     return _normalize_conversation_header(_conversation_header(focus_search=False))
+
+
+def activate_and_current_conversation_context() -> AccessibilityWindowContext:
+    """Raise WeChat and read its window bounds/header in one AX traversal."""
+
+    output = _osascript(
+        [
+            'tell application "WeChat" to reopen',
+            'tell application "System Events" to tell process "WeChat"',
+            'set frontmost to true',
+            'repeat 30 times',
+            'if exists window "\u5fae\u4fe1" then exit repeat',
+            'delay 0.1',
+            'end repeat',
+            'if not (exists window "\u5fae\u4fe1") then error "WECHAT_MAIN_WINDOW_NOT_FOUND"',
+            'set mainWindow to window "\u5fae\u4fe1"',
+            'perform action "AXRaise" of mainWindow',
+            'set windowPosition to position of mainWindow',
+            'set windowSize to size of mainWindow',
+            'set rootSplit to UI element 1 of UI element 7 of UI element 1 of mainWindow',
+            'set chatGroup to UI element 1 of UI element 1 of UI element 1 of UI element 1 of rootSplit',
+            'set chatHeader to UI element 1 of chatGroup',
+            'set visibleTitle to name of chatHeader as text',
+            'return visibleTitle & tab & (item 1 of windowPosition as text) & tab & (item 2 of windowPosition as text) & tab & (item 1 of windowSize as text) & tab & (item 2 of windowSize as text)',
+            'end tell',
+        ]
+    )
+    parts = output.split("\t")
+    if len(parts) != 5:
+        raise RuntimeError("WECHAT_ACCESSIBILITY_CONTEXT_INVALID_RESPONSE")
+    header, x, y, width, height = parts
+    return AccessibilityWindowContext(
+        _normalize_conversation_header(header),
+        Rect(float(x), float(y), float(width), float(height)),
+    )
+
+
+def _parse_visible_conversation_rows(output: str) -> list[tuple[str, Rect]]:
+    rows: list[tuple[str, Rect]] = []
+    for line in str(output or "").splitlines():
+        parts = line.split("\t")
+        if len(parts) != 5:
+            continue
+        title, x, y, width, height = parts
+        title = title.strip()
+        try:
+            rect = Rect(float(x), float(y), float(width), float(height))
+        except ValueError:
+            continue
+        if title and rect.width > 0 and rect.height > 0:
+            rows.append((title, rect))
+    return rows
+
+
+def visible_conversation_rows() -> list[tuple[str, Rect]]:
+    """Read the visible WeChat session list without screenshot OCR."""
+
+    output = _osascript(
+        [
+            'tell application "System Events" to tell process "WeChat"',
+            'set rootSplit to UI element 1 of UI element 7 of UI element 1 of window "\u5fae\u4fe1"',
+            'set chatList to list "\u4f1a\u8bdd" of rootSplit',
+            'set rowTitles to title of UI elements of chatList',
+            'set rowPositions to position of UI elements of chatList',
+            'set rowSizes to size of UI elements of chatList',
+            'set out to ""',
+            'repeat with i from 1 to count of rowTitles',
+            'set rawTitle to item i of rowTitles as text',
+            # WeChat can expose an empty placeholder row while its list is
+            # settling. Asking for paragraph 1 of an empty string aborts the
+            # entire fast path, so ignore that non-conversation row.
+            'if rawTitle is not "" and rawTitle is not "missing value" then',
+            'set rowTitle to paragraph 1 of rawTitle',
+            'set rowPosition to item i of rowPositions',
+            'set rowSize to item i of rowSizes',
+            # WeChat 4.x exposes AX row positions in global logical screen
+            # coordinates. Adding the list origin again shifts every row down
+            # by one list offset, which can pair an unread badge with the row
+            # above it and silently filter the real customer conversation.
+            'set out to out & rowTitle & tab & (item 1 of rowPosition as text) & tab & (item 2 of rowPosition as text) & tab & (item 1 of rowSize as text) & tab & (item 2 of rowSize as text) & linefeed',
+            'end if',
+            'end repeat',
+            'return out',
+            'end tell',
+        ]
+    )
+    return _parse_visible_conversation_rows(output)
 
 
 def raise_and_current_conversation_header() -> str:

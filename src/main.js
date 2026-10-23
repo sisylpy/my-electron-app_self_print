@@ -126,7 +126,7 @@ const os = require('os');
 const crypto = require('crypto');
 const https = require('https');
 const { pathToFileURL } = require('url');
-const { execFile, execFileSync } = require('child_process');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
@@ -138,6 +138,7 @@ const { createWechatReaderService, shutdownReader } = require('./wechat/reader-s
 const { createWechatUiAutomationService } = require('./wechat/ui-automation-service');
 const { createWechatWorkspaceWindowService } = require('./wechat/workspace-window-service');
 const { createWechatAutoReadScheduler } = require('./wechat/auto-read-scheduler');
+const { detectWechatProcessOpen } = require('./wechat/process-state');
 const { detectWechatLoginStateWithoutReader } = require('./wechat/login-state-probe');
 const { createMacKeychainEducation } = require('./security/mac-keychain-education');
 const {
@@ -4748,7 +4749,7 @@ app.whenReady().then(async () => {
   //   并自行按 departmentId/printMode/subDepartmentId 调 phoneGetToFillDepOrders 拉明细（Bills.vue 行为），
   //   故仅补 type 常量，禁止填假值/空串/默认 0。
   // ===== 微信状态探测（用于连接器就绪自检 + 桌面端红条提示）=====
-  // open：本地微信进程是否运行（pgrep，macOS）；
+  // open：本地微信进程是否运行（macOS: WeChat；Windows: Weixin.exe/WeChat.exe）；
   // loggedIn：只根据微信进程当前打开的 db_storage 文件判断；严禁为状态探测
   // 启动 Reader 或查询聊天数据库，避免后台轮询持续占用微信的实时数据文件。
   // 结果缓存 30s，避免每个桥轮询周期都执行系统进程检查。
@@ -4756,15 +4757,7 @@ app.whenReady().then(async () => {
   async function detectWechatState() {
     const now = Date.now();
     if (now - _wechatStateCache.at < 30000) return _wechatStateCache;
-    let open = false;
-    try {
-      open = Boolean(execFileSync('pgrep', ['-x', 'WeChat'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      }).trim());
-    } catch (e) {
-      open = false;
-    }
+    const open = detectWechatProcessOpen();
     const loggedIn = open
       ? detectWechatLoginStateWithoutReader()
       : false;
