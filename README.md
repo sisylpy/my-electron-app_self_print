@@ -12,3 +12,4 @@ Electron 桌面配送打印工作台。产品名 **GrainPrint**，appId `club.gr
 ## 文档
 
 - [WorkBuddy 打印连接器开发交接](docs/workbuddy-print-connector.md) — 三仓库职责、调用链、整合进度与操作边界（持续更新入口）。
+- [微信订单读取模块技术文档与 Agent 交接手册](docs/wechat-order/README.md) — 业务规则、真实调用链、可靠性、测试运维与长期维护合同。
