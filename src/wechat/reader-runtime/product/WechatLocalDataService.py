@@ -415,6 +415,16 @@ class WechatLocalDataService:
             for r in rows:
                 pairs.append(("message", shard, r))
 
+        if like is None and hasattr(db, "query_session_latest"):
+            session_rows = db.query_session_latest(meta.username, tr)
+            durable_keys = {
+                (int(row[0] or 0), int(row[1] or 0))
+                for kind, _shard, row in pairs if kind == "message"
+            }
+            for row in session_rows:
+                if (int(row[0] or 0), int(row[1] or 0)) not in durable_keys:
+                    pairs.append(("session", None, row))
+
         # Image delivery can reach message_resource.db before the corresponding
         # Msg_* row. Merge those resource records as a fallback, while keeping
         # the traditional Msg_* row authoritative when both copies exist.
@@ -440,6 +450,7 @@ class WechatLocalDataService:
         has_more = len(pairs) > page.offset + page.limit
         total = (
             sum(db.count_messages(shard, table, tr, like=like) for shard, table in locations)
+            + sum(1 for kind, _shard, _row in pairs if kind == "session")
             if has_more else len(pairs)
         )
         sliced = pairs[page.offset: page.offset + page.limit]
@@ -448,7 +459,7 @@ class WechatLocalDataService:
             message_id = self._stable_message_id(
                 conversation, kind, row, resource_identities
             )
-            if kind == "message":
+            if kind in ("message", "session"):
                 items.append(self._to_message(
                     conversation, meta.kind, acct.wxid, db, shard, row, message_id
                 ))
@@ -481,7 +492,14 @@ class WechatLocalDataService:
         resource_source_id = db.image_resource_source_id() if like is None else None
         if resource_source_id:
             sources.append(("resource", resource_source_id, None, None))
-        sources.sort(key=lambda source: (1 if source[0] == "message" else 0, source[1]), reverse=True)
+        session_source_id = (
+            db.session_source_id()
+            if like is None and hasattr(db, "session_source_id")
+            else None
+        )
+        if session_source_id:
+            sources.append(("session", session_source_id, None, None))
+        sources.sort(key=lambda source: (self._source_kind_rank(source[0]), source[1]), reverse=True)
         manifest = [[kind, source_id] for kind, source_id, _shard, _table in sources]
         query_fingerprint = self._page_query_fingerprint(conversation, tr, like)
 
@@ -519,14 +537,29 @@ class WechatLocalDataService:
                     cursor_time=cursor_time, same_second=relation,
                     cursor_tail=cursor_tail,
                 )
-            else:
+            elif kind == "resource":
                 rows = db.query_image_resources_keyset(
                     meta.username, tr, fetch_limit,
                     cursor_time=cursor_time, same_second=relation,
                     cursor_tail=cursor_tail,
                 )
+            else:
+                rows = db.query_session_latest(
+                    meta.username, tr, cursor_time=cursor_time,
+                    same_second=relation, cursor_tail=cursor_tail,
+                )
             source_was_full = source_was_full or len(rows) == fetch_limit
             pairs.extend((kind, shard, source_id, row) for row in rows)
+
+        durable_keys = {
+            (int(row[0] or 0), int(row[1] or 0))
+            for kind, _shard, _source, row in pairs if kind == "message"
+        }
+        pairs = [
+            pair for pair in pairs
+            if pair[0] != "session"
+            or (int(pair[3][0] or 0), int(pair[3][1] or 0)) not in durable_keys
+        ]
 
         pairs.sort(key=self._keyset_pair_key, reverse=True)
         resource_identities: List[list] = []
@@ -554,7 +587,7 @@ class WechatLocalDataService:
                 continue
             page_seen.add(identity_hash)
             message_id = self._stable_message_id(conversation, kind, row, resource_identities)
-            if kind == "message":
+            if kind in ("message", "session"):
                 item = self._to_message(
                     conversation, meta.kind, acct.wxid, db, shard, row, message_id
                 )
@@ -572,6 +605,7 @@ class WechatLocalDataService:
         if scan_total is None:
             scan_total = (
                 sum(db.count_messages(shard, table, tr, like=like) for shard, table in locations)
+                + sum(1 for kind, _shard, _source, _row in pairs if kind == "session")
                 if has_more else len(items)
             )
         next_page_key = None
@@ -612,7 +646,7 @@ class WechatLocalDataService:
     def _source_cursor_relation(kind: str, source_id: str, cursor: Optional[tuple]):
         if cursor is None:
             return "all", None
-        source_prefix = (1 if kind == "message" else 0, source_id)
+        source_prefix = (WechatLocalDataService._source_kind_rank(kind), source_id)
         cursor_prefix = (int(cursor[1]), str(cursor[2]))
         if source_prefix > cursor_prefix:
             return "before", None
@@ -621,11 +655,15 @@ class WechatLocalDataService:
         return "same", (int(cursor[3]), int(cursor[4]), int(cursor[5]))
 
     @staticmethod
+    def _source_kind_rank(kind: str) -> int:
+        return {"resource": 0, "message": 1, "session": 2}.get(kind, -1)
+
+    @staticmethod
     def _keyset_pair_key(pair: tuple) -> tuple:
         kind, _shard, source_id, row = pair
-        if kind == "message":
+        if kind in ("message", "session"):
             return (
-                int(row[1] or 0), 1, source_id,
+                int(row[1] or 0), WechatLocalDataService._source_kind_rank(kind), source_id,
                 int(row[6] or 0), int(row[0] or 0), int(row[8] or 0),
             )
         return (
@@ -635,7 +673,7 @@ class WechatLocalDataService:
 
     @classmethod
     def _logical_identity_hash(cls, kind: str, row: list) -> str:
-        identity = cls._message_row_key(row) if kind == "message" else cls._resource_row_key(row)
+        identity = cls._message_row_key(row) if kind in ("message", "session") else cls._resource_row_key(row)
         raw = json.dumps(identity, ensure_ascii=True, separators=(",", ":"))
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
 
@@ -775,7 +813,7 @@ class WechatLocalDataService:
     @staticmethod
     def _pair_create_time(pair: tuple) -> int:
         kind, _shard, row = pair
-        return int(row[1] or 0) if kind == "message" else int(row[2] or 0)
+        return int(row[1] or 0) if kind in ("message", "session") else int(row[2] or 0)
 
     @staticmethod
     def _stable_message_id(
@@ -784,10 +822,24 @@ class WechatLocalDataService:
         row: list,
         resource_identities: List[list],
     ) -> MessageId:
-        local_id = int(row[0] or 0) if kind == "message" else int(row[1] or 0)
-        create_time = int(row[1] or 0) if kind == "message" else int(row[2] or 0)
+        local_id = int(row[0] or 0) if kind in ("message", "session") else int(row[1] or 0)
+        create_time = int(row[1] or 0) if kind in ("message", "session") else int(row[2] or 0)
         server_id = int(row[6] or 0) if len(row) >= 8 else 0
         base = "%s:%d" % (conv_id, local_id)
+        if kind in ("message", "session") and int(row[4] or 0) == 1:
+            # SessionTable can reuse last_msg_locald_id for consecutive visible
+            # messages until Msg_* is flushed. Build the text identity from
+            # fields shared by the provisional and durable records instead of
+            # treating that reused local id as the whole business identity.
+            sender = str(row[5] or "") if len(row) > 5 else ""
+            content = str(row[3] or "") if len(row) > 3 else ""
+            canonical_text = _visible_message_text(content, "group", sender)
+            identity = json.dumps(
+                [create_time, sender, canonical_text],
+                ensure_ascii=True,
+                separators=(",", ":"),
+            )
+            return MessageId("%s:t%s" % (base, _hex(identity, 16)))
         if not server_id:
             return MessageId(base)
         # Preserve the historical ``conversation:local_id`` fingerprint for

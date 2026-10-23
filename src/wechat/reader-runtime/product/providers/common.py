@@ -256,6 +256,58 @@ class WechatReadOnlyDB:
         """单个会话的最后活跃时间；走批量缓存，不额外发起查询。"""
         return self.session_last_times().get(username)
 
+    def session_source_id(self) -> Optional[str]:
+        session_db = os.path.join(self.m.db_root, "session", "session.db")
+        if not os.path.isfile(session_db):
+            return None
+        return self._source_id("session", session_db)
+
+    def query_session_latest(
+        self,
+        username: str,
+        tr: Tuple[Optional[int], Optional[int]],
+        cursor_time: Optional[int] = None,
+        same_second: str = "all",
+        cursor_tail: Optional[Tuple[int, int, int]] = None,
+    ) -> List[list]:
+        """Read the latest text preview while Msg_* is still waiting to flush.
+
+        WeChat updates SessionTable before it writes the same message into the
+        numbered message shard. Return a Msg_*-shaped row so Reader can derive
+        the same logical text identity when the durable row later appears.
+        """
+        session_db = os.path.join(self.m.db_root, "session", "session.db")
+        if not os.path.isfile(session_db):
+            return []
+        rows = self._run(
+            session_db,
+            "SELECT last_msg_locald_id, last_timestamp, 0, summary, "
+            "last_msg_type, last_msg_sender, 0, NULL, last_msg_locald_id "
+            "FROM SessionTable WHERE userName = %s AND last_msg_type = 1 "
+            "AND summary IS NOT NULL AND summary != '' LIMIT 1"
+            % _sql_text_literal(username),
+        )
+        if not rows:
+            return []
+        row = rows[0]
+        timestamp = int(row[1] or 0)
+        local_id = int(row[0] or 0)
+        lo, hi = tr
+        if not local_id or (lo is not None and timestamp < lo) or (hi is not None and timestamp > hi):
+            return []
+        if cursor_time is not None:
+            physical = (0, local_id, local_id)
+            if same_second == "before" and not timestamp < cursor_time:
+                return []
+            if same_second == "all" and not timestamp <= cursor_time:
+                return []
+            if same_second == "same" and not (
+                timestamp < cursor_time
+                or (timestamp == cursor_time and cursor_tail is not None and physical < tuple(cursor_tail))
+            ):
+                return []
+        return [row]
+
     # ---- message 分片定位 ----
     def message_shards(self) -> List[str]:
         msg_dir = os.path.join(self.m.db_root, "message")

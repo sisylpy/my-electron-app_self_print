@@ -24,6 +24,7 @@ class _KeysetDB:
         self.with_resource = with_resource or bool(resources)
         self.keyset_calls = 0
         self.fail_on_call = None
+        self.session_row = None
 
     def locate_message_table(self, _username):
         return [(name, "Msg_test") for name in sorted(self.shards)]
@@ -45,6 +46,19 @@ class _KeysetDB:
 
     def image_resource_source_id(self):
         return "source-resource" if self.with_resource else None
+
+    def session_source_id(self):
+        return "source-session" if self.session_row else None
+
+    def query_session_latest(
+        self, _username, tr, cursor_time=None, same_second="all", cursor_tail=None,
+    ):
+        if not self.session_row or not self._within(self.session_row[1], tr):
+            return []
+        rows = self._apply_cursor(
+            [list(self.session_row)], cursor_time, same_second, cursor_tail, False
+        )
+        return rows
 
     def query_messages_keyset(
         self, shard, _table, tr, limit, like=None, cursor_time=None,
@@ -208,6 +222,48 @@ class KeysetPaginationV3Test(unittest.TestCase):
         self.assertEqual([len(page.items) for page in pages], [200, 200, 50])
         self.assertEqual(len({str(item.id) for item in items}), 450)
 
+    def test_session_preview_fills_latest_text_before_message_shard_flush(self):
+        db = _KeysetDB({"message_0.db": self._rows(2)})
+        db.session_row = [47, BASE + 120, 0, "芒果8斤", 1, "wxid_friend", 0, None, 47]
+        service, conversation = self._service(db)
+        items, _pages = self._read_all(service, conversation)
+        self.assertEqual([item.text for item in items[:1]], ["芒果8斤"])
+        self.assertTrue(str(items[0].id).startswith("fp:conversation:47:t"))
+
+    def test_consecutive_session_previews_reusing_local_id_have_distinct_ids(self):
+        db = _KeysetDB({"message_0.db": self._rows(2)})
+        service, conversation = self._service(db)
+        db.session_row = [47, BASE + 120, 0, "芒果8斤", 1, "wxid_friend", 0, None, 47]
+        first, _pages = self._read_all(service, conversation)
+        db.session_row = [47, BASE + 180, 0, "芒果999个", 1, "wxid_friend", 0, None, 47]
+        second, _pages = self._read_all(service, conversation)
+        self.assertNotEqual(first[0].id, second[0].id)
+
+    def test_session_preview_and_durable_text_share_logical_id(self):
+        db = _KeysetDB({"message_0.db": self._rows(2)})
+        db.session_row = [47, BASE + 120, 0, "芒果8斤", 1, "wxid_friend", 0, None, 47]
+        service, conversation = self._service(db)
+        preview, _pages = self._read_all(service, conversation)
+
+        durable = [
+            47, BASE + 120, 2, "芒果8斤", 1,
+            "wxid_friend", 7000, None, 47,
+        ]
+        db.shards["message_0.db"].append(durable)
+        db.session_row = list(durable)
+        persisted, _pages = self._read_all(service, conversation)
+        durable_item = next(item for item in persisted if item.text == "芒果8斤")
+        self.assertEqual(preview[0].id, durable_item.id)
+
+    def test_session_preview_is_deduplicated_after_message_shard_flush(self):
+        rows = self._rows(2)
+        durable = [47, BASE + 120, 2, "芒果8斤", 1, "wxid_friend", 7000, None, 47]
+        db = _KeysetDB({"message_0.db": rows + [durable]})
+        db.session_row = list(durable)
+        service, conversation = self._service(db)
+        items, _pages = self._read_all(service, conversation)
+        self.assertEqual(sum(item.text == "芒果8斤" for item in items), 1)
+
     def test_multiple_shards_and_resource_copy_merge_deterministically(self):
         first = self._rows(210, timestamp_step=0, start_local=1000, start_server=5000)
         second = self._rows(210, timestamp_step=0, start_local=2000, start_server=6000)
@@ -246,7 +302,7 @@ class KeysetPaginationV3Test(unittest.TestCase):
             token = page.nextPageKey
         all_ids = {str(item.id) for item in first.items + rest}
         self.assertEqual(len(all_ids), 400)
-        self.assertNotIn("fp:conversation:9999", all_ids)
+        self.assertNotIn("新到", {item.text for item in first.items + rest})
 
     def test_failure_on_second_page_is_raised_and_never_reported_complete(self):
         db = _KeysetDB({"message_0.db": self._rows(400)})
@@ -292,12 +348,10 @@ class KeysetPaginationV3Test(unittest.TestCase):
         service, conversation = self._service(_KeysetDB({"message_0.db": rows}))
         items, pages = self._read_all(service, conversation, limit=1)
         self.assertEqual(len(items), 2)
-        self.assertEqual([str(item.id) for item in items], [
-            "fp:conversation:77", "fp:conversation:77"
-        ])
+        self.assertNotEqual(items[0].id, items[1].id)
         self.assertEqual(len(pages), 2)
 
-    def test_public_message_id_stays_legacy_while_page_key_is_independent(self):
+    def test_text_message_id_is_logical_while_page_key_is_independent(self):
         service, conversation = self._service(
             _KeysetDB({"message_0.db": self._rows(201)})
         )
@@ -306,7 +360,7 @@ class KeysetPaginationV3Test(unittest.TestCase):
             TimeRange(start=_iso(BASE - 10), end=_iso(BASE + 5000)),
             Page(limit=200, keyset=True, pageKey=None),
         )
-        self.assertIn("fp:conversation:1000", {
+        ids = {
             str(item.id) for item in first.items
         } | {
             str(item.id) for item in service.getMessages(
@@ -314,7 +368,8 @@ class KeysetPaginationV3Test(unittest.TestCase):
                 TimeRange(start=_iso(BASE - 10), end=_iso(BASE + 5000)),
                 Page(limit=200, keyset=True, pageKey=first.nextPageKey),
             ).items
-        })
+        }
+        self.assertTrue(any(value.startswith("fp:conversation:1000:t") for value in ids))
         self.assertNotIn("fp:conversation", first.nextPageKey)
 
     def test_reader_restart_can_relocate_image_from_signed_locator(self):
