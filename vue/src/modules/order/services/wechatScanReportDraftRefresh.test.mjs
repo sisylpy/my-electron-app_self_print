@@ -17,6 +17,19 @@ test('全面检查合并任务时保留仅新增消息供关闭报告后刷新',
   assert.match(enqueue, /pendingMessageCount:/);
 });
 
+test('领取刷新任务时不提前覆盖当前队列快照', () => {
+  const claim = workbench.match(
+    /async function claimWechatImportItems\([\s\S]*?\n\}/,
+  )?.[0] || '';
+  const ensure = workbench.match(
+    /async function ensureWechatImportClaimed\([\s\S]*?\n\}/,
+  )?.[0] || '';
+
+  assert.match(ensure, /\{ updateQueue = true \} = \{\}/);
+  assert.match(ensure, /if \(updateQueue\) replaceWechatImportItem/);
+  assert.match(claim, /ensureWechatImportClaimed\(item, \{ updateQueue: false \}\)/);
+});
+
 test('关闭全面检查报告后只追加新消息并清除待刷新标记', () => {
   const dismiss = workbench.match(
     /async function dismissWechatScanReport\([\s\S]*?\n\}\n\nfunction messageFingerprints/,

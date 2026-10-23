@@ -38,10 +38,12 @@
               v-if="items.length || activeItem || selectedConversation"
               type="button"
               class="wechat-import-modal__rescan-all"
-              title="重新逐个检查全部已关联微信，并生成新一轮订单任务"
-              :disabled="busy || refreshing || selectedImportBusy"
+              :title="busy
+                ? '已在检查中；点击后会在本轮结束后自动再检查一遍'
+                : '重新逐个检查全部已关联微信，并生成新一轮订单任务'"
+              :disabled="refreshing || selectedImportBusy"
               @click="$emit('scan-all')"
-            >重新检查全部</button>
+            >{{ busy ? '完成后再查一次' : '重新检查全部' }}</button>
           </header>
 
           <div

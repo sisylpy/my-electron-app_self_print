@@ -123,7 +123,7 @@
       @select-item="selectWechatImport"
       @remove-item="removeWechatImport"
       @scan-unread="readUnreadWechatOrders"
-      @scan-all="scanAllBoundWechatOrders"
+      @scan-all="requestWechatFullRescan"
       @dismiss-scan-report="dismissWechatScanReport"
       @import-selected="importSelectedWechatConversation"
       @start-customer-match="openWechatCustomerMatcher"
@@ -404,6 +404,7 @@ const smartCustomersLoading = ref(false);
 const smartCustomersError = ref('');
 const smartModeActive = ref(false);
 const wechatScanBusy = ref(false);
+const wechatScanRerunRequested = ref(false);
 const wechatScanMessage = ref('');
 const wechatScanStatus = ref('info');
 const wechatScanReportOpen = ref(false);
@@ -1113,7 +1114,7 @@ async function wechatTaskSourceKey(item) {
     .map(value => value.toString(16).padStart(2, '0')).join('')}`;
 }
 
-async function ensureWechatImportClaimed(item) {
+async function ensureWechatImportClaimed(item, { updateQueue = true } = {}) {
   if (!item?.payload?.source) return item;
   const api = window.electronAPI?.customerWechatOrders;
   if (!api?.claimTask) throw new Error('当前安装包缺少微信可靠任务接口，请升级后重试');
@@ -1158,7 +1159,7 @@ async function ensureWechatImportClaimed(item) {
       },
     },
   };
-  replaceWechatImportItem(item.token, replacement);
+  if (updateQueue) replaceWechatImportItem(item.token, replacement);
   return replacement;
 }
 
@@ -1173,7 +1174,11 @@ async function claimWechatImportItems(items) {
       existingItem,
       mergeWechatOrderPayload,
     );
-    result.push(await ensureWechatImportClaimed(item));
+    // Do not replace an already-rendered queue item before enqueue has
+    // compared old and new fingerprints. Replacing it here made enqueue see
+    // both sides as identical, so the report showed the new message while the
+    // confirmation form remained on its old draft.
+    result.push(await ensureWechatImportClaimed(item, { updateQueue: false }));
   }
   return result;
 }
@@ -3420,7 +3425,6 @@ async function scanAllBoundWechatOrders(options = {}) {
     };
     setWechatScanStatus(error?.message || '巡查全部关联微信失败', 'error');
   } finally {
-    wechatScanBusy.value = false;
     await timeWechatOrderPhase(
       timing,
       'scan-report-visible',
@@ -3455,7 +3459,35 @@ async function scanAllBoundWechatOrders(options = {}) {
     timing.finish(timingOutcome, timingSummary);
     // 由 MCP 指令触发时，把最终结果回报给桥，完成「受理 → 执行 → 结果」闭环。
     reportMcpWechatScanResult(timingOutcome, timingSummary);
+    // Keep the scan locked through report painting, workspace focus and any
+    // automatic save. Previously the button looked ready during this tail,
+    // so a click could land in the finishing scan instead of starting a new
+    // one. A click received while busy is now queued explicitly below.
+    wechatScanBusy.value = false;
+    if (wechatScanRerunRequested.value) {
+      wechatScanRerunRequested.value = false;
+      setWechatScanStatus('已收到再次检查请求，正在开始新一轮…');
+      window.setTimeout(() => {
+        void scanAllBoundWechatOrders({ requestedByUser: true });
+      }, 0);
+    }
   }
+}
+
+function requestWechatFullRescan() {
+  wechatImportModalOpen.value = true;
+  if (wechatSelectedImportBusy.value) {
+    setWechatScanStatus('当前微信会话还在读取，请稍候再全面检查', 'warning');
+    return;
+  }
+  if (wechatScanBusy.value) {
+    wechatScanRerunRequested.value = true;
+    setWechatScanStatus('已记下再次检查请求，本轮结束后会自动再检查一遍');
+    return;
+  }
+  wechatScanRerunRequested.value = false;
+  setWechatScanStatus('已开始重新检查全部关联微信…');
+  void scanAllBoundWechatOrders({ requestedByUser: true });
 }
 
 async function handleTaskAdded(change) {
