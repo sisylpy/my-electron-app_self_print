@@ -138,6 +138,7 @@ const { createWechatReaderService, shutdownReader } = require('./wechat/reader-s
 const { createWechatUiAutomationService } = require('./wechat/ui-automation-service');
 const { createWechatWorkspaceWindowService } = require('./wechat/workspace-window-service');
 const { createWechatAutoReadScheduler } = require('./wechat/auto-read-scheduler');
+const { detectWechatLoginStateWithoutReader } = require('./wechat/login-state-probe');
 const { createMacKeychainEducation } = require('./security/mac-keychain-education');
 const {
   pushMcpPrintTaskToRenderer,
@@ -4747,13 +4748,14 @@ app.whenReady().then(async () => {
   //   并自行按 departmentId/printMode/subDepartmentId 调 phoneGetToFillDepOrders 拉明细（Bills.vue 行为），
   //   故仅补 type 常量，禁止填假值/空串/默认 0。
   // ===== 微信状态探测（用于连接器就绪自检 + 桌面端红条提示）=====
-  // open：本地微信进程是否运行（pgrep，macOS）；loggedIn：微信 Reader 能否列出已登录账号
-  //   （仅当微信已开且 Reader 已初始化时探测，避免强制拉起 Reader 子进程）。
-  // 结果缓存 15s，避免每个轮询周期都重算。
+  // open：本地微信进程是否运行（pgrep，macOS）；
+  // loggedIn：只根据微信进程当前打开的 db_storage 文件判断；严禁为状态探测
+  // 启动 Reader 或查询聊天数据库，避免后台轮询持续占用微信的实时数据文件。
+  // 结果缓存 30s，避免每个桥轮询周期都执行系统进程检查。
   let _wechatStateCache = { open: null, loggedIn: null, at: 0 };
   async function detectWechatState() {
     const now = Date.now();
-    if (now - _wechatStateCache.at < 15000) return _wechatStateCache;
+    if (now - _wechatStateCache.at < 30000) return _wechatStateCache;
     let open = false;
     try {
       open = Boolean(execFileSync('pgrep', ['-x', 'WeChat'], {
@@ -4763,22 +4765,9 @@ app.whenReady().then(async () => {
     } catch (e) {
       open = false;
     }
-    let loggedIn = null;
-    if (open) {
-      // 必须用 getter 懒初始化 reader 服务：模块变量 wechatReaderService 在桥轮询阶段恒为 null，
-      // 不初始化则 loggedIn 永远停在 null，导致「微信停在登录窗口」被误判为「已就绪」。
-      const reader = getWechatReaderService();
-      if (reader) {
-        try {
-          const r = await reader.listAccounts();
-          // 真实当前登录态：listAccounts 现在返回每个账号的 isCurrentLogin
-          // （微信仅打开当前登录账号的 db_storage，已修正真实检测）；
-          // 据此判断而非账号数量，否则历史账号会误判为「已登录」。
-          const accounts = (r && r.ok && Array.isArray(r.result)) ? r.result : [];
-          loggedIn = accounts.some(a => a.isCurrentLogin === true);
-        } catch (e) { loggedIn = null; }
-      }
-    }
+    const loggedIn = open
+      ? detectWechatLoginStateWithoutReader()
+      : false;
     _wechatStateCache = { open, loggedIn, at: now };
     return _wechatStateCache;
   }
