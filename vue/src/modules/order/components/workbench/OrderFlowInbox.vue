@@ -42,7 +42,13 @@
           <strong>{{ wechatScanLabel }}</strong>
           <em v-if="wechatImportCount">{{ wechatImportCount }}</em>
         </button>
-        <button type="button" class="order-flow__new-order" title="新建订单" aria-label="新建订单" @click="$emit('new-order')">＋</button>
+        <button
+          type="button"
+          class="order-flow__new-order"
+          :title="selectedCustomer ? `为“${customerName(selectedCustomer)}”添加订单` : '添加订单'"
+          :aria-label="selectedCustomer ? `为“${customerName(selectedCustomer)}”添加订单` : '添加订单'"
+          @click="$emit('new-order', selectedCustomer)"
+        >＋</button>
       </div>
     </Teleport>
     <aside class="order-flow__queue">
@@ -136,9 +142,6 @@
           <div class="order-flow__detail-actions">
             <button type="button" class="is-secondary" :disabled="detailLoading" @click="$emit('refresh-detail')">
               <img :src="iconRefresh" alt="" class="order-flow__btn-icon">{{ detailLoading ? '读取中…' : '刷新' }}
-            </button>
-            <button type="button" class="is-primary" @click="$emit('continue-order', selectedCustomer)">
-              <img :src="iconAddOrder" alt="" class="order-flow__btn-icon">追加订单
             </button>
             <button
               type="button"
@@ -259,8 +262,7 @@
       <div v-else class="order-flow__detail-state">
         <div class="order-flow__empty-mark">单</div>
         <strong>{{ emptyMessage }}</strong>
-        <span>可以选择其他阶段，或直接新建订单</span>
-        <button type="button" @click="$emit('new-order')">新建订单</button>
+        <span>可以选择其他阶段，或点击顶部“＋”添加订单</span>
       </div>
     </div>
   </section>
@@ -279,7 +281,6 @@ import {
   orderStatusSummary,
 } from '../../services/orderWorkbenchStage';
 import iconRefresh from '@/assets/order-actions/refresh.png';
-import iconAddOrder from '@/assets/order-actions/add_order.png';
 import {
   getPickListPrintConfig,
   printCustomerPickList,
@@ -367,7 +368,6 @@ const emit = defineEmits([
   'select-customer',
   'refresh-list',
   'refresh-detail',
-  'continue-order',
   'smart-mode-change',
   'scan-wechat',
   'new-order',
