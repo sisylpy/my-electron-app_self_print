@@ -1016,15 +1016,78 @@ async function dismissWechatScanReport() {
   // customer: a later explicit read/switch still performs live title
   // verification before messages can be attributed to the selected customer.
   await nextTick();
-  await openActiveWechatImport({
+  const opened = await openActiveWechatImport({
     preserveScanMessage: true,
     openWorkspace: false,
     focusConversation: false,
   });
+  if (!opened) return;
+
+  const refreshedItem = activeWechatImport.value;
+  const incrementalPayload = refreshedItem?.pendingRefreshPayload;
+  const incrementalCount = messageFingerprints(incrementalPayload).size;
+  if (refreshedItem?.taskType !== 'text' || !incrementalCount) return;
+
+  try {
+    await nextTick();
+    const appended = await activeWechatImportPanelRef.value?.appendWechatImport?.(
+      refreshedItem.payload,
+      incrementalPayload,
+    );
+    if (!appended) throw new Error('订单录入区尚未就绪');
+    replaceWechatImportItem(refreshedItem.token, {
+      ...refreshedItem,
+      payload: {
+        ...refreshedItem.payload,
+        text: appended.text,
+      },
+      pendingRefreshPayload: null,
+      pendingMessageCount: 0,
+      refreshNote: `已添加 ${incrementalCount} 条新消息`,
+      refreshError: '',
+    });
+  } catch (error) {
+    replaceWechatImportItem(refreshedItem.token, {
+      ...refreshedItem,
+      refreshError: error?.message || '新增微信消息载入失败，请重试',
+    });
+  }
 }
 
 function messageFingerprints(payload) {
   return new Set((payload?.source?.messages || []).map(message => String(message.messageFingerprint)));
+}
+
+function selectPendingWechatRefreshPayload(payload, knownFingerprints) {
+  if (!payload?.source) return null;
+  const known = knownFingerprints instanceof Set
+    ? knownFingerprints
+    : new Set(knownFingerprints || []);
+  const sourceMessages = Array.isArray(payload.source.messages) ? payload.source.messages : [];
+  const messages = sourceMessages
+    .filter(message => !known.has(String(message?.messageFingerprint || '')));
+  if (!messages.length) return null;
+
+  const fingerprints = new Set(messages.map(message => String(message?.messageFingerprint || '')));
+  const sourceEntries = Array.isArray(payload.entries)
+    ? payload.entries
+    : (sourceMessages.length === 1 && typeof payload.text === 'string'
+      ? [{ ...sourceMessages[0], text: payload.text }]
+      : []);
+  const entries = sourceEntries
+    .filter(entry => fingerprints.has(String(entry?.messageFingerprint || '')));
+  const images = (Array.isArray(payload.images) ? payload.images : [])
+    .filter(image => fingerprints.has(String(image?.messageFingerprint || '')));
+  return {
+    ...payload,
+    text: entries.map(entry => String(entry?.text || '').trim()).filter(Boolean).join('\n'),
+    entries,
+    images,
+    source: {
+      ...payload.source,
+      messages,
+    },
+  };
 }
 
 function replaceWechatImportItem(token, replacement) {
@@ -2287,6 +2350,18 @@ function enqueueWechatImportItems(incomingItems, { activate = true } = {}) {
       wechatImportTaskKey(item) === wechatImportTaskKey(incomingItem)
     ));
     if (existing) {
+      const incrementalPayload = existing.taskType === 'text'
+        ? selectPendingWechatRefreshPayload(
+          incomingItem.payload,
+          messageFingerprints(existing.payload),
+        )
+        : null;
+      const incrementalCount = messageFingerprints(incrementalPayload).size;
+      const pendingRefreshPayload = incrementalCount
+        ? (existing.pendingRefreshPayload
+          ? mergeWechatOrderPayload(existing.pendingRefreshPayload, incrementalPayload)
+          : incrementalPayload)
+        : (existing.pendingRefreshPayload || null);
       const payload = mergeWechatOrderPayload(existing.payload, incomingItem.payload);
       const replacement = {
         ...existing,
@@ -2295,6 +2370,8 @@ function enqueueWechatImportItems(incomingItems, { activate = true } = {}) {
         // task disappear merely because a newer payload was merged into it.
         token: existing.token,
         payload,
+        pendingRefreshPayload,
+        pendingMessageCount: messageFingerprints(pendingRefreshPayload).size,
         messageCount: payload?.source?.messages?.length || incomingItem.messageCount,
         conversationAvatar: incomingItem.conversationAvatar || existing.conversationAvatar || '',
       };
