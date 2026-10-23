@@ -1,16 +1,47 @@
 import assert from 'node:assert/strict';
 import {
+  assertWechatConversationNameCurrent,
   buildWechatReconciliationPlan,
   loadCustomerWechatBinding,
   loadWechatConversationAvatar,
   loadWechatConversationSnapshot,
   mergeWechatOrderPayload,
+  selectNewWechatOrderPayload,
   normalizeWechatAvatarSource,
   prepareWechatOrderImport,
   removeWechatImportQueueItem,
   WECHAT_IMAGE_DOWNLOAD_RETRY_DELAYS_MS,
   WECHAT_IMAGE_ORIGINAL_NOT_DOWNLOADED,
 } from './wechatOrderImport.js';
+
+assert.throws(
+  () => assertWechatConversationNameCurrent('调料群', {
+    available: true,
+    exists: false,
+  }),
+  {
+    code: 'WECHAT_CONVERSATION_NAME_STALE',
+    message: '微信中已找不到“调料群”，名称可能已经修改。请在客户中心更新关联微信名称后重试',
+  },
+);
+assert.throws(
+  () => assertWechatConversationNameCurrent('调料群', {
+    available: true,
+    exists: false,
+    currentDisplayName: '测试1群',
+  }),
+  {
+    code: 'WECHAT_CONVERSATION_NAME_STALE',
+    message: '关联微信名称“调料群”已失效，当前名称是“测试1群”。请在客户中心更新后重试',
+  },
+);
+assert.throws(
+  () => assertWechatConversationNameCurrent('调料群', {
+    available: false,
+    exists: null,
+  }),
+  { code: 'WECHAT_CONVERSATION_NAME_UNVERIFIED' },
+);
 
 assert.deepEqual(
   buildWechatReconciliationPlan(
@@ -170,8 +201,36 @@ assert.deepEqual(
   {
     available: true,
     exists: true,
+    currentDisplayName: '金调料',
     avatarUrl: 'https://wx.qlogo.cn/mmhead/customer/0',
     lastMessageTimeMs: Date.parse('2026-10-01T00:29:00.000Z'),
+  }
+);
+assert.deepEqual(
+  await loadWechatConversationSnapshot({
+    binding: loaded,
+    conversationTitle: '调料群',
+    electronAPI: {
+      wechatReader: {
+        findConversation: async () => ({
+          ok: true,
+          result: {
+            matches: [{
+              id: binding.conversationFingerprint,
+              displayName: '测试1群',
+              avatarUrl: '',
+            }],
+          },
+        }),
+      },
+    },
+  }),
+  {
+    available: true,
+    exists: false,
+    currentDisplayName: '测试1群',
+    avatarUrl: '',
+    lastMessageTimeMs: null,
   }
 );
 assert.equal((await loadWechatConversationSnapshot({
@@ -571,6 +630,8 @@ assert.deepEqual(
     'reader-messages',
     'message-filter',
     'server-prepare-messages',
+    // 完整性统计：上报提交条数与服务端 pending/processed 数量。
+    'server-prepare-result',
     'payload-build',
   ]
 );
@@ -597,6 +658,26 @@ assert.deepEqual(mergedPayload.source.messages.map(message => message.messageFin
   'msg:old',
   'msg:new',
 ]);
+
+const incrementalPayload = selectNewWechatOrderPayload(
+  {
+    text: '油菜8斤\n土豆8斤',
+    entries: [
+      { messageFingerprint: 'msg:old', messageTimeMs: 1000, text: '油菜8斤' },
+      { messageFingerprint: 'msg:new', messageTimeMs: 2000, text: '土豆8斤' },
+    ],
+    source: { messages: [
+      { messageFingerprint: 'msg:old', messageTimeMs: 1000 },
+      { messageFingerprint: 'msg:new', messageTimeMs: 2000 },
+    ] },
+  },
+  new Set(['msg:old']),
+);
+assert.equal(incrementalPayload.text, '土豆8斤');
+assert.deepEqual(
+  incrementalPayload.source.messages.map(message => message.messageFingerprint),
+  ['msg:new'],
+);
 
 const mergedImages = mergeWechatOrderPayload(
   {

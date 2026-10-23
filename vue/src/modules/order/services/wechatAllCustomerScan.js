@@ -39,7 +39,11 @@ export async function readWechatCustomerDatabaseFirst({
     databaseError = error;
   }
 
-  if (databaseResult?.payload || await canTrustDatabaseResult(databaseResult)) {
+  // Even a complete payload must pass the caller's binding/title validation.
+  // A renamed WeChat group keeps the same stable fingerprint, so reading by
+  // fingerprint alone would otherwise create an order under its stale name.
+  const databaseResultTrusted = await canTrustDatabaseResult(databaseResult);
+  if (databaseResult?.payload || databaseResultTrusted) {
     return {
       result: databaseResult,
       mode: 'database',
@@ -123,6 +127,7 @@ export async function scanAllBoundWechatCustomers({
           ...progress,
           status: 'found',
           itemCount: items.length,
+          items,
           message: `发现 ${items.length} 个订单任务${warning ? `；${warning}` : ''}`,
         });
       } else if (warning) {

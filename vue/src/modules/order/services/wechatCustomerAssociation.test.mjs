@@ -148,6 +148,180 @@ const activeDuplicateBinding = await ensureWechatCustomerBinding({
 assert.equal(activeDuplicatePayload.conversationFingerprint, 'fp:active-conversation');
 assert.equal(activeDuplicateBinding.bound, true);
 
+let bootstrappedDirectPayload = null;
+const bootstrappedDirectBinding = await ensureWechatCustomerBinding({
+  row: {
+    customer: { nxDepartmentId: 22, nxDepartmentWechatDisplayName: '' },
+    binding: { enabled: 0, profileConfigured: false },
+  },
+  selectedTitle: '新微信好友',
+  directory: buildWechatCustomerAssociationDirectory([]),
+  conversationKind: 'direct',
+  electronAPI: {
+    wechatReader: {
+      listAccounts: async () => ({
+        ok: true,
+        result: [{ id: 'fp:account123', isCurrentLogin: true, hasAccessMaterial: true }],
+      }),
+      findConversation: async () => ({
+        ok: true,
+        result: {
+          matches: [{
+            id: 'fp:new-direct',
+            displayName: '新微信好友',
+            kind: 'direct',
+            lastMessageAt: '2026-10-22T10:00:00+08:00',
+          }],
+        },
+      }),
+    },
+    customerWechatOrders: {
+      saveBinding: async (payload) => {
+        bootstrappedDirectPayload = payload;
+        return { ok: true, data: { ...payload, enabled: 1 } };
+      },
+    },
+  },
+});
+assert.equal(bootstrappedDirectPayload.conversationKind, 'direct');
+assert.equal(bootstrappedDirectBinding.bound, true);
+
+let bootstrappedGroupPayload = null;
+const bootstrappedGroupBinding = await ensureWechatCustomerBinding({
+  row: {
+    customer: { nxDepartmentId: 24, nxDepartmentWechatDisplayName: '' },
+    binding: { enabled: 0, profileConfigured: false },
+  },
+  selectedTitle: '新订单群',
+  directory: buildWechatCustomerAssociationDirectory([]),
+  conversationKind: 'group',
+  groupMode: 'ALL_MEMBER_MESSAGES',
+  electronAPI: {
+    wechatReader: {
+      listAccounts: async () => ({
+        ok: true,
+        result: [{ id: 'fp:account123', isCurrentLogin: true, hasAccessMaterial: true }],
+      }),
+      findConversation: async () => ({
+        ok: true,
+        result: {
+          matches: [{ id: 'fp:new-group', displayName: '新订单群', kind: 'group' }],
+        },
+      }),
+    },
+    customerWechatOrders: {
+      saveBinding: async (payload) => {
+        bootstrappedGroupPayload = payload;
+        return { ok: true, data: { ...payload, enabled: 1 } };
+      },
+    },
+  },
+});
+assert.equal(bootstrappedGroupPayload.conversationKind, 'group');
+assert.equal(bootstrappedGroupPayload.groupMode, 'ALL_MEMBER_MESSAGES');
+assert.equal(bootstrappedGroupBinding.bound, true);
+
+let changedGroupModePayload = null;
+await ensureWechatCustomerBinding({
+  row: {
+    customer: { nxDepartmentId: 24, nxDepartmentWechatDisplayName: '新订单群' },
+    binding: {
+      enabled: 1,
+      bound: true,
+      profileConfigured: true,
+      displayName: '新订单群',
+      accountFingerprint: 'fp:account123',
+      conversationFingerprint: 'fp:new-group',
+      conversationKind: 'group',
+      groupMode: 'MENTION_SELF_ONLY',
+    },
+  },
+  selectedTitle: '新订单群',
+  directory: buildWechatCustomerAssociationDirectory([]),
+  conversationKind: 'group',
+  groupMode: 'ALL_MEMBER_MESSAGES',
+  electronAPI: {
+    wechatReader: {
+      listAccounts: async () => ({
+        ok: true,
+        result: [{ id: 'fp:account123', isCurrentLogin: true, hasAccessMaterial: true }],
+      }),
+      findConversation: async () => ({
+        ok: true,
+        result: { matches: [{ id: 'fp:new-group', displayName: '新订单群', kind: 'group' }] },
+      }),
+    },
+    customerWechatOrders: {
+      saveBinding: async (payload) => {
+        changedGroupModePayload = payload;
+        return { ok: true, data: { ...payload, enabled: 1 } };
+      },
+    },
+  },
+});
+assert.equal(changedGroupModePayload.groupMode, 'ALL_MEMBER_MESSAGES');
+
+await assert.rejects(
+  ensureWechatCustomerBinding({
+    row: {
+      customer: { nxDepartmentId: 25, nxDepartmentWechatDisplayName: '' },
+      binding: { enabled: 0, profileConfigured: false },
+    },
+    selectedTitle: '实际是群',
+    directory: buildWechatCustomerAssociationDirectory([]),
+    conversationKind: 'direct',
+    electronAPI: {
+      wechatReader: {
+        listAccounts: async () => ({
+          ok: true,
+          result: [{ id: 'fp:account123', isCurrentLogin: true, hasAccessMaterial: true }],
+        }),
+        findConversation: async () => ({
+          ok: true,
+          result: { matches: [{ id: 'fp:kind-mismatch', displayName: '实际是群', kind: 'group' }] },
+        }),
+      },
+      customerWechatOrders: {
+        saveBinding: async () => {
+          throw new Error('mismatched kind must not be saved');
+        },
+      },
+    },
+  }),
+  /选择的是微信好友，但微信中找到的是微信群/
+);
+
+await assert.rejects(
+  ensureWechatCustomerBinding({
+    row: {
+      customer: { nxDepartmentId: 23, nxDepartmentWechatDisplayName: '' },
+      binding: { enabled: 0, profileConfigured: false },
+    },
+    selectedTitle: '未配置微信群',
+    directory: buildWechatCustomerAssociationDirectory([]),
+    electronAPI: {
+      wechatReader: {
+        listAccounts: async () => ({
+          ok: true,
+          result: [{ id: 'fp:account123', isCurrentLogin: true, hasAccessMaterial: true }],
+        }),
+        findConversation: async () => ({
+          ok: true,
+          result: {
+            matches: [{ id: 'fp:new-group', displayName: '未配置微信群', kind: 'group' }],
+          },
+        }),
+      },
+      customerWechatOrders: {
+        saveBinding: async () => {
+          throw new Error('unconfigured group must not be saved');
+        },
+      },
+    },
+  }),
+  /请先在客户中心设置/
+);
+
 await assert.rejects(
   ensureWechatCustomerBinding({
     row: {

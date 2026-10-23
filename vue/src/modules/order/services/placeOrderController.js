@@ -449,6 +449,42 @@ import api from '../services/orderApi';
                 return this.loadWechatOrderTask(payload);
             },
 
+            async appendWechatImport(payload, incrementalPayload) {
+                if (!payload?.source || !incrementalPayload?.source) {
+                    throw new Error('微信新增订单内容无效');
+                }
+                const incrementalText = String(incrementalPayload.text || '').trim();
+                if (!incrementalText) throw new Error('没有可追加的微信文字订单');
+                if (this.uploadType !== 'wechat') throw new Error('当前不是微信文字订单任务');
+
+                // 只解析本次真正新增的文字，避免重新载入整个草稿把旧内容和
+                // 已经编辑过的商品再次叠加。现有商品对象原样保留，新商品追加到末尾。
+                const result = parseOrderFromText(incrementalText);
+                const newOrders = (result.orders || []).map(order => ({
+                    ...order,
+                    nxDoGoodsNameOriginal: order.nxDoGoodsOrignialName || order.nxDoGoodsName || ''
+                }));
+                const invalidSegments = result.invalidSegments || [];
+                if (!newOrders.length || invalidSegments.length) {
+                    throw new Error(invalidSegments.length
+                        ? '新增微信内容存在无法解析的订单，请在左侧文字中检查'
+                        : '新增微信内容未解析出有效订单');
+                }
+
+                const currentText = String(this.pasteInputText || this.pasteInputContent || '').trim();
+                const combinedText = [currentText, incrementalText].filter(Boolean).join('\n');
+                this.wechatOrderSource = payload.source;
+                this.pasteInputText = combinedText;
+                this.pasteInputContent = combinedText;
+                this.pasteOriginText = combinedText;
+                this.orderItems = [...this.orderItems, ...newOrders];
+                this.pasteInvalidLineIndices = [];
+                this.pasteInvalidSegments = [];
+                this.pasteNoValidOrder = false;
+                this.$emit('wechat-draft-changed', { text: combinedText });
+                return { text: combinedText, addedCount: newOrders.length };
+            },
+
             // 停止所有正在进行的朗读
             stopAllReading() {
                 console.log('[PlaceOrder] 停止所有朗读');

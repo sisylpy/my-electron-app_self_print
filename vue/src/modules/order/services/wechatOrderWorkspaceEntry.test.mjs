@@ -157,7 +157,7 @@ assert.match(workbench, /ensureWechatBindingFromCustomerProfile/);
 const selectedAction = workbench.match(
   /async function importSelectedWechatConversation\(\) \{([\s\S]*?)\n\}\n\nasync function openWechatCustomerMatcher/,
 )?.[1] || '';
-assert.match(selectedAction, /currentConversationApi\(\)/);
+assert.match(selectedAction, /currentConversationApi\(\{ includeAvatar: false \}\)/);
 assert.match(selectedAction, /current-conversation-cache-corrected/);
 assert.doesNotMatch(selectedAction, /current-conversation-cached/);
 assert.match(selectedAction, /findWechatCustomerProfileMatches/);
@@ -171,6 +171,9 @@ const selectedCustomerImport = workbench.match(
   /async function importWechatConversationForCustomer\([\s\S]*?\n\}\n\nasync function importSelectedWechatConversation/,
 )?.[0] || '';
 assert.match(selectedCustomerImport, /if \(!result\.payload\)/);
+assert.match(selectedCustomerImport, /loadWechatConversationSnapshot/);
+assert.match(selectedCustomerImport, /databaseResultCoversConversation/);
+assert.match(selectedCustomerImport, /if \(!databaseCovered\)/);
 assert.match(selectedCustomerImport, /selected-conversation-fallback/);
 assert.match(
   selectedCustomerImport,
@@ -181,16 +184,23 @@ assert.match(workbench, /writeAppLog\('info', 'wechat-order-timing', 'phase'/);
 assert.match(workbench, /writeAppLog\(outcome === 'success' \? 'info' : 'warn', 'wechat-order-timing', 'summary'/);
 
 const refreshSelectedAction = workbench.match(
-  /async function refreshActiveWechatImport\(options = \{\}\) \{([\s\S]*?)\n\}\n\nfunction mergeActiveWechatImport/,
+  /async function refreshActiveWechatImport\(options = \{\}\) \{([\s\S]*?)\n\}\n\nasync function focusWechatImportConversation/,
 )?.[1] || '';
 assert.match(refreshSelectedAction, /createWechatOrderTiming\('refresh-selected-wechat'\)/);
 assert.match(refreshSelectedAction, /knownMessageFingerprints: messageFingerprints\(item\.payload\)/);
 assert.match(refreshSelectedAction, /deferPrepareUntilStable: true/);
 assert.match(refreshSelectedAction, /observedTitle !== expectedTitle/);
 assert.match(refreshSelectedAction, /needsFocusBeforeRead/);
-assert.match(refreshSelectedAction, /if \(options\.manual && !needsFocusBeforeRead\)/);
+assert.match(refreshSelectedAction, /if \(!result\.payload && options\.manual && !needsFocusBeforeRead\)/);
+assert.match(refreshSelectedAction, /focusWechatImportConversation\(item, \{ forceReselect: true \}\)/);
+assert.match(refreshSelectedAction, /focused-refresh-result/);
+assert.match(refreshSelectedAction, /if \(options\.manual && !needsFocusBeforeRead && !focusedVerification\)/);
 assert.match(refreshSelectedAction, /recordWechatServiceTiming\(timing, event\)/);
 assert.match(refreshSelectedAction, /timing\.finish\(outcome/);
+assert.match(refreshSelectedAction, /selectNewWechatOrderPayload\(matchingItem\.payload, existing\)/);
+assert.match(refreshSelectedAction, /appendWechatImport/);
+assert.doesNotMatch(modal, /合并 \{\{ activeItem\.lateMessageCount \}\} 条/);
+assert.doesNotMatch(workbench, /@merge-new=/);
 
 const allCustomerAction = workbench.match(
   /async function scanAllBoundWechatOrders\(options = \{\}\) \{([\s\S]*?)\n\}\n\nasync function handleTaskAdded/,

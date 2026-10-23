@@ -82,6 +82,8 @@ const props = defineProps({
   // MCP「保存微信订单」批量模式：由 OrderWorkbenchV2 置位。
   // 解析完成后自动静默校验 + 提交，并把结果 emit 回父组件统一汇总。
   batchSaveMode: { type: Boolean, default: false },
+  // 巡查报告显示时保留任务数据，但不在报告背后自动解析或弹出图片裁剪窗。
+  suspendWechatImport: { type: Boolean, default: false },
   returnLabel: { type: String, default: '返回订单主页' },
 });
 
@@ -117,12 +119,13 @@ watch(
     props.pendingWechatImport?.customerId || null,
     props.selectedCustomerId,
     workspaceKey.value,
+    props.suspendWechatImport,
   ],
-  async ([token, importCustomerId, selectedCustomerId]) => {
+  async ([token, importCustomerId, selectedCustomerId, , suspended]) => {
     // 批量保存由父组件原子驱动（解析 + 校验 + 保存一次完成）。
     // 这里必须跳过：切换客户会让 workspaceKey 变化而重复触发本 watch，
     // 重复解析会对着刚重建的空工作台做校验，把已成功的任务误判成「没有可保存的订单」。
-    if (props.batchSaveMode) return;
+    if (props.batchSaveMode || suspended) return;
     const pendingImport = props.pendingWechatImport;
     if (!token || appliedWechatImportToken.value === token) return;
     if (String(importCustomerId) !== String(selectedCustomerId)) return;
@@ -187,6 +190,24 @@ function dismissPendingWechatImport() {
   placeOrderRef.value?.dismissWechatImport?.();
 }
 
+// 巡查报告里的图片缩略图由用户主动点击后才进入图片识别。
+// 这条命令式入口刻意不受 suspendWechatImport 影响；后者只阻止巡查期间自动弹图。
+async function previewWechatImport(payload) {
+  selectedMode.value = 'wechat';
+  await nextTick();
+  const target = placeOrderRef.value;
+  if (!target?.applyWechatImport) throw new Error('图片识别区尚未就绪');
+  await target.applyWechatImport(payload);
+  appliedWechatImportToken.value = props.pendingWechatImport?.token || null;
+}
+
+async function appendWechatImport(payload, incrementalPayload) {
+  await nextTick();
+  const target = placeOrderRef.value;
+  if (!target?.appendWechatImport) throw new Error('订单录入区尚未就绪');
+  return target.appendWechatImport(payload, incrementalPayload);
+}
+
 // 批量保存的原子入口：解析 → 静默校验 → 提交，一次完成并返回结果。
 // 由父组件（OrderWorkbenchV2）在「客户上下文 + 工作区实例」都稳定之后调用，
 // 刻意不经过上面的 watch —— 否则切换客户引发的 workspaceKey 变化会重复触发解析，
@@ -246,7 +267,12 @@ async function runWechatImportAndSave(payload) {
   }
 }
 
-defineExpose({ dismissPendingWechatImport, runWechatImportAndSave });
+defineExpose({
+  appendWechatImport,
+  dismissPendingWechatImport,
+  previewWechatImport,
+  runWechatImportAndSave,
+});
 
 onBeforeUnmount(() => {
   clearTimeout(workspaceResetTimer);

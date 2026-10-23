@@ -19,6 +19,12 @@ export const WECHAT_IMAGE_DOWNLOAD_RETRY_DELAYS_MS = Object.freeze([
   15000,
 ]);
 
+// 微信桌面端可能延迟把已经显示在会话里的消息写入本地数据库。扫描游标只表示
+// 上次检查到的位置，因此每次都需要保留足够的重叠窗口；消息台账负责去重。
+// 这也避免连续的空扫描把刚写入、但时间稍早的消息永久排除在窗口之外。
+const WECHAT_SCAN_OVERLAP_MS = 15 * 60 * 1000;
+const WECHAT_SCAN_CLOCK_SKEW_MS = 2 * 60 * 1000;
+
 function timingNow() {
   return globalThis.performance?.now?.() ?? Date.now();
 }
@@ -132,6 +138,26 @@ export async function loadWechatConversationAvatar({
   return snapshot.avatarUrl;
 }
 
+export function assertWechatConversationNameCurrent(conversationTitle, snapshot) {
+  const title = String(conversationTitle || '').trim() || '该微信会话';
+  if (!snapshot?.available) {
+    const error = new Error(
+      `暂时无法核验微信中是否仍存在“${title}”，本次已停止读取，请稍后重试`
+    );
+    error.code = 'WECHAT_CONVERSATION_NAME_UNVERIFIED';
+    throw error;
+  }
+  if (snapshot.exists !== false) return snapshot;
+  const currentDisplayName = String(snapshot.currentDisplayName || '').trim();
+  const error = new Error(
+    currentDisplayName
+      ? `关联微信名称“${title}”已失效，当前名称是“${currentDisplayName}”。请在客户中心更新后重试`
+      : `微信中已找不到“${title}”，名称可能已经修改。请在客户中心更新关联微信名称后重试`
+  );
+  error.code = 'WECHAT_CONVERSATION_NAME_STALE';
+  throw error;
+}
+
 export async function loadWechatConversationSnapshot({
   binding,
   conversationTitle,
@@ -144,6 +170,7 @@ export async function loadWechatConversationSnapshot({
     return {
       available: false,
       exists: null,
+      currentDisplayName: '',
       avatarUrl: '',
       lastMessageTimeMs: null,
     };
@@ -158,6 +185,7 @@ export async function loadWechatConversationSnapshot({
         return {
           available: true,
           exists: false,
+          currentDisplayName: '',
           avatarUrl: '',
           lastMessageTimeMs: null,
         };
@@ -165,6 +193,7 @@ export async function loadWechatConversationSnapshot({
       return {
         available: false,
         exists: null,
+        currentDisplayName: '',
         avatarUrl: '',
         lastMessageTimeMs: null,
       };
@@ -184,6 +213,7 @@ export async function loadWechatConversationSnapshot({
       return {
         available: true,
         exists: false,
+        currentDisplayName: String(fingerprintMatch?.displayName || '').trim(),
         avatarUrl: normalizeWechatAvatarSource(avatarMatch?.avatarUrl),
         lastMessageTimeMs: null,
       };
@@ -192,16 +222,18 @@ export async function loadWechatConversationSnapshot({
     return {
       available: true,
       exists: true,
+      currentDisplayName: String(exact.displayName || '').trim(),
       avatarUrl: normalizeWechatAvatarSource(exact.avatarUrl),
       lastMessageTimeMs: Number.isFinite(lastMessageTimeMs) ? lastMessageTimeMs : null,
     };
   } catch {
-    // Conversation metadata is an optimization signal. Reader/schema errors
-    // fall back to the proven visible verification path instead of weakening
-    // order completeness.
+    // Preserve the distinction between "name absent" and "could not verify".
+    // Automatic order scans fail closed on the latter instead of silently
+    // trusting a stable fingerprint with a potentially stale display name.
     return {
       available: false,
       exists: null,
+      currentDisplayName: '',
       avatarUrl: '',
       lastMessageTimeMs: null,
     };
@@ -262,6 +294,36 @@ function payloadEntries(payload) {
 
 function payloadImages(payload) {
   return Array.isArray(payload?.images) ? payload.images : [];
+}
+
+export function selectNewWechatOrderPayload(payload, knownMessageFingerprints = []) {
+  if (!payload?.source) return payload;
+  const known = knownMessageFingerprints instanceof Set
+    ? knownMessageFingerprints
+    : new Set(Array.from(knownMessageFingerprints || []).map(value => String(value || '')));
+  const messages = (Array.isArray(payload.source.messages) ? payload.source.messages : [])
+    .filter(message => !known.has(String(message?.messageFingerprint || '')));
+  const messageIds = new Set(messages.map(message => String(message?.messageFingerprint || '')));
+  const entries = payloadEntries(payload)
+    .filter(entry => messageIds.has(String(entry?.messageFingerprint || '')));
+  const images = payloadImages(payload)
+    .filter(image => messageIds.has(String(image?.messageFingerprint || '')));
+  const textEntries = entries.filter(entry => String(entry?.text || '').trim());
+  const text = entries.length === messages.length
+    ? textEntries.map(entry => String(entry.text).trim()).join('\n')
+    : messages.length === (Array.isArray(payload.source.messages) ? payload.source.messages.length : 0)
+      ? String(payload.text || '')
+      : textEntries.map(entry => String(entry.text).trim()).join('\n');
+  return {
+    ...payload,
+    text,
+    entries,
+    images,
+    source: {
+      ...payload.source,
+      messages,
+    },
+  };
 }
 
 export function mergeWechatOrderPayload(currentPayload, incomingPayload) {
@@ -662,7 +724,7 @@ export async function prepareWechatOrderImport({
       .map(row => Number(row?.messageTimeMs))
       .filter(value => Number.isFinite(value) && value > 0);
     if (unclaimedTimes.length) {
-      recoveryWindowStartMs = Math.max(0, Math.min(...unclaimedTimes) - 2 * 60 * 1000);
+      recoveryWindowStartMs = Math.max(0, Math.min(...unclaimedTimes) - WECHAT_SCAN_CLOCK_SKEW_MS);
     }
   }
 
@@ -678,14 +740,14 @@ export async function prepareWechatOrderImport({
     }
     const attemptNow = scanNow;
     const normalStartMs = Number.isFinite(cursor) && cursor > 0
-      ? Math.max(0, cursor - 2 * 60 * 1000)
+      ? Math.max(0, cursor - WECHAT_SCAN_OVERLAP_MS)
       : attemptNow - 24 * 60 * 60 * 1000;
     const startMs = Number.isFinite(recoveryWindowStartMs)
       ? Math.min(normalStartMs, recoveryWindowStartMs)
       : normalStartMs;
     // 微信消息使用服务端时间，刚到达的消息可能比电脑当前时间快几十秒。
     // 如果查询上限严格等于点击时刻，界面中已经可见的未读消息仍会被排除。
-    const endMs = attemptNow + 2 * 60 * 1000;
+    const endMs = attemptNow + WECHAT_SCAN_CLOCK_SKEW_MS;
     queryStartTimeMs = startMs;
     queryEndTimeMs = endMs;
     const page = await readWechatMessageWindow({
@@ -749,6 +811,8 @@ export async function prepareWechatOrderImport({
       pageLimit: 200,
       pageFull: selectionCounts.rawMessageCount >= 200,
       pageCount: page.pageCount,
+      queryStartTimeMs,
+      queryEndTimeMs,
       // 黑盒判定排序方向用：观察窗口内最旧/最新消息距窗口两端的距离。
       // newestGapToWindowEndMs 很大 => 返回的是窗口前段（升序，最新被截掉）；
       // oldestDeltaFromWindowStartMs 很大 => 返回的是窗口后段（降序，最旧被截掉）。

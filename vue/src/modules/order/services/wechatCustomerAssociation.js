@@ -135,13 +135,22 @@ export async function ensureWechatCustomerBinding({
   row,
   selectedTitle,
   directory,
+  conversationKind: requestedConversationKind = null,
   groupMode: requestedGroupMode = null,
   electronAPI = window.electronAPI,
   onTiming = null,
 }) {
   const normalizedTitle = title(selectedTitle);
   const current = normalizeWechatBinding(row?.binding);
-  if (current.bound && title(current.displayName) === normalizedTitle) {
+  const hasRequestedProfile = requestedConversationKind === 'direct'
+    || requestedConversationKind === 'group';
+  const requestedProfileMatchesCurrent = hasRequestedProfile
+    && current.conversationKind === requestedConversationKind
+    && (requestedConversationKind !== 'group'
+      || current.groupMode === requestedGroupMode);
+  if (current.bound
+      && title(current.displayName) === normalizedTitle
+      && (!hasRequestedProfile || requestedProfileMatchesCurrent)) {
     const startedAt = timingNow();
     emitTiming(onTiming, 'binding-reuse', startedAt);
     return current;
@@ -176,13 +185,16 @@ export async function ensureWechatCustomerBinding({
 
   // 好友/群以及群规则必须在客户资料中一次设定。这里不能根据微信搜索结果
   // 偷偷猜测，更不能在自动读取过程中临时弹选择框，否则无人值守任务会中断。
-  if (row?.binding?.profileConfigured !== true) {
+  if (row?.binding?.profileConfigured !== true && !hasRequestedProfile) {
     const error = new Error('请先在客户中心设置该微信名称是好友还是微信群');
     error.code = WECHAT_PROFILE_REQUIRED;
     throw error;
   }
-  if (current.conversationKind !== conversation.kind) {
-    throw new Error(`客户资料设置为${current.conversationKind === 'group' ? '微信群' : '微信好友'}，但微信中找到的是${conversation.kind === 'group' ? '微信群' : '微信好友'}，请先在客户中心更正`);
+  const configuredKind = hasRequestedProfile
+    ? requestedConversationKind
+    : current.conversationKind;
+  if (configuredKind !== conversation.kind) {
+    throw new Error(`选择的是${configuredKind === 'group' ? '微信群' : '微信好友'}，但微信中找到的是${conversation.kind === 'group' ? '微信群' : '微信好友'}，请重新确认`);
   }
 
   const priorRow = (directory?.allRows || []).find(candidate => (
@@ -215,7 +227,7 @@ export async function ensureWechatCustomerBinding({
       displayName: conversation.displayName,
       accountFingerprint: account.id,
       conversationFingerprint: conversation.id,
-      conversationKind: conversation.kind,
+      conversationKind: configuredKind,
       groupMode,
     })
   ));

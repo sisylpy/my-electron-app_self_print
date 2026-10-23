@@ -12,7 +12,10 @@ const discard = workbench.match(
   /async function discardWechatImportSession\(\) \{([\s\S]*?)\n\}\n\nfunction resetWechatImportModalState/,
 )?.[1] || '';
 assert.match(discard, /wechatImportQueue\.value/);
-assert.match(discard, /customerWechatOrders\?\.discardTasks\?\.\(\{ taskIds \}\)/);
+assert.match(discard, /await loadAllPendingWechatTasks\(\)/);
+assert.match(discard, /pendingTasks\.map\(task => Number\(task\?\.wechatTaskId\)\)/);
+assert.match(discard, /taskIds\.slice\(offset, offset \+ 200\)/);
+assert.match(discard, /api\.discardTasks\(/);
 assert.match(discard, /unwrapWechatServer\(response\)/);
 assert.match(discard, /wechatImportQueue\.value = \[\]/);
 

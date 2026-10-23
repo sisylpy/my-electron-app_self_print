@@ -199,12 +199,6 @@
                     :disabled="refreshing || selectedImportBusy"
                     @click="$emit('refresh')"
                   >{{ refreshing ? '正在获取…' : '获取新消息' }}</button>
-                  <button
-                    v-if="activeItem.lateMessageCount"
-                    type="button"
-                    class="wechat-import-modal__merge"
-                    @click="$emit('merge-new')"
-                  >合并 {{ activeItem.lateMessageCount }} 条</button>
                   <div
                     id="wechat-import-active-actions"
                     class="wechat-import-modal__external-actions"
@@ -504,10 +498,43 @@
                         <div class="wechat-import-modal__result-name">
                           <strong>{{ item.title }}</strong>
                           <small v-if="item.customerName && item.customerName !== item.title">{{ item.customerName }}</small>
+                          <p v-if="item.textPreview" :title="item.textPreview">
+                            微信内容：{{ item.textPreview }}
+                          </p>
                         </div>
                         <div class="wechat-import-modal__result-status">
-                          <strong>{{ scanResultLabel(item) }}</strong>
-                          <small>{{ item.message }}</small>
+                          <div
+                            v-if="item.imagePreviews?.length"
+                            class="wechat-import-modal__result-thumbnails"
+                          >
+                            <button
+                              v-for="image in item.imagePreviews"
+                              :key="image.token"
+                              type="button"
+                              class="wechat-import-modal__result-thumbnail"
+                              :disabled="Boolean(scanPreviewBusyToken)"
+                              title="查看并识别这张图片"
+                              @click="$emit('preview-scan-image', image.token)"
+                            >
+                              <img :src="image.src" alt="微信订单图片缩略图" />
+                              <i v-if="scanPreviewBusyToken === image.token" aria-hidden="true"></i>
+                            </button>
+                          </div>
+                          <div class="wechat-import-modal__result-status-copy">
+                            <strong>{{ scanResultLabel(item) }}</strong>
+                            <small>{{ item.saved ? item.message : (item.parseMessage || item.message) }}</small>
+                            <small v-if="item.saveError" class="is-error">{{ item.saveError }}</small>
+                            <small v-if="item.previewError" class="is-error">{{ item.previewError }}</small>
+                            <button
+                              v-if="!busy && item.saveReady && !item.saved"
+                              type="button"
+                              class="wechat-import-modal__result-save-button"
+                              :disabled="Boolean(scanSaveBusyToken)"
+                              @click="$emit('save-scan-result', item.saveToken)"
+                            >
+                              {{ scanSaveBusyToken === item.saveToken ? '保存中…' : '保存订单' }}
+                            </button>
+                          </div>
                         </div>
                       </li>
                     </ol>
@@ -544,9 +571,9 @@
               >
                 <header>
                   <div>
-                    <small>微信好友转订单</small>
-                    <h3 id="wechat-customer-match-title">把微信好友关联到客户</h3>
-                    <p>以后选择这个微信好友时，会直接进入对应客户的转订单页面。</p>
+                    <small>微信会话转订单</small>
+                    <h3 id="wechat-customer-match-title">把微信会话关联到客户</h3>
+                    <p>请一次确认客户、会话类型和群规则，保存后立即继续读取订单。</p>
                   </div>
                   <button
                     type="button"
@@ -558,10 +585,58 @@
                 <div class="wechat-import-modal__detected-friend">
                   <span aria-hidden="true">微</span>
                   <div>
-                    <small>当前识别到的微信好友</small>
+                    <small>当前识别到的微信会话</small>
                     <strong>{{ unmatchedConversationTitle }}</strong>
                   </div>
                 </div>
+                <section class="wechat-import-modal__match-settings" aria-label="设置微信会话类型">
+                  <strong>确认这个微信名称的类型</strong>
+                  <div class="wechat-import-modal__match-mode-options">
+                    <button
+                      type="button"
+                      :class="{ 'is-selected': selectedMatchConversationKind === CONVERSATION_DIRECT }"
+                      :disabled="customerMatchBusy"
+                      @click="selectMatchConversationKind(CONVERSATION_DIRECT)"
+                    >
+                      <span>好友</span>
+                      <b>微信好友</b>
+                      <small>客户通过好友单聊发送订单</small>
+                    </button>
+                    <button
+                      type="button"
+                      :class="{ 'is-selected': selectedMatchConversationKind === CONVERSATION_GROUP }"
+                      :disabled="customerMatchBusy"
+                      @click="selectMatchConversationKind(CONVERSATION_GROUP)"
+                    >
+                      <span>群</span>
+                      <b>微信群</b>
+                      <small>客户通过微信群发送订单</small>
+                    </button>
+                  </div>
+                  <div
+                    v-if="selectedMatchConversationKind === CONVERSATION_GROUP"
+                    class="wechat-import-modal__match-group-options"
+                  >
+                    <button
+                      type="button"
+                      :class="{ 'is-selected': selectedMatchGroupMode === GROUP_ALL_MEMBER_MESSAGES }"
+                      :disabled="customerMatchBusy"
+                      @click="selectedMatchGroupMode = GROUP_ALL_MEMBER_MESSAGES"
+                    >
+                      <b>专属群</b>
+                      <small>群内成员发送的文字和图片都作为订单</small>
+                    </button>
+                    <button
+                      type="button"
+                      :class="{ 'is-selected': selectedMatchGroupMode === GROUP_MENTION_SELF_ONLY }"
+                      :disabled="customerMatchBusy"
+                      @click="selectedMatchGroupMode = GROUP_MENTION_SELF_ONLY"
+                    >
+                      <b>混合群</b>
+                      <small>只接收明确 @ 当前微信账号的文字消息</small>
+                    </button>
+                  </div>
+                </section>
                 <label class="wechat-import-modal__customer-search">
                   <span aria-hidden="true">⌕</span>
                   <input
@@ -601,7 +676,7 @@
                   <button
                     type="button"
                     class="is-primary"
-                    :disabled="customerMatchBusy || !selectedMatchCustomerId"
+                    :disabled="customerMatchBusy || !customerMatchSelectionValid"
                     @click="confirmCustomerMatch"
                   >{{ customerMatchBusy ? '正在关联并读取订单…' : '关联并继续转订单' }}</button>
                 </footer>
@@ -676,6 +751,12 @@
 
 <script setup>
 import { computed, ref, watch, inject } from 'vue';
+import {
+  CONVERSATION_DIRECT,
+  CONVERSATION_GROUP,
+  GROUP_ALL_MEMBER_MESSAGES,
+  GROUP_MENTION_SELF_ONLY,
+} from '../../services/wechatOrderMessagePolicy';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -689,6 +770,8 @@ const props = defineProps({
   scanReportOpen: { type: Boolean, default: false },
   scanProgress: { type: Object, default: () => ({}) },
   scanResults: { type: Array, default: () => [] },
+  scanSaveBusyToken: { type: String, default: '' },
+  scanPreviewBusyToken: { type: String, default: '' },
   refreshing: { type: Boolean, default: false },
   workspaceWarning: { type: String, default: '' },
   selectedImportBusy: { type: Boolean, default: false },
@@ -709,13 +792,14 @@ const props = defineProps({
 const emit = defineEmits([
   'close',
   'refresh',
-  'merge-new',
   'append-order',
   'select-item',
   'remove-item',
   'scan-unread',
   'scan-all',
   'dismiss-scan-report',
+  'save-scan-result',
+  'preview-scan-image',
   'import-selected',
   'start-customer-match',
   'cancel-customer-match',
@@ -739,6 +823,8 @@ const wechatWarning = computed(() => {
 
 const customerMatchQuery = ref('');
 const selectedMatchCustomerId = ref('');
+const selectedMatchConversationKind = ref('');
+const selectedMatchGroupMode = ref('');
 
 const completedTokenSet = computed(() => new Set(props.completedTokens.map(String)));
 const isLauncher = computed(() => (
@@ -833,6 +919,12 @@ const selectedMatchCustomerWarning = computed(() => {
   if (!current || current === props.unmatchedConversationTitle) return '';
   return `该客户当前关联“${current}”，确认后将改为“${props.unmatchedConversationTitle}”。`;
 });
+const customerMatchSelectionValid = computed(() => (
+  Boolean(selectedMatchCustomerId.value)
+  && [CONVERSATION_DIRECT, CONVERSATION_GROUP].includes(selectedMatchConversationKind.value)
+  && (selectedMatchConversationKind.value !== CONVERSATION_GROUP
+    || [GROUP_ALL_MEMBER_MESSAGES, GROUP_MENTION_SELF_ONLY].includes(selectedMatchGroupMode.value))
+));
 const launcherCurrentTitleText = computed(() => {
   if (props.selectedImportBusy && props.launcherCurrentTitle) return `正在读取“${props.launcherCurrentTitle}”…`;
   if (props.selectedImportBusy) return '正在读取当前微信…';
@@ -869,8 +961,15 @@ watch(
     if (!open) return;
     customerMatchQuery.value = '';
     selectedMatchCustomerId.value = '';
+    selectedMatchConversationKind.value = '';
+    selectedMatchGroupMode.value = '';
   }
 );
+
+function selectMatchConversationKind(kind) {
+  selectedMatchConversationKind.value = kind;
+  if (kind !== CONVERSATION_GROUP) selectedMatchGroupMode.value = '';
+}
 
 function matchCustomerId(customer) {
   return customer?.nxDepartmentId ?? customer?.departmentId ?? '';
@@ -895,8 +994,14 @@ function matchCustomerWechatName(customer) {
 }
 
 function confirmCustomerMatch() {
-  if (!selectedMatchCustomerId.value || props.customerMatchBusy) return;
-  emit('confirm-customer-match', selectedMatchCustomerId.value);
+  if (!customerMatchSelectionValid.value || props.customerMatchBusy) return;
+  emit('confirm-customer-match', {
+    customerId: selectedMatchCustomerId.value,
+    conversationKind: selectedMatchConversationKind.value,
+    groupMode: selectedMatchConversationKind.value === CONVERSATION_GROUP
+      ? selectedMatchGroupMode.value
+      : null,
+  });
 }
 
 function itemState(item) {
@@ -914,6 +1019,9 @@ function taskLabel(item) {
 }
 
 function scanResultLabel(item) {
+  if (item?.saved) return '已保存';
+  if (item?.status === 'found' && item?.saveReady) return '可直接保存';
+  if (item?.status === 'found' && item?.textPreview && item?.parseMessage) return '需检查';
   if (item?.status === 'found') return '发现订单';
   if (item?.status === 'empty') return '没有新订单';
   if (item?.status === 'not-found') return '微信未找到';
@@ -1202,8 +1310,7 @@ function hideBrokenAvatar(event) {
 .wechat-import-modal__append-order,
 .wechat-import-modal__remove-current,
 .wechat-import-modal__refresh,
-.wechat-import-modal__rescan-all,
-.wechat-import-modal__merge {
+.wechat-import-modal__rescan-all {
   min-height: 32px;
   padding: 0 10px;
   border-radius: 8px;
@@ -1223,7 +1330,6 @@ function hideBrokenAvatar(event) {
 .wechat-import-modal__refresh:disabled,
 .wechat-import-modal__append-order:disabled,
 .wechat-import-modal__rescan-all:disabled { cursor: wait; opacity: .65; }
-.wechat-import-modal__merge { border: 1px solid var(--product-warning); color: #fff; background: var(--product-warning); box-shadow: 0 4px 10px rgba(var(--product-warning-rgb), 0.18); }
 .wechat-import-modal__sync-note { grid-row: 3; margin: -4px 4px 8px; color: var(--product-primary-strong); font-size: 9px; text-align: right; }
 .wechat-import-modal__sync-note.is-error { color: var(--product-danger); }
 .wechat-import-modal__sync-note.is-ready { color: var(--product-primary-strong); }
@@ -1652,16 +1758,27 @@ function hideBrokenAvatar(event) {
 .is-not-found .wechat-import-modal__result-icon,
 .is-error .wechat-import-modal__result-icon { color: #fff; background: var(--product-danger); }
 .wechat-import-modal__result-name,
-.wechat-import-modal__result-status { display: grid; min-width: 0; gap: 2px; }
+.wechat-import-modal__result-status-copy { display: grid; min-width: 0; gap: 2px; }
 .wechat-import-modal__result-name strong { overflow: hidden; color: var(--product-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .wechat-import-modal__result-name small { overflow: hidden; color: var(--product-text-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.wechat-import-modal__result-status { justify-items: end; text-align: right; }
+.wechat-import-modal__result-name p { display: -webkit-box; margin: 2px 0 0; overflow: hidden; color: var(--product-text-muted); font-size: 9px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.wechat-import-modal__result-status { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 10px; text-align: right; }
+.wechat-import-modal__result-status-copy { justify-items: end; }
 .wechat-import-modal__result-status strong { color: var(--product-primary-strong); font-size: 10px; }
 .is-found .wechat-import-modal__result-status strong { color: var(--product-primary-strong); }
 .is-warning .wechat-import-modal__result-status strong { color: var(--product-warning); }
 .is-not-found .wechat-import-modal__result-status strong,
 .is-error .wechat-import-modal__result-status strong { color: var(--product-danger); }
 .wechat-import-modal__result-status small { max-width: 220px; overflow: hidden; color: var(--product-text-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.wechat-import-modal__result-status small.is-error { color: var(--product-danger); }
+.wechat-import-modal__result-save-button { min-height: 28px; margin-top: 3px; padding: 0 12px; border: 1px solid var(--product-primary-strong); border-radius: 8px; color: #fff; background: var(--product-primary-strong); font-size: 9px; font-weight: 900; cursor: pointer; }
+.wechat-import-modal__result-save-button:disabled { cursor: wait; opacity: .58; }
+.wechat-import-modal__result-thumbnails { display: flex; max-width: 104px; flex: none; gap: 6px; overflow: hidden; }
+.wechat-import-modal__result-thumbnail { position: relative; display: block; width: 46px; height: 46px; flex: none; padding: 0; overflow: hidden; border: 1px solid rgba(var(--product-primary-strong-rgb), .34); border-radius: 7px; background: var(--product-surface); cursor: pointer; }
+.wechat-import-modal__result-thumbnail:hover { border-color: var(--product-primary-strong); box-shadow: 0 4px 12px rgba(var(--product-primary-strong-rgb), .16); }
+.wechat-import-modal__result-thumbnail:disabled { cursor: wait; opacity: .62; }
+.wechat-import-modal__result-thumbnail img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.wechat-import-modal__result-thumbnail i { position: absolute; z-index: 1; inset: 50% auto auto 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border: 2px solid rgba(255,255,255,.48); border-top-color: #fff; border-radius: 50%; background: rgba(0,0,0,.18); animation: wechat-import-spin .7s linear infinite; }
 .wechat-import-modal__automation-empty { display: grid; align-self: center; justify-items: center; gap: 6px; color: var(--product-text-muted); text-align: center; }
 .wechat-import-modal__automation-empty i { width: 22px; height: 22px; margin-bottom: 4px; color: var(--product-primary-strong); border-color: rgba(var(--product-primary-strong-rgb), 0.2); }
 .wechat-import-modal__automation-empty strong { color: var(--product-primary-strong); font-size: 13px; }
@@ -1871,7 +1988,7 @@ function hideBrokenAvatar(event) {
 .wechat-import-modal__match-dialog {
   display: grid;
   max-height: min(720px, calc(100vh - 40px));
-  grid-template-rows: auto auto auto minmax(120px, 1fr) auto auto;
+  grid-template-rows: auto auto auto auto minmax(100px, 1fr) auto auto auto;
   gap: 13px;
   padding: 24px;
   overflow: hidden;
@@ -1915,6 +2032,43 @@ function hideBrokenAvatar(event) {
 .wechat-import-modal__detected-friend > div { display: grid; gap: 1px; min-width: 0; }
 .wechat-import-modal__detected-friend small { color: var(--product-primary); font-size: 9px; letter-spacing: 0; }
 .wechat-import-modal__detected-friend strong { overflow: hidden; color: var(--product-text); font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.wechat-import-modal__match-settings { display: grid; gap: 8px; }
+.wechat-import-modal__match-settings > strong { color: var(--product-text); font-size: 11px; }
+.wechat-import-modal__match-mode-options,
+.wechat-import-modal__match-group-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.wechat-import-modal__match-mode-options > button,
+.wechat-import-modal__match-group-options > button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 1px 9px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--product-primary-soft);
+  border-radius: 10px;
+  color: var(--product-text);
+  background: var(--product-surface);
+  text-align: left;
+  cursor: pointer;
+}
+.wechat-import-modal__match-mode-options > button > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  grid-row: 1 / 3;
+  place-items: center;
+  border-radius: 9px;
+  color: #fff;
+  background: var(--product-primary-strong);
+  font-size: 11px;
+  font-weight: 900;
+}
+.wechat-import-modal__match-mode-options b,
+.wechat-import-modal__match-group-options b { align-self: end; font-size: 11px; }
+.wechat-import-modal__match-mode-options small,
+.wechat-import-modal__match-group-options small { align-self: start; overflow: hidden; color: var(--product-text-muted); font-size: 8px; letter-spacing: 0; text-overflow: ellipsis; white-space: nowrap; }
+.wechat-import-modal__match-group-options > button { grid-template-columns: 1fr; background: var(--product-tint); }
+.wechat-import-modal__match-mode-options > button.is-selected,
+.wechat-import-modal__match-group-options > button.is-selected { border-color: var(--product-primary-strong); background: var(--product-primary-soft); box-shadow: 0 0 0 2px rgba(var(--product-primary-strong-rgb), 0.1); }
 .wechat-import-modal__customer-search {
   display: flex;
   align-items: center;
@@ -2158,7 +2312,8 @@ function hideBrokenAvatar(event) {
   .wechat-import-modal__automation-current { display: none; }
   .wechat-import-modal__automation-results { padding: 16px; }
   .wechat-import-modal__automation-results li { grid-template-columns: 32px minmax(0, 1fr); }
-  .wechat-import-modal__result-status { grid-column: 2; justify-items: start; text-align: left; }
+  .wechat-import-modal__result-status { grid-column: 2; justify-content: flex-start; text-align: left; }
+  .wechat-import-modal__result-status-copy { justify-items: start; }
   .wechat-import-modal__automation-footer { align-items: stretch; flex-direction: column; }
 }
 

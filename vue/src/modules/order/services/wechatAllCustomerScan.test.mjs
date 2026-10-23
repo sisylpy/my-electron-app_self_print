@@ -36,6 +36,24 @@ assert.deepEqual(databaseOnlyCalls, ['read:database']);
 assert.equal(databaseOnly.mode, 'database');
 assert.equal(databaseOnly.verifiedByConversation, false);
 
+await assert.rejects(
+  () => readWechatCustomerDatabaseFirst({
+    readDatabase: async () => ({
+      status: 'ready',
+      payload: { text: '旧名称下仍能由稳定指纹读到的订单' },
+    }),
+    canTrustDatabaseResult: async () => {
+      const error = new Error('微信中已找不到“调料群”，名称可能已经修改');
+      error.code = 'WECHAT_CONVERSATION_NAME_STALE';
+      throw error;
+    },
+    focusConversation: async () => {
+      throw new Error('失效名称不应继续搜索微信');
+    },
+  }),
+  { code: 'WECHAT_CONVERSATION_NAME_STALE' },
+);
+
 const freshDuplicateCalls = [];
 const freshDuplicate = await readWechatCustomerDatabaseFirst({
   readDatabase: async ({ mode }) => {
@@ -121,6 +139,7 @@ await assert.rejects(
 const calls = [];
 const progress = [];
 const outcomes = [];
+const outcomeItems = [];
 let activeScans = 0;
 let maxActiveScans = 0;
 
@@ -131,7 +150,10 @@ const result = await scanAllBoundWechatCustomers({
     { title: '蔬菜群', row: { customerId: 20 } },
   ],
   onProgress: item => progress.push(`${item.current}/${item.total}:${item.title}`),
-  onResult: item => outcomes.push(`${item.current}/${item.total}:${item.title}:${item.status}:${item.itemCount}`),
+  onResult: item => {
+    outcomes.push(`${item.current}/${item.total}:${item.title}:${item.status}:${item.itemCount}`);
+    if (item.status === 'found') outcomeItems.push(item.items);
+  },
   scanEntry: async (entry) => {
     activeScans += 1;
     maxActiveScans = Math.max(maxActiveScans, activeScans);
@@ -160,6 +182,10 @@ assert.deepEqual(outcomes, [
   '2/3:失效客户:error:0',
   '3/3:蔬菜群:empty:0',
 ]);
+assert.deepEqual(outcomeItems, [[
+  { token: 'wechat:seasoning' },
+  { token: 'wechat:seasoning:image' },
+]]);
 assert.equal(result.checkedCount, 3);
 assert.equal(result.successCount, 2);
 assert.equal(result.emptyCount, 1);
