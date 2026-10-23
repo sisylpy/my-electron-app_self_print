@@ -117,7 +117,10 @@ CustomerWechatScanV2ServiceTest test
 
 覆盖：绑定/群规则、Migration 合同、<=200 与多批事务、幂等重试、附件状态、任务领取/恢复/草稿、订单保存事务。正式修改 `OcrController` 图片链路时还应运行 `OcrControllerImagePersistenceTest` 和相关 OCR 保存测试。
 
-## 3. 2026-10-23 实际测试记录
+## 3. 2026-10-23 前次核查记录（历史）
+
+本节保留专项收口前的历史结果，不代表当前 RC1。最新可恢复版本和通过结果见
+[V2 RC1 验收候选记录](./06-rc1-acceptance.md)。
 
 测试针对 README 所列版本以及核查时桌面端未提交工作区；因此结果不能等同于纯 HEAD CI。
 
