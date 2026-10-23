@@ -59,4 +59,5 @@ config/tencent-cloud.json
 # Exclude from git
 /sox/
 /sox-14.4.1/
-/docs/
+/docs/*
+!/docs/DESKTOP_PLATFORM_MATRIX.md
